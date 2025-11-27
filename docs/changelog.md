@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.0.3] - 2024-11-27
+
+### Added
+
+#### Database Migration (Alembic → Supabase)
+
+**Tables Created**: `ingredients`, `recipes`, `recipe_ingredients`
+
+**Indexes**: `ix_ingredients_name`, `ix_recipes_name`, `ix_recipe_ingredients_recipe_id`, `ix_recipe_ingredients_ingredient_id`
+
+**Migration**: `db480a186284_initial_tables.py`
+
+### Fixed
+
+- `Recipe.instructions_structured` JSON type changed from `sqlite.JSON` to `sqlalchemy.JSON` for PostgreSQL compatibility
+
+**Docs**: `docs/completions/database-migration.md`
+
+---
+
 ## [0.0.2] - 2024-11-27
 
 ### Added

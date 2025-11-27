@@ -4,8 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
-from sqlalchemy.dialects.sqlite import JSON
 
 
 class RecipeStatus(str, Enum):
