@@ -1,0 +1,1 @@
+Get started by looking at CLAUDE.md, docs/intro.md and docs/changelog.md to get an overview of what we're developing.

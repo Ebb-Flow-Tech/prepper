@@ -1,0 +1,82 @@
+"""Recipe model - the core artifact kitchen + finance cares about."""
+
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.dialects.sqlite import JSON
+
+
+class RecipeStatus(str, Enum):
+    """Recipe lifecycle status."""
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class RecipeBase(SQLModel):
+    """Shared fields for Recipe."""
+
+    name: str = Field(index=True)
+    yield_quantity: float = Field(default=1.0)
+    yield_unit: str = Field(default="portion", description="e.g. portion, kg, tray")
+    is_prep_recipe: bool = Field(default=False)
+
+
+class Recipe(RecipeBase, table=True):
+    """
+    The core recipe artifact.
+
+    - instructions_structured is derived state (safe to recompute anytime)
+    - cost_price is also derived (cache only)
+    """
+
+    __tablename__ = "recipes"
+
+    id: int | None = Field(default=None, primary_key=True)
+    instructions_raw: str | None = Field(default=None)
+    instructions_structured: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+    )
+    cost_price: float | None = Field(default=None, description="Cached cost calculation")
+    selling_price_est: float | None = Field(default=None)
+    status: RecipeStatus = Field(default=RecipeStatus.DRAFT)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class RecipeCreate(RecipeBase):
+    """Schema for creating a new recipe."""
+
+    pass
+
+
+class RecipeUpdate(SQLModel):
+    """Schema for updating recipe metadata (all fields optional)."""
+
+    name: str | None = None
+    yield_quantity: float | None = None
+    yield_unit: str | None = None
+    selling_price_est: float | None = None
+    is_prep_recipe: bool | None = None
+
+
+class RecipeStatusUpdate(SQLModel):
+    """Schema for updating recipe status."""
+
+    status: RecipeStatus
+
+
+class InstructionsRaw(SQLModel):
+    """Schema for raw instructions input."""
+
+    text: str
+
+
+class InstructionsStructured(SQLModel):
+    """Schema for structured instructions (JSON format)."""
+
+    steps: list[dict[str, Any]]
