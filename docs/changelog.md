@@ -4,46 +4,68 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.0.2] - 2024-11-27
+
+### Added
+
+#### Frontend (Next.js 15 + TypeScript + Tailwind)
+
+**Stack**: Next.js 15, React 19, TypeScript, Tailwind CSS 4, TanStack Query, dnd-kit, Sonner
+
+**Three-Column Layout**
+- `TopAppBar` — inline-editable recipe name, yield, status dropdown, cost display
+- `LeftPanel` — recipe list with search, create button, selection state
+- `RecipeCanvas` — ingredient drop zone, instructions workspace
+- `RightPanel` — draggable ingredient palette with inline create form
+
+**Recipe Workspace**
+- Drag-and-drop ingredients from palette to recipe
+- Sortable ingredient rows with quantity/unit editing and line costs
+- Cost summary (batch total + per-portion) from costing API
+- Instructions with Freeform/Steps tab toggle
+- Structured steps with timer, temperature, drag reorder
+
+**Data Layer**
+- Typed API client (`lib/api.ts`) covering all 17 backend endpoints
+- 15+ TanStack Query hooks with automatic cache invalidation
+- App state context for selected recipe and UI preferences
+
+**UX Polish**
+- Debounced autosave (no save buttons)
+- Loading skeletons and contextual empty states
+- Toast notifications via Sonner
+- Dark mode support
+
+**Docs**: `docs/completions/frontend-implementation.md`
+
+---
+
 ## [0.0.1] - 2024-11-27
 
 ### Added
 
 #### Backend Foundation (FastAPI + SQLModel)
 
-**Core Infrastructure**
-- FastAPI application with lifespan management
-- PostgreSQL database support (Supabase) with Alembic migrations
-- pydantic-settings configuration via environment variables
-- CORS middleware for frontend integration
+**Infrastructure**: FastAPI, PostgreSQL (Supabase), Alembic migrations, pydantic-settings
 
-**Models**
-- `Ingredient`  canonical ingredient reference with base unit costs
-- `Recipe`  core recipe with raw/structured instructions, yield, status
-- `RecipeIngredient`  join table linking recipes to ingredients with quantities
+**Models**: `Ingredient`, `Recipe`, `RecipeIngredient`
 
-**Domain Layer**
-- `IngredientService`  CRUD operations, soft-delete via deactivation
-- `RecipeService`  lifecycle management, ingredient management, reordering
-- `InstructionsService`  raw/structured instructions with LLM parsing placeholder
-- `CostingService`  cost calculation engine with unit conversion
+**Domain Services**: IngredientService, RecipeService, InstructionsService, CostingService
 
 **API Endpoints (17 total)**
-- `/api/v1/ingredients`  create, list, get, update, deactivate
-- `/api/v1/recipes`  create, list, get, update, status, soft-delete
-- `/api/v1/recipes/{id}/ingredients`  add, update, remove, reorder
-- `/api/v1/recipes/{id}/instructions`  raw, parse, structured
-- `/api/v1/recipes/{id}/costing`  calculate, recompute
+- `/api/v1/ingredients` — CRUD + deactivate
+- `/api/v1/recipes` — CRUD + status + soft-delete
+- `/api/v1/recipes/{id}/ingredients` — add, update, remove, reorder
+- `/api/v1/recipes/{id}/instructions` — raw, parse, structured
+- `/api/v1/recipes/{id}/costing` — calculate, recompute
 
-**Utilities**
-- Unit conversion support (mass: g/kg/oz/lb, volume: ml/l/cup/tbsp, count: pcs/dozen)
+**Utilities**: Unit conversion (mass, volume, count)
 
-**Testing**
-- Pytest scaffolding with in-memory SQLite fixtures
-- Tests for ingredients, recipes, and costing calculations
+**Testing**: Pytest with SQLite fixtures
 
-**Documentation**
-- `docs/completions/backend-implementation.md`  full implementation reference
+**Docs**: `docs/completions/backend-implementation.md`
 
 ---
 
-*Blueprint: `docs/plans/backend-blueprint.md` | Alignment: ~95%*
+*Backend Blueprint: `docs/plans/backend-blueprint.md` | Alignment: ~95%*
+*Frontend Blueprint: `docs/plans/frontend-blueprint.md` | Alignment: ~95%*

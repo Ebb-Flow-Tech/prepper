@@ -1,0 +1,133 @@
+'use client';
+
+import { useDroppable } from '@dnd-kit/core';
+import { Plus, ChefHat } from 'lucide-react';
+import { useAppState } from '@/lib/store';
+import { useRecipe, useCreateRecipe } from '@/lib/hooks';
+import { RecipeIngredientsList } from '@/components/recipe/RecipeIngredientsList';
+import { Instructions } from '@/components/recipe/Instructions';
+import { Button, Skeleton } from '@/components/ui';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+function EmptyState() {
+  const { selectRecipe } = useAppState();
+  const createRecipe = useCreateRecipe();
+
+  const handleCreate = () => {
+    createRecipe.mutate(
+      {
+        name: 'Untitled Recipe',
+        yield_quantity: 10,
+        yield_unit: 'portion',
+        status: 'draft',
+      },
+      {
+        onSuccess: (newRecipe) => {
+          selectRecipe(newRecipe.id);
+          toast.success('Recipe created');
+        },
+        onError: () => toast.error('Failed to create recipe'),
+      }
+    );
+  };
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center text-center">
+      <div className="rounded-full bg-zinc-100 p-6 dark:bg-zinc-800">
+        <ChefHat className="h-12 w-12 text-zinc-400" />
+      </div>
+      <h2 className="mt-6 text-xl font-semibold">No recipe selected</h2>
+      <p className="mt-2 max-w-sm text-zinc-500">
+        Select a recipe from the left panel or create a new one to get started.
+      </p>
+      <Button className="mt-6" onClick={handleCreate} disabled={createRecipe.isPending}>
+        <Plus className="h-4 w-4" />
+        Create your first recipe
+      </Button>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="p-6">
+      <Skeleton className="mb-4 h-8 w-48" />
+      <div className="space-y-3">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+      <Skeleton className="mt-8 h-8 w-48" />
+      <Skeleton className="mt-4 h-40 w-full" />
+    </div>
+  );
+}
+
+export function RecipeCanvas() {
+  const { selectedRecipeId } = useAppState();
+  const { data: recipe, isLoading, error } = useRecipe(selectedRecipeId);
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'recipe-canvas',
+  });
+
+  if (!selectedRecipeId) {
+    return (
+      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+        <EmptyState />
+      </main>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+        <LoadingState />
+      </main>
+    );
+  }
+
+  if (error || !recipe) {
+    return (
+      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+        <div className="flex h-full items-center justify-center">
+          <div className="rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
+            <p className="text-red-600 dark:text-red-400">Failed to load recipe</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main
+      ref={setNodeRef}
+      className={cn(
+        'flex-1 overflow-y-auto bg-white dark:bg-zinc-950',
+        isOver && 'ring-2 ring-inset ring-blue-400'
+      )}
+    >
+      <div className="mx-auto max-w-4xl p-6">
+        {/* Ingredients Section */}
+        <section className="mb-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Ingredients</h2>
+            <p className="text-sm text-zinc-500">
+              Drag ingredients from the right panel to add them
+            </p>
+          </div>
+          <RecipeIngredientsList recipeId={recipe.id} />
+        </section>
+
+        {/* Instructions Section */}
+        <section>
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Instructions</h2>
+          </div>
+          <Instructions recipe={recipe} />
+        </section>
+      </div>
+    </main>
+  );
+}
