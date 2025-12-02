@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.0.4] - 2025-12-02
+
+### Added
+
+#### Backend Deployment (Fly.io)
+
+**App**: `reciperepo` deployed to Ebb & Flow Group organization
+
+**URL**: https://reciperepo.fly.dev
+
+**Files**: `Dockerfile`, `fly.toml`
+
+**Config**: Singapore region, shared-cpu-1x, 1GB RAM, auto-stop enabled
+
+**Secrets**: `DATABASE_URL` (Supabase), `CORS_ORIGINS`
+
+**Docs**: `docs/completions/backend-deployment.md`
+
+---
+
 ## [0.0.3] - 2024-11-27
 
 ### Added
