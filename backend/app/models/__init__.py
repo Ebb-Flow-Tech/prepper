@@ -25,8 +25,25 @@ from app.models.recipe_ingredient import (
     RecipeIngredientUpdate,
     RecipeIngredientReorder,
 )
+from app.models.recipe_recipe import (
+    RecipeRecipe,
+    RecipeRecipeCreate,
+    RecipeRecipeUpdate,
+    RecipeRecipeReorder,
+    SubRecipeUnit,
+)
+from app.models.outlet import (
+    Outlet,
+    OutletCreate,
+    OutletUpdate,
+    OutletType,
+    RecipeOutlet,
+    RecipeOutletCreate,
+    RecipeOutletUpdate,
+)
 from app.models.costing import (
     CostBreakdownItem,
+    SubRecipeCostItem,
     CostingResult,
 )
 
@@ -53,7 +70,22 @@ __all__ = [
     "RecipeIngredientCreate",
     "RecipeIngredientUpdate",
     "RecipeIngredientReorder",
+    # RecipeRecipe (sub-recipes)
+    "RecipeRecipe",
+    "RecipeRecipeCreate",
+    "RecipeRecipeUpdate",
+    "RecipeRecipeReorder",
+    "SubRecipeUnit",
+    # Outlet
+    "Outlet",
+    "OutletCreate",
+    "OutletUpdate",
+    "OutletType",
+    "RecipeOutlet",
+    "RecipeOutletCreate",
+    "RecipeOutletUpdate",
     # Costing
     "CostBreakdownItem",
+    "SubRecipeCostItem",
     "CostingResult",
 ]

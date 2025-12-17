@@ -6,12 +6,87 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.7** (2025-12-17) - Recipe Extensions: Sub-Recipe BOM Hierarchy, Authorship Tracking, Outlet/Brand Attribution
 - **0.0.6** (2025-12-17) - Ingredient Data Model Enhancements: Multi-Supplier Pricing, Master Ingredient Linking, Food Categories & Source Tracking
 - **0.0.5** (2025-12-03) - AI-Powered Instructions Parsing: Vercel AI SDK + GPT-5.1 for Freeform→Structured Conversion, UX Improvements & CORS Fixes
 - **0.0.4** (2025-12-02) - Backend Deployment: Fly.io Production Setup with Supabase PostgreSQL
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.7] - 2025-12-17
+
+### Added
+
+#### Recipe Extensions (Plan 02)
+
+Extended the `Recipe` model to support sub-recipe linking (BOM hierarchy), authorship tracking, and outlet/brand attribution.
+
+**1. Sub-Recipes (Recipe-to-Recipe Linking)**
+
+New `recipe_recipes` junction table enables Bill of Materials hierarchy where recipes can include other recipes as components (e.g., "Eggs Benedict" includes "Hollandaise Sauce").
+
+**New Model**: `RecipeRecipe`
+- `parent_recipe_id` / `child_recipe_id` — Recipe linking
+- `quantity` + `unit` — Supports `portion`, `batch`, `g`, `ml`
+- `position` — Display order
+- Check constraint prevents self-references
+
+**New API Endpoints**:
+- `GET /recipes/{id}/sub-recipes` — List sub-recipes
+- `POST /recipes/{id}/sub-recipes` — Add sub-recipe (with cycle detection)
+- `PUT /recipes/{id}/sub-recipes/{link_id}` — Update quantity/unit
+- `DELETE /recipes/{id}/sub-recipes/{link_id}` — Remove sub-recipe
+- `POST /recipes/{id}/sub-recipes/reorder` — Reorder sub-recipes
+- `GET /recipes/{id}/used-in` — Reverse lookup (what recipes use this?)
+- `GET /recipes/{id}/bom-tree` — Full BOM hierarchy tree
+
+**Costing**: `CostingService` now recursively calculates sub-recipe costs with cycle detection.
+
+**2. Authorship Tracking**
+
+**New Recipe Columns**:
+- `created_by` (VARCHAR 100) — Who created the recipe
+- `updated_by` (VARCHAR 100) — Who last modified it
+
+**3. Outlet/Brand Attribution**
+
+New `outlets` and `recipe_outlets` tables for multi-brand operations.
+
+**New Model**: `Outlet`
+- `name`, `code` — Brand/location identification
+- `outlet_type` — `"brand"` or `"location"`
+- `parent_outlet_id` — Hierarchical structure support
+
+**New Model**: `RecipeOutlet` (junction)
+- `recipe_id` / `outlet_id` — Many-to-many linking
+- `is_active` — Per-outlet activation
+- `price_override` — Outlet-specific pricing
+
+**New API Endpoints**:
+- `POST /outlets` — Create outlet
+- `GET /outlets` — List outlets
+- `GET /outlets/{id}` — Get outlet
+- `PATCH /outlets/{id}` — Update outlet
+- `DELETE /outlets/{id}` — Deactivate outlet
+- `GET /outlets/{id}/recipes` — Recipes for outlet
+- `GET /outlets/{id}/hierarchy` — Outlet tree
+- `GET /recipes/{id}/outlets` — Outlets for recipe
+- `POST /recipes/{id}/outlets` — Assign to outlet
+- `PATCH /recipes/{id}/outlets/{outlet_id}` — Update (price override)
+- `DELETE /recipes/{id}/outlets/{outlet_id}` — Remove from outlet
+
+**Migration**: `b2c3d4e5f6g7_add_recipe_extensions.py`
+
+**Files Created**:
+- `backend/app/models/recipe_recipe.py`
+- `backend/app/models/outlet.py`
+- `backend/app/domain/subrecipe_service.py`
+- `backend/app/domain/outlet_service.py`
+- `backend/app/api/sub_recipes.py`
+- `backend/app/api/outlets.py`
 
 ---
 

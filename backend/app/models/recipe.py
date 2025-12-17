@@ -44,6 +44,12 @@ class Recipe(RecipeBase, table=True):
     cost_price: float | None = Field(default=None, description="Cached cost calculation")
     selling_price_est: float | None = Field(default=None)
     status: RecipeStatus = Field(default=RecipeStatus.DRAFT)
+
+    # Authorship tracking
+    created_by: str | None = Field(default=None, max_length=100)
+    updated_by: str | None = Field(default=None, max_length=100)
+
+    # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -51,7 +57,7 @@ class Recipe(RecipeBase, table=True):
 class RecipeCreate(RecipeBase):
     """Schema for creating a new recipe."""
 
-    pass
+    created_by: str | None = None
 
 
 class RecipeUpdate(SQLModel):
@@ -62,6 +68,7 @@ class RecipeUpdate(SQLModel):
     yield_unit: str | None = None
     selling_price_est: float | None = None
     is_prep_recipe: bool | None = None
+    updated_by: str | None = None
 
 
 class RecipeStatusUpdate(SQLModel):
