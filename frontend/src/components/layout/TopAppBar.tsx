@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChefHat } from 'lucide-react';
 import { useAppState } from '@/lib/store';
 import { useRecipe, useUpdateRecipe, useUpdateRecipeStatus } from '@/lib/hooks';
 import { useCosting } from '@/lib/hooks';
@@ -117,15 +116,9 @@ export function TopAppBar() {
   }, [recipe, editedPrice, updateRecipe]);
 
   return (
-    <header className="flex h-16 shrink-0 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Logo */}
-      <div className="flex items-center gap-2 text-lg font-semibold">
-        <ChefHat className="h-6 w-6" />
-        <span className="hidden sm:inline">Prepper</span>
-      </div>
-
+    <header className="flex h-14 shrink-0 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
       {/* Recipe Name */}
-      <div className="ml-8 flex-1">
+      <div className="flex-1">
         {recipe ? (
           isEditingName ? (
             <Input

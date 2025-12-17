@@ -1,6 +1,7 @@
 # Plan 03: Frontend - New Pages
 
-**Status**: Draft
+**Status**: Implemented (v0.0.8)
+**Completed**: 2025-12-17
 **Priority**: Medium-High
 **Dependencies**: Plan 01 (Ingredient enhancements), Plan 02 (Recipe extensions)
 
@@ -421,11 +422,6 @@ export function GroupSection({ title, children }: { title: string; children: Rea
 
 ---
 
-## Resolved Questions
-
-1. **R&D Page**: ✅ Clarified — a workspace for experimentation. Recipes are "finalized" implicitly when linked to Atlas menu item via FK. No rigid status transitions needed.
-2. **Recipe images**: ✅ Optional images supported — both dish-level hero image AND per-step images for instructions.
-
 ## Recipe Images (Data Model Addition)
 
 ```python
@@ -451,11 +447,13 @@ class Recipe(SQLModel, table=True):
 - Frontend handles upload, stores URL in recipe
 - Consider image optimization (Next.js Image component)
 
-## Open Questions
+## Resolved Questions
 
-1. **Mobile**: Should these pages be mobile-responsive or desktop-only?
-2. **Routing**: Use Next.js App Router or keep current structure?
-3. **Image upload**: Where should images be stored? (Supabase Storage, Cloudinary, etc.)
+1. **R&D Page**: ✅ Clarified — a workspace for experimentation. Recipes are "finalized" implicitly when linked to Atlas menu item via FK. No rigid status transitions needed.
+2. **Recipe images**: ✅ Optional images supported — both dish-level hero image AND per-step images for instructions.
+3. **Mobile**: ✅ Responsive where practical. Skip mobile optimization if it adds significant complexity/LOC to specific pages.
+4. **Routing**: ✅ Continue with Next.js App Router (already in use via `/app` directory).
+5. **Image upload**: ✅ Supabase Storage. For now, leave image upload as placeholder/non-clickable buttons.
 
 ---
 

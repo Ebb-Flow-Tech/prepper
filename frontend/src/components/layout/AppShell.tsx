@@ -73,7 +73,7 @@ export function AppShell() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-screen flex-col">
+      <div className="flex h-full flex-col">
         <TopAppBar />
         <div className="flex flex-1 overflow-hidden">
           <LeftPanel />

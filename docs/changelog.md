@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.8** (2025-12-17) - Frontend Multi-Page Expansion: Ingredients Library, Recipes Gallery, Recipe Detail, R&D Workspace, Finance Placeholder
 - **0.0.7** (2025-12-17) - Recipe Extensions: Sub-Recipe BOM Hierarchy, Authorship Tracking, Outlet/Brand Attribution
 - **0.0.6** (2025-12-17) - Ingredient Data Model Enhancements: Multi-Supplier Pricing, Master Ingredient Linking, Food Categories & Source Tracking
 - **0.0.5** (2025-12-03) - AI-Powered Instructions Parsing: Vercel AI SDK + GPT-5.1 for Freeform→Structured Conversion, UX Improvements & CORS Fixes
@@ -13,6 +14,44 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.8] - 2025-12-17
+
+### Added
+
+#### Frontend Multi-Page Expansion (Plan 03)
+
+Expanded the frontend from a single recipe canvas to a multi-page application with dedicated views for ingredients, recipes, R&D, and finance.
+
+**New Routes**:
+- `/ingredients` — Ingredients Library with search, grouping, and filtering
+- `/recipes` — Recipes Gallery with status filtering and search
+- `/recipes/[id]` — Individual Recipe detail page with costing and instructions
+- `/rnd` — R&D Workspace for experimental recipes and ingredient exploration
+- `/finance` — Finance Reporting placeholder (awaiting Atlas integration)
+
+**New UI Components**:
+- `TopNav` — Global navigation bar with active state highlighting
+- `Card`, `CardHeader`, `CardTitle`, `CardContent`, `CardFooter` — Composable card components
+- `MasonryGrid` — Pinterest-style responsive grid (using react-masonry-css)
+- `GroupSection` — Section with title and count badge for grouped content
+- `PageHeader` — Page title, description, and action buttons
+- `SearchInput` — Search input with clear button
+
+**New Domain Components**:
+- `IngredientCard` — Ingredient display card with hover actions
+- `RecipeCard` — Recipe display card with status badge and cost
+
+**Layout Changes**:
+- Root layout now includes `TopNav` for global navigation
+- `TopAppBar` simplified (logo moved to TopNav)
+- Responsive design: mobile-friendly layouts for all new pages
+
+**Library**: Added `react-masonry-css` for masonry grid layout
+
+**Docs**: `docs/completions/plan-03-frontend-pages.md`
 
 ---
 
