@@ -4,6 +4,11 @@ from app.models.ingredient import (
     Ingredient,
     IngredientCreate,
     IngredientUpdate,
+    FoodCategory,
+    IngredientSource,
+    SupplierEntry,
+    SupplierEntryCreate,
+    SupplierEntryUpdate,
 )
 from app.models.recipe import (
     Recipe,
@@ -30,6 +35,11 @@ __all__ = [
     "Ingredient",
     "IngredientCreate",
     "IngredientUpdate",
+    "FoodCategory",
+    "IngredientSource",
+    "SupplierEntry",
+    "SupplierEntryCreate",
+    "SupplierEntryUpdate",
     # Recipe
     "Recipe",
     "RecipeCreate",

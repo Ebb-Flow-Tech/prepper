@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## Version History
+
+- **0.0.6** (2025-12-17) - Ingredient Data Model Enhancements: Multi-Supplier Pricing, Master Ingredient Linking, Food Categories & Source Tracking
+- **0.0.5** (2025-12-03) - AI-Powered Instructions Parsing: Vercel AI SDK + GPT-5.1 for Freeform→Structured Conversion, UX Improvements & CORS Fixes
+- **0.0.4** (2025-12-02) - Backend Deployment: Fly.io Production Setup with Supabase PostgreSQL
+- **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
+- **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
+- **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.6] - 2025-12-17
+
+### Added
+
+#### Ingredient Data Model Enhancements (Plan 01)
+
+Extended the `Ingredient` model to support multi-supplier pricing, canonical ingredient linking, and food categorization.
+
+**New Database Columns**:
+- `suppliers` (JSONB) — Array of supplier entries with pricing, currency, SKU
+- `master_ingredient_id` (FK) — Self-referential link to canonical/master ingredient
+- `category` (VARCHAR) — Food category enum (proteins, vegetables, dairy, etc.)
+- `source` (VARCHAR) — Origin tracking: `"fmh"` or `"manual"`
+
+**New API Endpoints**:
+- `GET /ingredients/categories` — List all food categories
+- `GET /ingredients/{id}/variants` — Get variants linked to a master ingredient
+- `POST /ingredients/{id}/suppliers` — Add supplier entry
+- `PATCH /ingredients/{id}/suppliers/{supplier_id}` — Update supplier
+- `DELETE /ingredients/{id}/suppliers/{supplier_id}` — Remove supplier
+- `GET /ingredients/{id}/suppliers/preferred` — Get preferred supplier
+
+**New Query Filters**:
+- `GET /ingredients?category=proteins` — Filter by food category
+- `GET /ingredients?source=fmh` — Filter by source
+- `GET /ingredients?master_only=true` — Only top-level ingredients
+
+**Migration**: `a1b2c3d4e5f6_add_ingredient_enhancements.py`
+
+**Docs**: `docs/completions/plan-01-ingredient-enhancements.md`
+
+---
+
 ## [0.0.5] - 2025-12-03
 
 ### Added
