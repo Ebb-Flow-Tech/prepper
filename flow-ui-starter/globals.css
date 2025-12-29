@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Flow UI Gradient */
+  .flow-ui-gradient {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--flow-ui-gradient-start)) 0%,
+      hsl(var(--flow-ui-gradient-mid)) 50%,
+      hsl(var(--flow-ui-gradient-end)) 100%
+    );
+  }
+
+  /* Status Label Utilities */
+  .status-label {
+    @apply px-2 py-1 rounded-md text-sm font-medium;
+  }
+
+  .status-optimal {
+    @apply status-label bg-[hsl(var(--status-optimal-bg))] text-[hsl(var(--status-optimal-text))];
+  }
+
+  .status-low {
+    @apply status-label bg-[hsl(var(--status-low-bg))] text-[hsl(var(--status-low-text))];
+  }
+
+  .status-excess {
+    @apply status-label bg-[hsl(var(--status-excess-bg))] text-[hsl(var(--status-excess-text))];
+  }
+
+  /* Dialog & Overlay Utilities */
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 backdrop-blur-[3px];
+    background-color: hsl(var(--dialog-overlay));
+  }
+
+  .dialog-content-mobile {
+    @apply rounded-2xl sm:rounded-xl;
+  }
+
+  /* Calendar Selected Day Gradient */
+  .calendar-selected {
+    background: linear-gradient(to right, hsl(var(--calendar-selected-start)), hsl(var(--calendar-selected-end)));
+    color: hsl(var(--calendar-selected-text)) !important;
+    font-weight: 700;
+  }
+
+  .calendar-selected:hover,
+  .calendar-selected:focus {
+    filter: brightness(0.9);
+  }
+
+  /* Mobile Dialog Footer */
+  .dialog-footer-mobile {
+    @apply flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-2;
+  }
+
+  /* Mobile Optimizations */
+  .mobile-container {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+@layer base {
+  :root {
+    /* Flow UI Design System Variables */
+
+    /* Base Background & Surface */
+    --background: 60 30% 97%; /* #FAFAF7 - warm white base */
+    --foreground: 220 20% 13%; /* #1B1F24 - deeper primary text */
+
+    /* Cards & Surfaces */
+    --card: 35 15% 95%; /* #F4F2EF - parchment-tinted grey */
+    --card-foreground: 220 20% 13%; /* Same as foreground */
+
+    /* Popover & Dialog */
+    --popover: 35 15% 95%; /* Same as card */
+    --popover-foreground: 220 20% 13%; /* Same as foreground */
+
+    /* Primary Action Color */
+    --primary: 230 40% 48%; /* #4257B2 - elegant indigo */
+    --primary-foreground: 0 0% 98%;
+
+    /* Secondary UI Elements */
+    --secondary: 35 15% 94%;
+    --secondary-foreground: 220 20% 13%;
+
+    /* Muted Elements */
+    --muted: 35 15% 94%;
+    --muted-foreground: 0 0% 37%; /* #5E5E5E - softer secondary text */
+
+    /* Accent Elements */
+    --accent: 35 15% 94%;
+    --accent-foreground: 220 20% 13%;
+
+    /* Destructive Actions */
+    --destructive: 0 70% 47%; /* #C62828 - deep red */
+    --destructive-foreground: 0 0% 98%;
+
+    /* Borders & Inputs */
+    --border: 35 15% 85%;
+    --input: 35 15% 85%;
+    --ring: 230 40% 48%; /* Same as primary */
+
+    /* Status Colors */
+    --status-optimal-bg: 140 40% 94%;
+    --status-optimal-text: 140 50% 34%;
+    --status-low-bg: 0 80% 96%;
+    --status-low-text: 0 70% 47%;
+    --status-excess-bg: 35 100% 96%;
+    --status-excess-text: 25 65% 37%;
+
+    /* Flow UI Gradients */
+    --flow-ui-gradient-start: 280 72% 50%; /* Purple */
+    --flow-ui-gradient-mid: 346 84% 50%; /* Pink */
+    --flow-ui-gradient-end: 25 95% 53%; /* Orange */
+
+    /* Dialog Overlay */
+    --dialog-overlay: 30 10% 22% / 0.2; /* #3d3833 at 20% - parchment-tinted grey */
+
+    /* Calendar Selection Gradient */
+    --calendar-selected-start: 271 81% 56%; /* #9333ea - purple */
+    --calendar-selected-end: 25 95% 53%; /* #f97316 - orange */
+    --calendar-selected-text: 43 71% 95%; /* #faf5eb - cream */
+
+    --radius: 0.75rem;
+
+    /* Font */
+    --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 60 10% 98%;
+    --card: 220 20% 13%;
+    --card-foreground: 60 10% 98%;
+    --popover: 220 20% 13%;
+    --popover-foreground: 60 10% 98%;
+    --primary: 230 40% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 60 10% 98%;
+    --muted: 220 20% 18%;
+    --muted-foreground: 60 10% 70%;
+    --accent: 220 20% 18%;
+    --accent-foreground: 60 10% 98%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 60 10% 98%;
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 230 40% 60%;
+
+    /* Status Colors - Dark Mode */
+    --status-optimal-bg: 140 40% 15%;
+    --status-optimal-text: 140 50% 65%;
+    --status-low-bg: 0 80% 15%;
+    --status-low-text: 0 70% 65%;
+    --status-excess-bg: 35 100% 15%;
+    --status-excess-text: 35 65% 65%;
+
+    /* Dialog Overlay - Dark Mode */
+    --dialog-overlay: 220 20% 8% / 0.4; /* darker overlay for dark mode */
+
+    /* Calendar Selection - same gradient works in dark mode */
+    --calendar-selected-start: 271 81% 56%;
+    --calendar-selected-end: 25 95% 53%;
+    --calendar-selected-text: 43 71% 95%;
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

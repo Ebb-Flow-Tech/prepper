@@ -1,0 +1,36 @@
+{
+  "name": "flow-ui-starter",
+  "version": "1.0.0",
+  "description": "Flow UI Design System Starter Kit",
+  "main": "index.js",
+  "scripts": {
+    "build-css": "tailwindcss -i ./globals.css -o ./dist/flow-ui.css"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.0.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.263.1",
+    "tailwind-merge": "^2.0.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.0",
+    "tailwindcss-animate": "^1.0.6",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "keywords": [
+    "flow-ui",
+    "design-system",
+    "tailwind",
+    "react",
+    "components"
+  ],
+  "author": "Ebb & Flow Group",
+  "license": "MIT"
+}
