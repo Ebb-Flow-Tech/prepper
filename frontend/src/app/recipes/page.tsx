@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useRecipes } from '@/lib/hooks';
+import { useCreateRecipe, useRecipes } from '@/lib/hooks';
 import { RecipeCard } from '@/components/recipes';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
+import { toast } from 'sonner';
 import type { Recipe, RecipeStatus } from '@/types';
 
 type GroupByOption = 'none' | 'status';
@@ -52,6 +53,7 @@ function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string,
 
 export default function RecipesPage() {
   const { data: recipes, isLoading, error } = useRecipes();
+  const createRecipe = useCreateRecipe();
 
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
@@ -74,6 +76,23 @@ export default function RecipesPage() {
     });
   }, [recipes, search, statusFilter]);
 
+  const handleCreate = () => {
+    createRecipe.mutate(
+      {
+        name: 'Untitled Recipe',
+        yield_quantity: 10,
+        yield_unit: 'portion',
+        status: 'draft',
+      },
+      {
+        onSuccess: (newRecipe) => {
+          toast.success('Recipe created');
+        },
+        onError: () => toast.error('Failed to create recipe'),
+      }
+    );
+  };
+
   const groupedRecipes = useMemo(() => {
     return groupRecipes(filteredRecipes, groupBy);
   }, [filteredRecipes, groupBy]);
@@ -95,7 +114,7 @@ export default function RecipesPage() {
           title="Recipes"
           description="Browse and manage your recipe collection"
         >
-          <Button disabled title="Use the Canvas to create recipes">
+          <Button onClick={handleCreate} disabled={createRecipe.isPending}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Recipe</span>
           </Button>
