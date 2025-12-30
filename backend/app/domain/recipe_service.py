@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.models import (
@@ -87,6 +88,7 @@ class RecipeService:
             select(RecipeIngredient)
             .where(RecipeIngredient.recipe_id == recipe_id)
             .order_by(RecipeIngredient.sort_order)
+            .options(selectinload(RecipeIngredient.ingredient))
         )
         return list(self.session.exec(statement).all())
 

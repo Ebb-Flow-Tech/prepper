@@ -1,8 +1,12 @@
 """RecipeIngredient model - quantitative link between recipe and ingredients."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.ingredient import Ingredient
 
 
 class RecipeIngredientBase(SQLModel):
@@ -28,6 +32,9 @@ class RecipeIngredient(RecipeIngredientBase, table=True):
     sort_order: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Relationship to Ingredient
+    ingredient: Optional["Ingredient"] = Relationship(back_populates="recipe_ingredients")
+
 
 class RecipeIngredientCreate(RecipeIngredientBase):
     """Schema for adding an ingredient to a recipe."""
@@ -46,3 +53,25 @@ class RecipeIngredientReorder(SQLModel):
     """Schema for reordering recipe ingredients."""
 
     ordered_ids: list[int]
+
+
+class IngredientNested(SQLModel):
+    """Ingredient data for nested response in RecipeIngredientRead."""
+
+    id: int
+    name: str
+    base_unit: str
+    cost_per_base_unit: float | None = None
+
+
+class RecipeIngredientRead(SQLModel):
+    """RecipeIngredient for API response (includes nested Ingredient)."""
+
+    id: int
+    recipe_id: int
+    ingredient_id: int
+    quantity: float
+    unit: str
+    sort_order: int
+    created_at: datetime
+    ingredient: IngredientNested | None = None

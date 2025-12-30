@@ -24,6 +24,8 @@ from app.models.recipe_ingredient import (
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
     RecipeIngredientReorder,
+    RecipeIngredientRead,
+    IngredientNested,
 )
 from app.models.recipe_recipe import (
     RecipeRecipe,
@@ -82,6 +84,8 @@ __all__ = [
     "RecipeIngredientCreate",
     "RecipeIngredientUpdate",
     "RecipeIngredientReorder",
+    "RecipeIngredientRead",
+    "IngredientNested",
     # RecipeRecipe (sub-recipes)
     "RecipeRecipe",
     "RecipeRecipeCreate",

@@ -2,10 +2,13 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, JSON, String
 from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.recipe_ingredient import RecipeIngredient
 
 
 class FoodCategory(str, Enum):
@@ -115,6 +118,9 @@ class Ingredient(IngredientBase, table=True):
         sa_relationship_kwargs={"remote_side": "Ingredient.id"},
     )
     variants: list["Ingredient"] = Relationship(back_populates="master_ingredient")
+
+    # Relationship to RecipeIngredient
+    recipe_ingredients: list["RecipeIngredient"] = Relationship(back_populates="ingredient")
 
 
 class IngredientCreate(SQLModel):
