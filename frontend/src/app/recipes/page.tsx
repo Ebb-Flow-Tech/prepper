@@ -6,6 +6,7 @@ import { useCreateRecipe, useRecipes } from '@/lib/hooks';
 import { RecipeCard } from '@/components/recipes';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
+import { useAppState } from '@/lib/store';
 import type { Recipe, RecipeStatus } from '@/types';
 
 type GroupByOption = 'none' | 'status';
@@ -52,6 +53,7 @@ function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string,
 }
 
 export default function RecipesPage() {
+  const { userId } = useAppState()
   const { data: recipes, isLoading, error } = useRecipes();
   const createRecipe = useCreateRecipe();
 
@@ -72,6 +74,11 @@ export default function RecipesPage() {
       if (statusFilter !== 'all' && recipe.status !== statusFilter) {
         return false;
       }
+
+      // filter by user availability
+      if (recipe.created_by != userId) {
+        return false;
+      }
       return true;
     });
   }, [recipes, search, statusFilter]);
@@ -83,6 +90,7 @@ export default function RecipesPage() {
         yield_quantity: 10,
         yield_unit: 'portion',
         status: 'draft',
+        created_by: userId || undefined,
       },
       {
         onSuccess: (newRecipe) => {

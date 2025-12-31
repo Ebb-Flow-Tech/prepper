@@ -98,7 +98,7 @@ function RecipeListSkeleton() {
 }
 
 export function LeftPanel() {
-  const { selectedRecipeId, selectRecipe } = useAppState();
+  const { selectedRecipeId, selectRecipe, userId } = useAppState();
   const { data: recipes, isLoading, error } = useRecipes();
   const createRecipe = useCreateRecipe();
   const deleteRecipe = useDeleteRecipe();
@@ -106,9 +106,10 @@ export function LeftPanel() {
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
-    if (!search.trim()) return recipes;
+    const userOwnedRecipes = recipes.filter((r)=> r.created_by == userId)
+    if (!search.trim()) return userOwnedRecipes;
     const lower = search.toLowerCase();
-    return recipes.filter((r) => r.name.toLowerCase().includes(lower));
+    return userOwnedRecipes.filter((r) => r.name.toLowerCase().includes(lower));
   }, [recipes, search]);
 
   const handleCreate = () => {
@@ -118,6 +119,7 @@ export function LeftPanel() {
         yield_quantity: 10,
         yield_unit: 'portion',
         status: 'draft',
+        created_by: userId || undefined,
       },
       {
         onSuccess: (newRecipe) => {

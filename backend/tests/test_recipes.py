@@ -11,6 +11,7 @@ def test_create_recipe(client: TestClient):
             "name": "Chocolate Cake",
             "yield_quantity": 12,
             "yield_unit": "portion",
+            "created_by":"234",
         },
     )
     assert response.status_code == 201
@@ -18,6 +19,7 @@ def test_create_recipe(client: TestClient):
     assert data["name"] == "Chocolate Cake"
     assert data["yield_quantity"] == 12
     assert data["status"] == "draft"
+    assert data["created_by"] == "234"
 
 
 def test_update_recipe_status(client: TestClient):

@@ -6,8 +6,10 @@ import { Plus, FlaskConical, Beaker, ClipboardList, ArrowRight } from 'lucide-re
 import { useRecipes, useIngredients } from '@/lib/hooks';
 import { RecipeCard } from '@/components/recipes';
 import { PageHeader, SearchInput, Card, CardContent, Button, Skeleton, Badge } from '@/components/ui';
+import { useAppState } from '@/lib/store';
 
 export default function RndPage() {
+  const { userId } = useAppState()
   const { data: recipes, isLoading: recipesLoading } = useRecipes();
   const { data: ingredients, isLoading: ingredientsLoading } = useIngredients();
 
@@ -16,7 +18,7 @@ export default function RndPage() {
   // Filter draft recipes as "experiments" (recipes not yet finalized)
   const experimentalRecipes = useMemo(() => {
     if (!recipes) return [];
-    return recipes.filter((r) => r.status === 'draft');
+    return recipes.filter((r) => r.status === 'draft' && (r.created_by == userId));
   }, [recipes]);
 
   // Filter ingredients by search

@@ -26,6 +26,7 @@ export interface Recipe {
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
+  created_by: string;
 }
 
 export interface RecipeIngredient {
@@ -75,6 +76,7 @@ export interface CreateRecipeRequest {
   yield_quantity?: number;
   yield_unit?: string;
   status?: RecipeStatus;
+  created_by?: string;
 }
 
 export interface UpdateRecipeRequest {

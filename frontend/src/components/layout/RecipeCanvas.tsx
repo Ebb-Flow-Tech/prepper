@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 function EmptyState() {
-  const { selectRecipe } = useAppState();
+  const { selectRecipe, userId } = useAppState();
   const createRecipe = useCreateRecipe();
 
   const handleCreate = () => {
@@ -21,6 +21,7 @@ function EmptyState() {
         yield_quantity: 10,
         yield_unit: 'portion',
         status: 'draft',
+        created_by: userId || undefined,
       },
       {
         onSuccess: (newRecipe) => {

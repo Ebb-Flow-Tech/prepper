@@ -39,6 +39,7 @@ import {
   Select,
 } from '@/components/ui';
 import type { TastingNote, TastingDecision, Recipe } from '@/types';
+import { useAppState } from '@/lib/store';
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-GB', {
@@ -87,11 +88,10 @@ function StarRating({ rating, onChange }: { rating: number | null; onChange?: (v
           className={`${isInteractive ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}
         >
           <Star
-            className={`h-4 w-4 ${
-              rating && star <= rating
+            className={`h-4 w-4 ${rating && star <= rating
                 ? 'fill-amber-400 text-amber-400'
                 : 'text-zinc-300 dark:text-zinc-600'
-            }`}
+              }`}
           />
         </button>
       ))}
@@ -276,11 +276,12 @@ interface AddRecipeFormProps {
 }
 
 function AddRecipeForm({ recipes, existingRecipeIds, onAdd, onCancel }: AddRecipeFormProps) {
+  const { userId } = useAppState()
   const [selectedRecipeId, setSelectedRecipeId] = useState<number | ''>('');
   const [overallRating, setOverallRating] = useState<number | null>(null);
   const [tasterName, setTasterName] = useState('');
 
-  const availableRecipes = recipes.filter((r) => !existingRecipeIds.includes(r.id));
+  const availableRecipes = recipes.filter((r) => !existingRecipeIds.includes(r.id) && r.created_by == userId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
