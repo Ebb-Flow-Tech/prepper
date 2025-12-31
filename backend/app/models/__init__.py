@@ -60,6 +60,11 @@ from app.models.tasting import (
     TastingDecision,
     RecipeTastingSummary,
 )
+from app.models.supplier import (
+    Supplier,
+    SupplierCreate,
+    SupplierUpdate,
+)
 
 __all__ = [
     # Ingredient
@@ -115,4 +120,8 @@ __all__ = [
     "TastingNoteWithRecipe",
     "TastingDecision",
     "RecipeTastingSummary",
+    # Supplier
+    "Supplier",
+    "SupplierCreate",
+    "SupplierUpdate",
 ]
