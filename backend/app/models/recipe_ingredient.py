@@ -32,6 +32,10 @@ class RecipeIngredient(RecipeIngredientBase, table=True):
     sort_order: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    unit_price: float | None = Field(default=None)  # not all unit prices are known
+    base_unit: str | None = Field(default=None)
+    supplier_id: int | None = Field(default=None)  # not all ingredients currently 
+
     # Relationship to Ingredient
     ingredient: Optional["Ingredient"] = Relationship(back_populates="recipe_ingredients")
 
