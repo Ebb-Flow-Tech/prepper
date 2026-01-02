@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Input, Select, Button } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
+import { getIngredientSuppliers } from '@/lib/api';
 import type { RecipeIngredient } from '@/types';
 
 const UNIT_OPTIONS = [
@@ -45,6 +47,19 @@ export function RecipeIngredientRow({
 
   const [localQuantity, setLocalQuantity] = useState(String(ingredient.quantity));
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('');
+  const [unitPrice, setUnitPrice] = useState<string>(String(ingredient.ingredient?.cost_per_base_unit));
+
+  // Fetch suppliers for this ingredient
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['ingredient-suppliers', ingredient.ingredient_id],
+    queryFn: () => getIngredientSuppliers(ingredient.ingredient_id),
+  });
+
+  const supplierOptions = suppliers.map((s) => ({
+    value: s.supplier_id,
+    label: s.supplier_name,
+  }));
 
   useEffect(() => {
     setLocalQuantity(String(ingredient.quantity));
@@ -105,6 +120,13 @@ export function RecipeIngredientRow({
         </p>
       </div>
 
+      <Select
+        value={selectedSupplier}
+        onChange={(e) => setSelectedSupplier(e.target.value)}
+        options={[{ value: '', label: 'No supplier' }, ...supplierOptions]}
+        className="w-32"
+      />
+
       <Input
         type="number"
         value={localQuantity}
@@ -120,6 +142,17 @@ export function RecipeIngredientRow({
         options={UNIT_OPTIONS}
         className="w-24"
       />
+
+      $
+      <Input
+        type="number"
+        value={unitPrice}
+        onChange={(e) => setUnitPrice(e.target.value)}
+        placeholder="Unit $"
+        className="w-20"
+        min={0}
+        step={0.01}
+      />/{ingredient.unit}
 
       <div className="w-20 text-right text-sm text-zinc-500">
         {lineCost !== null ? formatCurrency(lineCost) : '—'}
