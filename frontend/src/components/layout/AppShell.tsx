@@ -14,11 +14,11 @@ import type { Ingredient } from '@/types';
 
 function DragOverlayContent({ ingredient }: { ingredient: Ingredient }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-blue-400 bg-white p-3 shadow-lg dark:bg-zinc-800">
-      <GripVertical className="h-4 w-4 text-zinc-400" />
+    <div className="flex items-center gap-2 rounded-lg border border-ring bg-card p-3 shadow-lg">
+      <GripVertical className="h-4 w-4 text-muted-foreground" />
       <div>
-        <p className="font-medium">{ingredient.name}</p>
-        <p className="text-sm text-zinc-500">{ingredient.base_unit}</p>
+        <p className="font-medium text-foreground">{ingredient.name}</p>
+        <p className="text-sm text-muted-foreground">{ingredient.base_unit}</p>
       </div>
     </div>
   );

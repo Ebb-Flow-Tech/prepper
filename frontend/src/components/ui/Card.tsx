@@ -13,8 +13,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950',
-          interactive && 'cursor-pointer transition-shadow hover:shadow-md',
+          'rounded-xl border border-border bg-card p-4 text-card-foreground',
+          interactive && 'cursor-pointer transition-shadow hover:shadow-md flow-ui-hover-lift',
           className
         )}
         {...props}
@@ -48,7 +48,7 @@ export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(
     return (
       <h3
         ref={ref}
-        className={cn('font-semibold text-zinc-900 dark:text-zinc-100', className)}
+        className={cn('font-semibold text-foreground', className)}
         {...props}
       />
     );
@@ -57,6 +57,22 @@ export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(
 
 CardTitle.displayName = 'CardTitle';
 
+type CardDescriptionProps = HTMLAttributes<HTMLParagraphElement>;
+
+export const CardDescription = forwardRef<HTMLParagraphElement, CardDescriptionProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <p
+        ref={ref}
+        className={cn('text-sm text-muted-foreground', className)}
+        {...props}
+      />
+    );
+  }
+);
+
+CardDescription.displayName = 'CardDescription';
+
 type CardContentProps = HTMLAttributes<HTMLDivElement>;
 
 export const CardContent = forwardRef<HTMLDivElement, CardContentProps>(
@@ -64,7 +80,7 @@ export const CardContent = forwardRef<HTMLDivElement, CardContentProps>(
     return (
       <div
         ref={ref}
-        className={cn('mt-2 text-sm text-zinc-600 dark:text-zinc-400', className)}
+        className={cn('mt-2 text-sm text-muted-foreground', className)}
         {...props}
       />
     );
@@ -80,7 +96,7 @@ export const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
     return (
       <div
         ref={ref}
-        className={cn('mt-3 flex items-center gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800', className)}
+        className={cn('mt-3 flex items-center gap-2 pt-3 border-t border-border', className)}
         {...props}
       />
     );

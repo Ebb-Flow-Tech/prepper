@@ -5,7 +5,7 @@ import { ReactNode } from 'react';
 
 interface BadgeProps {
   children: ReactNode;
-  variant?: 'default' | 'secondary' | 'success' | 'warning' | 'destructive';
+  variant?: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'info';
   className?: string;
 }
 
@@ -13,17 +13,19 @@ export function Badge({ children, variant = 'default', className }: BadgeProps) 
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium transition-colors',
         {
-          'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300':
+          'bg-secondary text-secondary-foreground':
             variant === 'default',
-          'bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400':
+          'bg-muted text-muted-foreground':
             variant === 'secondary',
-          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':
+          'bg-[hsl(var(--status-approved-bg))] text-[hsl(var(--status-approved))]':
             variant === 'success',
-          'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300':
+          'bg-[hsl(var(--status-testing-bg))] text-[hsl(var(--status-testing))]':
+            variant === 'info',
+          'bg-[hsl(var(--color-amber-light))] text-[hsl(var(--color-amber-dark))]':
             variant === 'warning',
-          'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300':
+          'bg-[hsl(var(--status-archived-bg))] text-[hsl(var(--status-archived))]':
             variant === 'destructive',
         },
         className

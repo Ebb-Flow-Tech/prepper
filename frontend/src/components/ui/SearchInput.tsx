@@ -14,16 +14,15 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
 
     return (
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           ref={ref}
           type="text"
           value={value}
           className={cn(
-            'h-10 w-full rounded-md border border-zinc-200 bg-white pl-10 pr-10 text-sm',
-            'placeholder:text-zinc-400',
-            'focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400',
-            'dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600 dark:focus:ring-zinc-600',
+            'h-10 w-full rounded-lg border border-input bg-card pl-10 pr-10 text-sm text-foreground',
+            'placeholder:text-muted-foreground',
+            'focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring',
             className
           )}
           {...props}
@@ -32,7 +31,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           <button
             type="button"
             onClick={onClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>

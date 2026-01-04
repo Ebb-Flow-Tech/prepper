@@ -116,7 +116,7 @@ export function TopAppBar() {
   }, [recipe, editedPrice, updateRecipe]);
 
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+    <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4">
       {/* Recipe Name */}
       <div className="flex-1">
         {recipe ? (
@@ -132,13 +132,13 @@ export function TopAppBar() {
           ) : (
             <h1
               onClick={() => setIsEditingName(true)}
-              className="cursor-pointer text-xl font-semibold hover:text-zinc-600 dark:hover:text-zinc-400"
+              className="cursor-pointer text-xl font-semibold text-foreground hover:text-muted-foreground"
             >
               {recipe.name}
             </h1>
           )
         ) : (
-          <span className="text-zinc-400">No recipe selected</span>
+          <span className="text-muted-foreground">No recipe selected</span>
         )}
       </div>
 
@@ -163,13 +163,13 @@ export function TopAppBar() {
               />
               <button
                 onClick={handleYieldSave}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Save
               </button>
               <button
                 onClick={() => setIsEditingYield(false)}
-                className="text-sm text-zinc-500 hover:underline"
+                className="text-sm text-muted-foreground hover:underline"
               >
                 Cancel
               </button>
@@ -177,10 +177,10 @@ export function TopAppBar() {
           ) : (
             <button
               onClick={() => setIsEditingYield(true)}
-              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+              className="rounded-lg bg-secondary px-3 py-1.5 text-sm hover:bg-accent"
             >
-              <span className="text-zinc-500">Yield:</span>{' '}
-              <span className="font-medium">
+              <span className="text-muted-foreground">Yield:</span>{' '}
+              <span className="font-medium text-foreground">
                 {recipe.yield_quantity} {recipe.yield_unit}
               </span>
             </button>
@@ -195,9 +195,9 @@ export function TopAppBar() {
           />
 
           {/* Cost per portion */}
-          <div className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm dark:bg-zinc-800">
-            <span className="text-zinc-500">Cost:</span>{' '}
-            <span className="font-medium">
+          <div className="rounded-lg bg-secondary px-3 py-1.5 text-sm">
+            <span className="text-muted-foreground">Cost:</span>{' '}
+            <span className="font-medium text-foreground">
               {formatCurrency(costing?.cost_per_portion)}
             </span>
           </div>
@@ -216,7 +216,7 @@ export function TopAppBar() {
               />
               <button
                 onClick={handlePriceSave}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Save
               </button>
@@ -224,10 +224,10 @@ export function TopAppBar() {
           ) : (
             <button
               onClick={() => setIsEditingPrice(true)}
-              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+              className="rounded-lg bg-secondary px-3 py-1.5 text-sm hover:bg-accent"
             >
-              <span className="text-zinc-500">Price:</span>{' '}
-              <span className="font-medium">
+              <span className="text-muted-foreground">Price:</span>{' '}
+              <span className="font-medium text-foreground">
                 {formatCurrency(recipe.selling_price_est)}
               </span>
             </button>

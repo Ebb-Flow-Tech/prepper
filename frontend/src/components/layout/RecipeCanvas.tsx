@@ -34,11 +34,11 @@ function EmptyState() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="rounded-full bg-zinc-100 p-6 dark:bg-zinc-800">
-        <ChefHat className="h-12 w-12 text-zinc-400" />
+      <div className="rounded-full bg-muted p-6">
+        <ChefHat className="h-12 w-12 text-muted-foreground" />
       </div>
-      <h2 className="mt-6 text-xl font-semibold">No recipe selected</h2>
-      <p className="mt-2 max-w-sm text-zinc-500">
+      <h2 className="mt-6 text-xl font-semibold text-foreground">No recipe selected</h2>
+      <p className="mt-2 max-w-sm text-muted-foreground">
         Select a recipe from the left panel or create a new one to get started.
       </p>
       <Button className="mt-6" onClick={handleCreate} disabled={createRecipe.isPending}>
@@ -74,7 +74,7 @@ export function RecipeCanvas() {
 
   if (!selectedRecipeId) {
     return (
-      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+      <main className="flex-1 overflow-y-auto bg-background">
         <EmptyState />
       </main>
     );
@@ -82,7 +82,7 @@ export function RecipeCanvas() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+      <main className="flex-1 overflow-y-auto bg-background">
         <LoadingState />
       </main>
     );
@@ -90,10 +90,10 @@ export function RecipeCanvas() {
 
   if (error || !recipe) {
     return (
-      <main className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+      <main className="flex-1 overflow-y-auto bg-background">
         <div className="flex h-full items-center justify-center">
-          <div className="rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
-            <p className="text-red-600 dark:text-red-400">Failed to load recipe</p>
+          <div className="rounded-lg bg-destructive/10 p-6 text-center">
+            <p className="text-destructive">Failed to load recipe</p>
           </div>
         </div>
       </main>
@@ -104,16 +104,16 @@ export function RecipeCanvas() {
     <main
       ref={setNodeRef}
       className={cn(
-        'flex-1 overflow-y-auto bg-white dark:bg-zinc-950',
-        isOver && 'ring-2 ring-inset ring-blue-400'
+        'flex-1 overflow-y-auto bg-background',
+        isOver && 'ring-2 ring-inset ring-ring'
       )}
     >
       <div className="mx-auto max-w-4xl p-6">
         {/* Ingredients Section */}
         <section className="mb-8">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold">Ingredients</h2>
-            <p className="text-sm text-zinc-500">
+            <h2 className="text-lg font-semibold text-foreground">Ingredients</h2>
+            <p className="text-sm text-muted-foreground">
               Drag ingredients from the right panel to add them
             </p>
           </div>
@@ -123,7 +123,7 @@ export function RecipeCanvas() {
         {/* Instructions Section */}
         <section>
           <div className="mb-4">
-            <h2 className="text-lg font-semibold">Instructions</h2>
+            <h2 className="text-lg font-semibold text-foreground">Instructions</h2>
           </div>
           <Instructions recipe={recipe} />
         </section>

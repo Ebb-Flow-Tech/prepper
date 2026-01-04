@@ -51,14 +51,14 @@ function RecipeCard({
       className={cn(
         'group relative w-full cursor-pointer rounded-lg border p-3 text-left transition-colors',
         isSelected
-          ? 'border-zinc-400 bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800'
-          : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+          ? 'border-ring bg-accent'
+          : 'border-border hover:border-ring/50 hover:bg-accent/50'
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium">{recipe.name}</h3>
-          <p className="text-sm text-zinc-500">
+          <h3 className="truncate font-medium text-foreground">{recipe.name}</h3>
+          <p className="text-sm text-muted-foreground">
             {recipe.yield_quantity} {recipe.yield_unit}
           </p>
         </div>
@@ -71,8 +71,8 @@ function RecipeCard({
             className={cn(
               'rounded p-1 transition-all',
               confirmDelete
-                ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                : 'text-zinc-400 opacity-0 hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300'
+                ? 'bg-destructive/10 text-destructive'
+                : 'text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100'
             )}
             title={confirmDelete ? 'Click again to confirm' : 'Delete recipe'}
           >
@@ -88,7 +88,7 @@ function RecipeListSkeleton() {
   return (
     <div className="space-y-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+        <div key={i} className="rounded-lg border border-border p-3">
           <Skeleton className="mb-2 h-5 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
         </div>
@@ -142,10 +142,10 @@ export function LeftPanel() {
   };
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+    <aside className="flex h-full w-72 flex-col border-r border-border bg-secondary">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h2 className="font-semibold">Recipes</h2>
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 className="font-semibold text-foreground">Recipes</h2>
         <Button size="sm" onClick={handleCreate} disabled={createRecipe.isPending}>
           <Plus className="h-4 w-4" />
           New
@@ -153,9 +153,9 @@ export function LeftPanel() {
       </div>
 
       {/* Search */}
-      <div className="border-b border-zinc-200 p-3 dark:border-zinc-800">
+      <div className="border-b border-border p-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -170,12 +170,12 @@ export function LeftPanel() {
         {isLoading ? (
           <RecipeListSkeleton />
         ) : error ? (
-          <div className="rounded-lg bg-red-50 p-4 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <div className="rounded-lg bg-destructive/10 p-4 text-center text-sm text-destructive">
             Failed to load recipes
           </div>
         ) : filteredRecipes.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               {search ? 'No recipes found' : 'No recipes yet'}
             </p>
             {!search && (

@@ -12,12 +12,12 @@ interface GroupSectionProps {
 export function GroupSection({ title, children, className, count }: GroupSectionProps) {
   return (
     <section className={cn('mb-8', className)}>
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
+        <h2 className="text-lg font-semibold text-foreground">
           {title}
         </h2>
         {count !== undefined && (
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
+          <span className="text-sm text-muted-foreground">
             ({count})
           </span>
         )}
