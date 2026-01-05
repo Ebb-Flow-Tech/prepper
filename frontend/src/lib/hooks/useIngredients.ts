@@ -6,6 +6,7 @@ import type {
   CreateIngredientRequest,
   AddIngredientSupplierRequest,
   UpdateIngredientSupplierRequest,
+  UpdateIngredientRequest,
 } from '@/types';
 
 export function useIngredients(showArchived: boolean = false) {
@@ -44,7 +45,7 @@ export function useUpdateIngredient() {
       data,
     }: {
       id: number;
-      data: Partial<CreateIngredientRequest>;
+      data: Partial<UpdateIngredientRequest>;
     }) => api.updateIngredient(id, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
@@ -58,8 +59,9 @@ export function useDeactivateIngredient() {
 
   return useMutation({
     mutationFn: (id: number) => api.deactivateIngredient(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+      queryClient.invalidateQueries({ queryKey: ['ingredient', id] });
     },
   });
 }

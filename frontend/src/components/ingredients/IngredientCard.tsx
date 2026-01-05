@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Edit2, Archive, ImagePlus } from 'lucide-react';
+import { Edit2, Archive, ArchiveRestore, ImagePlus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { Ingredient } from '@/types';
@@ -11,9 +11,10 @@ interface IngredientCardProps {
   ingredient: Ingredient;
   onEdit?: (ingredient: Ingredient) => void;
   onArchive?: (ingredient: Ingredient) => void;
+  onUnarchive?: (ingredient: Ingredient) => void;
 }
 
-export function IngredientCard({ ingredient, onEdit, onArchive }: IngredientCardProps) {
+export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   return (
@@ -76,6 +77,17 @@ export function IngredientCard({ ingredient, onEdit, onArchive }: IngredientCard
               title="Archive"
             >
               <Archive className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onUnarchive && !ingredient.is_active && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onUnarchive(ingredient)}
+              title="Unarchive"
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

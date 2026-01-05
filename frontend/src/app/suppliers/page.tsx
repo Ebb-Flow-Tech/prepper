@@ -126,6 +126,7 @@ export default function SuppliersPage() {
       },
       {
         onSuccess: () => {
+          setName("");
           toast.success('Supplier created');
         },
         onError: () => toast.error('Failed to create supplier'),

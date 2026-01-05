@@ -145,6 +145,7 @@ class IngredientUpdate(SQLModel):
     source: str | None = None  # "fmh" or "manual"
     master_ingredient_id: int | None = None
     suppliers: list[dict] | None = None
+    is_active: bool | None = None
 
 
 class SupplierEntryCreate(SQLModel):

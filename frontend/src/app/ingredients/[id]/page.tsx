@@ -2,16 +2,18 @@
 
 import { use, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
+import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
 import {
   useIngredient,
   useUpdateIngredient,
+  useDeactivateIngredient,
   useSuppliers,
   useIngredientSuppliers,
   useAddIngredientSupplier,
   useRemoveIngredientSupplier,
   useUpdateIngredientSupplier,
 } from '@/lib/hooks';
+import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateIngredientSupplierRequest } from '@/types';
@@ -167,9 +169,27 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const removeSupplierMutation = useRemoveIngredientSupplier();
   const updateSupplierMutation = useUpdateIngredientSupplier();
   const updateIngredientMutation = useUpdateIngredient();
+  const deactivateIngredientMutation = useDeactivateIngredient();
 
-  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null }) => {
+  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean }) => {
     updateIngredientMutation.mutate({ id: ingredientId, data });
+  };
+
+  const handleArchive = () => {
+    deactivateIngredientMutation.mutate(ingredientId, {
+      onSuccess: () => toast.success(`${ingredient?.name} archived`),
+      onError: () => toast.error(`Failed to archive ${ingredient?.name}`),
+    });
+  };
+
+  const handleUnarchive = () => {
+    updateIngredientMutation.mutate(
+      { id: ingredientId, data: { is_active: true } },
+      {
+        onSuccess: () => toast.success(`${ingredient?.name} unarchived`),
+        onError: () => toast.error(`Failed to unarchive ${ingredient?.name}`),
+      }
+    );
   };
 
   const handleUpdateSupplier = (supplierId: string, data: UpdateIngredientSupplierRequest) => {
@@ -304,6 +324,27 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         <Badge variant={ingredient.is_active ? 'success' : 'warning'}>
                           {ingredient.is_active ? 'Active' : 'Archived'}
                         </Badge>
+                        {ingredient.is_active ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleArchive}
+                            disabled={deactivateIngredientMutation.isPending}
+                          >
+                            <Archive className="h-4 w-4 mr-1" />
+                            Archive
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUnarchive}
+                            disabled={updateIngredientMutation.isPending}
+                          >
+                            <ArchiveRestore className="h-4 w-4 mr-1" />
+                            Unarchive
+                          </Button>
+                        )}
                       </div>
                     </div>
 

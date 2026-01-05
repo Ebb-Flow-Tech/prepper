@@ -58,6 +58,9 @@ export function RecipeIngredientRow({
   const [unitPrice, setUnitPrice] = useState<string>(
     ingredient.unit_price?.toString() ?? ''
   );
+  const [baseUnit, setBaseUnit] = useState<string>(
+    ingredient.base_unit ?? ingredient.unit
+  );
 
   // Fetch suppliers for this ingredient
   const { data: suppliers = [] } = useQuery({
@@ -81,6 +84,10 @@ export function RecipeIngredientRow({
   useEffect(() => {
     setUnitPrice(ingredient.unit_price?.toString() ?? '');
   }, [ingredient.unit_price]);
+
+  useEffect(() => {
+    setBaseUnit(ingredient.base_unit ?? ingredient.unit);
+  }, [ingredient.base_unit, ingredient.unit]);
 
   const handleQuantityChange = useCallback(
     (value: string) => {
@@ -113,13 +120,13 @@ export function RecipeIngredientRow({
       const timer = setTimeout(() => {
         const num = parseFloat(value);
         if (!isNaN(num) && num >= 0) {
-          onUnitPriceChange(num, ingredient.base_unit ?? ingredient.unit);
+          onUnitPriceChange(num, baseUnit);
         }
       }, 500);
 
       setUnitPriceDebounceTimer(timer);
     },
-    [unitPriceDebounceTimer, onUnitPriceChange, ingredient.base_unit, ingredient.unit]
+    [unitPriceDebounceTimer, onUnitPriceChange, baseUnit]
   );
 
   const handleSupplierChange = useCallback(
@@ -130,11 +137,15 @@ export function RecipeIngredientRow({
         // No supplier selected - use ingredient defaults
         const defaultUnitPrice = ingredient.ingredient?.cost_per_base_unit ?? 0;
         const defaultBaseUnit = ingredient.ingredient?.base_unit ?? ingredient.unit;
+        setUnitPrice(defaultUnitPrice.toString());
+        setBaseUnit(defaultBaseUnit);
         onSupplierChange(null, defaultUnitPrice, defaultBaseUnit);
       } else {
         // Find the selected supplier and use its values
         const supplier = suppliers.find((s) => s.supplier_id === supplierId);
         if (supplier) {
+          setUnitPrice(supplier.cost_per_unit.toString());
+          setBaseUnit(supplier.pack_unit);
           onSupplierChange(
             parseInt(supplierId, 10),
             supplier.cost_per_unit,
@@ -212,7 +223,7 @@ export function RecipeIngredientRow({
         className="w-20"
         min={0}
         step={0.01}
-      />/{ingredient.base_unit ?? ingredient.unit}
+      />/{baseUnit}
 
       <div className="w-20 text-right text-sm text-zinc-500">
         {lineCost !== null ? formatCurrency(lineCost) : '—'}

@@ -99,6 +99,13 @@ export interface CreateIngredientRequest {
   cost_per_base_unit?: number | null;
 }
 
+export interface UpdateIngredientRequest {
+  name?: string;
+  base_unit?: string;
+  cost_per_base_unit?: number | null;
+  is_active?: boolean;
+}
+
 export interface AddRecipeIngredientRequest {
   ingredient_id: number;
   quantity: number;

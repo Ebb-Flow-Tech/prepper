@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient } from '@/lib/hooks';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient } from '@/lib/hooks';
 import { IngredientCard } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Re
 
 export default function IngredientsPage() {
   const deactivateIngredient = useDeactivateIngredient();
+  const updateIngredient = useUpdateIngredient();
 
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false)
@@ -74,6 +75,16 @@ export default function IngredientsPage() {
       onSuccess: () => toast.success(`${ingredient.name} archived`),
       onError: () => toast.error(`Failed to archive ${ingredient.name}`),
     });
+  };
+
+  const handleUnarchive = (ingredient: Ingredient) => {
+    updateIngredient.mutate(
+      { id: ingredient.id, data: { is_active: true } },
+      {
+        onSuccess: () => toast.success(`${ingredient.name} unarchived`),
+        onError: () => toast.error(`Failed to unarchive ${ingredient.name}`),
+      }
+    );
   };
 
   if (error) {
@@ -165,6 +176,7 @@ export default function IngredientsPage() {
                     key={ingredient.id}
                     ingredient={ingredient}
                     onArchive={handleArchive}
+                    onUnarchive={handleUnarchive}
                   />
                 ))}
               </GroupSection>

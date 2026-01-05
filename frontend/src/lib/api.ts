@@ -6,6 +6,7 @@ import type {
   CreateRecipeRequest,
   UpdateRecipeRequest,
   CreateIngredientRequest,
+  UpdateIngredientRequest,
   AddRecipeIngredientRequest,
   UpdateRecipeIngredientRequest,
   ReorderIngredientsRequest,
@@ -215,7 +216,7 @@ export async function createIngredient(
 
 export async function updateIngredient(
   id: number,
-  data: Partial<CreateIngredientRequest>
+  data: Partial<UpdateIngredientRequest>
 ): Promise<Ingredient> {
   return fetchApi<Ingredient>(`/ingredients/${id}`, {
     method: 'PATCH',
