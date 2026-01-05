@@ -22,6 +22,7 @@ import type {
   UpdateTastingNoteRequest,
   Supplier,
   CreateSupplierRequest,
+  UpdateSupplierRequest,
   IngredientSupplierEntry,
   AddIngredientSupplierRequest,
   UpdateIngredientSupplierRequest,
@@ -347,6 +348,22 @@ export async function createSupplier(
   return fetchApi<Supplier>('/suppliers', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export async function updateSupplier(
+  id: number,
+  data: UpdateSupplierRequest
+): Promise<Supplier> {
+  return fetchApi<Supplier>(`/suppliers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSupplier(id: number): Promise<void> {
+  return fetchApi<void>(`/suppliers/${id}`, {
+    method: 'DELETE',
   });
 }
 

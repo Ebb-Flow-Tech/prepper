@@ -1,27 +1,118 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
-import { useSuppliers, useCreateSupplier } from '@/lib/hooks';
+import { Plus, Trash2, Check, X } from 'lucide-react';
+import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
 function SupplierCard({ supplier }: { supplier: Supplier }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(supplier.name);
+  const updateSupplier = useUpdateSupplier();
+  const deleteSupplier = useDeleteSupplier();
+
+  const handleSave = () => {
+    if (!editName.trim()) {
+      toast.error('Supplier name is required');
+      return;
+    }
+    if (editName.trim() === supplier.name) {
+      setIsEditing(false);
+      return;
+    }
+    updateSupplier.mutate(
+      { id: supplier.id, data: { name: editName.trim() } },
+      {
+        onSuccess: () => {
+          toast.success('Supplier updated');
+          setIsEditing(false);
+        },
+        onError: () => toast.error('Failed to update supplier'),
+      }
+    );
+  };
+
+  const handleCancel = () => {
+    setEditName(supplier.name);
+    setIsEditing(false);
+  };
+
+  const handleDelete = () => {
+    if (!confirm(`Delete supplier "${supplier.name}"?`)) return;
+    deleteSupplier.mutate(supplier.id, {
+      onSuccess: () => toast.success('Supplier deleted'),
+      onError: () => toast.error('Failed to delete supplier'),
+    });
+  };
+
   return (
     <Card className="mb-4">
       <CardHeader>
-        <div className="flex-1 min-w-0">
-          <CardTitle className="truncate">{supplier.name}</CardTitle>
-        </div>
+        {isEditing ? (
+          <div className="flex items-center gap-2 w-full">
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="flex-1"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') handleCancel();
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSave}
+              disabled={updateSupplier.isPending}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleCancel}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between w-full">
+            <CardTitle
+              className="truncate flex-1 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300"
+              onClick={() => setIsEditing(true)}
+            >
+              {supplier.name}
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDelete}
+              disabled={deleteSupplier.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </CardHeader>
     </Card>
   );
 }
 
-function NewSupplierForm({ onClose }: { onClose: () => void }) {
+export default function SuppliersPage() {
+  const { data: suppliers, isLoading, error } = useSuppliers();
   const createSupplier = useCreateSupplier();
   const [name, setName] = useState('');
+  const [search, setSearch] = useState('');
+
+  const filteredSuppliers = useMemo(() => {
+    if (!suppliers) return [];
+
+    return suppliers.filter((supplier) => {
+      if (search && !supplier.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [suppliers, search]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,54 +127,11 @@ function NewSupplierForm({ onClose }: { onClose: () => void }) {
       {
         onSuccess: () => {
           toast.success('Supplier created');
-          onClose();
         },
         onError: () => toast.error('Failed to create supplier'),
       }
     );
   };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          Supplier Name
-        </label>
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter supplier name"
-          autoFocus
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={createSupplier.isPending}>
-          Add Supplier
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-export default function SuppliersPage() {
-  const { data: suppliers, isLoading, error } = useSuppliers();
-
-  const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-
-  const filteredSuppliers = useMemo(() => {
-    if (!suppliers) return [];
-
-    return suppliers.filter((supplier) => {
-      if (search && !supplier.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [suppliers, search]);
 
   if (error) {
     return (
@@ -102,20 +150,20 @@ export default function SuppliersPage() {
           title="Suppliers"
           description="Manage your ingredient suppliers"
         >
-          <Button onClick={() => setShowForm(true)} disabled={showForm}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Supplier</span>
-          </Button>
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Add new supplier"
+              autoFocus
+            />
+            <Button type="submit" disabled={createSupplier.isPending} className="shrink-0 whitespace-nowrap">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Supplier</span>
+            </Button>
+          </form>
+          {/* this is to just submit */}
         </PageHeader>
-
-        {showForm && (
-          <div className="w-full d-flex justify-items-end">
-            <div className="w-fit mb-3">
-              <NewSupplierForm onClose={() => setShowForm(false)} />
-            </div>
-          </div>
-        )}
-
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">
