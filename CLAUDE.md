@@ -54,13 +54,34 @@ app/
 ├── main.py              # FastAPI factory with lifespan, CORS, router mounting
 ├── config.py            # pydantic-settings (env-driven)
 ├── database.py          # SQLModel engine + session management
-├── models/              # SQLModel entities (Ingredient, Recipe, RecipeIngredient)
+├── models/              # SQLModel entities
+│   ├── ingredient.py            # Ingredient, SupplierEntry
+│   ├── recipe.py                # Recipe, RecipeStatus, Instructions
+│   ├── recipe_ingredient.py     # RecipeIngredient (ingredient links)
+│   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
+│   ├── outlet.py                # Outlet, RecipeOutlet (multi-brand support)
+│   ├── tasting.py               # TastingSession, TastingNote
+│   ├── supplier.py              # Supplier
+│   └── costing.py               # CostingResult, CostBreakdownItem
 ├── domain/              # Business logic services
-│   ├── ingredient_service.py
-│   ├── recipe_service.py
-│   ├── instructions_service.py   # Freeform → structured parsing
-│   └── costing_service.py        # Unit conversion + cost calculations
+│   ├── ingredient_service.py    # Ingredient CRUD + variants
+│   ├── recipe_service.py        # Recipe CRUD + status
+│   ├── instructions_service.py  # Freeform → structured parsing
+│   ├── costing_service.py       # Unit conversion + cost calculations
+│   ├── subrecipe_service.py     # Sub-recipe hierarchy + cycle detection
+│   ├── outlet_service.py        # Multi-brand outlet management
+│   ├── tasting_service.py       # Tasting sessions and notes
+│   └── supplier_service.py      # Supplier management
 ├── api/                 # FastAPI routers (one per resource)
+│   ├── recipes.py               # Recipe CRUD
+│   ├── recipe_ingredients.py    # Recipe ingredient links
+│   ├── ingredients.py           # Ingredient CRUD + suppliers
+│   ├── instructions.py          # Recipe instructions
+│   ├── costing.py               # Recipe costing
+│   ├── sub_recipes.py           # Sub-recipe hierarchy
+│   ├── outlets.py               # Outlets + recipe-outlet links
+│   ├── tastings.py              # Tasting sessions + notes
+│   └── suppliers.py             # Supplier CRUD
 └── utils/               # Unit conversion helpers
 ```
 
@@ -72,21 +93,34 @@ app/
 ### Frontend (`frontend/src/`)
 
 ```
+app/                     # Next.js App Router pages
+├── recipes/             # Recipe list and detail pages
+├── ingredients/         # Ingredient list and detail pages
+├── suppliers/           # Supplier management
+├── tastings/            # Tasting sessions (list, detail, new)
+├── finance/             # Finance/analytics
+└── rnd/                 # R&D workspace
+
 lib/
-├── api.ts               # Typed fetch wrapper for all 17 endpoints
+├── api.ts               # Typed fetch wrapper for 40+ endpoints
 ├── providers.tsx        # QueryClientProvider + AppProvider composition
 ├── store.tsx            # React Context for selectedRecipeId, instructionsTab
+├── types/index.ts       # TypeScript interfaces for all entities
 └── hooks/               # TanStack Query hooks with cache invalidation
     ├── useRecipes.ts
     ├── useIngredients.ts
     ├── useRecipeIngredients.ts
     ├── useCosting.ts
-    └── useInstructions.ts
+    ├── useInstructions.ts
+    ├── useSuppliers.ts
+    └── useTastings.ts
 
 components/
-├── layout/              # AppShell, TopAppBar, LeftPanel, RightPanel, RecipeCanvas
-├── recipe/              # RecipeIngredientsList, Instructions, InstructionsSteps
-└── ui/                  # Button, Input, Select, Badge, Skeleton
+├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
+├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, InstructionsSteps
+├── recipes/             # RecipeCard
+├── ingredients/         # IngredientCard
+└── ui/                  # Button, Input, Textarea, Select, Badge, Card, Skeleton, SearchInput, PageHeader, GroupSection, MasonryGrid
 ```
 
 **Key patterns:**
@@ -98,11 +132,28 @@ components/
 ### API Structure
 
 All endpoints under `/api/v1`:
-- `/ingredients` — CRUD + deactivate
+
+**Core Resources:**
 - `/recipes` — CRUD + status + soft-delete
+- `/ingredients` — CRUD + deactivate + categories + variants
+- `/suppliers` — CRUD
+
+**Recipe Sub-resources:**
 - `/recipes/{id}/ingredients` — add, update, remove, reorder
+- `/recipes/{id}/sub-recipes` — sub-recipe hierarchy (BOM) with cycle detection
 - `/recipes/{id}/instructions` — raw, parse (LLM), structured
 - `/recipes/{id}/costing` — calculate, recompute
+- `/recipes/{id}/outlets` — multi-brand outlet assignments
+- `/recipes/{id}/tasting-notes` — tasting history + summary
+
+**Ingredient Sub-resources:**
+- `/ingredients/{id}/suppliers` — add, update, remove supplier entries
+- `/ingredients/{id}/variants` — get ingredient variants
+
+**Tasting & Outlets:**
+- `/tasting-sessions` — CRUD + stats
+- `/tasting-sessions/{id}/notes` — tasting notes per session
+- `/outlets` — CRUD for multi-brand/location support
 
 ## Environment Variables
 
