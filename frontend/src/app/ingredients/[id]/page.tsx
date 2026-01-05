@@ -2,9 +2,10 @@
 
 import { use, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
+import { ArrowLeft, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
 import {
   useIngredient,
+  useUpdateIngredient,
   useSuppliers,
   useIngredientSuppliers,
   useAddIngredientSupplier,
@@ -90,6 +91,66 @@ function EditableCell({ value, onSave, type = 'text', className = '', displayVal
   );
 }
 
+// Inline editable select component
+interface EditableSelectProps {
+  value: string;
+  onSave: (value: string) => void;
+  options: { value: string; label: string }[];
+  className?: string;
+}
+
+function EditableSelect({ value, onSave, options, className = '' }: EditableSelectProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (isEditing && selectRef.current) {
+      selectRef.current.focus();
+    }
+  }, [isEditing]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newValue = e.target.value;
+    setIsEditing(false);
+    if (newValue !== value) {
+      onSave(newValue);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <select
+        ref={selectRef}
+        value={value}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        className={`px-1 py-0.5 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white dark:bg-zinc-800 ${className}`}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  const displayLabel = options.find((opt) => opt.value === value)?.label ?? value;
+
+  return (
+    <span
+      onClick={() => setIsEditing(true)}
+      className={`cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded font-medium text-zinc-900 dark:text-zinc-100 ${className}`}
+    >
+      {displayLabel}
+    </span>
+  );
+}
+
 interface IngredientPageProps {
   params: Promise<{ id: string }>;
 }
@@ -105,6 +166,11 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();
   const updateSupplierMutation = useUpdateIngredientSupplier();
+  const updateIngredientMutation = useUpdateIngredient();
+
+  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null }) => {
+    updateIngredientMutation.mutate({ id: ingredientId, data });
+  };
 
   const handleUpdateSupplier = (supplierId: string, data: UpdateIngredientSupplierRequest) => {
     updateSupplierMutation.mutate({
@@ -224,9 +290,13 @@ export default function IngredientPage({ params }: IngredientPageProps) {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className="flex-1">
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                          {ingredient.name}
+                          <EditableCell
+                            value={ingredient.name}
+                            onSave={(value) => handleUpdateIngredient({ name: value })}
+                            className="text-2xl font-bold"
+                          />
                         </h1>
                       </div>
 
@@ -234,31 +304,27 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         <Badge variant={ingredient.is_active ? 'success' : 'warning'}>
                           {ingredient.is_active ? 'Active' : 'Archived'}
                         </Badge>
-                        <Button variant="outline" size="sm" disabled>
-                          <Edit2 className="h-4 w-4" />
-                          Edit
-                        </Button>
                       </div>
                     </div>
 
                     <div className="mt-4 space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          Unit Cost:{' '}
-                          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                            {ingredient.cost_per_base_unit !== null
-                              ? formatCurrency(ingredient.cost_per_base_unit)
-                              : '-'}
-                          </span>
-                        </span>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-zinc-500 dark:text-zinc-400">Unit Cost:</span>
+                        <EditableCell
+                          value={ingredient.cost_per_base_unit?.toString() ?? ''}
+                          onSave={(value) => handleUpdateIngredient({ cost_per_base_unit: value ? parseFloat(value) : null })}
+                          type="number"
+                          className="font-medium text-zinc-900 dark:text-zinc-100"
+                          displayValue={ingredient.cost_per_base_unit !== null ? formatCurrency(ingredient.cost_per_base_unit) : '-'}
+                        />
                       </div>
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          Base Unit:{' '}
-                          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                            {ingredient.base_unit}
-                          </span>
-                        </span>
+                        <span className="text-zinc-500 dark:text-zinc-400">Base Unit:</span>
+                        <EditableSelect
+                          value={ingredient.base_unit}
+                          onSave={(value) => handleUpdateIngredient({ base_unit: value })}
+                          options={UNIT_OPTIONS}
+                        />
                       </div>
                     </div>
 

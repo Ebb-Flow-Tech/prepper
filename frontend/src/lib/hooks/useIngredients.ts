@@ -46,8 +46,9 @@ export function useUpdateIngredient() {
       id: number;
       data: Partial<CreateIngredientRequest>;
     }) => api.updateIngredient(id, data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+      queryClient.invalidateQueries({ queryKey: ['ingredient', variables.id] });
     },
   });
 }
