@@ -14,7 +14,7 @@ import {
   useUpdateIngredientSupplier,
 } from '@/lib/hooks';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, Input, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, EditableCell, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateIngredientSupplierRequest } from '@/types';
 
@@ -26,72 +26,6 @@ const UNIT_OPTIONS = [
   { value: 'l', label: 'l (liters)' },
   { value: 'pcs', label: 'pcs (pieces)' },
 ];
-
-// Inline editable cell component
-interface EditableCellProps {
-  value: string;
-  onSave: (value: string) => void;
-  type?: 'text' | 'number';
-  className?: string;
-  displayValue?: string;
-}
-
-function EditableCell({ value, onSave, type = 'text', className = '', displayValue }: EditableCellProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    setEditValue(value);
-  }, [value]);
-
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (editValue !== value) {
-      onSave(editValue);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleBlur();
-    } else if (e.key === 'Escape') {
-      setEditValue(value);
-      setIsEditing(false);
-    }
-  };
-
-  if (isEditing) {
-    return (
-      <input
-        ref={inputRef}
-        type={type}
-        value={editValue}
-        onChange={(e) => setEditValue(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        step={type === 'number' ? '0.01' : undefined}
-        className={`w-full px-1 py-0.5 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white dark:bg-zinc-800 ${className}`}
-      />
-    );
-  }
-
-  return (
-    <span
-      onClick={() => setIsEditing(true)}
-      className={`cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded ${className}`}
-    >
-      {displayValue ?? value ?? '-'}
-    </span>
-  );
-}
 
 // Inline editable select component
 interface EditableSelectProps {

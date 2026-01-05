@@ -11,6 +11,14 @@ export function useSuppliers() {
   });
 }
 
+export function useSupplier(id: number) {
+  return useQuery({
+    queryKey: ['suppliers', id],
+    queryFn: () => api.getSupplier(id),
+    enabled: !isNaN(id),
+  });
+}
+
 export function useCreateSupplier() {
   const queryClient = useQueryClient();
 

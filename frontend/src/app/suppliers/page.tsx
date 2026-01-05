@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
@@ -93,12 +94,11 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
           </div>
         ) : (
           <div className="flex items-center justify-between w-full">
-            <CardTitle
-              className="truncate flex-1 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300"
-              onClick={() => setIsEditing(true)}
-            >
-              {supplier.name}
-            </CardTitle>
+            <Link href={`/suppliers/${supplier.id}`} className="truncate flex-1">
+              <CardTitle className="truncate cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
+                {supplier.name}
+              </CardTitle>
+            </Link>
             <Button
               variant="ghost"
               size="icon"

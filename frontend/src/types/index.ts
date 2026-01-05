@@ -244,9 +244,9 @@ export interface CreateSupplierRequest {
 
 export interface UpdateSupplierRequest {
   name?: string;
-  address?: string;
-  phone_number?: string;
-  email?: string;
+  address?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
 }
 
 // ============ Ingredient Supplier Entry Types ============
