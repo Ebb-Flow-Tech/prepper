@@ -103,31 +103,6 @@ export default function RndPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Compare Variants - Placeholder */}
-            <Card className="mt-4">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <ClipboardList className="h-5 w-5 text-zinc-500" />
-                  <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    Compare Variants
-                  </h2>
-                </div>
-
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                  Select recipe variants to compare side-by-side
-                </p>
-
-                <Button variant="outline" className="w-full" disabled>
-                  Compare Selected
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 text-center">
-                  Coming soon
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right Column - Experiments */}
