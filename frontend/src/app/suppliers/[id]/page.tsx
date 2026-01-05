@@ -100,6 +100,10 @@ export default function SupplierPage({ params }: SupplierPageProps) {
       return;
     }
 
+    const selectedIngredient = availableIngredients?.find(
+      (i) => i.id === parseInt(formData.ingredient_id, 10)
+    );
+
     addIngredientMutation.mutate(
       {
         supplierId,
@@ -125,9 +129,16 @@ export default function SupplierPage({ params }: SupplierPageProps) {
             pack_unit: '',
             is_preferred: false,
           });
-          toast.success('Ingredient added');
+          toast.success(`${selectedIngredient?.name || 'Ingredient'} added`);
         },
-        onError: () => toast.error('Failed to add ingredient'),
+        onError: (error) => {
+          // Check for 409 Conflict (duplicate supplier-ingredient link)
+          if (error && typeof error === 'object' && 'status' in error && error.status === 409) {
+            toast.error(`${selectedIngredient?.name || 'This ingredient'} is already linked to this supplier`);
+          } else {
+            toast.error('Failed to add ingredient');
+          }
+        },
       }
     );
   };

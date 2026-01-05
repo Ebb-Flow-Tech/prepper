@@ -144,6 +144,10 @@ export default function IngredientPage({ params }: IngredientPageProps) {
     is_preferred: false,
   });
 
+  // Filter out suppliers that are already linked to this ingredient
+  const existingSupplierIds = new Set(suppliers.map((s) => s.supplier_id));
+  const suppliersToAdd = availableSuppliers?.filter((s) => !existingSupplierIds.has(s.id.toString())) || [];
+
   const handleDeleteSupplier = (supplierId: string) => {
     removeSupplierMutation.mutate({
       ingredientId,
@@ -180,6 +184,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
       },
       {
         onSuccess: () => {
+          toast.success(`${selectedSupplier.name} added as supplier`);
           setFormData({
             supplier_id: '',
             sku: '',
@@ -189,6 +194,14 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             price_per_pack: '',
             is_preferred: false,
           });
+        },
+        onError: (error) => {
+          // Check for 409 Conflict (duplicate supplier)
+          if (error && typeof error === 'object' && 'status' in error && error.status === 409) {
+            toast.error(`${selectedSupplier.name} is already a supplier for this ingredient`);
+          } else {
+            toast.error('Failed to add supplier');
+          }
         },
       }
     );
@@ -345,7 +358,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                           }
                           options={[
                             { value: '', label: 'Select supplier...' },
-                            ...(availableSuppliers ?? []).map((s) => ({
+                            ...suppliersToAdd.map((s) => ({
                               value: s.id.toString(),
                               label: s.name,
                             })),
