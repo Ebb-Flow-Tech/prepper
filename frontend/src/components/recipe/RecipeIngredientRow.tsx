@@ -25,6 +25,7 @@ const UNIT_OPTIONS = [
 
 interface RecipeIngredientRowProps {
   ingredient: RecipeIngredient;
+  canEdit: boolean;
   onQuantityChange: (quantity: number) => void;
   onUnitChange: (unit: string) => void;
   onUnitPriceChange: (unitPrice: number, baseUnit: string) => void;
@@ -34,6 +35,7 @@ interface RecipeIngredientRowProps {
 
 export function RecipeIngredientRow({
   ingredient,
+  canEdit,
   onQuantityChange,
   onUnitChange,
   onUnitPriceChange,
@@ -47,7 +49,7 @@ export function RecipeIngredientRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: ingredient.id });
+  } = useSortable({ id: ingredient.id, disabled: !canEdit });
 
   const [localQuantity, setLocalQuantity] = useState(String(ingredient.quantity));
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
@@ -177,13 +179,15 @@ export function RecipeIngredientRow({
         isDragging && 'opacity-50 shadow-lg'
       )}
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className="cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      {canEdit && (
+        <button
+          {...listeners}
+          {...attributes}
+          className="cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
 
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">
@@ -196,6 +200,7 @@ export function RecipeIngredientRow({
         onChange={(e) => handleSupplierChange(e.target.value)}
         options={[{ value: '', label: 'No supplier' }, ...supplierOptions]}
         className="w-32"
+        disabled={!canEdit}
       />
 
       <Input
@@ -205,6 +210,7 @@ export function RecipeIngredientRow({
         className="w-20"
         min={0}
         step={0.1}
+        disabled={!canEdit}
       />
 
       <Select
@@ -212,6 +218,7 @@ export function RecipeIngredientRow({
         onChange={(e) => onUnitChange(e.target.value)}
         options={UNIT_OPTIONS}
         className="w-24"
+        disabled={!canEdit}
       />
 
       $
@@ -223,15 +230,18 @@ export function RecipeIngredientRow({
         className="w-20"
         min={0}
         step={0.01}
+        disabled={!canEdit}
       />/{baseUnit}
 
       <div className="w-20 text-right text-sm text-zinc-500">
         {lineCost !== null ? formatCurrency(lineCost) : '—'}
       </div>
 
-      <Button variant="ghost" size="icon" onClick={onRemove}>
-        <Trash2 className="h-4 w-4 text-zinc-400 hover:text-red-500" />
-      </Button>
+      {canEdit && (
+        <Button variant="ghost" size="icon" onClick={onRemove}>
+          <Trash2 className="h-4 w-4 text-zinc-400 hover:text-red-500" />
+        </Button>
+      )}
     </div>
   );
 }

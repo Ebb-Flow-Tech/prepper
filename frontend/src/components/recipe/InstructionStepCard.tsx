@@ -12,6 +12,7 @@ interface InstructionStepCardProps {
   id: string;
   step: InstructionStep;
   stepNumber: number;
+  canEdit: boolean;
   onChange: (step: InstructionStep) => void;
   onDelete: () => void;
 }
@@ -20,6 +21,7 @@ export function InstructionStepCard({
   id,
   step,
   stepNumber,
+  canEdit,
   onChange,
   onDelete,
 }: InstructionStepCardProps) {
@@ -30,7 +32,7 @@ export function InstructionStepCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ id, disabled: !canEdit });
 
   const [localText, setLocalText] = useState(step.text);
   const [localTimer, setLocalTimer] = useState(formatTimer(step.timer_seconds));
@@ -92,13 +94,15 @@ export function InstructionStepCard({
       )}
     >
       <div className="flex items-start gap-3 p-4">
-        <button
-          {...listeners}
-          {...attributes}
-          className="mt-2 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {canEdit && (
+          <button
+            {...listeners}
+            {...attributes}
+            className="mt-2 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
 
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold dark:bg-zinc-700">
           {stepNumber}
@@ -110,6 +114,7 @@ export function InstructionStepCard({
             onChange={(e) => handleTextChange(e.target.value)}
             placeholder="Describe this step..."
             className="min-h-[80px]"
+            disabled={!canEdit}
           />
 
           <div className="flex flex-wrap gap-4">
@@ -121,6 +126,7 @@ export function InstructionStepCard({
                 onChange={(e) => handleTimerChange(e.target.value)}
                 placeholder="mm:ss"
                 className="w-20"
+                disabled={!canEdit}
               />
             </div>
 
@@ -133,6 +139,7 @@ export function InstructionStepCard({
                   onChange={(e) => handleTempChange(e.target.value)}
                   placeholder="180"
                   className="w-20"
+                  disabled={!canEdit}
                 />
                 <span className="text-sm text-zinc-500">°C</span>
               </div>
@@ -140,9 +147,11 @@ export function InstructionStepCard({
           </div>
         </div>
 
-        <Button variant="ghost" size="icon" onClick={onDelete}>
-          <Trash2 className="h-4 w-4 text-zinc-400 hover:text-red-500" />
-        </Button>
+        {canEdit && (
+          <Button variant="ghost" size="icon" onClick={onDelete}>
+            <Trash2 className="h-4 w-4 text-zinc-400 hover:text-red-500" />
+          </Button>
+        )}
       </div>
     </div>
   );

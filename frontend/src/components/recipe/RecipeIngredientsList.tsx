@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 
 interface RecipeIngredientsListProps {
   recipeId: number;
+  canEdit: boolean;
 }
 
 function CostSummary({ recipeId }: { recipeId: number }) {
@@ -81,7 +82,7 @@ function CostSummary({ recipeId }: { recipeId: number }) {
   );
 }
 
-export function RecipeIngredientsList({ recipeId }: RecipeIngredientsListProps) {
+export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsListProps) {
   const { data: ingredients, isLoading, error } = useRecipeIngredients(recipeId);
   const updateIngredient = useUpdateRecipeIngredient();
   const removeIngredient = useRemoveRecipeIngredient();
@@ -221,6 +222,7 @@ export function RecipeIngredientsList({ recipeId }: RecipeIngredientsListProps) 
               <RecipeIngredientRow
                 key={ingredient.id}
                 ingredient={ingredient}
+                canEdit={canEdit}
                 onQuantityChange={(qty) => handleQuantityChange(ingredient.id, qty)}
                 onUnitChange={(unit) => handleUnitChange(ingredient.id, unit)}
                 onUnitPriceChange={(unitPrice, baseUnit) =>

@@ -66,11 +66,17 @@ function LoadingState() {
 }
 
 export function RecipeCanvas() {
-  const { selectedRecipeId } = useAppState();
+  const { selectedRecipeId, userId, userType } = useAppState();
   const { data: recipe, isLoading, error } = useRecipe(selectedRecipeId);
+
+  // Determine if the current user can edit this recipe
+  // Allowed if: user is admin OR user is the owner of the recipe
+  const canEdit =
+    userType === 'admin' || (userId !== null && recipe?.owner_id === userId);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'recipe-canvas',
+    disabled: !canEdit,
   });
 
   if (!selectedRecipeId) {
@@ -118,7 +124,7 @@ export function RecipeCanvas() {
               Drag ingredients from the right panel to add them
             </p>
           </div>
-          <RecipeIngredientsList recipeId={recipe.id} />
+          <RecipeIngredientsList recipeId={recipe.id} canEdit={canEdit} />
         </section>
 
         {/* Instructions Section */}
@@ -126,7 +132,7 @@ export function RecipeCanvas() {
           <div className="mb-4">
             <h2 className="text-lg font-semibold">Instructions</h2>
           </div>
-          <Instructions recipe={recipe} />
+          <Instructions recipe={recipe} canEdit={canEdit} />
         </section>
       </div>
     </main>
