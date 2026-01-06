@@ -3,12 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useAppState } from '@/lib/store';
+import mockUsersData from '@/lib/mock-users.json';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAppState();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,8 +24,20 @@ export default function LoginPage() {
     // Simulate login delay
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Redirect to home page
-    router.push('/');
+    // Check credentials against mock users
+    const user = mockUsersData.users.find(
+      (u) => u.email === email && u.password === password
+    );
+
+    if (user) {
+      toast.success('Login successful');
+      login(user.userId, user.jwt, user.userType as 'normal' | 'admin');
+      router.push('/');
+    } else {
+      toast.error('Incorrect email/password');
+    }
+
+    setIsLoading(false);
   };
 
   return (

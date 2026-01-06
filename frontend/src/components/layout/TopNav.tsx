@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChefHat, FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppState } from '@/lib/store';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Canvas', icon: ChefHat },
@@ -18,8 +19,10 @@ const NAV_ITEMS = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { userId, logout } = useAppState();
 
   const handleLogout = () => {
+    logout();
     router.push('/login');
   };
 
@@ -54,13 +57,15 @@ export function TopNav() {
       </div>
 
       {/* Logout Button */}
-      <button
-        onClick={handleLogout}
-        className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-      >
-        <LogOut className="h-4 w-4" />
-        <span className="hidden md:inline">Logout</span>
-      </button>
+      {userId && (
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden md:inline">Logout</span>
+        </button>
+      )}
     </nav>
   );
 }
