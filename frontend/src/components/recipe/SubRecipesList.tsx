@@ -10,6 +10,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -344,6 +345,11 @@ export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
     [subRecipes, recipeId, reorderSubRecipes]
   );
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'sub-recipes-drop-zone',
+    disabled: !canEdit,
+  });
+
   // Create a map of recipe IDs to names for display
   const recipeMap = new Map<number, string>();
   recipes?.forEach((r) => recipeMap.set(r.id, r.name));
@@ -373,7 +379,13 @@ export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
   const existingChildIds = sortedSubRecipes.map((s) => s.child_recipe_id);
 
   return (
-    <div className="space-y-4">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'space-y-4 rounded-lg',
+        isOver && 'ring-2 ring-green-400 ring-offset-2'
+      )}
+    >
       {canEdit && recipes && (
         <AddSubRecipeForm
           recipeId={recipeId}
@@ -410,7 +422,12 @@ export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
           </SortableContext>
         </DndContext>
       ) : (
-        <div className="rounded-lg border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700">
+        <div
+          className={cn(
+            'rounded-lg border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700',
+            isOver && 'border-green-400 bg-green-50 dark:bg-green-900/20'
+          )}
+        >
           <p className="text-zinc-500">No sub-recipes yet</p>
           <p className="mt-1 text-sm text-zinc-400">
             Add recipes as components of this recipe

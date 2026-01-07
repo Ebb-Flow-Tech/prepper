@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -24,6 +25,7 @@ import {
 } from '@/lib/hooks';
 import { RecipeIngredientRow } from './RecipeIngredientRow';
 import { Skeleton } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface RecipeIngredientsListProps {
@@ -122,6 +124,11 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
     [ingredients, recipeId, reorderIngredients]
   );
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'ingredients-drop-zone',
+    disabled: !canEdit,
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -142,7 +149,13 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
 
   if (!ingredients || ingredients.length === 0) {
     return (
-      <div className="rounded-lg border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'rounded-lg border-2 border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700',
+          isOver && 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+        )}
+      >
         <p className="text-zinc-500">No ingredients yet</p>
         <p className="mt-1 text-sm text-zinc-400">
           Drag ingredients from the right panel to add them
@@ -156,7 +169,13 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
   );
 
   return (
-    <div>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'rounded-lg',
+        isOver && 'ring-2 ring-blue-400 ring-offset-2'
+      )}
+    >
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
