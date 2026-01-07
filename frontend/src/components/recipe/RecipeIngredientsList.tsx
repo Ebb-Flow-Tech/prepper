@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -16,70 +16,19 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Info } from 'lucide-react';
 import {
   useRecipeIngredients,
   useUpdateRecipeIngredient,
   useRemoveRecipeIngredient,
   useReorderRecipeIngredients,
-  useCosting,
 } from '@/lib/hooks';
 import { RecipeIngredientRow } from './RecipeIngredientRow';
 import { Skeleton } from '@/components/ui';
-import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface RecipeIngredientsListProps {
   recipeId: number;
   canEdit: boolean;
-}
-
-function CostSummary({ recipeId }: { recipeId: number }) {
-  const { data: costing, isLoading, error } = useCosting(recipeId);
-  const [showTooltip, setShowTooltip] = useState(false);
-
-  if (isLoading) {
-    return (
-      <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-2 h-5 w-32" />
-      </div>
-    );
-  }
-
-  if (error || !costing) {
-    return null;
-  }
-
-  return (
-    <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-500">Total batch cost:</span>
-        <span className="font-semibold">{formatCurrency(costing.total_batch_cost)}</span>
-      </div>
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <span className="text-sm text-zinc-500">Cost per portion:</span>
-          <div className="relative">
-            <button
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-              className="text-zinc-400 hover:text-zinc-600"
-            >
-              <Info className="h-3.5 w-3.5" />
-            </button>
-            {showTooltip && (
-              <div className="absolute bottom-full left-1/2 z-10 mb-2 w-48 -translate-x-1/2 rounded-md bg-zinc-900 p-2 text-xs text-white shadow-lg dark:bg-zinc-700">
-                Calculated from ingredient base costs and current yield of{' '}
-                {costing.yield_quantity} {costing.yield_unit}.
-              </div>
-            )}
-          </div>
-        </div>
-        <span className="font-semibold">{formatCurrency(costing.cost_per_portion)}</span>
-      </div>
-    </div>
-  );
 }
 
 export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsListProps) {
@@ -237,7 +186,6 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
           </div>
         </SortableContext>
       </DndContext>
-      <CostSummary recipeId={recipeId} />
     </div>
   );
 }

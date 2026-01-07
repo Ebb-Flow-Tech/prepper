@@ -30,6 +30,10 @@ import type {
   SupplierIngredientEntry,
   AddSupplierIngredientRequest,
   UpdateSupplierIngredientRequest,
+  SubRecipe,
+  SubRecipeCreate,
+  SubRecipeUpdate,
+  SubRecipeReorder,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -466,5 +470,51 @@ export async function removeSupplierIngredient(
 ): Promise<Ingredient> {
   return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers/${supplierId}`, {
     method: 'DELETE',
+  });
+}
+
+// ============ Sub-Recipes ============
+
+export async function getSubRecipes(recipeId: number): Promise<SubRecipe[]> {
+  return fetchApi<SubRecipe[]>(`/recipes/${recipeId}/sub-recipes`);
+}
+
+export async function addSubRecipe(
+  recipeId: number,
+  data: SubRecipeCreate
+): Promise<SubRecipe> {
+  return fetchApi<SubRecipe>(`/recipes/${recipeId}/sub-recipes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSubRecipe(
+  recipeId: number,
+  linkId: number,
+  data: SubRecipeUpdate
+): Promise<SubRecipe> {
+  return fetchApi<SubRecipe>(`/recipes/${recipeId}/sub-recipes/${linkId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeSubRecipe(
+  recipeId: number,
+  linkId: number
+): Promise<void> {
+  return fetchApi<void>(`/recipes/${recipeId}/sub-recipes/${linkId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function reorderSubRecipes(
+  recipeId: number,
+  data: SubRecipeReorder
+): Promise<SubRecipe[]> {
+  return fetchApi<SubRecipe[]>(`/recipes/${recipeId}/sub-recipes/reorder`, {
+    method: 'POST',
+    body: JSON.stringify(data),
   });
 }

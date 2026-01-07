@@ -334,3 +334,32 @@ export interface UpdateSupplierIngredientRequest {
   currency?: string;
   is_preferred?: boolean;
 }
+
+// ============ Sub-Recipe Types ============
+
+export type SubRecipeUnit = 'portion' | 'batch' | 'g' | 'ml';
+
+export interface SubRecipe {
+  id: number;
+  parent_recipe_id: number;
+  child_recipe_id: number;
+  quantity: number;
+  unit: SubRecipeUnit;
+  position: number;
+  created_at: string;
+}
+
+export interface SubRecipeCreate {
+  child_recipe_id: number;
+  quantity?: number;
+  unit?: SubRecipeUnit;
+}
+
+export interface SubRecipeUpdate {
+  quantity?: number;
+  unit?: SubRecipeUnit;
+}
+
+export interface SubRecipeReorder {
+  ordered_ids: number[];
+}
