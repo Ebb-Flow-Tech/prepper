@@ -262,3 +262,104 @@ def test_fork_recipe_multiple_ingredients_preserves_order(client: TestClient):
     assert forked_ingredients[0]["ingredient_id"] == ing1["id"]
     assert forked_ingredients[1]["ingredient_id"] == ing2["id"]
     assert forked_ingredients[2]["ingredient_id"] == ing3["id"]
+
+
+def test_fork_recipe_copies_sub_recipes(client: TestClient):
+    """Test that forking copies all sub-recipe links."""
+    # Create sub-recipes (child recipes)
+    child1 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Hollandaise Sauce", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    child2 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Poached Eggs", "yield_quantity": 4, "yield_unit": "portion"},
+    ).json()
+
+    # Create parent recipe
+    parent = client.post(
+        "/api/v1/recipes",
+        json={"name": "Eggs Benedict", "yield_quantity": 4, "yield_unit": "portion"},
+    ).json()
+
+    # Add sub-recipes to parent
+    client.post(
+        f"/api/v1/recipes/{parent['id']}/sub-recipes",
+        json={"child_recipe_id": child1["id"], "quantity": 0.5, "unit": "batch"},
+    )
+    client.post(
+        f"/api/v1/recipes/{parent['id']}/sub-recipes",
+        json={"child_recipe_id": child2["id"], "quantity": 4, "unit": "portion"},
+    )
+
+    # Get original sub-recipes
+    original_sub_recipes = client.get(f"/api/v1/recipes/{parent['id']}/sub-recipes").json()
+    assert len(original_sub_recipes) == 2
+
+    # Fork the recipe
+    forked = client.post(f"/api/v1/recipes/{parent['id']}/fork").json()
+
+    # Get forked sub-recipes
+    forked_sub_recipes = client.get(f"/api/v1/recipes/{forked['id']}/sub-recipes").json()
+
+    # Verify sub-recipes are copied
+    assert len(forked_sub_recipes) == 2
+    assert forked_sub_recipes[0]["child_recipe_id"] == child1["id"]
+    assert forked_sub_recipes[0]["quantity"] == 0.5
+    assert forked_sub_recipes[0]["unit"] == "batch"
+    assert forked_sub_recipes[1]["child_recipe_id"] == child2["id"]
+    assert forked_sub_recipes[1]["quantity"] == 4
+    assert forked_sub_recipes[1]["unit"] == "portion"
+
+    # Verify sub-recipes belong to the forked recipe (not original)
+    assert forked_sub_recipes[0]["parent_recipe_id"] == forked["id"]
+    assert forked_sub_recipes[1]["parent_recipe_id"] == forked["id"]
+
+
+def test_fork_recipe_preserves_sub_recipe_order(client: TestClient):
+    """Test that forking preserves sub-recipe position order."""
+    # Create three sub-recipes
+    child1 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Sub A", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    child2 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Sub B", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    child3 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Sub C", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Create parent recipe
+    parent = client.post(
+        "/api/v1/recipes",
+        json={"name": "Complex Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Add sub-recipes in order
+    client.post(
+        f"/api/v1/recipes/{parent['id']}/sub-recipes",
+        json={"child_recipe_id": child1["id"], "quantity": 1, "unit": "batch"},
+    )
+    client.post(
+        f"/api/v1/recipes/{parent['id']}/sub-recipes",
+        json={"child_recipe_id": child2["id"], "quantity": 1, "unit": "batch"},
+    )
+    client.post(
+        f"/api/v1/recipes/{parent['id']}/sub-recipes",
+        json={"child_recipe_id": child3["id"], "quantity": 1, "unit": "batch"},
+    )
+
+    # Fork the recipe
+    forked = client.post(f"/api/v1/recipes/{parent['id']}/fork").json()
+
+    # Get forked sub-recipes
+    forked_sub_recipes = client.get(f"/api/v1/recipes/{forked['id']}/sub-recipes").json()
+
+    # Verify order is preserved
+    assert len(forked_sub_recipes) == 3
+    assert forked_sub_recipes[0]["child_recipe_id"] == child1["id"]
+    assert forked_sub_recipes[1]["child_recipe_id"] == child2["id"]
+    assert forked_sub_recipes[2]["child_recipe_id"] == child3["id"]

@@ -13,6 +13,7 @@ from app.models import (
     RecipeIngredient,
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
+    RecipeRecipe,
 )
 
 
@@ -82,13 +83,14 @@ class RecipeService:
 
     def fork_recipe(self, recipe_id: int, new_owner_id: str | None = None) -> Recipe | None:
         """
-        Fork a recipe - create a copy with all ingredients.
+        Fork a recipe - create a copy with all ingredients and sub-recipes.
 
         The forked recipe will:
         - Have a new name with "(Fork)" suffix
         - Be owned by new_owner_id (or same as original if not provided)
         - Start as draft status
         - Copy all recipe ingredients
+        - Copy all sub-recipe links (referencing original child recipes)
         - Copy instructions (raw and structured)
         """
         original = self.get_recipe(recipe_id)
@@ -128,9 +130,30 @@ class RecipeService:
             )
             self.session.add(new_ri)
 
+        # Copy all sub-recipe links (referencing original child recipes)
+        original_sub_recipes = self._get_sub_recipes(recipe_id)
+        for rr in original_sub_recipes:
+            new_rr = RecipeRecipe(
+                parent_recipe_id=forked.id,
+                child_recipe_id=rr.child_recipe_id,
+                quantity=rr.quantity,
+                unit=rr.unit,
+                position=rr.position,
+            )
+            self.session.add(new_rr)
+
         self.session.commit()
         self.session.refresh(forked)
         return forked
+
+    def _get_sub_recipes(self, recipe_id: int) -> list[RecipeRecipe]:
+        """Get all sub-recipes for a parent recipe, ordered by position."""
+        statement = (
+            select(RecipeRecipe)
+            .where(RecipeRecipe.parent_recipe_id == recipe_id)
+            .order_by(RecipeRecipe.position)
+        )
+        return list(self.session.exec(statement).all())
 
     # --- Recipe Ingredient Management ---
 

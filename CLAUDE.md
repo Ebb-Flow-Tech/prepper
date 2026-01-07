@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Prepper is a **kitchen-first recipe workspace** for chefs and operators. It treats recipes as living objects on a single "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing. Key principles: clarity, immediacy, reversibility—no auth, no save buttons, just autosave.
+Prepper is a **kitchen-first recipe workspace** for chefs and operators. It treats recipes as living objects on a single "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing. Key principles: clarity, immediacy, reversibility—no save buttons, just autosave. Includes mock authentication (frontend-only) with user roles (normal/admin) for recipe ownership and permissions.
 
 ## Common Commands
 
@@ -14,7 +14,8 @@ Prepper is a **kitchen-first recipe workspace** for chefs and operators. It trea
 cd backend
 
 # Setup
-python -m venv venv && source venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
 
@@ -99,13 +100,17 @@ app/                     # Next.js App Router pages
 ├── suppliers/           # Supplier list and detail pages
 ├── tastings/            # Tasting sessions (list, detail, new)
 ├── finance/             # Finance/analytics
-└── rnd/                 # R&D workspace
+├── rnd/                 # R&D workspace
+├── login/               # Login page (mock auth)
+└── register/            # Registration page (mock auth)
 
 lib/
 ├── api.ts               # Typed fetch wrapper for 40+ endpoints
-├── providers.tsx        # QueryClientProvider + AppProvider composition
-├── store.tsx            # React Context for selectedRecipeId, instructionsTab
+├── providers.tsx        # QueryClientProvider + AppProvider + AuthGuard composition
+├── store.tsx            # React Context for selectedRecipeId, instructionsTab, auth state
 ├── types/index.ts       # TypeScript interfaces for all entities
+├── utils.ts             # Utility functions (cn for classnames)
+├── mock-users.json      # Mock user data for frontend-only auth
 └── hooks/               # TanStack Query hooks with cache invalidation
     ├── useRecipes.ts
     ├── useIngredients.ts
@@ -113,13 +118,15 @@ lib/
     ├── useCosting.ts
     ├── useInstructions.ts
     ├── useSuppliers.ts
-    └── useTastings.ts
+    ├── useTastings.ts
+    └── useSubRecipes.ts
 
 components/
 ├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
-├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, InstructionsSteps
+├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, InstructionsSteps, InstructionStepCard, SubRecipesList
 ├── recipes/             # RecipeCard
 ├── ingredients/         # IngredientCard
+├── AuthGuard.tsx        # Route protection for authenticated pages
 └── ui/                  # Button, Input, Textarea, Select, Badge, Card, Skeleton, SearchInput, PageHeader, GroupSection, MasonryGrid, EditableCell
 ```
 
