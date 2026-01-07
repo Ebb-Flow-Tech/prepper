@@ -9,6 +9,7 @@ import type { Recipe, RecipeStatus } from '@/types';
 interface RecipeCardProps {
   recipe: Recipe;
   costPerPortion?: number | null;
+  isOwned?: boolean;
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -17,7 +18,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeCard({ recipe, costPerPortion }: RecipeCardProps) {
+export function RecipeCard({ recipe, costPerPortion, isOwned }: RecipeCardProps) {
   return (
     <Link href={`/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
@@ -42,6 +43,9 @@ export function RecipeCard({ recipe, costPerPortion }: RecipeCardProps) {
             </Badge>
             {recipe.is_prep_recipe && (
               <Badge variant="default">Prep</Badge>
+            )}
+            {isOwned && (
+              <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
             )}
           </div>
         </CardContent>

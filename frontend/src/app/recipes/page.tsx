@@ -191,7 +191,11 @@ export default function RecipesPage() {
             {Object.entries(groupedRecipes).map(([group, items]) => (
               <GroupSection key={group} title={group} count={items.length}>
                 {items.map((recipe) => (
-                  <RecipeCard key={recipe.id} recipe={recipe} />
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    isOwned={userId !== null && recipe.owner_id === userId}
+                  />
                 ))}
               </GroupSection>
             ))}

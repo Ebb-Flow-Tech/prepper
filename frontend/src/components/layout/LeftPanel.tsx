@@ -24,12 +24,14 @@ function RecipeCard({
   recipe,
   isSelected,
   canEdit,
+  isOwned,
   onClick,
   onDelete,
 }: {
   recipe: Recipe;
   isSelected: boolean;
   canEdit: boolean;
+  isOwned: boolean;
   onClick: () => void;
   onDelete: () => void;
 }) {
@@ -58,12 +60,7 @@ function RecipeCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium">{recipe.name}</h3>
-          <p className="text-sm text-zinc-500">
-            {recipe.yield_quantity} {recipe.yield_unit}
-          </p>
-        </div>
+        <h3 className="min-w-0 flex-1 truncate font-medium">{recipe.name}</h3>
         <div className="flex items-center gap-2">
           <Badge variant={getStatusVariant(recipe.status)}>
             {recipe.status}
@@ -83,6 +80,18 @@ function RecipeCard({
           >
             <Trash2 className="h-4 w-4" />
           </button>
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-500">
+          {recipe.yield_quantity} {recipe.yield_unit}
+        </p>
+        <div className="flex items-center gap-2">
+          {isOwned && (
+            <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+          )}
+          {/* Spacer to align with delete button above */}
+          <div className="w-6" />
         </div>
       </div>
     </div>
@@ -222,12 +231,14 @@ export function LeftPanel() {
             {filteredRecipes.map((recipe) => {
               const canEditRecipe =
                 userType === 'admin' || (userId !== null && recipe.owner_id === userId);
+              const isOwned = userId !== null && recipe.owner_id === userId;
               return (
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
                   isSelected={recipe.id === selectedRecipeId}
                   canEdit={canEditRecipe}
+                  isOwned={isOwned}
                   onClick={() => selectRecipe(recipe.id)}
                   onDelete={() => handleDelete(recipe.id)}
                 />

@@ -1,7 +1,8 @@
 'use client';
 
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin } from '@dnd-kit/core';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { GripVertical } from 'lucide-react';
 import { TopAppBar } from './TopAppBar';
 import { LeftPanel } from './LeftPanel';
@@ -25,9 +26,21 @@ function DragOverlayContent({ ingredient }: { ingredient: Ingredient }) {
 }
 
 export function AppShell() {
-  const { selectedRecipeId } = useAppState();
+  const { selectedRecipeId, selectRecipe } = useAppState();
+  const searchParams = useSearchParams();
   const addIngredient = useAddRecipeIngredient();
   const [activeIngredient, setActiveIngredient] = useState<Ingredient | null>(null);
+
+  // Sync recipe from URL query parameter on mount
+  useEffect(() => {
+    const recipeParam = searchParams.get('recipe');
+    if (recipeParam) {
+      const recipeId = parseInt(recipeParam, 10);
+      if (!isNaN(recipeId) && recipeId !== selectedRecipeId) {
+        selectRecipe(recipeId);
+      }
+    }
+  }, [searchParams, selectRecipe]);
 
   const handleDragStart = (event: { active: { data: { current?: { ingredient?: Ingredient } } } }) => {
     const ingredient = event.active.data.current?.ingredient;

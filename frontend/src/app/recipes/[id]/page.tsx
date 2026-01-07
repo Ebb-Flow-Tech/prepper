@@ -2,9 +2,10 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
+import { ArrowLeft, Edit2, Eye, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
 import { useRecipe, useRecipeIngredients, useCosting } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
 import type { RecipeStatus, TastingDecision } from '@/types';
@@ -53,6 +54,7 @@ function formatTastingDate(dateString: string): string {
 export default function RecipePage({ params }: RecipePageProps) {
   const { id } = use(params);
   const recipeId = parseInt(id, 10);
+  const { userId } = useAppState();
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(recipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(recipeId);
@@ -123,13 +125,20 @@ export default function RecipePage({ params }: RecipePageProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {userId !== null && recipe.owner_id === userId && (
+                          <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                        )}
                         <Badge variant={STATUS_VARIANTS[recipe.status]}>
                           {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
                         </Badge>
                         <Link href={`/?recipe=${recipe.id}`}>
                           <Button variant="outline" size="sm">
-                            <Edit2 className="h-4 w-4" />
-                            Edit in Canvas
+                            {userId !== null && recipe.owner_id === userId ? (
+                              <Edit2 className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                            {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
                           </Button>
                         </Link>
                       </div>
