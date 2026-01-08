@@ -126,6 +126,10 @@ export async function forkRecipe(
   });
 }
 
+export async function getRecipeVersions(recipeId: number): Promise<Recipe[]> {
+  return fetchApi<Recipe[]>(`/recipes/${recipeId}/versions`);
+}
+
 // ============ Recipe Ingredients ============
 
 export async function getRecipeIngredients(

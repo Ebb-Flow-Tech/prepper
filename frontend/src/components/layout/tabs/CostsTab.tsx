@@ -244,7 +244,7 @@ function CostSummary({ recipeId }: { recipeId: number }) {
               </button>
               {showTooltip && (
                 <div className="absolute bottom-full left-1/2 z-10 mb-2 w-48 -translate-x-1/2 rounded-md bg-zinc-900 p-2 text-xs text-white shadow-lg dark:bg-zinc-700">
-                  Calculated from ingredient and sub-recipe costs with yield of{' '}
+                  Calculated from ingredient and item costs with yield of{' '}
                   {costing.yield_quantity} {costing.yield_unit}.
                 </div>
               )}

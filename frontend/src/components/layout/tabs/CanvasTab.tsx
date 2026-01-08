@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppState } from '@/lib/store';
 import {
@@ -143,6 +143,7 @@ function StagedIngredientCard({
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `staged-ingredient-${staged.id}`,
     data: { type: 'staged-ingredient', stagedId: staged.id },
@@ -154,37 +155,95 @@ function StagedIngredientCard({
     top: staged.y,
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
+    zIndex: isExpanded ? 10 : 1,
   };
+
+  const suppliers = staged.ingredient.suppliers || [];
+  const preferredSupplier = suppliers.find((s) => s.is_preferred);
+  const unitCost = preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-950"
+      className="rounded-lg border border-blue-200 bg-blue-50 shadow-sm dark:border-blue-800 dark:bg-blue-950"
     >
-      <button {...listeners} {...attributes} className="cursor-grab touch-none">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-      </button>
-      <div className="flex-1">
-        <p className="font-medium text-sm">{staged.ingredient.name}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <input
-            type="number"
-            value={staged.quantity}
-            onChange={(e) => onQuantityChange(parseFloat(e.target.value) || 0)}
-            className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-            min="0"
-            step="0.1"
-          />
-          <span className="text-xs text-zinc-500">{staged.ingredient.base_unit}</span>
+      <div className="flex items-center gap-2 p-3">
+        <button {...listeners} {...attributes} className="cursor-grab touch-none">
+          <GripVertical className="h-4 w-4 text-zinc-400" />
+        </button>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex-1 text-left cursor-pointer hover:opacity-80"
+        >
+          <p className="font-medium text-sm">{staged.ingredient.name}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="number"
+              value={staged.quantity}
+              onChange={(e) => {
+                e.stopPropagation();
+                onQuantityChange(parseFloat(e.target.value) || 0);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              min="0"
+              step="0.1"
+            />
+            <span className="text-xs text-zinc-500">{staged.ingredient.base_unit}</span>
+          </div>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="rounded p-1 text-zinc-400 hover:bg-blue-100 hover:text-zinc-600 dark:hover:bg-blue-900"
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
-      <button
-        onClick={onRemove}
-        className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-      >
-        <X className="h-4 w-4" />
-      </button>
+
+      {isExpanded && (
+        <div className="border-t border-blue-200 dark:border-blue-800 px-3 py-2 text-xs space-y-2">
+          <div>
+            <span className="text-zinc-500">Unit Cost: </span>
+            <span className="font-medium">
+              {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.ingredient.base_unit}` : 'N/A'}
+            </span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Suppliers: </span>
+            {suppliers.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {suppliers.map((supplier) => (
+                  <li
+                    key={supplier.supplier_id}
+                    className={`flex items-center gap-1 ${supplier.is_preferred ? 'font-medium' : ''}`}
+                  >
+                    <span>{supplier.supplier_name}</span>
+                    {supplier.is_preferred && (
+                      <span className="text-[10px] bg-blue-200 dark:bg-blue-800 px-1 rounded">
+                        preferred
+                      </span>
+                    )}
+                    <span className="text-zinc-400">
+                      (${supplier.cost_per_unit.toFixed(2)}/{supplier.pack_unit})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-zinc-400">No suppliers</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -193,15 +252,22 @@ function StagedRecipeCard({
   staged,
   onRemove,
   onQuantityChange,
+  allRecipes,
 }: {
   staged: StagedRecipe;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
+  allRecipes?: Recipe[];
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `staged-recipe-${staged.id}`,
     data: { type: 'staged-recipe', stagedId: staged.id },
   });
+
+  // Fetch recipe ingredients and sub-recipes when expanded
+  const { data: recipeIngredients } = useRecipeIngredients(isExpanded ? staged.recipe.id : null);
+  const { data: subRecipes } = useSubRecipes(isExpanded ? staged.recipe.id : null);
 
   const style = {
     position: 'absolute' as const,
@@ -209,37 +275,112 @@ function StagedRecipeCard({
     top: staged.y,
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
+    zIndex: isExpanded ? 10 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 shadow-sm dark:border-green-800 dark:bg-green-950"
+      className="rounded-lg border border-green-200 bg-green-50 shadow-sm dark:border-green-800 dark:bg-green-950 max-w-xs"
     >
-      <button {...listeners} {...attributes} className="cursor-grab touch-none">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-      </button>
-      <div className="flex-1">
-        <p className="font-medium text-sm">{staged.recipe.name}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <input
-            type="number"
-            value={staged.quantity}
-            onChange={(e) => onQuantityChange(parseFloat(e.target.value) || 0)}
-            className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-            min="0"
-            step="0.1"
-          />
-          <span className="text-xs text-zinc-500">portion</span>
+      <div className="flex items-center gap-2 p-3">
+        <button {...listeners} {...attributes} className="cursor-grab touch-none">
+          <GripVertical className="h-4 w-4 text-zinc-400" />
+        </button>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex-1 text-left cursor-pointer hover:opacity-80"
+        >
+          <p className="font-medium text-sm">{staged.recipe.name}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="number"
+              value={staged.quantity}
+              onChange={(e) => {
+                e.stopPropagation();
+                onQuantityChange(parseFloat(e.target.value) || 0);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              min="0"
+              step="0.1"
+            />
+            <span className="text-xs text-zinc-500">portion</span>
+          </div>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="rounded p-1 text-zinc-400 hover:bg-green-100 hover:text-zinc-600 dark:hover:bg-green-900"
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
-      <button
-        onClick={onRemove}
-        className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-      >
-        <X className="h-4 w-4" />
-      </button>
+
+      {isExpanded && (
+        <div className="border-t border-green-200 dark:border-green-800 px-3 py-2 text-xs space-y-3 max-h-64 overflow-y-auto">
+          {/* Ingredients Section */}
+          <div>
+            <span className="text-zinc-500 font-medium">Ingredients:</span>
+            {recipeIngredients && recipeIngredients.length > 0 ? (
+              <ul className="mt-1 space-y-1.5">
+                {recipeIngredients.map((ri) => {
+                  const ingredient = ri.ingredient;
+                  const suppliers = ingredient?.suppliers || [];
+                  const preferredSupplier = suppliers.find((s) => s.is_preferred);
+                  return (
+                    <li key={ri.id} className="bg-white dark:bg-zinc-900 rounded p-1.5">
+                      <div className="font-medium">{ingredient?.name || `Ingredient #${ri.ingredient_id}`}</div>
+                      <div className="text-zinc-500 flex flex-wrap gap-x-2">
+                        <span>{ri.quantity} {ri.base_unit || ri.unit}</span>
+                        <span>
+                          @ ${ri.unit_price?.toFixed(2) ?? 'N/A'}/{ri.base_unit || ri.unit}
+                        </span>
+                      </div>
+                      {suppliers.length > 0 && (
+                        <div className="text-zinc-400 mt-0.5">
+                          Supplier: {preferredSupplier?.supplier_name || suppliers[0]?.supplier_name}
+                          {preferredSupplier && <span className="ml-1 text-[10px] bg-green-200 dark:bg-green-800 px-1 rounded">preferred</span>}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <span className="text-zinc-400 ml-1">No ingredients</span>
+            )}
+          </div>
+
+          {/* Sub-Recipes Section */}
+          {subRecipes && subRecipes.length > 0 && (
+            <div>
+              <span className="text-zinc-500 font-medium">Sub-Recipes:</span>
+              <ul className="mt-1 space-y-1">
+                {subRecipes.map((sr) => {
+                  const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
+                  return (
+                    <li key={sr.id} className="bg-white dark:bg-zinc-900 rounded p-1.5">
+                      <div className="font-medium">{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</div>
+                      <div className="text-zinc-500">
+                        {sr.quantity} {sr.unit}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -252,6 +393,7 @@ function CanvasDropZone({
   onIngredientQuantityChange,
   onRecipeQuantityChange,
   canvasRef,
+  allRecipes,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -260,6 +402,7 @@ function CanvasDropZone({
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   canvasRef: React.RefObject<HTMLDivElement | null>;
+  allRecipes?: Recipe[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-drop-zone',
@@ -302,6 +445,7 @@ function CanvasDropZone({
           staged={staged}
           onRemove={() => onRemoveRecipe(staged.id)}
           onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
+          allRecipes={allRecipes}
         />
       ))}
     </div>
@@ -329,6 +473,7 @@ function CanvasContent({
   canvasRef,
   rootRecipeName,
   currentVersion,
+  allRecipes,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -344,6 +489,7 @@ function CanvasContent({
   canvasRef: React.RefObject<HTMLDivElement | null>;
   rootRecipeName: string | null;
   currentVersion: number | null;
+  allRecipes?: Recipe[];
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -418,6 +564,7 @@ function CanvasContent({
           onIngredientQuantityChange={onIngredientQuantityChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
           canvasRef={canvasRef}
+          allRecipes={allRecipes}
         />
       </div>
 
@@ -426,11 +573,16 @@ function CanvasContent({
         <div className="flex items-center justify-between">
           <div className="text-sm text-zinc-500">
             {stagedIngredients.length} ingredient{stagedIngredients.length !== 1 ? 's' : ''},{' '}
-            {stagedRecipes.length} sub-recipe{stagedRecipes.length !== 1 ? 's' : ''}
+            {stagedRecipes.length} item{stagedRecipes.length !== 1 ? 's' : ''}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={!hasItems || isSubmitting}>
-              Cancel
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              disabled={!hasItems || isSubmitting}
+              className="border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-500 dark:text-red-500 dark:hover:bg-red-950 dark:hover:text-red-400"
+            >
+              Reset
             </Button>
             <Button onClick={onSubmit} disabled={!hasItems || isSubmitting}>
               {isSubmitting ? 'Submitting...' : 'Submit'}
@@ -698,6 +850,13 @@ export function CanvasTab() {
       return;
     }
 
+    const confirmed = window.confirm(
+      `Are you sure you want to submit this recipe "${metadata.name}" with ${stagedIngredients.length} ingredient(s) and ${stagedRecipes.length} items(s)?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Determine version and root_id based on selected recipe
@@ -798,6 +957,7 @@ export function CanvasTab() {
           const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
           return selectedRecipe?.version ?? null;
         })()}
+        allRecipes={recipes}
       />
       <RightPanel />
       <DragOverlay>

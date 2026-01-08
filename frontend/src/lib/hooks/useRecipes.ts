@@ -79,3 +79,11 @@ export function useForkRecipe() {
     },
   });
 }
+
+export function useRecipeVersions(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-versions', recipeId],
+    queryFn: () => api.getRecipeVersions(recipeId!),
+    enabled: recipeId !== null,
+  });
+}

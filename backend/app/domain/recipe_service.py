@@ -97,6 +97,11 @@ class RecipeService:
         if not original:
             return None
 
+        # Determine root_id and version for the fork
+        # root_id points to the recipe this was forked from
+        # Version increments based on the original's version
+        new_version = original.version + 1
+
         # Create the forked recipe
         forked = Recipe(
             name=f"{original.name} (Fork)",
@@ -110,6 +115,8 @@ class RecipeService:
             is_public=False,  # Forked recipes start as private
             owner_id=new_owner_id if new_owner_id else original.owner_id,
             created_by=new_owner_id,
+            version=new_version,
+            root_id=original.id,
         )
         self.session.add(forked)
         self.session.commit()
@@ -246,3 +253,61 @@ class RecipeService:
 
         self.session.commit()
         return self.get_recipe_ingredients(recipe_id)
+
+    # --- Versioning Operations ---
+
+    def get_version_tree(self, recipe_id: int) -> list[Recipe]:
+        """
+        Get all recipes in the version tree for a given recipe.
+
+        This traverses both up (to find ancestors) and down (to find descendants)
+        to return the complete version tree.
+
+        Returns a list of recipes ordered by version number (ascending).
+        """
+        recipe = self.get_recipe(recipe_id)
+        if not recipe:
+            return []
+
+        # Collect all recipe IDs in the version tree
+        tree_ids: set[int] = {recipe_id}
+
+        # Traverse up to find all ancestors and collect their IDs
+        current = recipe
+        while current.root_id is not None:
+            tree_ids.add(current.root_id)
+            parent = self.get_recipe(current.root_id)
+            if parent is None:
+                break
+            current = parent
+
+        # Find the root (oldest ancestor) - this is now 'current'
+        root_id = current.id
+
+        # Traverse down from root to find all descendants using BFS
+        def collect_all_descendants(start_id: int) -> None:
+            """Collect all descendants using BFS to handle branching."""
+            queue = [start_id]
+            visited = {start_id}
+
+            while queue:
+                current_id = queue.pop(0)
+                # Find all recipes that have this recipe as their root_id
+                statement = select(Recipe).where(Recipe.root_id == current_id)
+                children = list(self.session.exec(statement).all())
+                for child in children:
+                    if child.id not in visited:
+                        visited.add(child.id)
+                        tree_ids.add(child.id)
+                        queue.append(child.id)
+
+        # Start collecting from root
+        collect_all_descendants(root_id)
+
+        # Fetch all recipes in the tree and sort by version
+        statement = (
+            select(Recipe)
+            .where(Recipe.id.in_(tree_ids))
+            .order_by(Recipe.version, Recipe.created_at)
+        )
+        return list(self.session.exec(statement).all())

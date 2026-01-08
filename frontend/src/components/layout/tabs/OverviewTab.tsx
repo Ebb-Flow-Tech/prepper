@@ -119,11 +119,14 @@ export function OverviewTab() {
                         <p className="text-zinc-500 dark:text-zinc-400 mt-1">
                           Yield: {recipe.yield_quantity} {recipe.yield_unit}
                         </p>
-                        {recipe.root_id && (
-                          <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">
-                            Forked from: {allRecipes?.find((r) => r.id === recipe.root_id)?.name || `Recipe #${recipe.root_id}`}
-                          </p>
-                        )}
+                        <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">
+                          Based on: {recipe.root_id
+                            ? (allRecipes?.find((r) => r.id === recipe.root_id)?.name || `Recipe #${recipe.root_id}`)
+                            : 'N/A'}
+                        </p>
+                        <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-0.5">
+                          Version: {recipe.version}
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-2">

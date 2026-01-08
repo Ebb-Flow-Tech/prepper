@@ -70,6 +70,8 @@ class IngredientNested(SQLModel):
     name: str
     base_unit: str
     cost_per_base_unit: float | None = None
+    is_active: bool = True
+    suppliers: list[dict] | None = None
 
 
 class RecipeIngredientRead(SQLModel):

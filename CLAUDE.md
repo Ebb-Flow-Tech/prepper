@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Prepper is a **kitchen-first recipe workspace** for chefs and operators. It treats recipes as living objects on a single "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing. Key principles: clarity, immediacy, reversibility—no save buttons, just autosave. Includes mock authentication (frontend-only) with user roles (normal/admin) for recipe ownership and permissions.
 
+**Recipe Versioning**: Recipes support forking with full version history tracking. Each recipe has a `version` number and `root_id` pointing to its parent, enabling tree-based version lineage visualization.
+
 ## Common Commands
 
 ### Backend (FastAPI)
@@ -57,7 +59,7 @@ app/
 ├── database.py          # SQLModel engine + session management
 ├── models/              # SQLModel entities
 │   ├── ingredient.py            # Ingredient, SupplierEntry
-│   ├── recipe.py                # Recipe, RecipeStatus, Instructions
+│   ├── recipe.py                # Recipe, RecipeStatus, Instructions (+ version, root_id for versioning)
 │   ├── recipe_ingredient.py     # RecipeIngredient (ingredient links)
 │   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
 │   ├── outlet.py                # Outlet, RecipeOutlet (multi-brand support)
@@ -66,7 +68,7 @@ app/
 │   └── costing.py               # CostingResult, CostBreakdownItem
 ├── domain/              # Business logic services
 │   ├── ingredient_service.py    # Ingredient CRUD + variants
-│   ├── recipe_service.py        # Recipe CRUD + status + fork
+│   ├── recipe_service.py        # Recipe CRUD + status + fork + version tree
 │   ├── instructions_service.py  # Freeform → structured parsing
 │   ├── costing_service.py       # Unit conversion + cost calculations
 │   ├── subrecipe_service.py     # Sub-recipe hierarchy + cycle detection
@@ -107,12 +109,12 @@ app/                     # Next.js App Router pages
 lib/
 ├── api.ts               # Typed fetch wrapper for 40+ endpoints
 ├── providers.tsx        # QueryClientProvider + AppProvider + AuthGuard composition
-├── store.tsx            # React Context for selectedRecipeId, instructionsTab, auth state
+├── store.tsx            # React Context for selectedRecipeId, canvasTab, auth state
 ├── types/index.ts       # TypeScript interfaces for all entities
 ├── utils.ts             # Utility functions (cn for classnames)
 ├── mock-users.json      # Mock user data for frontend-only auth
 └── hooks/               # TanStack Query hooks with cache invalidation
-    ├── useRecipes.ts
+    ├── useRecipes.ts            # includes useRecipeVersions for version tree
     ├── useIngredients.ts
     ├── useRecipeIngredients.ts
     ├── useCosting.ts
@@ -123,6 +125,7 @@ lib/
 
 components/
 ├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
+│   └── tabs/            # CanvasTab (drag-drop recipe builder), VersionsTab (version tree via @xyflow/react)
 ├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, InstructionsSteps, InstructionStepCard, SubRecipesList
 ├── recipes/             # RecipeCard
 ├── ingredients/         # IngredientCard
@@ -135,6 +138,8 @@ components/
 - Drag-and-drop via `dnd-kit` (wrapped in AppShell's DndContext)
 - Debounced autosave on all editable fields (no save buttons)
 - `useAppState()` for global UI state (selected recipe, active tab)
+- Canvas tabs: `canvas | overview | ingredients | costs | instructions | tasting | versions`
+- Version tree visualization via `@xyflow/react` (ReactFlow)
 
 ### API Structure
 
@@ -146,7 +151,8 @@ All endpoints under `/api/v1`:
 - `/suppliers` — CRUD + contact info (address, phone, email)
 
 **Recipe Sub-resources:**
-- `/recipes/{id}/fork` — create editable copy with ingredients & instructions
+- `/recipes/{id}/fork` — create editable copy with ingredients & instructions (sets version + root_id)
+- `/recipes/{id}/versions` — get all recipes in version tree (ancestors + descendants)
 - `/recipes/{id}/ingredients` — add, update, remove, reorder
 - `/recipes/{id}/sub-recipes` — sub-recipe hierarchy (BOM) with cycle detection
 - `/recipes/{id}/instructions` — raw, parse (LLM), structured

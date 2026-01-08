@@ -11,7 +11,7 @@ def test_create_recipe(client: TestClient):
             "name": "Chocolate Cake",
             "yield_quantity": 12,
             "yield_unit": "portion",
-            "created_by":"234",
+            "created_by": "234",
         },
     )
     assert response.status_code == 201
@@ -20,6 +20,8 @@ def test_create_recipe(client: TestClient):
     assert data["yield_quantity"] == 12
     assert data["status"] == "draft"
     assert data["created_by"] == "234"
+    assert data["version"] == 1
+    assert data["root_id"] is None
 
 
 def test_update_recipe_status(client: TestClient):
@@ -85,6 +87,9 @@ def test_fork_recipe_basic(client: TestClient):
     assert forked["status"] == "draft"
     assert forked["is_public"] is False
     assert forked["id"] != original["id"]
+    # Verify version and root_id
+    assert forked["version"] == 2
+    assert forked["root_id"] == original["id"]
 
 
 def test_fork_recipe_with_new_owner(client: TestClient):
@@ -363,3 +368,177 @@ def test_fork_recipe_preserves_sub_recipe_order(client: TestClient):
     assert forked_sub_recipes[0]["child_recipe_id"] == child1["id"]
     assert forked_sub_recipes[1]["child_recipe_id"] == child2["id"]
     assert forked_sub_recipes[2]["child_recipe_id"] == child3["id"]
+
+
+def test_fork_recipe_chain_tracks_parent(client: TestClient):
+    """Test that forking sets root_id to the direct parent and increments version."""
+    # Create original recipe (v1)
+    original = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    assert original["version"] == 1
+    assert original["root_id"] is None
+
+    # Fork the original (v2)
+    fork1 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+    assert fork1["version"] == 2
+    assert fork1["root_id"] == original["id"]
+
+    # Fork the fork (v3) - root_id points to fork1 (the direct parent)
+    fork2 = client.post(f"/api/v1/recipes/{fork1['id']}/fork").json()
+    assert fork2["version"] == 3
+    assert fork2["root_id"] == fork1["id"]
+
+    # Fork v3 again (v4) - root_id points to fork2
+    fork3 = client.post(f"/api/v1/recipes/{fork2['id']}/fork").json()
+    assert fork3["version"] == 4
+    assert fork3["root_id"] == fork2["id"]
+
+
+# ============ Version Tree Tests ============
+
+
+def test_get_version_tree_single_recipe(client: TestClient):
+    """Test version tree for a recipe with no forks returns just the recipe."""
+    # Create a standalone recipe
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Standalone Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Get version tree
+    response = client.get(f"/api/v1/recipes/{recipe['id']}/versions")
+    assert response.status_code == 200
+    versions = response.json()
+
+    assert len(versions) == 1
+    assert versions[0]["id"] == recipe["id"]
+    assert versions[0]["version"] == 1
+
+
+def test_get_version_tree_linear_chain(client: TestClient):
+    """Test version tree for a linear fork chain returns all versions."""
+    # Create original recipe (v1)
+    original = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Fork to create v2
+    fork1 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+
+    # Fork to create v3
+    fork2 = client.post(f"/api/v1/recipes/{fork1['id']}/fork").json()
+
+    # Get version tree from any recipe in the chain
+    for recipe_id in [original["id"], fork1["id"], fork2["id"]]:
+        response = client.get(f"/api/v1/recipes/{recipe_id}/versions")
+        assert response.status_code == 200
+        versions = response.json()
+
+        assert len(versions) == 3
+        # Should be sorted by version number
+        assert versions[0]["id"] == original["id"]
+        assert versions[0]["version"] == 1
+        assert versions[1]["id"] == fork1["id"]
+        assert versions[1]["version"] == 2
+        assert versions[2]["id"] == fork2["id"]
+        assert versions[2]["version"] == 3
+
+
+def test_get_version_tree_branching(client: TestClient):
+    """Test version tree with branches (multiple forks from same parent)."""
+    # Create original recipe (v1)
+    original = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Create two forks from original (both v2)
+    fork1 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+    fork2 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+
+    # Get version tree from any recipe
+    response = client.get(f"/api/v1/recipes/{original['id']}/versions")
+    assert response.status_code == 200
+    versions = response.json()
+
+    assert len(versions) == 3
+    version_ids = {v["id"] for v in versions}
+    assert original["id"] in version_ids
+    assert fork1["id"] in version_ids
+    assert fork2["id"] in version_ids
+
+
+def test_get_version_tree_complex_branching(client: TestClient):
+    """Test version tree with complex branching (fork of a fork)."""
+    # Create original recipe (v1)
+    original = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    # Fork original to create v2
+    fork1 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+
+    # Fork original again to create another v2
+    fork2 = client.post(f"/api/v1/recipes/{original['id']}/fork").json()
+
+    # Fork fork1 to create v3
+    fork1_1 = client.post(f"/api/v1/recipes/{fork1['id']}/fork").json()
+
+    # Get version tree - should include all 4 recipes
+    response = client.get(f"/api/v1/recipes/{fork1_1['id']}/versions")
+    assert response.status_code == 200
+    versions = response.json()
+
+    assert len(versions) == 4
+    version_ids = {v["id"] for v in versions}
+    assert original["id"] in version_ids
+    assert fork1["id"] in version_ids
+    assert fork2["id"] in version_ids
+    assert fork1_1["id"] in version_ids
+
+
+def test_get_version_tree_not_found(client: TestClient):
+    """Test version tree for non-existent recipe returns 404."""
+    response = client.get("/api/v1/recipes/99999/versions")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Recipe not found"
+
+
+def test_get_version_tree_preserves_recipe_data(client: TestClient):
+    """Test that version tree returns full recipe data."""
+    # Create recipe with specific data
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={
+            "name": "Detailed Recipe",
+            "yield_quantity": 4,
+            "yield_unit": "servings",
+            "owner_id": "user123",
+        },
+    ).json()
+
+    # Fork it
+    forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
+
+    # Get version tree
+    response = client.get(f"/api/v1/recipes/{recipe['id']}/versions")
+    versions = response.json()
+
+    # Verify original recipe data
+    orig = next(v for v in versions if v["id"] == recipe["id"])
+    assert orig["name"] == "Detailed Recipe"
+    assert orig["yield_quantity"] == 4
+    assert orig["yield_unit"] == "servings"
+    assert orig["owner_id"] == "user123"
+    assert orig["version"] == 1
+    assert orig["root_id"] is None
+
+    # Verify forked recipe data
+    fork = next(v for v in versions if v["id"] == forked["id"])
+    assert fork["name"] == "Detailed Recipe (Fork)"
+    assert fork["version"] == 2
+    assert fork["root_id"] == recipe["id"]

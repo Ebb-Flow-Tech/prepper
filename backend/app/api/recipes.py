@@ -119,3 +119,19 @@ def fork_recipe(
             detail="Recipe not found",
         )
     return forked
+
+
+@router.get("/{recipe_id}/versions", response_model=list[Recipe])
+def get_recipe_versions(
+    recipe_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get all recipes in the version tree for a recipe."""
+    service = RecipeService(session)
+    recipe = service.get_recipe(recipe_id)
+    if not recipe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+    return service.get_version_tree(recipe_id)

@@ -205,13 +205,13 @@ function AddSubRecipeForm({ recipeId, existingChildIds, recipes, userId, userTyp
       },
       {
         onSuccess: () => {
-          toast.success('Sub-recipe added');
+          toast.success('Item added');
           setSelectedRecipeId('');
           setQuantity('1');
           setUnit('portion');
         },
         onError: (error) => {
-          const message = error instanceof Error ? error.message : 'Failed to add sub-recipe';
+          const message = error instanceof Error ? error.message : 'Failed to add item';
           if (message.includes('cycle') || message.includes('circular')) {
             toast.error('Cannot add: this would create a circular reference');
           } else {
@@ -316,8 +316,8 @@ export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
       removeSubRecipe.mutate(
         { recipeId, linkId },
         {
-          onSuccess: () => toast.success('Sub-recipe removed'),
-          onError: () => toast.error('Failed to remove sub-recipe'),
+          onSuccess: () => toast.success('Item removed'),
+          onError: () => toast.error('Failed to remove item'),
         }
       );
     },

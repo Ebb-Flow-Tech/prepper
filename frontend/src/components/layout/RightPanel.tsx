@@ -344,7 +344,7 @@ export function RightPanel() {
                   <div className="space-y-2">
                     {activeTab !== 'all' && (
                       <p className="mb-2 text-xs text-zinc-500">
-                        Drag to add as sub-recipe
+                        Drag to add as item
                       </p>
                     )}
                     {filteredRecipes.map((recipe) => (
