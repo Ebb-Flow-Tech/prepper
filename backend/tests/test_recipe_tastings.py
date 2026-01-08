@@ -172,3 +172,57 @@ def test_add_multiple_recipes_to_session(client: TestClient):
             json={"recipe_id": recipe["id"]},
         )
         assert response.status_code == 201
+
+
+def test_get_session_recipes(client: TestClient):
+    """Test getting all recipes associated with a tasting session."""
+    # Create recipes
+    recipe1 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Recipe 1", "yield_quantity": 1, "yield_unit": "portion"},
+    ).json()
+    recipe2 = client.post(
+        "/api/v1/recipes",
+        json={"name": "Recipe 2", "yield_quantity": 1, "yield_unit": "portion"},
+    ).json()
+
+    # Create a tasting session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Menu Tasting", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add recipes to session
+    client.post(
+        f"/api/v1/tasting-sessions/{session_id}/recipes",
+        json={"recipe_id": recipe1["id"]},
+    )
+    client.post(
+        f"/api/v1/tasting-sessions/{session_id}/recipes",
+        json={"recipe_id": recipe2["id"]},
+    )
+
+    # Get session recipes
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    recipe_ids = [r["recipe_id"] for r in data]
+    assert recipe1["id"] in recipe_ids
+    assert recipe2["id"] in recipe_ids
+
+
+def test_get_session_recipes_empty(client: TestClient):
+    """Test getting recipes from a session with no recipes."""
+    # Create a tasting session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Empty Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Get session recipes - should return empty list
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    assert response.json() == []

@@ -150,7 +150,7 @@ def add_note_to_session(
     if not note:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not add note. Session or recipe not found, or recipe already in session.",
+            detail="Could not add note. Session or recipe not found.",
         )
     return note
 

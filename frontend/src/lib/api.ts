@@ -21,6 +21,8 @@ import type {
   UpdateTastingSessionRequest,
   CreateTastingNoteRequest,
   UpdateTastingNoteRequest,
+  RecipeTasting,
+  AddRecipeToSessionRequest,
   Supplier,
   CreateSupplierRequest,
   UpdateSupplierRequest,
@@ -352,6 +354,33 @@ export async function getRecipeTastingSummary(
   recipeId: number
 ): Promise<RecipeTastingSummary> {
   return fetchApi<RecipeTastingSummary>(`/recipes/${recipeId}/tasting-summary`);
+}
+
+// ============ Session Recipes (Recipe-Tasting) ============
+
+export async function getSessionRecipes(
+  sessionId: number
+): Promise<RecipeTasting[]> {
+  return fetchApi<RecipeTasting[]>(`/tasting-sessions/${sessionId}/recipes`);
+}
+
+export async function addRecipeToSession(
+  sessionId: number,
+  data: AddRecipeToSessionRequest
+): Promise<RecipeTasting> {
+  return fetchApi<RecipeTasting>(`/tasting-sessions/${sessionId}/recipes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeRecipeFromSession(
+  sessionId: number,
+  recipeId: number
+): Promise<void> {
+  return fetchApi<void>(`/tasting-sessions/${sessionId}/recipes/${recipeId}`, {
+    method: 'DELETE',
+  });
 }
 
 // ============ Suppliers ============

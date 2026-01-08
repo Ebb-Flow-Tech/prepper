@@ -64,6 +64,7 @@ app/
 │   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
 │   ├── outlet.py                # Outlet, RecipeOutlet (multi-brand support)
 │   ├── tasting.py               # TastingSession, TastingNote
+│   ├── recipe_tasting.py        # RecipeTasting (session-recipe many-to-many)
 │   ├── supplier.py              # Supplier (name, address, phone, email)
 │   └── costing.py               # CostingResult, CostBreakdownItem
 ├── domain/              # Business logic services
@@ -73,7 +74,9 @@ app/
 │   ├── costing_service.py       # Unit conversion + cost calculations
 │   ├── subrecipe_service.py     # Sub-recipe hierarchy + cycle detection
 │   ├── outlet_service.py        # Multi-brand outlet management
-│   ├── tasting_service.py       # Tasting sessions and notes
+│   ├── tasting_session_service.py   # Tasting session CRUD + stats
+│   ├── tasting_note_service.py      # Tasting notes + recipe history
+│   ├── recipe_tasting_service.py    # Session-recipe relationships
 │   └── supplier_service.py      # Supplier CRUD + supplier-ingredient links
 ├── api/                 # FastAPI routers (one per resource)
 │   ├── recipes.py               # Recipe CRUD + fork
@@ -84,6 +87,7 @@ app/
 │   ├── sub_recipes.py           # Sub-recipe hierarchy
 │   ├── outlets.py               # Outlets + recipe-outlet links
 │   ├── tastings.py              # Tasting sessions + notes
+│   ├── recipe_tastings.py       # Session-recipe relationships
 │   └── suppliers.py             # Supplier CRUD + ingredient links
 └── utils/               # Unit conversion helpers
 ```
@@ -100,7 +104,7 @@ app/                     # Next.js App Router pages
 ├── recipes/             # Recipe list and detail pages
 ├── ingredients/         # Ingredient list and detail pages
 ├── suppliers/           # Supplier list and detail pages
-├── tastings/            # Tasting sessions (list, detail, new)
+├── tastings/            # Tasting sessions (list, detail, new, per-recipe notes)
 ├── finance/             # Finance/analytics
 ├── rnd/                 # R&D workspace
 ├── login/               # Login page (mock auth)
@@ -170,6 +174,7 @@ All endpoints under `/api/v1`:
 **Tasting & Outlets:**
 - `/tasting-sessions` — CRUD + stats
 - `/tasting-sessions/{id}/notes` — tasting notes per session
+- `/tasting-sessions/{id}/recipes` — session-recipe relationships (add/remove recipes to session)
 - `/outlets` — CRUD for multi-brand/location support
 
 ## Environment Variables

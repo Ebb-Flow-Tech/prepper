@@ -11,6 +11,19 @@ from app.domain import RecipeTastingService
 router = APIRouter()
 
 
+@router.get(
+    "/{session_id}/recipes",
+    response_model=list[RecipeTasting],
+)
+def get_session_recipes(
+    session_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get all recipes associated with a tasting session."""
+    service = RecipeTastingService(session)
+    return service.get_recipes_for_session(session_id)
+
+
 @router.post(
     "/{session_id}/recipes",
     response_model=RecipeTasting,

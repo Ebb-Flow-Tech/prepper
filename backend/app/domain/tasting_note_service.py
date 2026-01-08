@@ -36,17 +36,7 @@ class TastingNoteService:
         if not recipe:
             return None
 
-        # Check for duplicate (same recipe in same session)
-        existing = self.session.exec(
-            select(TastingNote).where(
-                TastingNote.session_id == session_id,
-                TastingNote.recipe_id == data.recipe_id,
-            )
-        ).first()
-
-        if existing:
-            return None  # Duplicate not allowed
-
+        # Multiple notes per recipe are allowed (different tasters can provide feedback)
         note = TastingNote(
             session_id=session_id,
             **data.model_dump(),

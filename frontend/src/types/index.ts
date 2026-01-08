@@ -249,6 +249,19 @@ export interface UpdateTastingNoteRequest {
   taster_name?: string | null;
 }
 
+// ============ Recipe-Tasting Session Types ============
+
+export interface RecipeTasting {
+  id: number;
+  recipe_id: number;
+  tasting_session_id: number;
+  created_at: string;
+}
+
+export interface AddRecipeToSessionRequest {
+  recipe_id: number;
+}
+
 // ============ Supplier Types ============
 
 export interface Supplier {
