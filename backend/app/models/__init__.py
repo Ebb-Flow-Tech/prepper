@@ -65,6 +65,10 @@ from app.models.supplier import (
     SupplierCreate,
     SupplierUpdate,
 )
+from app.models.recipe_tasting import (
+    RecipeTasting,
+    RecipeTastingCreate,
+)
 
 __all__ = [
     # Ingredient
@@ -124,4 +128,7 @@ __all__ = [
     "Supplier",
     "SupplierCreate",
     "SupplierUpdate",
+    # RecipeTasting
+    "RecipeTasting",
+    "RecipeTastingCreate",
 ]
