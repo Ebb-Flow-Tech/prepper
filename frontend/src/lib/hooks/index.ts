@@ -5,3 +5,4 @@ export * from './useCosting';
 export * from './useInstructions';
 export * from './useSuppliers';
 export * from './useSubRecipes';
+export * from './useTastings';
