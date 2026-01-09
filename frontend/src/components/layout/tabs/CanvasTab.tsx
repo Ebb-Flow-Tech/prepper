@@ -16,15 +16,19 @@ import { useAppState } from '@/lib/store';
 import {
   useRecipes,
   useCreateRecipe,
+  useUpdateRecipe,
   useAddRecipeIngredient,
+  useUpdateRecipeIngredient,
+  useRemoveRecipeIngredient,
   useAddSubRecipe,
+  useUpdateSubRecipe,
+  useRemoveSubRecipe,
   useRecipeIngredients,
   useSubRecipes,
 } from '@/lib/hooks';
 import { Button, Input, Select, ConfirmModal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus } from '@/types';
-import { LeftPanel } from '../LeftPanel';
 import { RightPanel } from '../RightPanel';
 import type { Ingredient, Recipe } from '@/types';
 
@@ -468,14 +472,18 @@ function CanvasContent({
   onIngredientQuantityChange,
   onRecipeQuantityChange,
   onSubmit,
+  onFork,
   onReset,
   onClearAll,
   isSubmitting,
+  isForking,
   canvasRef,
   rootRecipeName,
   currentVersion,
   allRecipes,
   hasUnsavedChanges,
+  hasSelectedRecipe,
+  isOwner,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -486,14 +494,18 @@ function CanvasContent({
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onSubmit: () => void;
+  onFork: () => void;
   onReset: () => void;
   onClearAll: () => void;
   isSubmitting: boolean;
+  isForking: boolean;
   canvasRef: React.RefObject<HTMLDivElement | null>;
   rootRecipeName: string | null;
   currentVersion: number | null;
   allRecipes?: Recipe[];
   hasUnsavedChanges: boolean;
+  hasSelectedRecipe: boolean;
+  isOwner: boolean;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -587,7 +599,8 @@ function CanvasContent({
             )}
             <Button
               variant="outline"
-              onClick={onReset}            >
+              onClick={onReset}
+            >
               Reset
             </Button>
             <Button
@@ -597,8 +610,24 @@ function CanvasContent({
             >
               Clear All
             </Button>
-            <Button onClick={onSubmit} disabled={!hasItems || isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit'}
+            {hasSelectedRecipe && (
+              <Button
+                variant="outline"
+                onClick={onFork}
+                disabled={!hasItems || isForking}
+                className="border-purple-500 text-purple-500 hover:bg-purple-50 hover:text-purple-600 dark:border-purple-500 dark:text-purple-500 dark:hover:bg-purple-950 dark:hover:text-purple-400"
+              >
+                {isForking ? 'Forking...' : 'Fork'}
+              </Button>
+            )}
+            <Button onClick={onSubmit} disabled={!hasItems || isSubmitting || (hasSelectedRecipe && !isOwner)}>
+              {isSubmitting
+                ? hasSelectedRecipe
+                  ? 'Updating...'
+                  : 'Creating...'
+                : hasSelectedRecipe
+                  ? 'Update'
+                  : 'Create'}
             </Button>
           </div>
         </div>
@@ -609,21 +638,28 @@ function CanvasContent({
 
 export function CanvasTab() {
   const router = useRouter();
-  const { userId, selectedRecipeId } = useAppState();
+  const { userId, selectedRecipeId, userType } = useAppState();
   const { data: recipes } = useRecipes();
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
 
   const createRecipe = useCreateRecipe();
+  const updateRecipe = useUpdateRecipe();
   const addIngredient = useAddRecipeIngredient();
+  const updateIngredient = useUpdateRecipeIngredient();
+  const removeIngredient = useRemoveRecipeIngredient();
   const addSubRecipe = useAddSubRecipe();
+  const updateSubRecipeHook = useUpdateSubRecipe();
+  const removeSubRecipe = useRemoveSubRecipe();
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [stagedIngredients, setStagedIngredients] = useState<StagedIngredient[]>([]);
   const [stagedRecipes, setStagedRecipes] = useState<StagedRecipe[]>([]);
   const [activeDragItem, setActiveDragItem] = useState<DragItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForking, setIsForking] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showForkModal, setShowForkModal] = useState(false);
   const [loadedRecipeId, setLoadedRecipeId] = useState<number | null>(null);
   const [metadata, setMetadata] = useState<RecipeMetadata>(DEFAULT_METADATA);
 
@@ -967,30 +1003,42 @@ export function CanvasTab() {
     setStagedRecipes([]);
   }, []);
 
-  const handleSubmitClick = useCallback(() => {
+  // Fork button click handler
+  const handleForkClick = useCallback(() => {
     if (stagedIngredients.length === 0 && stagedRecipes.length === 0) {
       toast.error('Add some ingredients or recipes first');
       return;
     }
-    setShowSubmitModal(true);
-  }, [stagedIngredients.length, stagedRecipes.length]);
+    if (!selectedRecipeId) {
+      toast.error('No recipe selected to fork');
+      return;
+    }
+    setShowForkModal(true);
+  }, [stagedIngredients.length, stagedRecipes.length, selectedRecipeId]);
 
-  const handleSubmitConfirm = useCallback(async () => {
-    setShowSubmitModal(false);
-    setIsSubmitting(true);
+  // Fork confirm handler - creates a new recipe with incremented version
+  const handleForkConfirm = useCallback(async () => {
+    setShowForkModal(false);
+    setIsForking(true);
 
-    // Determine version and root_id based on selected recipe
     const selectedRecipe = selectedRecipeId
       ? recipes?.find((r) => r.id === selectedRecipeId)
       : null;
-    const version = selectedRecipe ? selectedRecipe.version + 1 : 1;
-    // root_id points to the recipe this new version is based on
-    const root_id = selectedRecipe ? selectedRecipe.id : null;
+
+    if (!selectedRecipe) {
+      toast.error('No recipe selected to fork');
+      setIsForking(false);
+      return;
+    }
+
+    // Version is incremented by 1, root_id points to the original recipe
+    const version = selectedRecipe.version + 1;
+    const root_id = selectedRecipe.id;
 
     try {
-      // Create a new recipe
+      // Create a new forked recipe with "(Fork)" appended to the name
       const newRecipe = await createRecipe.mutateAsync({
-        name: metadata.name,
+        name: `${metadata.name} (Fork)`,
         yield_quantity: metadata.yield_quantity,
         yield_unit: metadata.yield_unit,
         status: metadata.status,
@@ -1001,7 +1049,7 @@ export function CanvasTab() {
         root_id,
       });
 
-      // Add all staged ingredients
+      // Add all staged ingredients to the new recipe
       for (const staged of stagedIngredients) {
         const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
         const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
@@ -1024,7 +1072,7 @@ export function CanvasTab() {
         });
       }
 
-      // Add all staged sub-recipes
+      // Add all staged sub-recipes to the new recipe
       for (const staged of stagedRecipes) {
         await addSubRecipe.mutateAsync({
           recipeId: newRecipe.id,
@@ -1040,16 +1088,237 @@ export function CanvasTab() {
       setStagedRecipes([]);
       setMetadata(DEFAULT_METADATA);
 
-      toast.success('Recipe created successfully!');
+      toast.success(`Recipe forked successfully! Version ${version} created.`);
 
-      // Redirect to recipes page
-      router.push('/recipes');
+      // Redirect to the new recipe in canvas
+      router.push(`/?recipe=${newRecipe.id}`);
     } catch {
-      toast.error('Failed to create recipe');
+      toast.error('Failed to fork recipe');
+    } finally {
+      setIsForking(false);
+    }
+  }, [selectedRecipeId, recipes, metadata, stagedIngredients, stagedRecipes, createRecipe, addIngredient, addSubRecipe, userId, router]);
+
+  const handleSubmitClick = useCallback(() => {
+    if (stagedIngredients.length === 0 && stagedRecipes.length === 0) {
+      toast.error('Add some ingredients or recipes first');
+      return;
+    }
+    setShowSubmitModal(true);
+  }, [stagedIngredients.length, stagedRecipes.length]);
+
+  const handleSubmitConfirm = useCallback(async () => {
+    setShowSubmitModal(false);
+    setIsSubmitting(true);
+
+    try {
+      if (selectedRecipeId) {
+        // UPDATE existing recipe
+        const recipeId = selectedRecipeId;
+
+        // Capture current server state at the start (these are from React Query cache)
+        const serverIngredients = recipeIngredients || [];
+        const serverSubRecipes = subRecipes || [];
+
+        // Update recipe metadata
+        await updateRecipe.mutateAsync({
+          id: recipeId,
+          data: {
+            name: metadata.name,
+            yield_quantity: metadata.yield_quantity,
+            yield_unit: metadata.yield_unit,
+            status: metadata.status,
+            is_public: metadata.is_public,
+          },
+        });
+
+        // Build maps for efficient lookups
+        // Map: ingredient_id -> RecipeIngredient record
+        const serverIngredientMap = new Map(
+          serverIngredients.map((ri) => [ri.ingredient_id, ri])
+        );
+        // Map: child_recipe_id -> SubRecipe record
+        const serverSubRecipeMap = new Map(
+          serverSubRecipes.map((sr) => [sr.child_recipe_id, sr])
+        );
+
+        // Get staged ingredient and recipe IDs
+        const stagedIngredientIds = new Set(
+          stagedIngredients.map((si) => si.ingredient.id)
+        );
+        const stagedSubRecipeIds = new Set(
+          stagedRecipes.map((sr) => sr.recipe.id)
+        );
+
+        // Remove ingredients that are no longer staged
+        for (const ri of serverIngredients) {
+          if (!stagedIngredientIds.has(ri.ingredient_id)) {
+            await removeIngredient.mutateAsync({
+              recipeId,
+              ingredientId: ri.id,
+            });
+          }
+        }
+
+        // Remove sub-recipes that are no longer staged
+        for (const sr of serverSubRecipes) {
+          if (!stagedSubRecipeIds.has(sr.child_recipe_id)) {
+            await removeSubRecipe.mutateAsync({
+              recipeId,
+              linkId: sr.id,
+            });
+          }
+        }
+
+        // Add or update ingredients
+        for (const staged of stagedIngredients) {
+          const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
+          const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
+          const unit_price =
+            preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit ?? 0;
+          const supplier_id = preferredSupplier
+            ? parseInt(preferredSupplier.supplier_id, 10)
+            : null;
+
+          const existingRi = serverIngredientMap.get(staged.ingredient.id);
+          if (existingRi) {
+            // Update existing ingredient
+            await updateIngredient.mutateAsync({
+              recipeId,
+              ingredientId: existingRi.id,
+              data: {
+                quantity: staged.quantity,
+                unit: base_unit,
+                base_unit,
+                unit_price,
+                supplier_id,
+              },
+            });
+          } else {
+            // Add new ingredient
+            await addIngredient.mutateAsync({
+              recipeId,
+              data: {
+                ingredient_id: staged.ingredient.id,
+                quantity: staged.quantity,
+                unit: base_unit,
+                base_unit,
+                unit_price,
+                supplier_id,
+              },
+            });
+          }
+        }
+
+        // Add or update sub-recipes
+        for (const staged of stagedRecipes) {
+          const existingSr = serverSubRecipeMap.get(staged.recipe.id);
+          if (existingSr) {
+            // Update existing sub-recipe
+            await updateSubRecipeHook.mutateAsync({
+              recipeId,
+              linkId: existingSr.id,
+              data: {
+                quantity: staged.quantity,
+              },
+            });
+          } else {
+            // Add new sub-recipe
+            await addSubRecipe.mutateAsync({
+              recipeId,
+              data: {
+                child_recipe_id: staged.recipe.id,
+                quantity: staged.quantity,
+              },
+            });
+          }
+        }
+
+        // Reset loaded recipe to force reload of data
+        setLoadedRecipeId(null);
+
+        toast.success('Recipe updated successfully!');
+      } else {
+        // CREATE new recipe
+        const newRecipe = await createRecipe.mutateAsync({
+          name: metadata.name,
+          yield_quantity: metadata.yield_quantity,
+          yield_unit: metadata.yield_unit,
+          status: metadata.status,
+          created_by: userId || undefined,
+          is_public: metadata.is_public,
+          owner_id: userId || undefined,
+          version: 1,
+          root_id: null,
+        });
+
+        // Add all staged ingredients
+        for (const staged of stagedIngredients) {
+          const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
+          const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
+          const unit_price =
+            preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit ?? 0;
+          const supplier_id = preferredSupplier
+            ? parseInt(preferredSupplier.supplier_id, 10)
+            : null;
+
+          await addIngredient.mutateAsync({
+            recipeId: newRecipe.id,
+            data: {
+              ingredient_id: staged.ingredient.id,
+              quantity: staged.quantity,
+              unit: base_unit,
+              base_unit,
+              unit_price,
+              supplier_id,
+            },
+          });
+        }
+
+        // Add all staged sub-recipes
+        for (const staged of stagedRecipes) {
+          await addSubRecipe.mutateAsync({
+            recipeId: newRecipe.id,
+            data: {
+              child_recipe_id: staged.recipe.id,
+              quantity: staged.quantity,
+            },
+          });
+        }
+
+        // Clear the canvas
+        setStagedIngredients([]);
+        setStagedRecipes([]);
+        setMetadata(DEFAULT_METADATA);
+
+        toast.success('Recipe created successfully!');
+
+        // Redirect to the new recipe
+        router.push(`/?recipe=${newRecipe.id}`);
+      }
+    } catch {
+      toast.error(selectedRecipeId ? 'Failed to update recipe' : 'Failed to create recipe');
     } finally {
       setIsSubmitting(false);
     }
-  }, [stagedIngredients, stagedRecipes, metadata, createRecipe, addIngredient, addSubRecipe, userId, selectedRecipeId, recipes, router]);
+  }, [
+    stagedIngredients,
+    stagedRecipes,
+    metadata,
+    createRecipe,
+    updateRecipe,
+    addIngredient,
+    updateIngredient,
+    removeIngredient,
+    addSubRecipe,
+    updateSubRecipeHook,
+    removeSubRecipe,
+    userId,
+    selectedRecipeId,
+    recipeIngredients,
+    subRecipes,
+    router,
+  ]);
 
   // Determine if there are  by comparing to initial state
   const hasUnsavedChanges = (() => {
@@ -1143,9 +1412,11 @@ export function CanvasTab() {
           onIngredientQuantityChange={handleIngredientQuantityChange}
           onRecipeQuantityChange={handleRecipeQuantityChange}
           onSubmit={handleSubmitClick}
+          onFork={handleForkClick}
           onReset={handleReset}
           onClearAll={handleClearAll}
           isSubmitting={isSubmitting}
+          isForking={isForking}
           canvasRef={canvasRef}
           rootRecipeName={(() => {
             const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
@@ -1158,6 +1429,13 @@ export function CanvasTab() {
           })()}
           allRecipes={recipes}
           hasUnsavedChanges={hasUnsavedChanges}
+          hasSelectedRecipe={selectedRecipeId !== null}
+          isOwner={(() => {
+            if (userType === 'admin') return true; // Admins bypass ownership restrictions
+            if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
+            const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
+            return selectedRecipe?.owner_id === userId;
+          })()}
         />
         <RightPanel />
         <DragOverlay>
@@ -1175,9 +1453,23 @@ export function CanvasTab() {
         isOpen={showSubmitModal}
         onClose={() => setShowSubmitModal(false)}
         onConfirm={handleSubmitConfirm}
-        title="Submit Recipe"
-        message={`Are you sure you want to submit "${metadata.name}" with ${stagedIngredients.length} ingredient(s) and ${stagedRecipes.length} sub-recipe(s)?`}
-        confirmLabel="Submit"
+        title={selectedRecipeId ? 'Update Recipe' : 'Create Recipe'}
+        message={
+          selectedRecipeId
+            ? `Are you sure you want to update "${metadata.name}" with ${stagedIngredients.length} ingredient(s) and ${stagedRecipes.length} sub-recipe(s)?`
+            : `Are you sure you want to create "${metadata.name}" with ${stagedIngredients.length} ingredient(s) and ${stagedRecipes.length} sub-recipe(s)?`
+        }
+        confirmLabel={selectedRecipeId ? 'Update' : 'Create'}
+        cancelLabel="Cancel"
+      />
+
+      <ConfirmModal
+        isOpen={showForkModal}
+        onClose={() => setShowForkModal(false)}
+        onConfirm={handleForkConfirm}
+        title="Fork Recipe"
+        message={`Are you sure you want to fork "${metadata.name}"? This will create a new version (v${(recipes?.find((r) => r.id === selectedRecipeId)?.version ?? 0) + 1}) based on the current recipe.`}
+        confirmLabel="Fork"
         cancelLabel="Cancel"
       />
     </>
