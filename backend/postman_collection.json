@@ -1,0 +1,1275 @@
+{
+  "info": {
+    "_postman_id": "prepper-api-collection",
+    "name": "Prepper API",
+    "description": "Recipe Builder API - Kitchen-first recipe workspace for chefs and operators",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "ingredientId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "recipeId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "recipeIngredientId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "outletId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "noteId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "supplierId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "linkId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "ingredients",
+      "description": "Ingredient CRUD and supplier management",
+      "item": [
+        {
+          "name": "Create Ingredient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tomato\",\n  \"base_unit\": \"kg\",\n  \"cost_per_base_unit\": 2.50,\n  \"category\": \"vegetables\",\n  \"source\": \"manual\",\n  \"master_ingredient_id\": null,\n  \"suppliers\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ingredients",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients"]
+            },
+            "description": "Create a new ingredient"
+          }
+        },
+        {
+          "name": "List Ingredients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients?active_only=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients"],
+              "query": [
+                {
+                  "key": "active_only",
+                  "value": "true",
+                  "description": "If true, only return active ingredients"
+                },
+                {
+                  "key": "category",
+                  "value": "proteins",
+                  "description": "Filter by food category (proteins, vegetables, fruits, dairy, grains, spices, oils_fats, sauces_condiments, beverages, other)",
+                  "disabled": true
+                },
+                {
+                  "key": "source",
+                  "value": "manual",
+                  "description": "Filter by source (fmh or manual)",
+                  "disabled": true
+                },
+                {
+                  "key": "master_only",
+                  "value": "false",
+                  "description": "If true, only return master ingredients (no variants)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all ingredients with optional filters"
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "categories"]
+            },
+            "description": "List all available food categories"
+          }
+        },
+        {
+          "name": "Get Ingredient",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}"]
+            },
+            "description": "Get an ingredient by ID"
+          }
+        },
+        {
+          "name": "Get Ingredient Variants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/variants",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "variants"]
+            },
+            "description": "Get all variant ingredients linked to a master ingredient"
+          }
+        },
+        {
+          "name": "Update Ingredient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Roma Tomato\",\n  \"cost_per_base_unit\": 3.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}"]
+            },
+            "description": "Update an ingredient"
+          }
+        },
+        {
+          "name": "Deactivate Ingredient",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "deactivate"]
+            },
+            "description": "Deactivate (soft-delete) an ingredient"
+          }
+        },
+        {
+          "name": "Add Supplier to Ingredient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplier_id\": \"sup-001\",\n  \"supplier_name\": \"ABC Foods\",\n  \"sku\": \"TOM-001\",\n  \"pack_size\": 5.0,\n  \"pack_unit\": \"kg\",\n  \"price_per_pack\": 12.50,\n  \"cost_per_unit\": 2.50,\n  \"currency\": \"SGD\",\n  \"is_preferred\": true,\n  \"source\": \"manual\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "suppliers"]
+            },
+            "description": "Add a supplier entry to an ingredient"
+          }
+        },
+        {
+          "name": "Update Supplier for Ingredient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price_per_pack\": 11.00,\n  \"is_preferred\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "suppliers", "{{supplierId}}"]
+            },
+            "description": "Update a supplier entry for an ingredient"
+          }
+        },
+        {
+          "name": "Remove Supplier from Ingredient",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "suppliers", "{{supplierId}}"]
+            },
+            "description": "Remove a supplier entry from an ingredient"
+          }
+        },
+        {
+          "name": "Get Suppliers for Ingredient",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "suppliers"]
+            },
+            "description": "Get all suppliers for an ingredient"
+          }
+        },
+        {
+          "name": "Get Preferred Supplier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingredients/{{ingredientId}}/suppliers/preferred",
+              "host": ["{{baseUrl}}"],
+              "path": ["ingredients", "{{ingredientId}}", "suppliers", "preferred"]
+            },
+            "description": "Get the preferred supplier for an ingredient"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recipes",
+      "description": "Recipe CRUD operations",
+      "item": [
+        {
+          "name": "Create Recipe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pasta Carbonara\",\n  \"yield_quantity\": 4,\n  \"yield_unit\": \"portion\",\n  \"is_prep_recipe\": false,\n  \"created_by\": \"chef_john\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes"]
+            },
+            "description": "Create a new recipe"
+          }
+        },
+        {
+          "name": "List Recipes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "draft",
+                  "description": "Filter by status (draft, active, archived)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all recipes, optionally filtered by status"
+          }
+        },
+        {
+          "name": "Get Recipe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}"]
+            },
+            "description": "Get a recipe by ID"
+          }
+        },
+        {
+          "name": "Update Recipe",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pasta Carbonara Classic\",\n  \"yield_quantity\": 6,\n  \"selling_price_est\": 18.50,\n  \"updated_by\": \"chef_mike\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}"]
+            },
+            "description": "Update recipe metadata"
+          }
+        },
+        {
+          "name": "Update Recipe Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "status"]
+            },
+            "description": "Update a recipe's status (draft, active, archived)"
+          }
+        },
+        {
+          "name": "Delete Recipe",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}"]
+            },
+            "description": "Soft-delete a recipe (sets status to archived)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recipe-ingredients",
+      "description": "Recipe ingredient management",
+      "item": [
+        {
+          "name": "List Recipe Ingredients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/ingredients",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "ingredients"]
+            },
+            "description": "List all ingredients for a recipe"
+          }
+        },
+        {
+          "name": "Add Ingredient to Recipe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ingredient_id\": 1,\n  \"quantity\": 200,\n  \"unit\": \"g\",\n  \"base_unit\": \"kg\",\n  \"unit_price\": 2.50,\n  \"supplier_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/ingredients",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "ingredients"]
+            },
+            "description": "Add an ingredient to a recipe"
+          }
+        },
+        {
+          "name": "Update Recipe Ingredient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 250,\n  \"unit\": \"g\",\n  \"base_unit\": \"kg\",\n  \"unit_price\": 3.00,\n  \"supplier_id\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/ingredients/{{recipeIngredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "ingredients", "{{recipeIngredientId}}"]
+            },
+            "description": "Update a recipe ingredient's quantity, unit, base_unit, unit_price, or supplier_id"
+          }
+        },
+        {
+          "name": "Remove Ingredient from Recipe",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/ingredients/{{recipeIngredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "ingredients", "{{recipeIngredientId}}"]
+            },
+            "description": "Remove an ingredient from a recipe"
+          }
+        },
+        {
+          "name": "Reorder Recipe Ingredients",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ordered_ids\": [3, 1, 2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/ingredients/reorder",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "ingredients", "reorder"]
+            },
+            "description": "Reorder recipe ingredients"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instructions",
+      "description": "Recipe instructions management",
+      "item": [
+        {
+          "name": "Store Raw Instructions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"1. Boil water and cook pasta until al dente.\\n2. In a bowl, whisk eggs with parmesan.\\n3. Cook pancetta until crispy.\\n4. Combine pasta with egg mixture and pancetta.\\n5. Season with black pepper and serve.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/instructions/raw",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "instructions", "raw"]
+            },
+            "description": "Store raw instructions text for a recipe"
+          }
+        },
+        {
+          "name": "Parse Instructions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/instructions/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "instructions", "parse"]
+            },
+            "description": "Parse raw instructions into structured format using LLM"
+          }
+        },
+        {
+          "name": "Update Structured Instructions",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"steps\": [\n    {\n      \"step_number\": 1,\n      \"description\": \"Boil water and cook pasta until al dente\",\n      \"duration_minutes\": 10\n    },\n    {\n      \"step_number\": 2,\n      \"description\": \"Whisk eggs with parmesan in a bowl\",\n      \"duration_minutes\": 2\n    },\n    {\n      \"step_number\": 3,\n      \"description\": \"Cook pancetta until crispy\",\n      \"duration_minutes\": 5\n    },\n    {\n      \"step_number\": 4,\n      \"description\": \"Combine pasta with egg mixture and pancetta\",\n      \"duration_minutes\": 2\n    },\n    {\n      \"step_number\": 5,\n      \"description\": \"Season with black pepper and serve\",\n      \"duration_minutes\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/instructions/structured",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "instructions", "structured"]
+            },
+            "description": "Manually update structured instructions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "costing",
+      "description": "Recipe costing calculations",
+      "item": [
+        {
+          "name": "Get Recipe Costing",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/costing",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "costing"]
+            },
+            "description": "Get the cost breakdown for a recipe"
+          }
+        },
+        {
+          "name": "Recompute Recipe Cost",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/costing/recompute",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "costing", "recompute"]
+            },
+            "description": "Recompute and persist the cost for a recipe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sub-recipes",
+      "description": "Sub-recipe / BOM hierarchy management",
+      "item": [
+        {
+          "name": "List Sub-Recipes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/sub-recipes",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "sub-recipes"]
+            },
+            "description": "Get all sub-recipes for a recipe, ordered by position"
+          }
+        },
+        {
+          "name": "Add Sub-Recipe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"child_recipe_id\": 2,\n  \"quantity\": 1.0,\n  \"unit\": \"portion\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/sub-recipes",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "sub-recipes"]
+            },
+            "description": "Add a sub-recipe to a recipe. Returns 400 if this would create a circular reference."
+          }
+        },
+        {
+          "name": "Update Sub-Recipe",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2.0,\n  \"unit\": \"portion\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/sub-recipes/{{linkId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "sub-recipes", "{{linkId}}"]
+            },
+            "description": "Update a sub-recipe link's quantity or unit"
+          }
+        },
+        {
+          "name": "Remove Sub-Recipe",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/sub-recipes/{{linkId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "sub-recipes", "{{linkId}}"]
+            },
+            "description": "Remove a sub-recipe from a recipe"
+          }
+        },
+        {
+          "name": "Reorder Sub-Recipes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ordered_ids\": [3, 1, 2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/sub-recipes/reorder",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "sub-recipes", "reorder"]
+            },
+            "description": "Reorder sub-recipes within a recipe"
+          }
+        },
+        {
+          "name": "Get Used In (Parent Recipes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/used-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "used-in"]
+            },
+            "description": "Get all recipes that use this recipe as a sub-recipe (reverse lookup)"
+          }
+        },
+        {
+          "name": "Get BOM Tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/bom-tree",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "bom-tree"]
+            },
+            "description": "Get the full Bill of Materials tree for a recipe (nested structure)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outlets",
+      "description": "Outlet (brand/location) management",
+      "item": [
+        {
+          "name": "Create Outlet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Central Kitchen\",\n  \"code\": \"CK\",\n  \"outlet_type\": \"brand\",\n  \"parent_outlet_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/outlets",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets"]
+            },
+            "description": "Create a new outlet (brand or location)"
+          }
+        },
+        {
+          "name": "List Outlets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/outlets",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets"],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "description": "Filter by active status",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all outlets, optionally filtered by active status"
+          }
+        },
+        {
+          "name": "Get Outlet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/outlets/{{outletId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets", "{{outletId}}"]
+            },
+            "description": "Get an outlet by ID"
+          }
+        },
+        {
+          "name": "Update Outlet",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Central Kitchen HQ\",\n  \"code\": \"CK-HQ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/outlets/{{outletId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets", "{{outletId}}"]
+            },
+            "description": "Update outlet details"
+          }
+        },
+        {
+          "name": "Deactivate Outlet",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/outlets/{{outletId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets", "{{outletId}}"]
+            },
+            "description": "Soft-delete an outlet (sets is_active to false)"
+          }
+        },
+        {
+          "name": "Get Outlet Recipes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/outlets/{{outletId}}/recipes",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets", "{{outletId}}", "recipes"],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "description": "Filter by active status",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all recipes assigned to an outlet"
+          }
+        },
+        {
+          "name": "Get Outlet Hierarchy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/outlets/{{outletId}}/hierarchy",
+              "host": ["{{baseUrl}}"],
+              "path": ["outlets", "{{outletId}}", "hierarchy"]
+            },
+            "description": "Get the full hierarchy tree for an outlet and its children"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recipe-outlets",
+      "description": "Recipe-outlet assignment management",
+      "item": [
+        {
+          "name": "Get Recipe Outlets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/outlets",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "outlets"]
+            },
+            "description": "Get all outlets a recipe is assigned to"
+          }
+        },
+        {
+          "name": "Add Recipe to Outlet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outlet_id\": 1,\n  \"is_active\": true,\n  \"price_override\": 25.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/outlets",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "outlets"]
+            },
+            "description": "Add a recipe to an outlet"
+          }
+        },
+        {
+          "name": "Update Recipe Outlet",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"price_override\": 28.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/outlets/{{outletId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "outlets", "{{outletId}}"]
+            },
+            "description": "Update a recipe-outlet link (e.g., price override)"
+          }
+        },
+        {
+          "name": "Remove Recipe from Outlet",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/outlets/{{outletId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "outlets", "{{outletId}}"]
+            },
+            "description": "Remove a recipe from an outlet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tastings",
+      "description": "Tasting sessions management",
+      "item": [
+        {
+          "name": "Create Tasting Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"December Menu Tasting\",\n  \"date\": \"2024-12-15\",\n  \"location\": \"Main Kitchen\",\n  \"notes\": \"New winter menu review\",\n  \"attendees\": [\"Chef John\", \"Chef Mike\", \"Manager Sarah\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions"]
+            },
+            "description": "Create a new tasting session"
+          }
+        },
+        {
+          "name": "List Tasting Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Maximum number of sessions to return (max 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Number of sessions to skip"
+                }
+              ]
+            },
+            "description": "List all tasting sessions, ordered by date descending"
+          }
+        },
+        {
+          "name": "Get Tasting Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}"]
+            },
+            "description": "Get a tasting session by ID"
+          }
+        },
+        {
+          "name": "Get Tasting Session Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "stats"]
+            },
+            "description": "Get statistics for a tasting session"
+          }
+        },
+        {
+          "name": "Update Tasting Session",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"December Menu Tasting - Updated\",\n  \"notes\": \"Added more dishes to review\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}"]
+            },
+            "description": "Update a tasting session"
+          }
+        },
+        {
+          "name": "Delete Tasting Session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}"]
+            },
+            "description": "Delete a tasting session and all its notes"
+          }
+        },
+        {
+          "name": "List Session Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "notes"]
+            },
+            "description": "List all notes for a tasting session"
+          }
+        },
+        {
+          "name": "Add Note to Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipe_id\": 1,\n  \"taste_rating\": 4,\n  \"presentation_rating\": 5,\n  \"texture_rating\": 4,\n  \"overall_rating\": 4,\n  \"feedback\": \"Excellent flavor profile, good balance of salt and acid\",\n  \"action_items\": \"Consider reducing cooking time by 2 minutes\",\n  \"decision\": \"approved\",\n  \"taster_name\": \"Chef John\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "notes"]
+            },
+            "description": "Add a tasting note to a session"
+          }
+        },
+        {
+          "name": "Get Tasting Note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/notes/{{noteId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "notes", "{{noteId}}"]
+            },
+            "description": "Get a specific tasting note"
+          }
+        },
+        {
+          "name": "Update Tasting Note",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"overall_rating\": 5,\n  \"feedback\": \"Updated feedback after second taste\",\n  \"decision\": \"approved\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/notes/{{noteId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "notes", "{{noteId}}"]
+            },
+            "description": "Update a tasting note"
+          }
+        },
+        {
+          "name": "Delete Tasting Note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasting-sessions/{{sessionId}}/notes/{{noteId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasting-sessions", "{{sessionId}}", "notes", "{{noteId}}"]
+            },
+            "description": "Delete a tasting note from a session"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recipe-tastings",
+      "description": "Recipe tasting history",
+      "item": [
+        {
+          "name": "Get Recipe Tasting Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/tasting-notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "tasting-notes"]
+            },
+            "description": "Get all tasting notes for a recipe"
+          }
+        },
+        {
+          "name": "Get Recipe Tasting Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recipes/{{recipeId}}/tasting-summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["recipes", "{{recipeId}}", "tasting-summary"]
+            },
+            "description": "Get aggregated tasting data for a recipe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "suppliers",
+      "description": "Supplier entity management",
+      "item": [
+        {
+          "name": "Create Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ABC Foods Pte Ltd\",\n  \"address\": \"123 Food Street, Singapore 123456\",\n  \"phone_number\": \"+65 6123 4567\",\n  \"email\": \"contact@abcfoods.sg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers"]
+            },
+            "description": "Create a new supplier with contact details"
+          }
+        },
+        {
+          "name": "List Suppliers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers"]
+            },
+            "description": "List all suppliers"
+          }
+        },
+        {
+          "name": "Get Supplier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers", "{{supplierId}}"]
+            },
+            "description": "Get a supplier by ID"
+          }
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ABC Foods International\",\n  \"address\": \"456 New Food Street, Singapore 654321\",\n  \"phone_number\": \"+65 6789 0123\",\n  \"email\": \"info@abcfoods-intl.sg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers", "{{supplierId}}"]
+            },
+            "description": "Update a supplier's details (name, address, phone, email)"
+          }
+        },
+        {
+          "name": "Delete Supplier",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers", "{{supplierId}}"]
+            },
+            "description": "Delete a supplier"
+          }
+        },
+        {
+          "name": "Get Supplier Ingredients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/{{supplierId}}/ingredients",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers", "{{supplierId}}", "ingredients"]
+            },
+            "description": "Get all ingredients associated with a supplier"
+          }
+        }
+      ]
+    },
+    {
+      "name": "health",
+      "description": "Health check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["health"]
+            },
+            "description": "Health check endpoint"
+          }
+        }
+      ]
+    }
+  ]
+}

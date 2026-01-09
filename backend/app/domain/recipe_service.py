@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.models import (
@@ -12,6 +13,7 @@ from app.models import (
     RecipeIngredient,
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
+    RecipeRecipe,
 )
 
 
@@ -79,6 +81,87 @@ class RecipeService:
         """Soft-delete a recipe by setting status to archived."""
         return self.set_recipe_status(recipe_id, RecipeStatus.ARCHIVED)
 
+    def fork_recipe(self, recipe_id: int, new_owner_id: str | None = None) -> Recipe | None:
+        """
+        Fork a recipe - create a copy with all ingredients and sub-recipes.
+
+        The forked recipe will:
+        - Have a new name with "(Fork)" suffix
+        - Be owned by new_owner_id (or same as original if not provided)
+        - Start as draft status
+        - Copy all recipe ingredients
+        - Copy all sub-recipe links (referencing original child recipes)
+        - Copy instructions (raw and structured)
+        """
+        original = self.get_recipe(recipe_id)
+        if not original:
+            return None
+
+        # Determine root_id and version for the fork
+        # root_id points to the recipe this was forked from
+        # Version increments based on the original's version
+        new_version = original.version + 1
+
+        # Create the forked recipe
+        forked = Recipe(
+            name=f"{original.name} (Fork)",
+            yield_quantity=original.yield_quantity,
+            yield_unit=original.yield_unit,
+            is_prep_recipe=original.is_prep_recipe,
+            instructions_raw=original.instructions_raw,
+            instructions_structured=original.instructions_structured,
+            selling_price_est=original.selling_price_est,
+            status=RecipeStatus.DRAFT,
+            is_public=False,  # Forked recipes start as private
+            owner_id=new_owner_id if new_owner_id else original.owner_id,
+            created_by=new_owner_id,
+            version=new_version,
+            root_id=original.id,
+        )
+        self.session.add(forked)
+        self.session.commit()
+        self.session.refresh(forked)
+
+        # Copy all recipe ingredients
+        original_ingredients = self.get_recipe_ingredients(recipe_id)
+        for ri in original_ingredients:
+            new_ri = RecipeIngredient(
+                recipe_id=forked.id,
+                ingredient_id=ri.ingredient_id,
+                quantity=ri.quantity,
+                unit=ri.unit,
+                sort_order=ri.sort_order,
+                unit_price=ri.unit_price,
+                base_unit=ri.base_unit,
+                supplier_id=ri.supplier_id,
+            )
+            self.session.add(new_ri)
+
+        # Copy all sub-recipe links (referencing original child recipes)
+        original_sub_recipes = self._get_sub_recipes(recipe_id)
+        for rr in original_sub_recipes:
+            new_rr = RecipeRecipe(
+                parent_recipe_id=forked.id,
+                child_recipe_id=rr.child_recipe_id,
+                quantity=rr.quantity,
+                unit=rr.unit,
+                position=rr.position,
+            )
+            self.session.add(new_rr)
+
+        self.session.commit()
+        self.session.refresh(forked)
+        return forked
+
+    def _get_sub_recipes(self, recipe_id: int) -> list[RecipeRecipe]:
+        """Get all sub-recipes for a parent recipe, ordered by position."""
+        statement = (
+            select(RecipeRecipe)
+            .where(RecipeRecipe.parent_recipe_id == recipe_id)
+            .order_by(RecipeRecipe.position)
+        )
+        return list(self.session.exec(statement).all())
+
     # --- Recipe Ingredient Management ---
 
     def get_recipe_ingredients(self, recipe_id: int) -> list[RecipeIngredient]:
@@ -87,6 +170,7 @@ class RecipeService:
             select(RecipeIngredient)
             .where(RecipeIngredient.recipe_id == recipe_id)
             .order_by(RecipeIngredient.sort_order)
+            .options(selectinload(RecipeIngredient.ingredient))
         )
         return list(self.session.exec(statement).all())
 
@@ -113,12 +197,17 @@ class RecipeService:
         ).first()
         next_order = (max_order_result or 0) + 1
 
+        # no priority -> just take the ingredient
+
         recipe_ingredient = RecipeIngredient(
             recipe_id=recipe_id,
             ingredient_id=data.ingredient_id,
             quantity=data.quantity,
             unit=data.unit,
             sort_order=next_order,
+            base_unit=data.base_unit,
+            unit_price=data.unit_price,
+            supplier_id=data.supplier_id
         )
         self.session.add(recipe_ingredient)
         self.session.commit()
@@ -164,3 +253,61 @@ class RecipeService:
 
         self.session.commit()
         return self.get_recipe_ingredients(recipe_id)
+
+    # --- Versioning Operations ---
+
+    def get_version_tree(self, recipe_id: int) -> list[Recipe]:
+        """
+        Get all recipes in the version tree for a given recipe.
+
+        This traverses both up (to find ancestors) and down (to find descendants)
+        to return the complete version tree.
+
+        Returns a list of recipes ordered by version number (ascending).
+        """
+        recipe = self.get_recipe(recipe_id)
+        if not recipe:
+            return []
+
+        # Collect all recipe IDs in the version tree
+        tree_ids: set[int] = {recipe_id}
+
+        # Traverse up to find all ancestors and collect their IDs
+        current = recipe
+        while current.root_id is not None:
+            tree_ids.add(current.root_id)
+            parent = self.get_recipe(current.root_id)
+            if parent is None:
+                break
+            current = parent
+
+        # Find the root (oldest ancestor) - this is now 'current'
+        root_id = current.id
+
+        # Traverse down from root to find all descendants using BFS
+        def collect_all_descendants(start_id: int) -> None:
+            """Collect all descendants using BFS to handle branching."""
+            queue = [start_id]
+            visited = {start_id}
+
+            while queue:
+                current_id = queue.pop(0)
+                # Find all recipes that have this recipe as their root_id
+                statement = select(Recipe).where(Recipe.root_id == current_id)
+                children = list(self.session.exec(statement).all())
+                for child in children:
+                    if child.id not in visited:
+                        visited.add(child.id)
+                        tree_ids.add(child.id)
+                        queue.append(child.id)
+
+        # Start collecting from root
+        collect_all_descendants(root_id)
+
+        # Fetch all recipes in the tree and sort by version
+        statement = (
+            select(Recipe)
+            .where(Recipe.id.in_(tree_ids))
+            .order_by(Recipe.version, Recipe.created_at)
+        )
+        return list(self.session.exec(statement).all())

@@ -1,4 +1,4 @@
-"""Tasting session and note management operations."""
+"""Tasting note management operations."""
 
 from datetime import datetime
 from typing import Optional
@@ -7,8 +7,6 @@ from sqlmodel import Session, select
 
 from app.models import (
     TastingSession,
-    TastingSessionCreate,
-    TastingSessionUpdate,
     TastingNote,
     TastingNoteCreate,
     TastingNoteUpdate,
@@ -18,96 +16,18 @@ from app.models import (
 )
 
 
-class TastingService:
-    """Service for tasting session and note management."""
+class TastingNoteService:
+    """Service for tasting note management."""
 
     def __init__(self, session: Session):
         self.session = session
 
-    # -------------------------------------------------------------------------
-    # Tasting Session Operations
-    # -------------------------------------------------------------------------
-
-    def create_session(self, data: TastingSessionCreate) -> TastingSession:
-        """Create a new tasting session."""
-        tasting_session = TastingSession.model_validate(data)
-        self.session.add(tasting_session)
-        self.session.commit()
-        self.session.refresh(tasting_session)
-        return tasting_session
-
-    def list_sessions(
-        self,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[TastingSession]:
-        """List all tasting sessions, ordered by date descending."""
-        statement = (
-            select(TastingSession)
-            .order_by(TastingSession.date.desc(), TastingSession.id.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        return list(self.session.exec(statement).all())
-
-    def get_session(self, session_id: int) -> Optional[TastingSession]:
-        """Get a tasting session by ID."""
-        return self.session.get(TastingSession, session_id)
-
-    def update_session(
-        self, session_id: int, data: TastingSessionUpdate
-    ) -> Optional[TastingSession]:
-        """Update a tasting session."""
-        tasting_session = self.get_session(session_id)
-        if not tasting_session:
-            return None
-
-        update_data = data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(tasting_session, key, value)
-
-        tasting_session.updated_at = datetime.utcnow()
-        self.session.add(tasting_session)
-        self.session.commit()
-        self.session.refresh(tasting_session)
-        return tasting_session
-
-    def delete_session(self, session_id: int) -> bool:
-        """Delete a tasting session and all its notes (cascade)."""
-        tasting_session = self.get_session(session_id)
-        if not tasting_session:
-            return False
-
-        self.session.delete(tasting_session)
-        self.session.commit()
-        return True
-
-    def get_session_stats(self, session_id: int) -> dict:
-        """Get statistics for a tasting session."""
-        notes = self.get_notes_for_session(session_id)
-
-        decision_counts = {"approved": 0, "needs_work": 0, "rejected": 0}
-        for note in notes:
-            if note.decision in decision_counts:
-                decision_counts[note.decision] += 1
-
-        return {
-            "recipe_count": len(notes),
-            "approved_count": decision_counts["approved"],
-            "needs_work_count": decision_counts["needs_work"],
-            "rejected_count": decision_counts["rejected"],
-        }
-
-    # -------------------------------------------------------------------------
-    # Tasting Note Operations
-    # -------------------------------------------------------------------------
-
-    def add_note(
+    def add(
         self, session_id: int, data: TastingNoteCreate
     ) -> Optional[TastingNote]:
         """Add a tasting note to a session."""
         # Verify session exists
-        tasting_session = self.get_session(session_id)
+        tasting_session = self.session.get(TastingSession, session_id)
         if not tasting_session:
             return None
 
@@ -116,17 +36,7 @@ class TastingService:
         if not recipe:
             return None
 
-        # Check for duplicate (same recipe in same session)
-        existing = self.session.exec(
-            select(TastingNote).where(
-                TastingNote.session_id == session_id,
-                TastingNote.recipe_id == data.recipe_id,
-            )
-        ).first()
-
-        if existing:
-            return None  # Duplicate not allowed
-
+        # Multiple notes per recipe are allowed (different tasters can provide feedback)
         note = TastingNote(
             session_id=session_id,
             **data.model_dump(),
@@ -136,7 +46,7 @@ class TastingService:
         self.session.refresh(note)
         return note
 
-    def get_notes_for_session(self, session_id: int) -> list[TastingNote]:
+    def get_for_session(self, session_id: int) -> list[TastingNote]:
         """Get all notes for a tasting session."""
         statement = (
             select(TastingNote)
@@ -145,15 +55,15 @@ class TastingService:
         )
         return list(self.session.exec(statement).all())
 
-    def get_note(self, note_id: int) -> Optional[TastingNote]:
+    def get(self, note_id: int) -> Optional[TastingNote]:
         """Get a tasting note by ID."""
         return self.session.get(TastingNote, note_id)
 
-    def update_note(
+    def update(
         self, note_id: int, data: TastingNoteUpdate
     ) -> Optional[TastingNote]:
         """Update a tasting note."""
-        note = self.get_note(note_id)
+        note = self.get(note_id)
         if not note:
             return None
 
@@ -167,9 +77,9 @@ class TastingService:
         self.session.refresh(note)
         return note
 
-    def delete_note(self, note_id: int) -> bool:
+    def delete(self, note_id: int) -> bool:
         """Delete a tasting note."""
-        note = self.get_note(note_id)
+        note = self.get(note_id)
         if not note:
             return False
 
@@ -177,11 +87,7 @@ class TastingService:
         self.session.commit()
         return True
 
-    # -------------------------------------------------------------------------
-    # Recipe Tasting History
-    # -------------------------------------------------------------------------
-
-    def get_notes_for_recipe(self, recipe_id: int) -> list[TastingNoteWithRecipe]:
+    def get_for_recipe(self, recipe_id: int) -> list[TastingNoteWithRecipe]:
         """Get all tasting notes for a recipe, with session info."""
         statement = (
             select(TastingNote, TastingSession, Recipe)
@@ -216,7 +122,7 @@ class TastingService:
 
         return notes_with_info
 
-    def get_recipe_tasting_summary(self, recipe_id: int) -> RecipeTastingSummary:
+    def get_recipe_summary(self, recipe_id: int) -> RecipeTastingSummary:
         """Get aggregated tasting data for a recipe."""
         # Get all notes for recipe
         notes = self.session.exec(

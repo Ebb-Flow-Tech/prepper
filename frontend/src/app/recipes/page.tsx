@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { useRecipes } from '@/lib/hooks';
 import { RecipeCard } from '@/components/recipes';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
+import { useAppState } from '@/lib/store';
 import type { Recipe, RecipeStatus } from '@/types';
 
 type GroupByOption = 'none' | 'status';
@@ -51,6 +53,8 @@ function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string,
 }
 
 export default function RecipesPage() {
+  const router = useRouter();
+  const { userId, userType, selectRecipe, setCanvasTab } = useAppState();
   const { data: recipes, isLoading, error } = useRecipes();
 
   const [search, setSearch] = useState('');
@@ -70,9 +74,27 @@ export default function RecipesPage() {
       if (statusFilter !== 'all' && recipe.status !== statusFilter) {
         return false;
       }
+
+      // Admin users can see all recipes
+      if (userType === 'admin') {
+        return true;
+      }
+
+      // Show recipe if user is the owner OR if recipe is public
+      const currUserId = userId ? userId : null;
+      if (recipe.owner_id !== currUserId && !recipe.is_public) {
+        return false;
+      }
       return true;
     });
-  }, [recipes, search, statusFilter]);
+  }, [recipes, search, statusFilter, userId, userType]);
+
+  const handleCreate = () => {
+    // Clear selected recipe and navigate to canvas for new recipe creation
+    selectRecipe(null);
+    setCanvasTab('canvas');
+    router.push('/');
+  };
 
   const groupedRecipes = useMemo(() => {
     return groupRecipes(filteredRecipes, groupBy);
@@ -95,7 +117,7 @@ export default function RecipesPage() {
           title="Recipes"
           description="Browse and manage your recipe collection"
         >
-          <Button disabled title="Use the Canvas to create recipes">
+          <Button onClick={handleCreate}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Recipe</span>
           </Button>
@@ -156,7 +178,11 @@ export default function RecipesPage() {
             {Object.entries(groupedRecipes).map(([group, items]) => (
               <GroupSection key={group} title={group} count={items.length}>
                 {items.map((recipe) => (
-                  <RecipeCard key={recipe.id} recipe={recipe} />
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    isOwned={userId !== null && recipe.owner_id === userId}
+                  />
                 ))}
               </GroupSection>
             ))}

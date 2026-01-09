@@ -44,6 +44,16 @@ class Recipe(RecipeBase, table=True):
     cost_price: float | None = Field(default=None, description="Cached cost calculation")
     selling_price_est: float | None = Field(default=None)
     status: RecipeStatus = Field(default=RecipeStatus.DRAFT)
+    is_public: bool = Field(default=False)
+    owner_id: str | None = Field(default=None)
+
+    # Versioning
+    version: int = Field(default=1, description="Version number of this recipe")
+    root_id: int | None = Field(
+        default=None,
+        foreign_key="recipes.id",
+        description="ID of the original recipe this was forked from",
+    )
 
     # Authorship tracking
     created_by: str | None = Field(default=None, max_length=100)
@@ -57,7 +67,12 @@ class Recipe(RecipeBase, table=True):
 class RecipeCreate(RecipeBase):
     """Schema for creating a new recipe."""
 
+    status: RecipeStatus = RecipeStatus.DRAFT
+    is_public: bool = False
     created_by: str | None = None
+    owner_id: str | None = None
+    version: int = 1
+    root_id: int | None = None
 
 
 class RecipeUpdate(SQLModel):
@@ -68,6 +83,7 @@ class RecipeUpdate(SQLModel):
     yield_unit: str | None = None
     selling_price_est: float | None = None
     is_prep_recipe: bool | None = None
+    is_public: bool = False
     updated_by: str | None = None
 
 

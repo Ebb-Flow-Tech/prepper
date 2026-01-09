@@ -146,13 +146,14 @@ class IngredientService:
 
         # If this is marked as preferred, unset preferred on others
         if data.is_preferred:
-            for supplier in ingredient.suppliers:
-                supplier["is_preferred"] = False
+            updated_suppliers = [{**s, "is_preferred": False} for s in ingredient.suppliers]
+        else:
+            updated_suppliers = list(ingredient.suppliers)
 
-        ingredient.suppliers.append(supplier_entry)
+        # Create a new list to force SQLAlchemy to detect the change in JSON column
+        ingredient.suppliers = updated_suppliers + [supplier_entry]
         ingredient.updated_at = datetime.utcnow()
 
-        # Force SQLAlchemy to detect the change in JSONB
         self.session.add(ingredient)
         self.session.commit()
         self.session.refresh(ingredient)
@@ -166,27 +167,34 @@ class IngredientService:
         if not ingredient or not ingredient.suppliers:
             return None
 
-        # Find the supplier entry
+        update_data = data.model_dump(exclude_unset=True)
         supplier_found = False
-        for i, supplier in enumerate(ingredient.suppliers):
+        updated_suppliers = []
+
+        for supplier in ingredient.suppliers:
             if supplier.get("supplier_id") == supplier_id:
                 supplier_found = True
-                update_data = data.model_dump(exclude_unset=True)
+                # Create updated supplier entry
+                updated_supplier = {**supplier}
 
-                # If setting as preferred, unset others first
-                if update_data.get("is_preferred"):
-                    for s in ingredient.suppliers:
-                        s["is_preferred"] = False
-
+                # If setting as preferred, we'll unset others below
                 for key, value in update_data.items():
-                    supplier[key] = value
+                    updated_supplier[key] = value
 
-                supplier["last_updated"] = datetime.utcnow().isoformat()
-                break
+                updated_supplier["last_updated"] = datetime.utcnow().isoformat()
+                updated_suppliers.append(updated_supplier)
+            else:
+                # If we're setting this supplier as preferred, unset others
+                if update_data.get("is_preferred"):
+                    updated_suppliers.append({**supplier, "is_preferred": False})
+                else:
+                    updated_suppliers.append({**supplier})
 
         if not supplier_found:
             return None
 
+        # Reassign list to force SQLAlchemy to detect the change
+        ingredient.suppliers = updated_suppliers
         ingredient.updated_at = datetime.utcnow()
         self.session.add(ingredient)
         self.session.commit()
@@ -216,6 +224,18 @@ class IngredientService:
         self.session.commit()
         self.session.refresh(ingredient)
         return ingredient
+
+    def get_suppliers(self, ingredient_id: int) -> list[dict] | None:
+        """Get all suppliers for an ingredient.
+
+        Returns the list of supplier entries, or None if ingredient not found.
+        Returns an empty list if the ingredient has no suppliers.
+        """
+        ingredient = self.get_ingredient(ingredient_id)
+        if not ingredient:
+            return None
+
+        return ingredient.suppliers or []
 
     def get_preferred_supplier(self, ingredient_id: int) -> dict | None:
         """Get the preferred supplier for an ingredient.

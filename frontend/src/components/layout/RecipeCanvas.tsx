@@ -1,17 +1,16 @@
 'use client';
 
+import { ReactNode } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { Plus, ChefHat } from 'lucide-react';
 import { useAppState } from '@/lib/store';
 import { useRecipe, useCreateRecipe } from '@/lib/hooks';
-import { RecipeIngredientsList } from '@/components/recipe/RecipeIngredientsList';
-import { Instructions } from '@/components/recipe/Instructions';
 import { Button, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 function EmptyState() {
-  const { selectRecipe } = useAppState();
+  const { selectRecipe, userId } = useAppState();
   const createRecipe = useCreateRecipe();
 
   const handleCreate = () => {
@@ -21,6 +20,7 @@ function EmptyState() {
         yield_quantity: 10,
         yield_unit: 'portion',
         status: 'draft',
+        created_by: userId || undefined,
       },
       {
         onSuccess: (newRecipe) => {
@@ -64,12 +64,20 @@ function LoadingState() {
   );
 }
 
-export function RecipeCanvas() {
-  const { selectedRecipeId } = useAppState();
+interface RecipeCanvasProps {
+  children: ReactNode;
+}
+
+export function RecipeCanvas({ children }: RecipeCanvasProps) {
+  const { selectedRecipeId, userId, userType } = useAppState();
   const { data: recipe, isLoading, error } = useRecipe(selectedRecipeId);
+
+  const canEdit =
+    userType === 'admin' || (userId !== null && recipe?.owner_id === userId);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'recipe-canvas',
+    disabled: !canEdit,
   });
 
   if (!selectedRecipeId) {
@@ -108,26 +116,7 @@ export function RecipeCanvas() {
         isOver && 'ring-2 ring-inset ring-ring'
       )}
     >
-      <div className="mx-auto max-w-4xl p-6">
-        {/* Ingredients Section */}
-        <section className="mb-8">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Ingredients</h2>
-            <p className="text-sm text-muted-foreground">
-              Drag ingredients from the right panel to add them
-            </p>
-          </div>
-          <RecipeIngredientsList recipeId={recipe.id} />
-        </section>
-
-        {/* Instructions Section */}
-        <section>
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Instructions</h2>
-          </div>
-          <Instructions recipe={recipe} />
-        </section>
-      </div>
+      {children}
     </main>
   );
 }

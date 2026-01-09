@@ -187,6 +187,27 @@ def remove_supplier(
     return ingredient
 
 
+@router.get("/{ingredient_id}/suppliers", response_model=list[dict])
+def get_suppliers(
+    ingredient_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get all suppliers for an ingredient.
+
+    Returns the list of all supplier entries for this ingredient.
+    """
+    service = IngredientService(session)
+
+    suppliers = service.get_suppliers(ingredient_id)
+    if suppliers is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ingredient not found",
+        )
+
+    return suppliers
+
+
 @router.get("/{ingredient_id}/suppliers/preferred", response_model=dict | None)
 def get_preferred_supplier(
     ingredient_id: int,

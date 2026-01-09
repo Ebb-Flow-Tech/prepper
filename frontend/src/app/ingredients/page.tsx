@@ -2,11 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient } from '@/lib/hooks';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient } from '@/lib/hooks';
 import { IngredientCard } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
+import { NewIngredientForm } from '@/components/layout/RightPanel';
 
 type GroupByOption = 'none' | 'unit' | 'status';
 
@@ -43,12 +44,14 @@ function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Re
 }
 
 export default function IngredientsPage() {
-  const { data: ingredients, isLoading, error } = useIngredients();
   const deactivateIngredient = useDeactivateIngredient();
+  const updateIngredient = useUpdateIngredient();
 
   const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false)
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
+  const { data: ingredients, isLoading, error } = useIngredients(showArchived);
 
   // Filter and group ingredients
   const filteredIngredients = useMemo(() => {
@@ -57,10 +60,6 @@ export default function IngredientsPage() {
     return ingredients.filter((ing) => {
       // Filter by search
       if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      // Filter archived unless showing them
-      if (!showArchived && !ing.is_active) {
         return false;
       }
       return true;
@@ -76,6 +75,16 @@ export default function IngredientsPage() {
       onSuccess: () => toast.success(`${ingredient.name} archived`),
       onError: () => toast.error(`Failed to archive ${ingredient.name}`),
     });
+  };
+
+  const handleUnarchive = (ingredient: Ingredient) => {
+    updateIngredient.mutate(
+      { id: ingredient.id, data: { is_active: true } },
+      {
+        onSuccess: () => toast.success(`${ingredient.name} unarchived`),
+        onError: () => toast.error(`Failed to unarchive ${ingredient.name}`),
+      }
+    );
   };
 
   if (error) {
@@ -95,12 +104,19 @@ export default function IngredientsPage() {
           title="Ingredients"
           description="Browse and manage your ingredient library"
         >
-          <Button disabled title="Coming soon">
+          <Button onClick={() => setShowForm(true)} disabled={showForm}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Ingredient</span>
           </Button>
         </PageHeader>
+        {showForm && (
+          <div className="w-full d-flex justify-items-end">
+            <div className="w-fit mb-3">
+              <NewIngredientForm onClose={() => setShowForm(false)} />
+            </div>
+          </div>
 
+        )}
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">
@@ -160,6 +176,7 @@ export default function IngredientsPage() {
                     key={ingredient.id}
                     ingredient={ingredient}
                     onArchive={handleArchive}
+                    onUnarchive={handleUnarchive}
                   />
                 ))}
               </GroupSection>

@@ -141,8 +141,8 @@ def test_add_note_to_session(client: TestClient):
     assert data["decision"] == "approved"
 
 
-def test_duplicate_note_not_allowed(client: TestClient):
-    """Test that adding duplicate recipe to session fails."""
+def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
+    """Test that multiple notes for the same recipe are allowed (different tasters)."""
     # Create recipe
     recipe_response = client.post(
         "/api/v1/recipes",
@@ -160,16 +160,20 @@ def test_duplicate_note_not_allowed(client: TestClient):
     # Add note first time - should succeed
     response1 = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 4},
+        json={"recipe_id": recipe_id, "overall_rating": 4, "taster_name": "Chef Marco"},
     )
     assert response1.status_code == 201
 
-    # Add note second time - should fail
+    # Add note second time with different taster - should also succeed
     response2 = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 5},
+        json={"recipe_id": recipe_id, "overall_rating": 5, "taster_name": "Chef Sarah"},
     )
-    assert response2.status_code == 400
+    assert response2.status_code == 201
+
+    # Verify both notes exist
+    notes_response = client.get(f"/api/v1/tasting-sessions/{session_id}/notes")
+    assert len(notes_response.json()) == 2
 
 
 def test_list_session_notes(client: TestClient):

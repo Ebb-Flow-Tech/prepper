@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, Archive, ImagePlus } from 'lucide-react';
+import Link from 'next/link';
+import { Edit2, Archive, ArchiveRestore, ImagePlus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { Ingredient } from '@/types';
@@ -10,9 +11,10 @@ interface IngredientCardProps {
   ingredient: Ingredient;
   onEdit?: (ingredient: Ingredient) => void;
   onArchive?: (ingredient: Ingredient) => void;
+  onUnarchive?: (ingredient: Ingredient) => void;
 }
 
-export function IngredientCard({ ingredient, onEdit, onArchive }: IngredientCardProps) {
+export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   return (
@@ -23,7 +25,11 @@ export function IngredientCard({ ingredient, onEdit, onArchive }: IngredientCard
     >
       <CardHeader>
         <div className="flex-1 min-w-0">
-          <CardTitle className="truncate">{ingredient.name}</CardTitle>
+          <Link href={`/ingredients/${ingredient.id}`}>
+            <CardTitle className="truncate hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
+              {ingredient.name}
+            </CardTitle>
+          </Link>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
             {formatCurrency(ingredient.cost_per_base_unit)}/{ingredient.base_unit}
           </p>
@@ -71,6 +77,17 @@ export function IngredientCard({ ingredient, onEdit, onArchive }: IngredientCard
               title="Archive"
             >
               <Archive className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onUnarchive && !ingredient.is_active && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onUnarchive(ingredient)}
+              title="Unarchive"
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

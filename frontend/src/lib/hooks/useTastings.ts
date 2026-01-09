@@ -7,6 +7,7 @@ import type {
   UpdateTastingSessionRequest,
   CreateTastingNoteRequest,
   UpdateTastingNoteRequest,
+  AddRecipeToSessionRequest,
 } from '@/types';
 
 // ============ Tasting Sessions ============
@@ -165,5 +166,54 @@ export function useRecipeTastingSummary(recipeId: number | null) {
     queryKey: ['recipe', recipeId, 'tasting-summary'],
     queryFn: () => api.getRecipeTastingSummary(recipeId!),
     enabled: recipeId !== null,
+  });
+}
+
+// ============ Session Recipes (Recipe-Tasting) ============
+
+export function useSessionRecipes(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['tasting-session', sessionId, 'recipes'],
+    queryFn: () => api.getSessionRecipes(sessionId!),
+    enabled: sessionId !== null,
+  });
+}
+
+export function useAddRecipeToSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      data,
+    }: {
+      sessionId: number;
+      data: AddRecipeToSessionRequest;
+    }) => api.addRecipeToSession(sessionId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'recipes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'stats'],
+      });
+    },
+  });
+}
+
+export function useRemoveRecipeFromSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId, recipeId }: { sessionId: number; recipeId: number }) =>
+      api.removeRecipeFromSession(sessionId, recipeId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'recipes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'stats'],
+      });
+    },
   });
 }

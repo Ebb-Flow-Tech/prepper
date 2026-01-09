@@ -115,14 +115,16 @@ class CostingService:
                     continue
 
                 # Convert quantity to base unit
+                # TO DO: should use the base unit for the recipe ingredient unit
                 quantity_in_base = convert_to_base_unit(
-                    ri.quantity, ri.unit, ingredient.base_unit
+                    ri.quantity, ri.unit, ri.base_unit
                 )
 
                 # Calculate line cost
+                # TO DO: should use the ingredient unit
                 line_cost = None
-                if ingredient.cost_per_base_unit is not None and quantity_in_base is not None:
-                    line_cost = quantity_in_base * ingredient.cost_per_base_unit
+                if ri.unit_price is not None and quantity_in_base is not None:
+                    line_cost = quantity_in_base * ri.unit_price
                     ingredient_cost += line_cost
                 else:
                     missing_costs.append(ingredient.name)
@@ -134,8 +136,8 @@ class CostingService:
                         quantity=ri.quantity,
                         unit=ri.unit,
                         quantity_in_base_unit=quantity_in_base or ri.quantity,
-                        base_unit=ingredient.base_unit,
-                        cost_per_base_unit=ingredient.cost_per_base_unit,
+                        base_unit=ri.base_unit,
+                        cost_per_base_unit=ri.unit_price,
                         line_cost=line_cost,
                     )
                 )

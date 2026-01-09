@@ -34,6 +34,8 @@ def test_calculate_recipe_cost(client: TestClient):
             "ingredient_id": ingredient_id,
             "quantity": 500,
             "unit": "g",
+            "base_unit": "g",
+            "unit_price": 0.002,
         },
     )
 
@@ -80,6 +82,8 @@ def test_costing_with_unit_conversion(client: TestClient):
             "ingredient_id": ingredient_id,
             "quantity": 1,
             "unit": "kg",
+            "base_unit": "g",
+            "unit_price": 0.001,
         },
     )
 

@@ -1,238 +1,60 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useAppState } from '@/lib/store';
-import { useRecipe, useUpdateRecipe, useUpdateRecipeStatus } from '@/lib/hooks';
-import { useCosting } from '@/lib/hooks';
-import { Input, Select } from '@/components/ui';
-import { formatCurrency } from '@/lib/utils';
-import { toast } from 'sonner';
-import type { RecipeStatus } from '@/types';
+import { useCallback } from 'react';
+import { useAppState, type CanvasTab } from '@/lib/store';
+import { useRecipe } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
+const CANVAS_TABS: { id: CanvasTab; label: string }[] = [
+  { id: 'canvas', label: 'Canvas' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'ingredients', label: 'Ingredients' },
+  { id: 'costs', label: 'Costs' },
+  { id: 'instructions', label: 'Instructions' },
+  { id: 'tasting', label: 'Tasting' },
+  { id: 'versions', label: 'Versions' },
 ];
 
 export function TopAppBar() {
-  const { selectedRecipeId } = useAppState();
+  const { selectedRecipeId, canvasTab, setCanvasTab, canvasHasUnsavedChanges } = useAppState();
   const { data: recipe } = useRecipe(selectedRecipeId);
-  const { data: costing } = useCosting(selectedRecipeId);
-  const updateRecipe = useUpdateRecipe();
-  const updateStatus = useUpdateRecipeStatus();
 
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState('');
-  const [isEditingYield, setIsEditingYield] = useState(false);
-  const [editedYieldQty, setEditedYieldQty] = useState('');
-  const [editedYieldUnit, setEditedYieldUnit] = useState('');
-  const [isEditingPrice, setIsEditingPrice] = useState(false);
-  const [editedPrice, setEditedPrice] = useState('');
-
-  useEffect(() => {
-    if (recipe) {
-      setEditedName(recipe.name);
-      setEditedYieldQty(String(recipe.yield_quantity));
-      setEditedYieldUnit(recipe.yield_unit);
-      setEditedPrice(recipe.selling_price_est?.toString() || '');
-    }
-  }, [recipe]);
-
-  const handleNameSave = useCallback(() => {
-    if (!recipe || editedName === recipe.name) {
-      setIsEditingName(false);
-      return;
-    }
-    updateRecipe.mutate(
-      { id: recipe.id, data: { name: editedName } },
-      {
-        onSuccess: () => {
-          setIsEditingName(false);
-          toast.success('Recipe name updated');
-        },
-        onError: () => toast.error('Failed to update name'),
-      }
-    );
-  }, [recipe, editedName, updateRecipe]);
-
-  const handleYieldSave = useCallback(() => {
-    if (!recipe) {
-      setIsEditingYield(false);
-      return;
-    }
-    const qty = parseFloat(editedYieldQty);
-    if (isNaN(qty) || qty <= 0) {
-      toast.error('Invalid yield quantity');
-      return;
-    }
-    updateRecipe.mutate(
-      { id: recipe.id, data: { yield_quantity: qty, yield_unit: editedYieldUnit } },
-      {
-        onSuccess: () => {
-          setIsEditingYield(false);
-          toast.success('Yield updated');
-        },
-        onError: () => toast.error('Failed to update yield'),
-      }
-    );
-  }, [recipe, editedYieldQty, editedYieldUnit, updateRecipe]);
-
-  const handleStatusChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (!recipe) return;
-      const newStatus = e.target.value as RecipeStatus;
-      updateStatus.mutate(
-        { id: recipe.id, status: newStatus },
-        {
-          onSuccess: () => toast.success(`Status changed to ${newStatus}`),
-          onError: () => toast.error('Failed to update status'),
+  const handleTabClick = useCallback(
+    (tabId: CanvasTab) => {
+      // Only show warning when leaving the canvas tab with unsaved changes
+      if (canvasTab === 'canvas' && tabId !== 'canvas' && canvasHasUnsavedChanges) {
+        const confirmed = window.confirm(
+          'You have unsaved changes. If you leave now, your work will be lost.'
+        );
+        if (!confirmed) {
+          return;
         }
-      );
+      }
+      setCanvasTab(tabId);
     },
-    [recipe, updateStatus]
+    [canvasTab, canvasHasUnsavedChanges, setCanvasTab]
   );
 
-  const handlePriceSave = useCallback(() => {
-    if (!recipe) {
-      setIsEditingPrice(false);
-      return;
-    }
-    const price = editedPrice ? parseFloat(editedPrice) : null;
-    if (editedPrice && (isNaN(price!) || price! < 0)) {
-      toast.error('Invalid price');
-      return;
-    }
-    updateRecipe.mutate(
-      { id: recipe.id, data: { selling_price_est: price } },
-      {
-        onSuccess: () => {
-          setIsEditingPrice(false);
-          toast.success('Selling price updated');
-        },
-        onError: () => toast.error('Failed to update price'),
-      }
-    );
-  }, [recipe, editedPrice, updateRecipe]);
-
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4">
-      {/* Recipe Name */}
-      <div className="flex-1">
-        {recipe ? (
-          isEditingName ? (
-            <Input
-              value={editedName}
-              onChange={(e) => setEditedName(e.target.value)}
-              onBlur={handleNameSave}
-              onKeyDown={(e) => e.key === 'Enter' && handleNameSave()}
-              className="max-w-md text-xl font-semibold"
-              autoFocus
-            />
-          ) : (
-            <h1
-              onClick={() => setIsEditingName(true)}
-              className="cursor-pointer text-xl font-semibold text-foreground hover:text-muted-foreground"
-            >
-              {recipe.name}
-            </h1>
-          )
-        ) : (
-          <span className="text-muted-foreground">No recipe selected</span>
-        )}
-      </div>
-
-      {/* Recipe Metadata */}
+    <header className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Tabs row */}
       {recipe && (
-        <div className="flex items-center gap-4">
-          {/* Yield */}
-          {isEditingYield ? (
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={editedYieldQty}
-                onChange={(e) => setEditedYieldQty(e.target.value)}
-                className="w-20"
-                min={0}
-              />
-              <Input
-                value={editedYieldUnit}
-                onChange={(e) => setEditedYieldUnit(e.target.value)}
-                className="w-24"
-                placeholder="unit"
-              />
-              <button
-                onClick={handleYieldSave}
-                className="text-sm text-primary hover:underline"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setIsEditingYield(false)}
-                className="text-sm text-muted-foreground hover:underline"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
+        <nav className="flex gap-1 px-4" aria-label="Recipe tabs">
+          {CANVAS_TABS.map((tab) => (
             <button
-              onClick={() => setIsEditingYield(true)}
-              className="rounded-lg bg-secondary px-3 py-1.5 text-sm hover:bg-accent"
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-colors',
+                canvasTab === tab.id
+                  ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+              )}
             >
-              <span className="text-muted-foreground">Yield:</span>{' '}
-              <span className="font-medium text-foreground">
-                {recipe.yield_quantity} {recipe.yield_unit}
-              </span>
+              {tab.label}
             </button>
-          )}
-
-          {/* Status */}
-          <Select
-            value={recipe.status}
-            onChange={handleStatusChange}
-            options={STATUS_OPTIONS}
-            className="w-28"
-          />
-
-          {/* Cost per portion */}
-          <div className="rounded-lg bg-secondary px-3 py-1.5 text-sm">
-            <span className="text-muted-foreground">Cost:</span>{' '}
-            <span className="font-medium text-foreground">
-              {formatCurrency(costing?.cost_per_portion)}
-            </span>
-          </div>
-
-          {/* Selling Price */}
-          {isEditingPrice ? (
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={editedPrice}
-                onChange={(e) => setEditedPrice(e.target.value)}
-                className="w-24"
-                placeholder="0.00"
-                min={0}
-                step={0.01}
-              />
-              <button
-                onClick={handlePriceSave}
-                className="text-sm text-primary hover:underline"
-              >
-                Save
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsEditingPrice(true)}
-              className="rounded-lg bg-secondary px-3 py-1.5 text-sm hover:bg-accent"
-            >
-              <span className="text-muted-foreground">Price:</span>{' '}
-              <span className="font-medium text-foreground">
-                {formatCurrency(recipe.selling_price_est)}
-              </span>
-            </button>
-          )}
-        </div>
+          ))}
+        </nav>
       )}
     </header>
   );

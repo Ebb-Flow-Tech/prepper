@@ -10,6 +10,7 @@ export interface Ingredient {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  suppliers?: IngredientSupplierEntry[];
 }
 
 export interface Recipe {
@@ -23,9 +24,14 @@ export interface Recipe {
   selling_price_est: number | null;
   status: RecipeStatus;
   is_prep_recipe: boolean;
+  is_public: boolean;
+  owner_id: string | null;
+  version: number;
+  root_id: number | null;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
+  created_by: string;
 }
 
 export interface RecipeIngredient {
@@ -36,6 +42,9 @@ export interface RecipeIngredient {
   unit: string;
   sort_order: number;
   created_at: string;
+  base_unit: string | null;
+  unit_price: number | null;
+  supplier_id: number | null;
   ingredient?: Ingredient;
 }
 
@@ -55,18 +64,35 @@ export interface CostingBreakdown {
   ingredient_name: string;
   quantity: number;
   unit: string;
-  unit_cost: number;
-  line_cost: number;
+  quantity_in_base_unit: number;
+  base_unit: string;
+  cost_per_base_unit: number | null;
+  line_cost: number | null;
+}
+
+export interface SubRecipeCostItem {
+  link_id: number;
+  recipe_id: number;
+  recipe_name: string;
+  quantity: number;
+  unit: string;
+  sub_recipe_batch_cost: number | null;
+  sub_recipe_portion_cost: number | null;
+  line_cost: number | null;
 }
 
 export interface CostingResult {
   recipe_id: number;
-  total_batch_cost: number;
-  cost_per_portion: number;
+  recipe_name: string;
+  total_batch_cost: number | null;
+  cost_per_portion: number | null;
   yield_quantity: number;
   yield_unit: string;
   breakdown: CostingBreakdown[];
-  calculated_at: string;
+  sub_recipe_breakdown: SubRecipeCostItem[];
+  ingredient_cost: number | null;
+  sub_recipe_cost: number | null;
+  missing_costs: string[];
 }
 
 // API Request/Response types
@@ -75,6 +101,11 @@ export interface CreateRecipeRequest {
   yield_quantity?: number;
   yield_unit?: string;
   status?: RecipeStatus;
+  created_by?: string;
+  is_public?: boolean;
+  owner_id?: string;
+  version?: number;
+  root_id?: number | null;
 }
 
 export interface UpdateRecipeRequest {
@@ -85,6 +116,7 @@ export interface UpdateRecipeRequest {
   instructions_raw?: string | null;
   instructions_structured?: InstructionsStructured | null;
   status?: RecipeStatus;
+  is_public?: boolean;
 }
 
 export interface CreateIngredientRequest {
@@ -93,15 +125,28 @@ export interface CreateIngredientRequest {
   cost_per_base_unit?: number | null;
 }
 
+export interface UpdateIngredientRequest {
+  name?: string;
+  base_unit?: string;
+  cost_per_base_unit?: number | null;
+  is_active?: boolean;
+}
+
 export interface AddRecipeIngredientRequest {
   ingredient_id: number;
   quantity: number;
   unit: string;
+  base_unit: string;
+  unit_price: number;
+  supplier_id: number | null;
 }
 
 export interface UpdateRecipeIngredientRequest {
   quantity?: number;
   unit?: string;
+  base_unit?: string;
+  unit_price?: number;
+  supplier_id?: number | null;
 }
 
 export interface ReorderIngredientsRequest {
@@ -202,4 +247,153 @@ export interface UpdateTastingNoteRequest {
   action_items?: string | null;
   decision?: TastingDecision | null;
   taster_name?: string | null;
+}
+
+// ============ Recipe-Tasting Session Types ============
+
+export interface RecipeTasting {
+  id: number;
+  recipe_id: number;
+  tasting_session_id: number;
+  created_at: string;
+}
+
+export interface AddRecipeToSessionRequest {
+  recipe_id: number;
+}
+
+// ============ Supplier Types ============
+
+export interface Supplier {
+  id: number;
+  name: string;
+  address: string | null;
+  phone_number: string | null;
+  email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSupplierRequest {
+  name: string;
+  address?: string;
+  phone_number?: string;
+  email?: string;
+}
+
+export interface UpdateSupplierRequest {
+  name?: string;
+  address?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+}
+
+// ============ Ingredient Supplier Entry Types ============
+
+export interface IngredientSupplierEntry {
+  supplier_id: string;
+  supplier_name: string;
+  sku: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency: string;
+  is_preferred: boolean;
+  source: string;
+  last_updated: string | null;
+  last_synced: string | null;
+}
+
+export interface AddIngredientSupplierRequest {
+  supplier_id: string;
+  supplier_name: string;
+  sku?: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency?: string;
+  is_preferred?: boolean;
+  source?: string;
+}
+
+export interface UpdateIngredientSupplierRequest {
+  supplier_name?: string;
+  sku?: string | null;
+  pack_size?: number;
+  pack_unit?: string;
+  price_per_pack?: number;
+  cost_per_unit?: number;
+  currency?: string;
+  is_preferred?: boolean;
+}
+
+// ============ Supplier Ingredient Entry Types ============
+
+export interface SupplierIngredientEntry {
+  ingredient_id: number;
+  ingredient_name: string;
+  base_unit: string;
+  supplier_id: string;
+  sku: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency: string;
+  is_preferred: boolean;
+  source: string;
+  last_updated: string | null;
+}
+
+export interface AddSupplierIngredientRequest {
+  ingredient_id: number;
+  sku?: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency?: string;
+  is_preferred?: boolean;
+  source?: string;
+}
+
+export interface UpdateSupplierIngredientRequest {
+  sku?: string | null;
+  pack_size?: number;
+  pack_unit?: string;
+  price_per_pack?: number;
+  cost_per_unit?: number;
+  currency?: string;
+  is_preferred?: boolean;
+}
+
+// ============ Sub-Recipe Types ============
+
+export type SubRecipeUnit = 'portion' | 'batch' | 'g' | 'ml';
+
+export interface SubRecipe {
+  id: number;
+  parent_recipe_id: number;
+  child_recipe_id: number;
+  quantity: number;
+  unit: SubRecipeUnit;
+  position: number;
+  created_at: string;
+}
+
+export interface SubRecipeCreate {
+  child_recipe_id: number;
+  quantity?: number;
+  unit?: SubRecipeUnit;
+}
+
+export interface SubRecipeUpdate {
+  quantity?: number;
+  unit?: SubRecipeUnit;
+}
+
+export interface SubRecipeReorder {
+  ordered_ids: number[];
 }

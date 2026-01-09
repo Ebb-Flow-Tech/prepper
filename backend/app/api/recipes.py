@@ -1,11 +1,18 @@
 """Recipe core API routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
 from app.models import Recipe, RecipeCreate, RecipeUpdate, RecipeStatus, RecipeStatusUpdate
 from app.domain import RecipeService
+
+
+class ForkRecipeRequest(BaseModel):
+    """Request body for forking a recipe."""
+
+    new_owner_id: str | None = None
 
 router = APIRouter()
 
@@ -94,3 +101,37 @@ def delete_recipe(
             detail="Recipe not found",
         )
     return recipe
+
+
+@router.post("/{recipe_id}/fork", response_model=Recipe, status_code=status.HTTP_201_CREATED)
+def fork_recipe(
+    recipe_id: int,
+    data: ForkRecipeRequest | None = None,
+    session: Session = Depends(get_session),
+):
+    """Fork a recipe - create an editable copy with all ingredients."""
+    service = RecipeService(session)
+    new_owner_id = data.new_owner_id if data else None
+    forked = service.fork_recipe(recipe_id, new_owner_id)
+    if not forked:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+    return forked
+
+
+@router.get("/{recipe_id}/versions", response_model=list[Recipe])
+def get_recipe_versions(
+    recipe_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get all recipes in the version tree for a recipe."""
+    service = RecipeService(session)
+    recipe = service.get_recipe(recipe_id)
+    if not recipe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+    return service.get_version_tree(recipe_id)

@@ -2,9 +2,10 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting } from '@/lib/hooks';
+import { ArrowLeft, Edit2, Eye, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
 import type { RecipeStatus, TastingDecision } from '@/types';
@@ -53,14 +54,21 @@ function formatTastingDate(dateString: string): string {
 export default function RecipePage({ params }: RecipePageProps) {
   const { id } = use(params);
   const recipeId = parseInt(id, 10);
+  const { userId } = useAppState();
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(recipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(recipeId);
   const { data: costing, isLoading: costingLoading } = useCosting(recipeId);
+  const { data: subRecipes, isLoading: subRecipesLoading } = useSubRecipes(recipeId);
+  const { data: allRecipes } = useRecipes();
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
 
-  const isLoading = recipeLoading || ingredientsLoading || costingLoading || tastingLoading;
+  const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
+
+  // Create a map of recipe IDs to names for sub-recipe display
+  const recipeMap = new Map<number, string>();
+  allRecipes?.forEach((r) => recipeMap.set(r.id, r.name));
 
   if (recipeError) {
     return (
@@ -123,13 +131,20 @@ export default function RecipePage({ params }: RecipePageProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {userId !== null && recipe.owner_id === userId && (
+                          <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                        )}
                         <Badge variant={STATUS_VARIANTS[recipe.status]}>
                           {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
                         </Badge>
                         <Link href={`/?recipe=${recipe.id}`}>
                           <Button variant="outline" size="sm">
-                            <Edit2 className="h-4 w-4" />
-                            Edit in Canvas
+                            {userId !== null && recipe.owner_id === userId ? (
+                              <Edit2 className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                            {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
                           </Button>
                         </Link>
                       </div>
@@ -148,8 +163,76 @@ export default function RecipePage({ params }: RecipePageProps) {
               </CardContent>
             </Card>
 
-            {/* Costing & Ingredients Grid */}
-            <div className="grid gap-6 md:grid-cols-2 mb-6">
+            {/* Ingredients | Sub Recipes | Costing Grid */}
+            <div className="grid gap-6 md:grid-cols-3 mb-6">
+              {/* Ingredients Card */}
+              <Card>
+                <CardContent className="p-6">
+                  <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                    Ingredients
+                  </h2>
+
+                  {ingredients && ingredients.length > 0 ? (
+                    <ul className="space-y-2">
+                      {ingredients.map((ri) => (
+                        <li
+                          key={ri.id}
+                          className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
+                        >
+                          <div>
+                            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                              {ri.ingredient?.name || `Ingredient #${ri.ingredient_id}`}
+                            </span>
+                          </div>
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            {ri.quantity} {ri.unit}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-zinc-400 dark:text-zinc-500">
+                      No ingredients added yet
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Sub Recipes Card */}
+              <Card>
+                <CardContent className="p-6">
+                  <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                    Sub Recipes
+                  </h2>
+
+                  {subRecipes && subRecipes.length > 0 ? (
+                    <ul className="space-y-2">
+                      {[...subRecipes]
+                        .sort((a, b) => a.position - b.position)
+                        .map((sr) => (
+                          <li
+                            key={sr.id}
+                            className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
+                          >
+                            <div>
+                              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                                {recipeMap.get(sr.child_recipe_id) || `Recipe #${sr.child_recipe_id}`}
+                              </span>
+                            </div>
+                            <span className="text-zinc-500 dark:text-zinc-400">
+                              {sr.quantity} {sr.unit}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : (
+                    <p className="text-zinc-400 dark:text-zinc-500">
+                      No sub-recipes added yet
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Costing Card */}
               <Card>
                 <CardContent className="p-6">
@@ -185,39 +268,6 @@ export default function RecipePage({ params }: RecipePageProps) {
                   ) : (
                     <p className="text-zinc-400 dark:text-zinc-500">
                       No costing data available
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Ingredients Card */}
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-                    Ingredients
-                  </h2>
-
-                  {ingredients && ingredients.length > 0 ? (
-                    <ul className="space-y-2">
-                      {ingredients.map((ri) => (
-                        <li
-                          key={ri.id}
-                          className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
-                        >
-                          <div>
-                            <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                              {ri.ingredient?.name || `Ingredient #${ri.ingredient_id}`}
-                            </span>
-                          </div>
-                          <span className="text-zinc-500 dark:text-zinc-400">
-                            {ri.quantity} {ri.unit}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-zinc-400 dark:text-zinc-500">
-                      No ingredients added yet
                     </p>
                   )}
                 </CardContent>

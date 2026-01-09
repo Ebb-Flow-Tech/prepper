@@ -70,6 +70,20 @@ uvicorn app.main:app --reload
 
 API docs available at http://localhost:8000/docs
 
+#### Using the Postman Collection
+
+A Postman collection is available at `backend/postman_collection.json` for testing API endpoints.
+
+**To import into Postman:**
+1. Open Postman
+2. Click **Import** (top-left) or use `Ctrl/Cmd + O`
+3. Drag and drop `backend/postman_collection.json` or click **Upload Files** and select it
+4. The collection will appear in your sidebar under "Prepper API"
+
+**Setup:**
+- Ensure the backend is running on `http://localhost:8000`
+- The collection uses `{{baseUrl}}` variable—set it to `http://localhost:8000/api/v1` in your Postman environment, or replace it in the collection settings
+
 ### Frontend
 
 ```bash

@@ -16,9 +16,10 @@ import type { Recipe } from '@/types';
 
 interface InstructionsProps {
   recipe: Recipe;
+  canEdit: boolean;
 }
 
-export function Instructions({ recipe }: InstructionsProps) {
+export function Instructions({ recipe, canEdit }: InstructionsProps) {
   const { instructionsTab, setInstructionsTab } = useAppState();
   const updateRecipe = useUpdateRecipe();
   const parseInstructions = useParseInstructions();
@@ -113,31 +114,34 @@ export function Instructions({ recipe }: InstructionsProps) {
             onChange={(e) => handleRawTextChange(e.target.value)}
             placeholder="Type the recipe as you'd explain it to another chef..."
             className="min-h-[200px]"
+            disabled={!canEdit}
           />
-          <div className="mt-3 flex justify-end">
-            <Button
-              onClick={handleFormat}
-              disabled={parseInstructions.isPending || !rawText.trim()}
-            >
-              {parseInstructions.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Parsing with AI...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Format into steps
-                </>
-              )}
-            </Button>
-          </div>
+          {canEdit && (
+            <div className="mt-3 flex justify-end">
+              <Button
+                onClick={handleFormat}
+                disabled={parseInstructions.isPending || !rawText.trim()}
+              >
+                {parseInstructions.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Parsing with AI...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Format into steps
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Steps Tab */}
       {instructionsTab === 'steps' && (
-        <InstructionsSteps recipe={recipe} />
+        <InstructionsSteps recipe={recipe} canEdit={canEdit} />
       )}
     </div>
   );

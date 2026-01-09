@@ -24,6 +24,8 @@ from app.models.recipe_ingredient import (
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
     RecipeIngredientReorder,
+    RecipeIngredientRead,
+    IngredientNested,
 )
 from app.models.recipe_recipe import (
     RecipeRecipe,
@@ -58,6 +60,15 @@ from app.models.tasting import (
     TastingDecision,
     RecipeTastingSummary,
 )
+from app.models.supplier import (
+    Supplier,
+    SupplierCreate,
+    SupplierUpdate,
+)
+from app.models.recipe_tasting import (
+    RecipeTasting,
+    RecipeTastingCreate,
+)
 
 __all__ = [
     # Ingredient
@@ -82,6 +93,8 @@ __all__ = [
     "RecipeIngredientCreate",
     "RecipeIngredientUpdate",
     "RecipeIngredientReorder",
+    "RecipeIngredientRead",
+    "IngredientNested",
     # RecipeRecipe (sub-recipes)
     "RecipeRecipe",
     "RecipeRecipeCreate",
@@ -111,4 +124,11 @@ __all__ = [
     "TastingNoteWithRecipe",
     "TastingDecision",
     "RecipeTastingSummary",
+    # Supplier
+    "Supplier",
+    "SupplierCreate",
+    "SupplierUpdate",
+    # RecipeTasting
+    "RecipeTasting",
+    "RecipeTastingCreate",
 ]

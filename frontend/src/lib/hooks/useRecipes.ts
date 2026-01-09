@@ -39,6 +39,7 @@ export function useUpdateRecipe() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipe', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['costing', variables.id] });
     },
   });
 }
@@ -64,5 +65,25 @@ export function useDeleteRecipe() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
+  });
+}
+
+export function useForkRecipe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, newOwnerId }: { id: number; newOwnerId?: string }) =>
+      api.forkRecipe(id, newOwnerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+  });
+}
+
+export function useRecipeVersions(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-versions', recipeId],
+    queryFn: () => api.getRecipeVersions(recipeId!),
+    enabled: recipeId !== null,
   });
 }

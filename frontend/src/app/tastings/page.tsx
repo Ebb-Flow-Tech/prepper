@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, Wine, Calendar, MapPin, Users } from 'lucide-react';
+import { Plus, Wine, Calendar, MapPin, Users, Clock, History } from 'lucide-react';
 import { useTastingSessions } from '@/lib/hooks/useTastings';
-import { PageHeader, SearchInput, Button, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge } from '@/components/ui';
 import type { TastingSession } from '@/types';
 
 function formatDate(dateString: string): string {
@@ -15,23 +15,42 @@ function formatDate(dateString: string): string {
   });
 }
 
-interface TastingSessionCardProps {
-  session: TastingSession;
+function isSessionExpired(dateString: string): boolean {
+  const sessionDate = new Date(dateString);
+  const today = new Date();
+  // Set both to start of day for comparison
+  sessionDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return sessionDate < today;
 }
 
-function TastingSessionCard({ session }: TastingSessionCardProps) {
+interface TastingSessionCardProps {
+  session: TastingSession;
+  expired?: boolean;
+}
+
+function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
   return (
     <Link href={`/tastings/${session.id}`} className="block">
-      <Card interactive className="mb-4 h-full">
+      <Card interactive className={`h-full ${expired ? 'opacity-75' : ''}`}>
         <CardHeader>
           <div className="flex-1 min-w-0">
-            <CardTitle className="truncate">{session.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="truncate">{session.name}</CardTitle>
+              {expired && (
+                <Badge variant="secondary" className="text-xs">Past</Badge>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 mt-1">
               <Calendar className="h-3.5 w-3.5" />
               <span>{formatDate(session.date)}</span>
             </div>
           </div>
-          <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+            expired
+              ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500'
+              : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+          }`}>
             <Wine className="h-5 w-5" />
           </div>
         </CardHeader>
@@ -69,18 +88,40 @@ export default function TastingsPage() {
   const { data: sessions, isLoading, error } = useTastingSessions();
   const [search, setSearch] = useState('');
 
-  const filteredSessions = useMemo(() => {
-    if (!sessions) return [];
-    if (!search) return sessions;
+  const { ongoingSessions, expiredSessions } = useMemo(() => {
+    if (!sessions) return { ongoingSessions: [], expiredSessions: [] };
 
-    const searchLower = search.toLowerCase();
-    return sessions.filter(
-      (session) =>
-        session.name.toLowerCase().includes(searchLower) ||
-        session.location?.toLowerCase().includes(searchLower) ||
-        session.attendees?.some((a) => a.toLowerCase().includes(searchLower))
-    );
+    let filtered = sessions;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = sessions.filter(
+        (session) =>
+          session.name.toLowerCase().includes(searchLower) ||
+          session.location?.toLowerCase().includes(searchLower) ||
+          session.attendees?.some((a) => a.toLowerCase().includes(searchLower))
+      );
+    }
+
+    const ongoing: TastingSession[] = [];
+    const expired: TastingSession[] = [];
+
+    filtered.forEach((session) => {
+      if (isSessionExpired(session.date)) {
+        expired.push(session);
+      } else {
+        ongoing.push(session);
+      }
+    });
+
+    // Sort ongoing by date ascending (nearest first)
+    ongoing.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort expired by date descending (most recent first)
+    expired.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return { ongoingSessions: ongoing, expiredSessions: expired };
   }, [sessions, search]);
+
+  const hasNoSessions = ongoingSessions.length === 0 && expiredSessions.length === 0;
 
   if (error) {
     return (
@@ -129,7 +170,7 @@ export default function TastingsPage() {
         )}
 
         {/* Empty State */}
-        {!isLoading && filteredSessions.length === 0 && (
+        {!isLoading && hasNoSessions && (
           <div className="text-center py-12">
             <Wine className="h-12 w-12 mx-auto mb-4 text-zinc-300 dark:text-zinc-600" />
             <p className="text-zinc-500 dark:text-zinc-400">
@@ -147,12 +188,43 @@ export default function TastingsPage() {
           </div>
         )}
 
-        {/* Session Cards */}
-        {!isLoading && filteredSessions.length > 0 && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredSessions.map((session) => (
-              <TastingSessionCard key={session.id} session={session} />
-            ))}
+        {/* Ongoing Sessions */}
+        {!isLoading && ongoingSessions.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="h-5 w-5 text-purple-500" />
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Upcoming & Today
+              </h2>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                ({ongoingSessions.length})
+              </span>
+            </div>
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {ongoingSessions.map((session) => (
+                <TastingSessionCard key={session.id} session={session} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Expired Sessions */}
+        {!isLoading && expiredSessions.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <History className="h-5 w-5 text-zinc-400" />
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Past Sessions
+              </h2>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                ({expiredSessions.length})
+              </span>
+            </div>
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {expiredSessions.map((session) => (
+                <TastingSessionCard key={session.id} session={session} expired />
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -9,13 +9,14 @@ from app.models import (
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
     RecipeIngredientReorder,
+    RecipeIngredientRead,
 )
 from app.domain import RecipeService
 
 router = APIRouter()
 
 
-@router.get("/{recipe_id}/ingredients", response_model=list[RecipeIngredient])
+@router.get("/{recipe_id}/ingredients", response_model=list[RecipeIngredientRead])
 def list_recipe_ingredients(
     recipe_id: int,
     session: Session = Depends(get_session),
@@ -33,7 +34,7 @@ def list_recipe_ingredients(
 
 @router.post(
     "/{recipe_id}/ingredients",
-    response_model=RecipeIngredient,
+    response_model=RecipeIngredientRead,
     status_code=status.HTTP_201_CREATED,
 )
 def add_ingredient_to_recipe(
@@ -49,7 +50,6 @@ def add_ingredient_to_recipe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe not found",
         )
-
     result = service.add_ingredient_to_recipe(recipe_id, data)
     if not result:
         raise HTTPException(
@@ -61,7 +61,7 @@ def add_ingredient_to_recipe(
 
 @router.patch(
     "/{recipe_id}/ingredients/{ri_id}",
-    response_model=RecipeIngredient,
+    response_model=RecipeIngredientRead,
 )
 def update_recipe_ingredient(
     recipe_id: int,
@@ -101,7 +101,7 @@ def remove_ingredient_from_recipe(
 
 @router.post(
     "/{recipe_id}/ingredients/reorder",
-    response_model=list[RecipeIngredient],
+    response_model=list[RecipeIngredientRead],
 )
 def reorder_recipe_ingredients(
     recipe_id: int,

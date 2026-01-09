@@ -25,9 +25,10 @@ import type { Recipe, InstructionStep, InstructionsStructured } from '@/types';
 
 interface InstructionsStepsProps {
   recipe: Recipe;
+  canEdit: boolean;
 }
 
-export function InstructionsSteps({ recipe }: InstructionsStepsProps) {
+export function InstructionsSteps({ recipe, canEdit }: InstructionsStepsProps) {
   const updateStructured = useUpdateStructuredInstructions();
   const steps = recipe.instructions_structured?.steps || [];
 
@@ -104,10 +105,12 @@ export function InstructionsSteps({ recipe }: InstructionsStepsProps) {
         <p className="mt-1 text-sm text-zinc-400">
           Write freeform instructions and click &quot;Format into steps&quot;, or add steps manually
         </p>
-        <Button variant="outline" size="sm" className="mt-4" onClick={handleAddStep}>
-          <Plus className="h-4 w-4" />
-          Add first step
-        </Button>
+        {canEdit && (
+          <Button variant="outline" size="sm" className="mt-4" onClick={handleAddStep}>
+            <Plus className="h-4 w-4" />
+            Add first step
+          </Button>
+        )}
       </div>
     );
   }
@@ -130,6 +133,7 @@ export function InstructionsSteps({ recipe }: InstructionsStepsProps) {
                 id={`step-${index}`}
                 step={step}
                 stepNumber={index + 1}
+                canEdit={canEdit}
                 onChange={(updated) => handleStepChange(index, updated)}
                 onDelete={() => handleStepDelete(index)}
               />
@@ -137,12 +141,14 @@ export function InstructionsSteps({ recipe }: InstructionsStepsProps) {
           </div>
         </SortableContext>
       </DndContext>
-      <div className="mt-4">
-        <Button variant="outline" size="sm" onClick={handleAddStep}>
-          <Plus className="h-4 w-4" />
-          Add step
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="mt-4">
+          <Button variant="outline" size="sm" onClick={handleAddStep}>
+            <Plus className="h-4 w-4" />
+            Add step
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

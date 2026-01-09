@@ -1,0 +1,25 @@
+{
+  "users": [
+    {
+      "userId": "user-001",
+      "email": "admin@prepper.com",
+      "password": "admin123",
+      "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyLTAwMSIsImVtYWlsIjoiYWRtaW5AcHJlcHBlci5jb20iLCJ1c2VyVHlwZSI6ImFkbWluIiwiaWF0IjoxNzA0MDY3MjAwLCJleHAiOjE3MzU2ODk2MDB9.mock-admin-signature",
+      "userType": "admin"
+    },
+    {
+      "userId": "user-002",
+      "email": "chef@prepper.com",
+      "password": "chef123",
+      "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyLTAwMiIsImVtYWlsIjoiY2hlZkBwcmVwcGVyLmNvbSIsInVzZXJUeXBlIjoibm9ybWFsIiwiaWF0IjoxNzA0MDY3MjAwLCJleHAiOjE3MzU2ODk2MDB9.mock-chef-signature",
+      "userType": "normal"
+    },
+    {
+      "userId": "user-003",
+      "email": "sous@prepper.com",
+      "password": "sous123",
+      "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyLTAwMyIsImVtYWlsIjoic291c0BwcmVwcGVyLmNvbSIsInVzZXJUeXBlIjoibm9ybWFsIiwiaWF0IjoxNzA0MDY3MjAwLCJleHAiOjE3MzU2ODk2MDB9.mock-sous-signature",
+      "userType": "normal"
+    }
+  ]
+}

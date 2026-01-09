@@ -23,11 +23,15 @@ function getStatusVariant(status: RecipeStatus): 'default' | 'success' | 'second
 function RecipeCard({
   recipe,
   isSelected,
+  canEdit,
+  isOwned,
   onClick,
   onDelete,
 }: {
   recipe: Recipe;
   isSelected: boolean;
+  canEdit: boolean;
+  isOwned: boolean;
   onClick: () => void;
   onDelete: () => void;
 }) {
@@ -56,28 +60,38 @@ function RecipeCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-foreground">{recipe.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {recipe.yield_quantity} {recipe.yield_unit}
-          </p>
-        </div>
+        <h3 className="min-w-0 flex-1 truncate font-medium">{recipe.name}</h3>
         <div className="flex items-center gap-2">
           <Badge variant={getStatusVariant(recipe.status)}>
             {recipe.status}
           </Badge>
           <button
-            onClick={handleDeleteClick}
+            onClick={canEdit ? handleDeleteClick : undefined}
             className={cn(
               'rounded p-1 transition-all',
-              confirmDelete
-                ? 'bg-destructive/10 text-destructive'
-                : 'text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100'
+              !canEdit
+                ? 'invisible'
+                : confirmDelete
+                  ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                  : 'text-zinc-400 opacity-0 hover:bg-zinc-200 hover:text-zinc-600 group-hover:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-300'
             )}
-            title={confirmDelete ? 'Click again to confirm' : 'Delete recipe'}
+            disabled={!canEdit}
+            title={!canEdit ? undefined : confirmDelete ? 'Click again to confirm' : 'Delete recipe'}
           >
             <Trash2 className="h-4 w-4" />
           </button>
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-500">
+          {recipe.yield_quantity} {recipe.yield_unit}
+        </p>
+        <div className="flex items-center gap-2">
+          {isOwned && (
+            <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+          )}
+          {/* Spacer to align with delete button above */}
+          <div className="w-6" />
         </div>
       </div>
     </div>
@@ -98,7 +112,7 @@ function RecipeListSkeleton() {
 }
 
 export function LeftPanel() {
-  const { selectedRecipeId, selectRecipe } = useAppState();
+  const { selectedRecipeId, selectRecipe, userId, userType } = useAppState();
   const { data: recipes, isLoading, error } = useRecipes();
   const createRecipe = useCreateRecipe();
   const deleteRecipe = useDeleteRecipe();
@@ -106,10 +120,29 @@ export function LeftPanel() {
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
-    if (!search.trim()) return recipes;
-    const lower = search.toLowerCase();
-    return recipes.filter((r) => r.name.toLowerCase().includes(lower));
-  }, [recipes, search]);
+
+    return recipes.filter((recipe) => {
+      // Filter by search
+      if (search.trim()) {
+        const lower = search.toLowerCase();
+        if (!recipe.name.toLowerCase().includes(lower)) {
+          return false;
+        }
+      }
+
+      // Admin users can see all recipes
+      if (userType === 'admin') {
+        return true;
+      }
+
+      // Show recipe if user is the owner OR if recipe is public
+      const currUserId = userId ? userId : null;
+      if (recipe.owner_id !== currUserId && !recipe.is_public) {
+        return false;
+      }
+      return true;
+    });
+  }, [recipes, search, userId, userType]);
 
   const handleCreate = () => {
     createRecipe.mutate(
@@ -118,6 +151,9 @@ export function LeftPanel() {
         yield_quantity: 10,
         yield_unit: 'portion',
         status: 'draft',
+        created_by: userId || undefined,
+        is_public: false,
+        owner_id: userId || undefined,
       },
       {
         onSuccess: (newRecipe) => {
@@ -192,15 +228,22 @@ export function LeftPanel() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredRecipes.map((recipe) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                isSelected={recipe.id === selectedRecipeId}
-                onClick={() => selectRecipe(recipe.id)}
-                onDelete={() => handleDelete(recipe.id)}
-              />
-            ))}
+            {filteredRecipes.map((recipe) => {
+              const canEditRecipe =
+                userType === 'admin' || (userId !== null && recipe.owner_id === userId);
+              const isOwned = userId !== null && recipe.owner_id === userId;
+              return (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  isSelected={recipe.id === selectedRecipeId}
+                  canEdit={canEditRecipe}
+                  isOwned={isOwned}
+                  onClick={() => selectRecipe(recipe.id === selectedRecipeId ? null : recipe.id)}
+                  onDelete={() => handleDelete(recipe.id)}
+                />
+              );
+            })}
           </div>
         )}
       </div>

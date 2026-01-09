@@ -5,6 +5,7 @@ import { useState, ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import { AppProvider } from './store';
 import { ThemeProvider } from './theme';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -23,10 +24,13 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AppProvider>
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
           <Toaster position="bottom-center" richColors />
         </AppProvider>
       </ThemeProvider>
+
     </QueryClientProvider>
   );
 }

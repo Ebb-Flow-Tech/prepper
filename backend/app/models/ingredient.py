@@ -2,10 +2,13 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, JSON, String
 from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.recipe_ingredient import RecipeIngredient
 
 
 class FoodCategory(str, Enum):
@@ -116,6 +119,9 @@ class Ingredient(IngredientBase, table=True):
     )
     variants: list["Ingredient"] = Relationship(back_populates="master_ingredient")
 
+    # Relationship to RecipeIngredient
+    recipe_ingredients: list["RecipeIngredient"] = Relationship(back_populates="ingredient")
+
 
 class IngredientCreate(SQLModel):
     """Schema for creating a new ingredient."""
@@ -139,6 +145,7 @@ class IngredientUpdate(SQLModel):
     source: str | None = None  # "fmh" or "manual"
     master_ingredient_id: int | None = None
     suppliers: list[dict] | None = None
+    is_active: bool | None = None
 
 
 class SupplierEntryCreate(SQLModel):
@@ -150,6 +157,7 @@ class SupplierEntryCreate(SQLModel):
     pack_size: float
     pack_unit: str
     price_per_pack: float
+    cost_per_unit: float
     currency: str = "SGD"
     is_preferred: bool = False
     source: str = "manual"
@@ -163,5 +171,6 @@ class SupplierEntryUpdate(SQLModel):
     pack_size: float | None = None
     pack_unit: str | None = None
     price_per_pack: float | None = None
+    cost_per_unit: float | None = None
     currency: str | None = None
     is_preferred: bool | None = None
