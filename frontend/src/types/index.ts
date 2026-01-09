@@ -182,6 +182,7 @@ export interface TastingNote {
   overall_rating: number | null;
   feedback: string | null;
   action_items: string | null;
+  action_items_done: boolean;
   decision: TastingDecision | null;
   taster_name: string | null;
   created_at: string;
@@ -245,6 +246,7 @@ export interface UpdateTastingNoteRequest {
   overall_rating?: number | null;
   feedback?: string | null;
   action_items?: string | null;
+  action_items_done?: boolean;
   decision?: TastingDecision | null;
   taster_name?: string | null;
 }

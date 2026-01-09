@@ -433,6 +433,114 @@ def test_recipe_tasting_summary_empty(client: TestClient):
     assert data["latest_decision"] is None
 
 
+def test_create_note_with_action_items_done(client: TestClient):
+    """Test creating a tasting note with action_items_done set to true."""
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Create session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add note with action_items_done = True
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 4,
+            "action_items": "Add more salt",
+            "action_items_done": True,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["action_items"] == "Add more salt"
+    assert data["action_items_done"] is True
+
+
+def test_create_note_action_items_done_defaults_to_false(client: TestClient):
+    """Test that action_items_done defaults to false when not specified."""
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Create session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add note without specifying action_items_done
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 4,
+            "action_items": "Reduce cooking time",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["action_items"] == "Reduce cooking time"
+    assert data["action_items_done"] is False
+
+
+def test_update_action_items_done(client: TestClient):
+    """Test updating action_items_done from false to true."""
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Create session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add note with action_items_done = False (default)
+    note_response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 3,
+            "action_items": "Improve plating",
+        },
+    )
+    note_id = note_response.json()["id"]
+    assert note_response.json()["action_items_done"] is False
+
+    # Update action_items_done to True
+    response = client.patch(
+        f"/api/v1/tasting-sessions/{session_id}/notes/{note_id}",
+        json={"action_items_done": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["action_items_done"] is True
+
+    # Update action_items_done back to False
+    response = client.patch(
+        f"/api/v1/tasting-sessions/{session_id}/notes/{note_id}",
+        json={"action_items_done": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["action_items_done"] is False
+
+
 def test_cascade_delete_session_notes(client: TestClient):
     """Test that deleting a session cascades to notes."""
     # Create recipe

@@ -118,10 +118,12 @@ export function useUpdateTastingNote() {
       sessionId,
       noteId,
       data,
+      recipeId,
     }: {
       sessionId: number;
       noteId: number;
       data: UpdateTastingNoteRequest;
+      recipeId?: number;
     }) => api.updateTastingNote(sessionId, noteId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -130,6 +132,12 @@ export function useUpdateTastingNote() {
       queryClient.invalidateQueries({
         queryKey: ['tasting-session', variables.sessionId, 'stats'],
       });
+      // Also invalidate recipe tasting notes if recipeId is provided
+      if (variables.recipeId) {
+        queryClient.invalidateQueries({
+          queryKey: ['recipe', variables.recipeId, 'tasting-notes'],
+        });
+      }
     },
   });
 }

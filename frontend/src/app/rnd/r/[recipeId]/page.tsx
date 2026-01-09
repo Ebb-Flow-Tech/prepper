@@ -36,7 +36,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
 import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions } from '@/lib/hooks';
-import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
@@ -299,9 +299,9 @@ function buildVersionGraph(
 // ============ Actionable Item Component ============
 
 interface ActionableItem {
-  id: string;
-  text: string;
   noteId: number;
+  sessionId: number;
+  text: string;
   sessionName: string | null;
   sessionDate: string | null;
   checked: boolean;
@@ -309,10 +309,12 @@ interface ActionableItem {
 
 function ActionablesList({
   actionables,
-  onToggle
+  onToggle,
+  isUpdating,
 }: {
   actionables: ActionableItem[];
-  onToggle: (id: string) => void;
+  onToggle: (noteId: number, sessionId: number, currentValue: boolean) => void;
+  isUpdating: boolean;
 }) {
   const uncheckedCount = actionables.filter(a => !a.checked).length;
 
@@ -335,20 +337,22 @@ function ActionablesList({
         <ul className="space-y-2">
           {actionables.map((item) => (
             <li
-              key={item.id}
+              key={item.noteId}
               className={cn(
                 'flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
                 item.checked
                   ? 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
-                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600',
+                isUpdating && 'opacity-50 pointer-events-none'
               )}
-              onClick={() => onToggle(item.id)}
+              onClick={() => onToggle(item.noteId, item.sessionId, item.checked)}
             >
               <button
                 className="mt-0.5 shrink-0"
+                disabled={isUpdating}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onToggle(item.id);
+                  onToggle(item.noteId, item.sessionId, item.checked);
                 }}
               >
                 {item.checked ? (
@@ -359,7 +363,7 @@ function ActionablesList({
               </button>
               <div className="flex-1 min-w-0">
                 <p className={cn(
-                  'text-sm',
+                  'text-sm whitespace-pre-line',
                   item.checked
                     ? 'text-zinc-400 dark:text-zinc-500 line-through'
                     : 'text-zinc-700 dark:text-zinc-300'
@@ -711,20 +715,16 @@ function OverviewTab({
 }
 
 function ActionablesTab({
-  tastingNotes
+  tastingNotes,
+  recipeId,
 }: {
   tastingNotes: TastingNoteWithRecipe[] | undefined;
+  recipeId: number;
 }) {
-  // Local state for checked items (persisted in localStorage)
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('rnd-actionables-checked');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    }
-    return new Set();
-  });
+  const updateTastingNote = useUpdateTastingNote();
 
   // Extract actionables from tasting notes, filtering out empty ones
+  // Each tasting note with action_items becomes one actionable item
   const actionables = useMemo(() => {
     if (!tastingNotes) return [];
 
@@ -732,49 +732,37 @@ function ActionablesTab({
 
     for (const note of tastingNotes) {
       if (note.action_items && note.action_items.trim()) {
-        // Split by newlines or bullet points to get individual items
-        const lines = note.action_items
-          .split(/[\n\r]+/)
-          .map(line => line.replace(/^[-*•]\s*/, '').trim())
-          .filter(line => line.length > 0);
-
-        for (let i = 0; i < lines.length; i++) {
-          const id = `${note.id}-${i}`;
-          items.push({
-            id,
-            text: lines[i],
-            noteId: note.id,
-            sessionName: note.session_name,
-            sessionDate: note.session_date,
-            checked: checkedItems.has(id),
-          });
-        }
+        items.push({
+          noteId: note.id,
+          sessionId: note.session_id,
+          text: note.action_items.trim(),
+          sessionName: note.session_name,
+          sessionDate: note.session_date,
+          checked: note.action_items_done,
+        });
       }
     }
 
     return items;
-  }, [tastingNotes, checkedItems]);
+  }, [tastingNotes]);
 
-  const handleToggle = useCallback((id: string) => {
-    setCheckedItems(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      // Persist to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('rnd-actionables-checked', JSON.stringify([...next]));
-      }
-      return next;
+  const handleToggle = useCallback((noteId: number, sessionId: number, currentValue: boolean) => {
+    updateTastingNote.mutate({
+      sessionId,
+      noteId,
+      data: { action_items_done: !currentValue },
+      recipeId,
     });
-  }, []);
+  }, [updateTastingNote, recipeId]);
 
   return (
     <Card>
       <CardContent className="p-6">
-        <ActionablesList actionables={actionables} onToggle={handleToggle} />
+        <ActionablesList
+          actionables={actionables}
+          onToggle={handleToggle}
+          isUpdating={updateTastingNote.isPending}
+        />
       </CardContent>
     </Card>
   );
@@ -1005,7 +993,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
             )}
 
             {activeTab === 'actionables' && (
-              <ActionablesTab tastingNotes={tastingNotes} />
+              <ActionablesTab tastingNotes={tastingNotes} recipeId={recipeId} />
             )}
 
             {activeTab === 'versions' && (

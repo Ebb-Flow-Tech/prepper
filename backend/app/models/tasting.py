@@ -74,6 +74,7 @@ class TastingNoteBase(SQLModel):
     # Feedback
     feedback: Optional[str] = Field(default=None, description="Free-form tasting notes")
     action_items: Optional[str] = Field(default=None, description="What needs to change")
+    action_items_done: bool = Field(default=False, description="Whether action items have been completed")
 
     # Decision
     decision: Optional[str] = Field(
@@ -112,6 +113,7 @@ class TastingNoteUpdate(SQLModel):
     overall_rating: Optional[int] = None
     feedback: Optional[str] = None
     action_items: Optional[str] = None
+    action_items_done: Optional[bool] = None
     decision: Optional[str] = None
     taster_name: Optional[str] = None
 

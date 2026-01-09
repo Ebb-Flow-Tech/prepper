@@ -110,6 +110,7 @@ class TastingNoteService:
                 "overall_rating": note.overall_rating,
                 "feedback": note.feedback,
                 "action_items": note.action_items,
+                "action_items_done": note.action_items_done,
                 "decision": note.decision,
                 "taster_name": note.taster_name,
                 "created_at": note.created_at,
