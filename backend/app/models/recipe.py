@@ -83,7 +83,8 @@ class RecipeUpdate(SQLModel):
     yield_unit: str | None = None
     selling_price_est: float | None = None
     is_prep_recipe: bool | None = None
-    is_public: bool = False
+    is_public: bool | None = None
+    status: RecipeStatus | None = None
     updated_by: str | None = None
 
 

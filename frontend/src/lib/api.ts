@@ -128,8 +128,9 @@ export async function forkRecipe(
   });
 }
 
-export async function getRecipeVersions(recipeId: number): Promise<Recipe[]> {
-  return fetchApi<Recipe[]>(`/recipes/${recipeId}/versions`);
+export async function getRecipeVersions(recipeId: number, userId?: string | null): Promise<Recipe[]> {
+  const params = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  return fetchApi<Recipe[]>(`/recipes/${recipeId}/versions${params}`);
 }
 
 // ============ Recipe Ingredients ============

@@ -107,9 +107,13 @@ function buildVersionGraph(
 ): { nodes: VersionNodeType[]; edges: Edge[] } {
   if (!versions.length) return { nodes: [], edges: [] };
 
+  // Filter out masked (private) recipes - they have empty names
+  const visibleVersions = versions.filter((recipe) => recipe.name !== '');
+  if (!visibleVersions.length) return { nodes: [], edges: [] };
+
   // Build a map of recipe id to recipe for quick lookup
   const recipeMap = new Map<number, Recipe>();
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     recipeMap.set(recipe.id, recipe);
   }
 
@@ -117,12 +121,12 @@ function buildVersionGraph(
   const childrenMap = new Map<number, Recipe[]>();
   let rootRecipe: Recipe | null = null;
 
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     if (recipe.root_id === null) {
       // This is the root recipe (original, not forked from anything)
       rootRecipe = recipe;
     } else if (recipeMap.has(recipe.root_id)) {
-      // Only create edge if the parent is in our versions list
+      // Only create edge if the parent is in our visible versions list
       const children = childrenMap.get(recipe.root_id) || [];
       children.push(recipe);
       childrenMap.set(recipe.root_id, children);
@@ -131,7 +135,7 @@ function buildVersionGraph(
 
   // If no root found, use the recipe with the lowest version number
   if (!rootRecipe) {
-    rootRecipe = [...versions].sort((a, b) => a.version - b.version)[0];
+    rootRecipe = [...visibleVersions].sort((a, b) => a.version - b.version)[0];
   }
 
   // Layout nodes using a tree structure (BFS for level assignment)
@@ -169,7 +173,7 @@ function buildVersionGraph(
   }
 
   // Handle any orphaned nodes (not connected to root) - add them at appropriate levels
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     if (!visited.has(recipe.id)) {
       const level = recipe.version - 1; // Use version as a fallback for level
       levelMap.set(recipe.id, level);
@@ -197,8 +201,8 @@ function buildVersionGraph(
     });
   }
 
-  // Create nodes
-  const nodes: VersionNodeType[] = versions.map((recipe) => {
+  // Create nodes (only for visible/authorized recipes)
+  const nodes: VersionNodeType[] = visibleVersions.map((recipe) => {
     const position = positionMap.get(recipe.id) || { x: 0, y: 0 };
     return {
       id: String(recipe.id),
@@ -215,7 +219,7 @@ function buildVersionGraph(
 
   // Create edges based on actual parent-child (root_id) relationships
   const edges: Edge[] = [];
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     if (recipe.root_id !== null && recipeMap.has(recipe.root_id)) {
       edges.push({
         id: `e${recipe.root_id}-${recipe.id}`,
@@ -294,8 +298,8 @@ function VersionTreeSkeleton() {
 
 export function VersionsTab() {
   const router = useRouter();
-  const { selectedRecipeId } = useAppState();
-  const { data: versions, isLoading, error } = useRecipeVersions(selectedRecipeId);
+  const { selectedRecipeId, userId } = useAppState();
+  const { data: versions, isLoading, error } = useRecipeVersions(selectedRecipeId, userId);
 
   const handleNodeClick: NodeMouseHandler<VersionNodeType> = useCallback((_event, node) => {
     router.push(`/?recipe=${node.data.recipe.id}`);

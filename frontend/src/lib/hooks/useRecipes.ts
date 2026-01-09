@@ -80,10 +80,10 @@ export function useForkRecipe() {
   });
 }
 
-export function useRecipeVersions(recipeId: number | null) {
+export function useRecipeVersions(recipeId: number | null, userId?: string | null) {
   return useQuery({
-    queryKey: ['recipe-versions', recipeId],
-    queryFn: () => api.getRecipeVersions(recipeId!),
+    queryKey: ['recipe-versions', recipeId, userId],
+    queryFn: () => api.getRecipeVersions(recipeId!, userId),
     enabled: recipeId !== null,
   });
 }

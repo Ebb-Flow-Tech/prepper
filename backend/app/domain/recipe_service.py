@@ -256,12 +256,50 @@ class RecipeService:
 
     # --- Versioning Operations ---
 
-    def get_version_tree(self, recipe_id: int) -> list[Recipe]:
+    def _is_recipe_authorized(self, recipe: Recipe, user_id: str | None) -> bool:
+        """Check if a recipe is authorized for the given user."""
+        if recipe.is_public:
+            return True
+        if user_id is not None and recipe.owner_id == user_id:
+            return True
+        return False
+
+    def _create_masked_recipe(self, recipe: Recipe, new_root_id: int | None) -> Recipe:
+        """Create a masked version of a recipe with minimal info."""
+        return Recipe(
+            id=recipe.id,
+            name="",  # Empty name for unauthorized recipes
+            yield_quantity=0,
+            yield_unit="",
+            is_prep_recipe=False,
+            instructions_raw=None,
+            instructions_structured=None,
+            cost_price=None,
+            selling_price_est=None,
+            status=recipe.status,
+            is_public=False,
+            owner_id=None,
+            version=recipe.version,
+            root_id=new_root_id,  # Link to last authorized ancestor
+            created_by=None,
+            updated_by=None,
+            created_at=recipe.created_at,
+            updated_at=recipe.updated_at,
+        )
+
+    def get_version_tree(self, recipe_id: int, user_id: str | None = None) -> list[Recipe]:
         """
         Get all recipes in the version tree for a given recipe.
 
         This traverses both up (to find ancestors) and down (to find descendants)
         to return the complete version tree.
+
+        If user_id is provided, recipes are filtered based on ownership:
+        - If user_id matches owner_id OR recipe is public: full recipe data is returned
+        - Otherwise: a masked recipe with only id, root_id, version, and status is returned
+
+        If a recipe's parent is unauthorized, the masked recipe links to the last
+        authorized ancestor in the tree.
 
         Returns a list of recipes ordered by version number (ascending).
         """
@@ -282,7 +320,7 @@ class RecipeService:
             current = parent
 
         # Find the root (oldest ancestor) - this is now 'current'
-        root_id = current.id
+        root_recipe_id = current.id
 
         # Traverse down from root to find all descendants using BFS
         def collect_all_descendants(start_id: int) -> None:
@@ -302,7 +340,7 @@ class RecipeService:
                         queue.append(child.id)
 
         # Start collecting from root
-        collect_all_descendants(root_id)
+        collect_all_descendants(root_recipe_id)
 
         # Fetch all recipes in the tree and sort by version
         statement = (
@@ -310,4 +348,71 @@ class RecipeService:
             .where(Recipe.id.in_(tree_ids))
             .order_by(Recipe.version, Recipe.created_at)
         )
-        return list(self.session.exec(statement).all())
+        all_recipes = list(self.session.exec(statement).all())
+
+        # If no user_id provided, return all recipes unfiltered
+        if user_id is None:
+            return all_recipes
+
+        # Build a map of recipe id to recipe for quick lookup
+        recipe_map = {r.id: r for r in all_recipes}
+
+        # Track which recipes are authorized
+        authorized_ids: set[int] = set()
+        for r in all_recipes:
+            if self._is_recipe_authorized(r, user_id):
+                authorized_ids.add(r.id)
+
+        # For each recipe, find its last authorized ancestor
+        def find_last_authorized_ancestor(r: Recipe) -> int | None:
+            """Find the nearest authorized ancestor for a recipe."""
+            current_recipe = r
+            while current_recipe.root_id is not None:
+                parent = recipe_map.get(current_recipe.root_id)
+                if parent is None:
+                    return None
+                if parent.id in authorized_ids:
+                    return parent.id
+                current_recipe = parent
+            # Root has no parent
+            return None
+
+        # Build the result list with masking and root_id adjustment
+        result: list[Recipe] = []
+        for r in all_recipes:
+            if r.id in authorized_ids:
+                # Authorized: return full recipe, but may need to adjust root_id
+                if r.root_id is not None and r.root_id not in authorized_ids:
+                    # Parent is unauthorized, link to last authorized ancestor
+                    new_root_id = find_last_authorized_ancestor(r)
+                    # Create a copy with updated root_id
+                    adjusted_recipe = Recipe(
+                        id=r.id,
+                        name=r.name,
+                        yield_quantity=r.yield_quantity,
+                        yield_unit=r.yield_unit,
+                        is_prep_recipe=r.is_prep_recipe,
+                        instructions_raw=r.instructions_raw,
+                        instructions_structured=r.instructions_structured,
+                        cost_price=r.cost_price,
+                        selling_price_est=r.selling_price_est,
+                        status=r.status,
+                        is_public=r.is_public,
+                        owner_id=r.owner_id,
+                        version=r.version,
+                        root_id=new_root_id,
+                        created_by=r.created_by,
+                        updated_by=r.updated_by,
+                        created_at=r.created_at,
+                        updated_at=r.updated_at,
+                    )
+                    result.append(adjusted_recipe)
+                else:
+                    result.append(r)
+            else:
+                # Unauthorized: return masked recipe with adjusted root_id
+                new_root_id = find_last_authorized_ancestor(r)
+                masked = self._create_masked_recipe(r, new_root_id)
+                result.append(masked)
+
+        return result

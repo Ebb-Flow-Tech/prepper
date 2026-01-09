@@ -124,9 +124,17 @@ def fork_recipe(
 @router.get("/{recipe_id}/versions", response_model=list[Recipe])
 def get_recipe_versions(
     recipe_id: int,
+    user_id: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ):
-    """Get all recipes in the version tree for a recipe."""
+    """Get all recipes in the version tree for a recipe.
+
+    Recipes are filtered based on ownership:
+    - If user_id matches owner_id OR recipe is public: full recipe data is returned
+    - Otherwise: a masked recipe with only id, root_id, and version is returned
+
+    If a recipe's parent is unauthorized, it links to the last authorized ancestor.
+    """
     service = RecipeService(session)
     recipe = service.get_recipe(recipe_id)
     if not recipe:
@@ -134,4 +142,4 @@ def get_recipe_versions(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe not found",
         )
-    return service.get_version_tree(recipe_id)
+    return service.get_version_tree(recipe_id, user_id=user_id)

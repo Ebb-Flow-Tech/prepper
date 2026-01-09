@@ -20,7 +20,8 @@ import {
   LayoutGrid,
   Square,
   CheckSquare,
-  Plus,
+  Calendar,
+  User,
 } from 'lucide-react';
 import {
   ReactFlow,
@@ -90,23 +91,17 @@ function formatTastingDate(dateString: string): string {
 interface VersionNodeData extends Record<string, unknown> {
   recipe: Recipe;
   isCurrentRecipe: boolean;
-  isLeaf: boolean;
 }
 
 type VersionNodeType = Node<VersionNodeData, 'versionNode'>;
 
 const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
-  const { recipe, isCurrentRecipe, isLeaf } = data;
-
-  const handleForkClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.location.href = `/?recipe=${recipe.id}`;
-  };
+  const { recipe, isCurrentRecipe } = data;
 
   return (
     <div
       className={cn(
-        'relative rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
+        'cursor-pointer rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
         isCurrentRecipe
           ? 'border-blue-500 bg-blue-50 shadow-blue-100 dark:border-blue-400 dark:bg-blue-950 dark:shadow-blue-900/20'
           : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
@@ -136,10 +131,16 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
               v{recipe.version}
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
+              <Calendar className="h-3.5 w-3.5" />
               {new Date(recipe.created_at).toLocaleDateString()}
             </span>
           </div>
+          {recipe.created_by && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
+              <User className="h-3 w-3" />
+              {recipe.created_by}
+            </div>
+          )}
         </div>
         <Badge variant={STATUS_VARIANTS[recipe.status]} className="shrink-0">
           {recipe.status}
@@ -151,17 +152,6 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
         position={Position.Right}
         className="!bg-zinc-400 !w-2 !h-2 !border-0"
       />
-
-      {/* Fork button for leaf nodes */}
-      {isLeaf && (
-        <button
-          onClick={handleForkClick}
-          className="absolute -right-4 top-1/2 -translate-y-1/2 translate-x-full ml-2 p-1.5 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-md transition-colors"
-          title="Fork this recipe"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      )}
     </div>
   );
 });
@@ -178,33 +168,45 @@ function buildVersionGraph(
 ): { nodes: VersionNodeType[]; edges: Edge[] } {
   if (!versions.length) return { nodes: [], edges: [] };
 
+  // Filter out masked (private) recipes - they have empty names
+  const visibleVersions = versions.filter((recipe) => recipe.name !== '');
+  if (!visibleVersions.length) return { nodes: [], edges: [] };
+
+  // Build a map of recipe id to recipe for quick lookup
   const recipeMap = new Map<number, Recipe>();
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     recipeMap.set(recipe.id, recipe);
   }
 
+  // Build parent-child relationships based on root_id (which is actually "forked_from")
   const childrenMap = new Map<number, Recipe[]>();
   let rootRecipe: Recipe | null = null;
 
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     if (recipe.root_id === null) {
+      // This is the root recipe (original, not forked from anything)
       rootRecipe = recipe;
     } else if (recipeMap.has(recipe.root_id)) {
+      // Only create edge if the parent is in our visible versions list
       const children = childrenMap.get(recipe.root_id) || [];
       children.push(recipe);
       childrenMap.set(recipe.root_id, children);
     }
   }
 
+  // If no root found, use the recipe with the lowest version number
   if (!rootRecipe) {
-    rootRecipe = [...versions].sort((a, b) => a.version - b.version)[0];
+    rootRecipe = [...visibleVersions].sort((a, b) => a.version - b.version)[0];
   }
 
+  // Layout nodes using a tree structure (BFS for level assignment)
+  // Horizontal layout: levels go left to right
   const NODE_WIDTH = 320;
   const NODE_HEIGHT = 120;
   const HORIZONTAL_SPACING = 80;
   const VERTICAL_SPACING = 40;
 
+  // Assign levels (depth) to each node using BFS
   const levelMap = new Map<number, number>();
   const nodesAtLevel = new Map<number, Recipe[]>();
   const queue: { recipe: Recipe; level: number }[] = [{ recipe: rootRecipe, level: 0 }];
@@ -220,7 +222,9 @@ function buildVersionGraph(
     levelNodes.push(recipe);
     nodesAtLevel.set(level, levelNodes);
 
+    // Add children to queue
     const children = childrenMap.get(recipe.id) || [];
+    // Sort children by version for consistent ordering
     children.sort((a, b) => a.version - b.version);
     for (const child of children) {
       if (!visited.has(child.id)) {
@@ -229,9 +233,10 @@ function buildVersionGraph(
     }
   }
 
-  for (const recipe of versions) {
+  // Handle any orphaned nodes (not connected to root) - add them at appropriate levels
+  for (const recipe of visibleVersions) {
     if (!visited.has(recipe.id)) {
-      const level = recipe.version - 1;
+      const level = recipe.version - 1; // Use version as a fallback for level
       levelMap.set(recipe.id, level);
       const levelNodes = nodesAtLevel.get(level) || [];
       levelNodes.push(recipe);
@@ -239,6 +244,8 @@ function buildVersionGraph(
     }
   }
 
+  // Calculate positions for horizontal layout (left to right)
+  // X = level (depth), Y = position within level
   const positionMap = new Map<number, { x: number; y: number }>();
   const maxLevel = Math.max(...Array.from(nodesAtLevel.keys()));
 
@@ -255,10 +262,9 @@ function buildVersionGraph(
     });
   }
 
-  const nodes: VersionNodeType[] = versions.map((recipe) => {
+  // Create nodes (only for visible/authorized recipes)
+  const nodes: VersionNodeType[] = visibleVersions.map((recipe) => {
     const position = positionMap.get(recipe.id) || { x: 0, y: 0 };
-    // A node is a leaf if it has no children
-    const isLeaf = !childrenMap.has(recipe.id) || childrenMap.get(recipe.id)!.length === 0;
     return {
       id: String(recipe.id),
       type: 'versionNode',
@@ -266,15 +272,15 @@ function buildVersionGraph(
       data: {
         recipe,
         isCurrentRecipe: recipe.id === selectedRecipeId,
-        isLeaf,
       },
       draggable: false,
       selectable: false,
     };
   });
 
+  // Create edges based on actual parent-child (root_id) relationships
   const edges: Edge[] = [];
-  for (const recipe of versions) {
+  for (const recipe of visibleVersions) {
     if (recipe.root_id !== null && recipeMap.has(recipe.root_id)) {
       edges.push({
         id: `e${recipe.root_id}-${recipe.id}`,
@@ -901,7 +907,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: allRecipes } = useRecipes();
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
-  const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId);
+  const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
