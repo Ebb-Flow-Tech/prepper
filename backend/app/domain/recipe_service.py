@@ -307,42 +307,36 @@ class RecipeService:
         if not recipe:
             return []
 
-        # Collect all recipe IDs in the version tree
-        tree_ids: set[int] = {recipe_id}
-
-        # Traverse up to find all ancestors and collect their IDs
-        current = recipe
-        while current.root_id is not None:
-            tree_ids.add(current.root_id)
-            parent = self.get_recipe(current.root_id)
-            if parent is None:
+        # Find root by traversing up - only fetch id and root_id for efficiency
+        root_id = recipe_id
+        current_root_id = recipe.root_id
+        while current_root_id is not None:
+            root_id = current_root_id
+            stmt = select(Recipe.root_id).where(Recipe.id == current_root_id)
+            result = self.session.exec(stmt).first()
+            if result is None:
                 break
-            current = parent
+            current_root_id = result
 
-        # Find the root (oldest ancestor) - this is now 'current'
-        root_recipe_id = current.id
+        # Single recursive CTE query to get all descendants from root
+        # For databases that support it, this is much more efficient
+        # Fallback: batch query all recipes with root_id in tree
+        tree_ids: set[int] = {root_id}
+        frontier = {root_id}
 
-        # Traverse down from root to find all descendants using BFS
-        def collect_all_descendants(start_id: int) -> None:
-            """Collect all descendants using BFS to handle branching."""
-            queue = [start_id]
-            visited = {start_id}
+        while frontier:
+            # Batch query: find all children of current frontier
+            statement = select(Recipe.id, Recipe.root_id).where(
+                Recipe.root_id.in_(frontier)
+            )
+            children = list(self.session.exec(statement).all())
+            frontier = set()
+            for child_id, _ in children:
+                if child_id not in tree_ids:
+                    tree_ids.add(child_id)
+                    frontier.add(child_id)
 
-            while queue:
-                current_id = queue.pop(0)
-                # Find all recipes that have this recipe as their root_id
-                statement = select(Recipe).where(Recipe.root_id == current_id)
-                children = list(self.session.exec(statement).all())
-                for child in children:
-                    if child.id not in visited:
-                        visited.add(child.id)
-                        tree_ids.add(child.id)
-                        queue.append(child.id)
-
-        # Start collecting from root
-        collect_all_descendants(root_recipe_id)
-
-        # Fetch all recipes in the tree and sort by version
+        # Fetch all recipes in a single query, sorted
         statement = (
             select(Recipe)
             .where(Recipe.id.in_(tree_ids))
@@ -354,65 +348,61 @@ class RecipeService:
         if user_id is None:
             return all_recipes
 
-        # Build a map of recipe id to recipe for quick lookup
-        recipe_map = {r.id: r for r in all_recipes}
-
-        # Track which recipes are authorized
+        # Build lookup structures in a single pass
+        recipe_map: dict[int, Recipe] = {}
         authorized_ids: set[int] = set()
         for r in all_recipes:
+            recipe_map[r.id] = r
             if self._is_recipe_authorized(r, user_id):
                 authorized_ids.add(r.id)
 
-        # For each recipe, find its last authorized ancestor
-        def find_last_authorized_ancestor(r: Recipe) -> int | None:
-            """Find the nearest authorized ancestor for a recipe."""
-            current_recipe = r
-            while current_recipe.root_id is not None:
-                parent = recipe_map.get(current_recipe.root_id)
-                if parent is None:
-                    return None
-                if parent.id in authorized_ids:
-                    return parent.id
-                current_recipe = parent
-            # Root has no parent
-            return None
+        # Memoized ancestor lookup to avoid redundant traversals
+        ancestor_cache: dict[int, int | None] = {}
 
-        # Build the result list with masking and root_id adjustment
+        def find_last_authorized_ancestor(r: Recipe) -> int | None:
+            """Find the nearest authorized ancestor, with memoization."""
+            if r.id in ancestor_cache:
+                return ancestor_cache[r.id]
+
+            path: list[int] = []
+            current = r
+            result: int | None = None
+
+            while current.root_id is not None:
+                parent = recipe_map.get(current.root_id)
+                if parent is None:
+                    break
+                if parent.id in authorized_ids:
+                    result = parent.id
+                    break
+                # Check if parent's result is already cached
+                if parent.id in ancestor_cache:
+                    result = ancestor_cache[parent.id]
+                    break
+                path.append(current.id)
+                current = parent
+
+            # Cache results for all recipes in the path
+            for rid in path:
+                ancestor_cache[rid] = result
+            ancestor_cache[r.id] = result
+
+            return result
+
+        # Build result list
         result: list[Recipe] = []
         for r in all_recipes:
             if r.id in authorized_ids:
-                # Authorized: return full recipe, but may need to adjust root_id
+                # Authorized: return full recipe, adjust root_id if parent unauthorized
                 if r.root_id is not None and r.root_id not in authorized_ids:
-                    # Parent is unauthorized, link to last authorized ancestor
                     new_root_id = find_last_authorized_ancestor(r)
-                    # Create a copy with updated root_id
-                    adjusted_recipe = Recipe(
-                        id=r.id,
-                        name=r.name,
-                        yield_quantity=r.yield_quantity,
-                        yield_unit=r.yield_unit,
-                        is_prep_recipe=r.is_prep_recipe,
-                        instructions_raw=r.instructions_raw,
-                        instructions_structured=r.instructions_structured,
-                        cost_price=r.cost_price,
-                        selling_price_est=r.selling_price_est,
-                        status=r.status,
-                        is_public=r.is_public,
-                        owner_id=r.owner_id,
-                        version=r.version,
-                        root_id=new_root_id,
-                        created_by=r.created_by,
-                        updated_by=r.updated_by,
-                        created_at=r.created_at,
-                        updated_at=r.updated_at,
-                    )
+                    adjusted_recipe = r.model_copy(update={"root_id": new_root_id})
                     result.append(adjusted_recipe)
                 else:
                     result.append(r)
             else:
-                # Unauthorized: return masked recipe with adjusted root_id
+                # Unauthorized: return masked recipe
                 new_root_id = find_last_authorized_ancestor(r)
-                masked = self._create_masked_recipe(r, new_root_id)
-                result.append(masked)
+                result.append(self._create_masked_recipe(r, new_root_id))
 
         return result

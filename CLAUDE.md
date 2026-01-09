@@ -79,14 +79,16 @@ app/
 │   ├── recipe_tasting_service.py    # Session-recipe relationships
 │   └── supplier_service.py      # Supplier CRUD + supplier-ingredient links
 ├── api/                 # FastAPI routers (one per resource)
-│   ├── recipes.py               # Recipe CRUD + fork
+│   ├── recipes.py               # Recipe CRUD + fork + versions
 │   ├── recipe_ingredients.py    # Recipe ingredient links
-│   ├── ingredients.py           # Ingredient CRUD + suppliers
-│   ├── instructions.py          # Recipe instructions
-│   ├── costing.py               # Recipe costing
-│   ├── sub_recipes.py           # Sub-recipe hierarchy
-│   ├── outlets.py               # Outlets + recipe-outlet links
-│   ├── tastings.py              # Tasting sessions + notes
+│   ├── ingredients.py           # Ingredient CRUD + suppliers + variants
+│   ├── instructions.py          # Recipe instructions (raw, parse, structured)
+│   ├── costing.py               # Recipe costing (calculate, recompute)
+│   ├── sub_recipes.py           # Sub-recipe hierarchy + BOM tree
+│   ├── outlets.py               # Outlets + recipe-outlet links + hierarchy
+│   ├── tastings.py              # Tasting sessions CRUD + stats
+│   ├── tasting_notes.py         # Tasting notes CRUD (nested under sessions)
+│   ├── tasting_history.py       # Recipe tasting history + summary
 │   ├── recipe_tastings.py       # Session-recipe relationships
 │   └── suppliers.py             # Supplier CRUD + ingredient links
 └── utils/               # Unit conversion helpers
@@ -156,26 +158,39 @@ All endpoints under `/api/v1`:
 
 **Recipe Sub-resources:**
 - `/recipes/{id}/fork` — create editable copy with ingredients & instructions (sets version + root_id)
-- `/recipes/{id}/versions` — get all recipes in version tree (ancestors + descendants)
+- `/recipes/{id}/versions` — get all recipes in version tree (with user_id filtering for visibility)
 - `/recipes/{id}/ingredients` — add, update, remove, reorder
 - `/recipes/{id}/sub-recipes` — sub-recipe hierarchy (BOM) with cycle detection
-- `/recipes/{id}/instructions` — raw, parse (LLM), structured
-- `/recipes/{id}/costing` — calculate, recompute
+- `/recipes/{id}/used-in` — reverse lookup: recipes that use this as sub-recipe
+- `/recipes/{id}/bom-tree` — full Bill of Materials tree (nested)
+- `/recipes/{id}/instructions/raw` — store raw instructions text
+- `/recipes/{id}/instructions/parse` — parse raw to structured (LLM)
+- `/recipes/{id}/instructions/structured` — update structured instructions
+- `/recipes/{id}/costing` — calculate cost breakdown
+- `/recipes/{id}/costing/recompute` — recompute and persist cost
 - `/recipes/{id}/outlets` — multi-brand outlet assignments
-- `/recipes/{id}/tasting-notes` — tasting history + summary
+- `/recipes/{id}/tasting-notes` — tasting history for recipe
+- `/recipes/{id}/tasting-summary` — aggregated tasting data for recipe
 
 **Ingredient Sub-resources:**
+- `/ingredients/categories` — list all food categories
 - `/ingredients/{id}/suppliers` — add, update, remove supplier entries
+- `/ingredients/{id}/suppliers/preferred` — get preferred supplier
 - `/ingredients/{id}/variants` — get ingredient variants
 
 **Supplier Sub-resources:**
 - `/suppliers/{id}/ingredients` — get ingredients linked to a supplier
 
-**Tasting & Outlets:**
+**Tasting Sessions:**
 - `/tasting-sessions` — CRUD + stats
-- `/tasting-sessions/{id}/notes` — tasting notes per session
-- `/tasting-sessions/{id}/recipes` — session-recipe relationships (add/remove recipes to session)
+- `/tasting-sessions/{id}/stats` — get session statistics
+- `/tasting-sessions/{id}/notes` — full CRUD for tasting notes
+- `/tasting-sessions/{id}/recipes` — session-recipe relationships (add/remove)
+
+**Outlets:**
 - `/outlets` — CRUD for multi-brand/location support
+- `/outlets/{id}/recipes` — get recipes assigned to outlet
+- `/outlets/{id}/hierarchy` — get outlet hierarchy tree
 
 ## Environment Variables
 

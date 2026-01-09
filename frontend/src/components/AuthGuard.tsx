@@ -1,10 +1,35 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
+
+// Valid route patterns in the app
+const VALID_ROUTE_PATTERNS = [
+  /^\/$/,                                    // Home
+  /^\/login$/,                               // Login
+  /^\/register$/,                            // Register
+  /^\/recipes$/,                             // Recipes list
+  /^\/recipes\/[^/]+$/,                      // Recipe detail
+  /^\/ingredients$/,                         // Ingredients list
+  /^\/ingredients\/[^/]+$/,                  // Ingredient detail
+  /^\/suppliers$/,                           // Suppliers list
+  /^\/suppliers\/[^/]+$/,                    // Supplier detail
+  /^\/tastings$/,                            // Tastings list
+  /^\/tastings\/new$/,                       // New tasting
+  /^\/tastings\/[^/]+$/,                     // Tasting detail
+  /^\/tastings\/[^/]+\/r\/[^/]+$/,           // Tasting recipe notes
+  /^\/finance$/,                             // Finance
+  /^\/rnd$/,                                 // R&D
+  /^\/rnd\/r\/[^/]+$/,                       // R&D recipe detail
+  /^\/design-system$/,                       // Design system
+];
+
+function isValidRoute(pathname: string): boolean {
+  return VALID_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
+}
 const LAST_ROUTE_KEY = 'prepper_last_route';
 
 function getLastRoute(): string {
@@ -20,17 +45,21 @@ function setLastRoute(route: string) {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { userId } = useAppState();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   const isAuthenticated = !!userId;
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+  const isNotFound = !isValidRoute(pathname);
 
-  // Save last visited route (excluding public routes)
+  // Save last visited route (only for valid, non-public routes)
   useEffect(() => {
-    if (!isPublicRoute && pathname) {
-      setLastRoute(pathname);
+    if (isValidRoute(pathname) && !isPublicRoute) {
+      const queryString = searchParams.toString();
+      const fullRoute = queryString ? `${pathname}?${queryString}` : pathname;
+      setLastRoute(fullRoute);
     }
-  }, [pathname, isPublicRoute]);
+  }, [pathname, searchParams, isPublicRoute]);
 
   useEffect(() => {
     if (isAuthenticated && isPublicRoute) {
@@ -41,9 +70,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       // Not logged in on protected page -> redirect to login
       router.replace('/login');
     }
-  }, [isAuthenticated, isPublicRoute, router]);
+  }, [isAuthenticated, isPublicRoute, isNotFound, router]);
 
   // Show nothing while redirecting
+  if (isNotFound) {
+    return null;
+  }
   if (isAuthenticated && isPublicRoute) {
     return null;
   }

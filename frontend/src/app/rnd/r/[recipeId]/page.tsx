@@ -47,7 +47,7 @@ interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
 }
 
-type TabType = 'overview' | 'actionables' | 'versions';
+type TabType = 'overview' | 'followups' | 'versions';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
   draft: 'secondary',
@@ -895,7 +895,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
 
   const tabFromUrl = searchParams.get('tab') as TabType | null;
   const [activeTab, setActiveTab] = useState<TabType>(
-    tabFromUrl && ['overview', 'actionables', 'versions'].includes(tabFromUrl)
+    tabFromUrl && ['overview', 'followups', 'versions'].includes(tabFromUrl)
       ? tabFromUrl
       : 'overview'
   );
@@ -917,7 +917,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
-    { id: 'actionables' as const, label: 'Actionables', icon: ClipboardList },
+    { id: 'followups' as const, label: 'Follow Ups', icon: ClipboardList },
     { id: 'versions' as const, label: 'Version History', icon: History },
   ];
 
@@ -998,7 +998,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
               />
             )}
 
-            {activeTab === 'actionables' && (
+            {activeTab === 'followups' && (
               <ActionablesTab tastingNotes={tastingNotes} recipeId={recipeId} />
             )}
 

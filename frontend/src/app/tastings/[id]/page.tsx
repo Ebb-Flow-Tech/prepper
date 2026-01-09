@@ -164,13 +164,15 @@ function SessionRecipesSection({
                 >
                   {recipe?.name || `Recipe #${sr.recipe_id}`}
                 </Link>
-                <button
-                  onClick={() => onRemoveRecipe(sr.recipe_id)}
-                  className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
-                  title="Remove from session"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                {!isExpired && (
+                  <button
+                    onClick={() => onRemoveRecipe(sr.recipe_id)}
+                    className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
+                    title="Remove from session"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             );
           })}
