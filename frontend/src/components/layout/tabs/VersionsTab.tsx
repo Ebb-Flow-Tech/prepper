@@ -11,6 +11,7 @@ import {
   type Node,
   type Edge,
   type NodeProps,
+  type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Calendar, User, History } from 'lucide-react';
@@ -29,17 +30,15 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
 interface VersionNodeData extends Record<string, unknown> {
   recipe: Recipe;
   isCurrentRecipe: boolean;
-  onNavigate: (id: number) => void;
 }
 
 type VersionNodeType = Node<VersionNodeData, 'versionNode'>;
 
 const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
-  const { recipe, isCurrentRecipe, onNavigate } = data;
+  const { recipe, isCurrentRecipe } = data;
 
   return (
     <div
-      onClick={() => onNavigate(recipe.id)}
       className={cn(
         'cursor-pointer rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
         isCurrentRecipe
@@ -104,8 +103,7 @@ const nodeTypes = {
 
 function buildVersionGraph(
   versions: Recipe[],
-  selectedRecipeId: number | null,
-  onNavigate: (id: number) => void
+  selectedRecipeId: number | null
 ): { nodes: VersionNodeType[]; edges: Edge[] } {
   if (!versions.length) return { nodes: [], edges: [] };
 
@@ -209,7 +207,6 @@ function buildVersionGraph(
       data: {
         recipe,
         isCurrentRecipe: recipe.id === selectedRecipeId,
-        onNavigate,
       },
       draggable: false,
       selectable: false,
@@ -240,15 +237,57 @@ function buildVersionGraph(
   return { nodes, edges };
 }
 
+function VersionNodeSkeleton() {
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 min-w-[280px] max-w-[320px]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Title row */}
+          <Skeleton className="h-5 w-32" />
+          {/* Version and date row */}
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          {/* Author row */}
+          <Skeleton className="h-3 w-24" />
+        </div>
+        {/* Status badge */}
+        <Skeleton className="h-5 w-14 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
 function VersionTreeSkeleton() {
   return (
-    <div className="space-y-6 p-8">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex flex-col items-center">
-          <Skeleton className="h-24 w-72 rounded-lg" />
-          {i < 3 && <Skeleton className="h-12 w-0.5 mt-2" />}
+    <div className="p-8">
+      {/* Horizontal tree layout with connecting lines */}
+      <div className="flex items-center gap-6">
+        {/* Root node */}
+        <VersionNodeSkeleton />
+
+        {/* Connector line */}
+        <div className="flex items-center">
+          <Skeleton className="h-0.5 w-12" />
+          <Skeleton className="h-2 w-2 rounded-full" />
         </div>
-      ))}
+
+        {/* Branch with two children */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-6">
+            <VersionNodeSkeleton />
+            <div className="flex items-center">
+              <Skeleton className="h-0.5 w-12" />
+              <Skeleton className="h-2 w-2 rounded-full" />
+            </div>
+            <VersionNodeSkeleton />
+          </div>
+          <div className="flex items-center gap-6">
+            <VersionNodeSkeleton />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -258,14 +297,14 @@ export function VersionsTab() {
   const { selectedRecipeId } = useAppState();
   const { data: versions, isLoading, error } = useRecipeVersions(selectedRecipeId);
 
-  const handleNodeNavigate = useCallback((id: number) => {
-    router.push(`/recipes/${id}`);
+  const handleNodeClick: NodeMouseHandler<VersionNodeType> = useCallback((_event, node) => {
+    router.push(`/?recipe=${node.data.recipe.id}`);
   }, [router]);
 
   const { nodes, edges } = useMemo(() => {
     if (!versions) return { nodes: [], edges: [] };
-    return buildVersionGraph(versions, selectedRecipeId, handleNodeNavigate);
-  }, [versions, selectedRecipeId, handleNodeNavigate]);
+    return buildVersionGraph(versions, selectedRecipeId);
+  }, [versions, selectedRecipeId]);
 
   if (!selectedRecipeId) {
     return (
@@ -332,6 +371,7 @@ export function VersionsTab() {
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          onNodeClick={handleNodeClick}
           defaultViewport={{ x: 50, y: 200, zoom: 1 }}
           nodesDraggable={false}
           nodesConnectable={false}
