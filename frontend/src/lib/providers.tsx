@@ -24,13 +24,10 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AppProvider>
-          <AuthGuard>
-            {children}
-          </AuthGuard>
+          <AuthGuard>{children}</AuthGuard>
           <Toaster position="bottom-center" richColors />
         </AppProvider>
       </ThemeProvider>
-
     </QueryClientProvider>
   );
 }

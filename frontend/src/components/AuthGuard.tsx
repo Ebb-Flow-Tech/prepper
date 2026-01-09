@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 
@@ -42,17 +42,10 @@ function setLastRoute(route: string) {
   localStorage.setItem(LAST_ROUTE_KEY, route);
 }
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { userId } = useAppState();
-  const pathname = usePathname();
+// Separate component for search params to isolate Suspense boundary
+function RouteTracker({ pathname, isPublicRoute }: { pathname: string; isPublicRoute: boolean }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
-  const isAuthenticated = !!userId;
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
-  const isNotFound = !isValidRoute(pathname);
-
-  // Save last visited route (only for valid, non-public routes)
   useEffect(() => {
     if (isValidRoute(pathname) && !isPublicRoute) {
       const queryString = searchParams.toString();
@@ -60,6 +53,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       setLastRoute(fullRoute);
     }
   }, [pathname, searchParams, isPublicRoute]);
+
+  return null;
+}
+
+export function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { userId } = useAppState();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const isAuthenticated = !!userId;
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+  const isNotFound = !isValidRoute(pathname);
 
   useEffect(() => {
     if (isAuthenticated && isPublicRoute) {
@@ -83,5 +88,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <Suspense fallback={null}>
+        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} />
+      </Suspense>
+      {children}
+    </>
+  );
 }
