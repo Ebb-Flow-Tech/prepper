@@ -1,0 +1,1024 @@
+'use client';
+
+import { use, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  Edit2,
+  Eye,
+  ImagePlus,
+  Clock,
+  Thermometer,
+  Star,
+  CheckCircle,
+  AlertCircle,
+  XCircle,
+  Wine,
+  ClipboardList,
+  History,
+  LayoutGrid,
+  Square,
+  CheckSquare,
+  Plus,
+} from 'lucide-react';
+import {
+  ReactFlow,
+  Background,
+  Handle,
+  Position,
+  MarkerType,
+  type Node,
+  type Edge,
+  type NodeProps,
+  type NodeMouseHandler,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { memo } from 'react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions } from '@/lib/hooks';
+import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useAppState } from '@/lib/store';
+import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
+import { formatCurrency, formatTimer, cn } from '@/lib/utils';
+import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary } from '@/types';
+
+interface RndRecipePageProps {
+  params: Promise<{ recipeId: string }>;
+}
+
+type TabType = 'overview' | 'actionables' | 'versions';
+
+const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
+  draft: 'secondary',
+  active: 'success',
+  archived: 'warning',
+};
+
+const DECISION_CONFIG: Record<TastingDecision, { label: string; icon: typeof CheckCircle; variant: 'success' | 'warning' | 'destructive' }> = {
+  approved: { label: 'Approved', icon: CheckCircle, variant: 'success' },
+  needs_work: { label: 'Needs Work', icon: AlertCircle, variant: 'warning' },
+  rejected: { label: 'Rejected', icon: XCircle, variant: 'destructive' },
+};
+
+function StarRating({ rating }: { rating: number | null }) {
+  if (!rating) return <span className="text-zinc-400">-</span>;
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`h-3.5 w-3.5 ${
+            star <= rating
+              ? 'fill-amber-400 text-amber-400'
+              : 'text-zinc-300 dark:text-zinc-600'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function formatTastingDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+// ============ Version Tree Components ============
+
+interface VersionNodeData extends Record<string, unknown> {
+  recipe: Recipe;
+  isCurrentRecipe: boolean;
+  isLeaf: boolean;
+}
+
+type VersionNodeType = Node<VersionNodeData, 'versionNode'>;
+
+const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
+  const { recipe, isCurrentRecipe, isLeaf } = data;
+
+  const handleForkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.location.href = `/?recipe=${recipe.id}`;
+  };
+
+  return (
+    <div
+      className={cn(
+        'relative rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
+        isCurrentRecipe
+          ? 'border-blue-500 bg-blue-50 shadow-blue-100 dark:border-blue-400 dark:bg-blue-950 dark:shadow-blue-900/20'
+          : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
+      )}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-zinc-400 !w-2 !h-2 !border-0"
+      />
+
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+              {recipe.name}
+            </h3>
+            {isCurrentRecipe && (
+              <Badge className="bg-blue-500 text-white text-xs shrink-0">
+                Current
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+            <span className="flex items-center gap-1">
+              <History className="h-3.5 w-3.5" />
+              v{recipe.version}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {new Date(recipe.created_at).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+        <Badge variant={STATUS_VARIANTS[recipe.status]} className="shrink-0">
+          {recipe.status}
+        </Badge>
+      </div>
+
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-zinc-400 !w-2 !h-2 !border-0"
+      />
+
+      {/* Fork button for leaf nodes */}
+      {isLeaf && (
+        <button
+          onClick={handleForkClick}
+          className="absolute -right-4 top-1/2 -translate-y-1/2 translate-x-full ml-2 p-1.5 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-md transition-colors"
+          title="Fork this recipe"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+});
+
+VersionNode.displayName = 'VersionNode';
+
+const nodeTypes = {
+  versionNode: VersionNode,
+};
+
+function buildVersionGraph(
+  versions: Recipe[],
+  selectedRecipeId: number | null
+): { nodes: VersionNodeType[]; edges: Edge[] } {
+  if (!versions.length) return { nodes: [], edges: [] };
+
+  const recipeMap = new Map<number, Recipe>();
+  for (const recipe of versions) {
+    recipeMap.set(recipe.id, recipe);
+  }
+
+  const childrenMap = new Map<number, Recipe[]>();
+  let rootRecipe: Recipe | null = null;
+
+  for (const recipe of versions) {
+    if (recipe.root_id === null) {
+      rootRecipe = recipe;
+    } else if (recipeMap.has(recipe.root_id)) {
+      const children = childrenMap.get(recipe.root_id) || [];
+      children.push(recipe);
+      childrenMap.set(recipe.root_id, children);
+    }
+  }
+
+  if (!rootRecipe) {
+    rootRecipe = [...versions].sort((a, b) => a.version - b.version)[0];
+  }
+
+  const NODE_WIDTH = 320;
+  const NODE_HEIGHT = 120;
+  const HORIZONTAL_SPACING = 80;
+  const VERTICAL_SPACING = 40;
+
+  const levelMap = new Map<number, number>();
+  const nodesAtLevel = new Map<number, Recipe[]>();
+  const queue: { recipe: Recipe; level: number }[] = [{ recipe: rootRecipe, level: 0 }];
+  const visited = new Set<number>();
+
+  while (queue.length > 0) {
+    const { recipe, level } = queue.shift()!;
+    if (visited.has(recipe.id)) continue;
+    visited.add(recipe.id);
+
+    levelMap.set(recipe.id, level);
+    const levelNodes = nodesAtLevel.get(level) || [];
+    levelNodes.push(recipe);
+    nodesAtLevel.set(level, levelNodes);
+
+    const children = childrenMap.get(recipe.id) || [];
+    children.sort((a, b) => a.version - b.version);
+    for (const child of children) {
+      if (!visited.has(child.id)) {
+        queue.push({ recipe: child, level: level + 1 });
+      }
+    }
+  }
+
+  for (const recipe of versions) {
+    if (!visited.has(recipe.id)) {
+      const level = recipe.version - 1;
+      levelMap.set(recipe.id, level);
+      const levelNodes = nodesAtLevel.get(level) || [];
+      levelNodes.push(recipe);
+      nodesAtLevel.set(level, levelNodes);
+    }
+  }
+
+  const positionMap = new Map<number, { x: number; y: number }>();
+  const maxLevel = Math.max(...Array.from(nodesAtLevel.keys()));
+
+  for (let level = 0; level <= maxLevel; level++) {
+    const nodesInLevel = nodesAtLevel.get(level) || [];
+    const totalHeight = nodesInLevel.length * NODE_HEIGHT + (nodesInLevel.length - 1) * VERTICAL_SPACING;
+    const startY = -totalHeight / 2 + NODE_HEIGHT / 2;
+
+    nodesInLevel.forEach((recipe, index) => {
+      positionMap.set(recipe.id, {
+        x: level * (NODE_WIDTH + HORIZONTAL_SPACING),
+        y: startY + index * (NODE_HEIGHT + VERTICAL_SPACING),
+      });
+    });
+  }
+
+  const nodes: VersionNodeType[] = versions.map((recipe) => {
+    const position = positionMap.get(recipe.id) || { x: 0, y: 0 };
+    // A node is a leaf if it has no children
+    const isLeaf = !childrenMap.has(recipe.id) || childrenMap.get(recipe.id)!.length === 0;
+    return {
+      id: String(recipe.id),
+      type: 'versionNode',
+      position,
+      data: {
+        recipe,
+        isCurrentRecipe: recipe.id === selectedRecipeId,
+        isLeaf,
+      },
+      draggable: false,
+      selectable: false,
+    };
+  });
+
+  const edges: Edge[] = [];
+  for (const recipe of versions) {
+    if (recipe.root_id !== null && recipeMap.has(recipe.root_id)) {
+      edges.push({
+        id: `e${recipe.root_id}-${recipe.id}`,
+        source: String(recipe.root_id),
+        target: String(recipe.id),
+        type: 'smoothstep',
+        animated: false,
+        style: { stroke: '#71717a', strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#71717a',
+          width: 20,
+          height: 20,
+        },
+      });
+    }
+  }
+
+  return { nodes, edges };
+}
+
+// ============ Actionable Item Component ============
+
+interface ActionableItem {
+  id: string;
+  text: string;
+  noteId: number;
+  sessionName: string | null;
+  sessionDate: string | null;
+  checked: boolean;
+}
+
+function ActionablesList({
+  actionables,
+  onToggle
+}: {
+  actionables: ActionableItem[];
+  onToggle: (id: string) => void;
+}) {
+  const uncheckedCount = actionables.filter(a => !a.checked).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Follow Ups ({uncheckedCount} tasks left)
+        </h2>
+      </div>
+
+      {actionables.length === 0 ? (
+        <div className="text-center py-12">
+          <ClipboardList className="h-12 w-12 mx-auto mb-4 text-zinc-300 dark:text-zinc-600" />
+          <p className="text-zinc-500 dark:text-zinc-400">
+            No actionables from tastings yet
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {actionables.map((item) => (
+            <li
+              key={item.id}
+              className={cn(
+                'flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
+                item.checked
+                  ? 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
+                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+              )}
+              onClick={() => onToggle(item.id)}
+            >
+              <button
+                className="mt-0.5 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(item.id);
+                }}
+              >
+                {item.checked ? (
+                  <CheckSquare className="h-5 w-5 text-green-600 dark:text-green-400" />
+                ) : (
+                  <Square className="h-5 w-5 text-zinc-400 dark:text-zinc-500" />
+                )}
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className={cn(
+                  'text-sm',
+                  item.checked
+                    ? 'text-zinc-400 dark:text-zinc-500 line-through'
+                    : 'text-zinc-700 dark:text-zinc-300'
+                )}>
+                  {item.text}
+                </p>
+                {item.sessionName && (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+                    From: {item.sessionName}
+                    {item.sessionDate && ` (${formatTastingDate(item.sessionDate)})`}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ============ Tab Components ============
+
+function OverviewTab({
+  recipe,
+  ingredients,
+  costing,
+  subRecipes,
+  recipeMap,
+  tastingNotes,
+  tastingSummary,
+  userId,
+}: {
+  recipe: Recipe;
+  ingredients: RecipeIngredient[] | undefined;
+  costing: CostingResult | undefined;
+  subRecipes: SubRecipe[] | undefined;
+  recipeMap: Map<number, string>;
+  tastingNotes: TastingNoteWithRecipe[] | undefined;
+  tastingSummary: RecipeTastingSummary | undefined;
+  userId: string | null;
+}) {
+  return (
+    <>
+      {/* Recipe Header */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-6">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
+              <ImagePlus className="h-8 w-8" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                    {recipe.name}
+                  </h1>
+                  <p className="text-zinc-500 dark:text-zinc-400 mt-1">
+                    Yield: {recipe.yield_quantity} {recipe.yield_unit}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {userId !== null && recipe.owner_id === userId && (
+                    <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                  )}
+                  <Badge variant={STATUS_VARIANTS[recipe.status]}>
+                    {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+                  </Badge>
+                  <Link href={`/?recipe=${recipe.id}`}>
+                    <Button variant="outline" size="sm">
+                      {userId !== null && recipe.owner_id === userId ? (
+                        <Edit2 className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                      {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+                Created: {new Date(recipe.created_at).toLocaleDateString()}
+                {recipe.updated_at !== recipe.created_at && (
+                  <span className="ml-4">
+                    Updated: {new Date(recipe.updated_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ingredients | Sub Recipes | Costing Grid */}
+      <div className="grid gap-6 md:grid-cols-3 mb-6">
+        {/* Ingredients Card */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+              Ingredients
+            </h2>
+
+            {ingredients && ingredients.length > 0 ? (
+              <ul className="space-y-2">
+                {ingredients.map((ri) => (
+                  <li
+                    key={ri.id}
+                    className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
+                  >
+                    <div>
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {ri.ingredient?.name || `Ingredient #${ri.ingredient_id}`}
+                      </span>
+                    </div>
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {ri.quantity} {ri.unit}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-zinc-400 dark:text-zinc-500">
+                No ingredients added yet
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Sub Recipes Card */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+              Sub Recipes
+            </h2>
+
+            {subRecipes && subRecipes.length > 0 ? (
+              <ul className="space-y-2">
+                {[...subRecipes]
+                  .sort((a, b) => a.position - b.position)
+                  .map((sr) => (
+                    <li
+                      key={sr.id}
+                      className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
+                    >
+                      <div>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                          {recipeMap.get(sr.child_recipe_id) || `Recipe #${sr.child_recipe_id}`}
+                        </span>
+                      </div>
+                      <span className="text-zinc-500 dark:text-zinc-400">
+                        {sr.quantity} {sr.unit}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <p className="text-zinc-400 dark:text-zinc-500">
+                No sub-recipes added yet
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Costing Card */}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+              Costing
+            </h2>
+
+            {costing ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Batch Cost</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    {formatCurrency(costing.total_batch_cost)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <span className="text-zinc-500 dark:text-zinc-400">Cost per Portion</span>
+                  <span className="font-semibold text-xl text-zinc-900 dark:text-zinc-100">
+                    {formatCurrency(costing.cost_per_portion)}
+                  </span>
+                </div>
+
+                {recipe.selling_price_est && costing.cost_per_portion && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Margin</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {((1 - costing.cost_per_portion / recipe.selling_price_est) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-zinc-400 dark:text-zinc-500">
+                No costing data available
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Instructions Card */}
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+            Instructions
+          </h2>
+
+          {recipe.instructions_structured?.steps && recipe.instructions_structured.steps.length > 0 ? (
+            <ol className="space-y-4">
+              {recipe.instructions_structured.steps.map((step, index) => (
+                <li key={index} className="flex gap-4">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    {step.order || index + 1}
+                  </span>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-zinc-700 dark:text-zinc-300">{step.text}</p>
+                    <div className="mt-2 flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+                      {step.timer_seconds && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          {formatTimer(step.timer_seconds)}
+                        </span>
+                      )}
+                      {step.temperature_c && (
+                        <span className="flex items-center gap-1">
+                          <Thermometer className="h-4 w-4" />
+                          {step.temperature_c}°C
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : recipe.instructions_raw ? (
+            <div className="prose prose-zinc dark:prose-invert max-w-none">
+              <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+                {recipe.instructions_raw}
+              </p>
+            </div>
+          ) : (
+            <p className="text-zinc-400 dark:text-zinc-500">
+              No instructions added yet
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tasting History Card */}
+      <Card className="mt-6">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Tasting History
+              </h2>
+            </div>
+            {tastingSummary && tastingSummary.total_tastings > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-zinc-500">
+                  {tastingSummary.total_tastings} tasting{tastingSummary.total_tastings !== 1 ? 's' : ''}
+                </span>
+                {tastingSummary.average_overall_rating && (
+                  <div className="flex items-center gap-1 text-sm">
+                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    <span className="font-medium">{tastingSummary.average_overall_rating.toFixed(1)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {tastingNotes && tastingNotes.length > 0 ? (
+            <div className="space-y-3">
+              {tastingNotes.slice(0, 5).map((note) => {
+                const config = note.decision ? DECISION_CONFIG[note.decision] : null;
+                const Icon = config?.icon;
+                return (
+                  <div
+                    key={note.id}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link
+                          href={`/tastings/${note.session_id}`}
+                          className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+                        >
+                          {note.session_name}
+                        </Link>
+                        {config && (
+                          <Badge variant={config.variant} className="text-xs">
+                            {Icon && <Icon className="h-3 w-3 mr-1" />}
+                            {config.label}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+                        {note.session_date && (
+                          <span>{formatTastingDate(note.session_date)}</span>
+                        )}
+                        {note.overall_rating && (
+                          <StarRating rating={note.overall_rating} />
+                        )}
+                      </div>
+                      {note.feedback && (
+                        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300 line-clamp-2">
+                          &ldquo;{note.feedback}&rdquo;
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {tastingNotes.length > 5 && (
+                <Link
+                  href="/tastings"
+                  className="block text-center text-sm text-purple-600 dark:text-purple-400 hover:underline pt-2"
+                >
+                  View all {tastingNotes.length} tastings
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Wine className="h-8 w-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+              <p className="text-zinc-400 dark:text-zinc-500">
+                No tastings recorded yet
+              </p>
+              <Link href="/tastings/new" className="mt-2 inline-block">
+                <Button variant="outline" size="sm">
+                  Create Tasting Session
+                </Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function ActionablesTab({
+  tastingNotes
+}: {
+  tastingNotes: TastingNoteWithRecipe[] | undefined;
+}) {
+  // Local state for checked items (persisted in localStorage)
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('rnd-actionables-checked');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    }
+    return new Set();
+  });
+
+  // Extract actionables from tasting notes, filtering out empty ones
+  const actionables = useMemo(() => {
+    if (!tastingNotes) return [];
+
+    const items: ActionableItem[] = [];
+
+    for (const note of tastingNotes) {
+      if (note.action_items && note.action_items.trim()) {
+        // Split by newlines or bullet points to get individual items
+        const lines = note.action_items
+          .split(/[\n\r]+/)
+          .map(line => line.replace(/^[-*•]\s*/, '').trim())
+          .filter(line => line.length > 0);
+
+        for (let i = 0; i < lines.length; i++) {
+          const id = `${note.id}-${i}`;
+          items.push({
+            id,
+            text: lines[i],
+            noteId: note.id,
+            sessionName: note.session_name,
+            sessionDate: note.session_date,
+            checked: checkedItems.has(id),
+          });
+        }
+      }
+    }
+
+    return items;
+  }, [tastingNotes, checkedItems]);
+
+  const handleToggle = useCallback((id: string) => {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('rnd-actionables-checked', JSON.stringify([...next]));
+      }
+      return next;
+    });
+  }, []);
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <ActionablesList actionables={actionables} onToggle={handleToggle} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function VersionsTab({
+  recipeId,
+  versions,
+  isLoading,
+  error,
+}: {
+  recipeId: number;
+  versions: Recipe[] | undefined;
+  isLoading: boolean;
+  error: Error | null;
+}) {
+  const router = useRouter();
+
+  const handleNodeClick: NodeMouseHandler<VersionNodeType> = useCallback((_event, node) => {
+    router.push(`/rnd/r/${node.data.recipe.id}?tab=versions`);
+  }, [router]);
+
+  const { nodes, edges } = useMemo(() => {
+    if (!versions) return { nodes: [], edges: [] };
+    return buildVersionGraph(versions, recipeId);
+  }, [versions, recipeId]);
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+            Failed to load version history
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-[400px] w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!versions || versions.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center py-12">
+            <History className="h-12 w-12 mx-auto mb-4 text-zinc-300 dark:text-zinc-600" />
+            <p className="text-zinc-500 dark:text-zinc-400">
+              No version history available
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="p-0 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center gap-2 p-4 border-b border-zinc-200 dark:border-zinc-800">
+          <History className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            Version History
+          </h2>
+          <Badge variant="secondary" className="ml-auto">
+            {versions.length} version{versions.length !== 1 ? 's' : ''}
+          </Badge>
+        </div>
+
+        {/* React Flow Canvas */}
+        <div className="h-[500px]">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodeClick={handleNodeClick}
+            defaultViewport={{ x: 50, y: 200, zoom: 1 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            panOnDrag={false}
+            panOnScroll={true}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            minZoom={1}
+            maxZoom={1}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background color="#e4e4e7" gap={16} />
+          </ReactFlow>
+        </div>
+
+        {/* Footer hint */}
+        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 text-center">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Click a version node to view that recipe
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============ Main Page Component ============
+
+export default function RndRecipePage({ params }: RndRecipePageProps) {
+  const { recipeId: recipeIdStr } = use(params);
+  const recipeId = parseInt(recipeIdStr, 10);
+  const { userId } = useAppState();
+  const searchParams = useSearchParams();
+
+  const tabFromUrl = searchParams.get('tab') as TabType | null;
+  const [activeTab, setActiveTab] = useState<TabType>(
+    tabFromUrl && ['overview', 'actionables', 'versions'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'overview'
+  );
+
+  const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(recipeId);
+  const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(recipeId);
+  const { data: costing, isLoading: costingLoading } = useCosting(recipeId);
+  const { data: subRecipes, isLoading: subRecipesLoading } = useSubRecipes(recipeId);
+  const { data: allRecipes } = useRecipes();
+  const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
+  const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
+  const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId);
+
+  const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
+
+  // Create a map of recipe IDs to names for sub-recipe display
+  const recipeMap = new Map<number, string>();
+  allRecipes?.forEach((r) => recipeMap.set(r.id, r.name));
+
+  const tabs = [
+    { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
+    { id: 'actionables' as const, label: 'Actionables', icon: ClipboardList },
+    { id: 'versions' as const, label: 'Version History', icon: History },
+  ];
+
+  if (recipeError) {
+    return (
+      <div className="p-6">
+        <Link
+          href="/rnd"
+          className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to R&D
+        </Link>
+        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          Recipe not found or failed to load.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-auto">
+      <div className="p-6 max-w-5xl mx-auto">
+        {/* Back Link */}
+        <Link
+          href="/rnd"
+          className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to R&D
+        </Link>
+
+        {isLoading ? (
+          <div className="space-y-6">
+            <Skeleton className="h-10 w-64 rounded-lg" />
+            <Skeleton className="h-32 rounded-lg" />
+            <div className="grid gap-6 md:grid-cols-2">
+              <Skeleton className="h-48 rounded-lg" />
+              <Skeleton className="h-48 rounded-lg" />
+            </div>
+            <Skeleton className="h-64 rounded-lg" />
+          </div>
+        ) : recipe ? (
+          <>
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-1 mb-6 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg w-fit">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                      activeTab === tab.id
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'overview' && (
+              <OverviewTab
+                recipe={recipe}
+                ingredients={ingredients}
+                costing={costing}
+                subRecipes={subRecipes}
+                recipeMap={recipeMap}
+                tastingNotes={tastingNotes}
+                tastingSummary={tastingSummary}
+                userId={userId}
+              />
+            )}
+
+            {activeTab === 'actionables' && (
+              <ActionablesTab tastingNotes={tastingNotes} />
+            )}
+
+            {activeTab === 'versions' && (
+              <VersionsTab
+                recipeId={recipeId}
+                versions={versions}
+                isLoading={versionsLoading}
+                error={versionsError}
+              />
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}

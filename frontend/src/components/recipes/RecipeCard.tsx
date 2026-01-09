@@ -10,6 +10,7 @@ interface RecipeCardProps {
   recipe: Recipe;
   costPerPortion?: number | null;
   isOwned?: boolean;
+  href?: string;
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -18,9 +19,9 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeCard({ recipe, costPerPortion, isOwned }: RecipeCardProps) {
+export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCardProps) {
   return (
-    <Link href={`/recipes/${recipe.id}`} className="block">
+    <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
         <CardHeader>
           <div className="flex-1 min-w-0">
