@@ -55,6 +55,9 @@ class Recipe(RecipeBase, table=True):
         description="ID of the original recipe this was forked from",
     )
 
+    # Image
+    image_url: str | None = Field(default=None, description="URL to recipe image in storage")
+
     # Authorship tracking
     created_by: str | None = Field(default=None, max_length=100)
     updated_by: str | None = Field(default=None, max_length=100)
@@ -73,6 +76,7 @@ class RecipeCreate(RecipeBase):
     owner_id: str | None = None
     version: int = 1
     root_id: int | None = None
+    image_url: str | None = None
 
 
 class RecipeUpdate(SQLModel):
@@ -86,6 +90,7 @@ class RecipeUpdate(SQLModel):
     is_public: bool | None = None
     status: RecipeStatus | None = None
     updated_by: str | None = None
+    image_url: str | None = None
 
 
 class RecipeStatusUpdate(SQLModel):

@@ -4,12 +4,13 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ConfirmModal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
 function SupplierCard({ supplier }: { supplier: Supplier }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editName, setEditName] = useState(supplier.name);
   const [editAddress, setEditAddress] = useState(supplier.address || '');
   const [editPhone, setEditPhone] = useState(supplier.phone_number || '');
@@ -60,10 +61,16 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    if (!confirm(`Delete supplier "${supplier.name}"?`)) return;
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = () => {
     deleteSupplier.mutate(supplier.id, {
-      onSuccess: () => toast.success('Supplier deleted'),
+      onSuccess: () => {
+        toast.success('Supplier deleted');
+        setShowDeleteModal(false);
+      },
       onError: () => toast.error('Failed to delete supplier'),
     });
   };
@@ -102,11 +109,21 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleDelete}
+              onClick={handleDeleteClick}
               disabled={deleteSupplier.isPending}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+            <ConfirmModal
+              isOpen={showDeleteModal}
+              onClose={() => setShowDeleteModal(false)}
+              onConfirm={handleDeleteConfirm}
+              title="Delete Supplier"
+              message={`Are you sure you want to delete "${supplier.name}"? This action cannot be undone.`}
+              confirmLabel="Delete"
+              cancelLabel="Cancel"
+              variant="destructive"
+            />
           </div>
         )}
       </CardHeader>

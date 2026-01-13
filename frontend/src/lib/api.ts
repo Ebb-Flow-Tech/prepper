@@ -5,6 +5,7 @@ import type {
   CostingResult,
   CreateRecipeRequest,
   UpdateRecipeRequest,
+  UpdateRecipeImageRequest,
   CreateIngredientRequest,
   UpdateIngredientRequest,
   AddRecipeIngredientRequest,
@@ -131,6 +132,16 @@ export async function forkRecipe(
 export async function getRecipeVersions(recipeId: number, userId?: string | null): Promise<Recipe[]> {
   const params = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
   return fetchApi<Recipe[]>(`/recipes/${recipeId}/versions${params}`);
+}
+
+export async function updateRecipeImage(
+  id: number,
+  data: UpdateRecipeImageRequest
+): Promise<Recipe> {
+  return fetchApi<Recipe>(`/recipes/${id}/image`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
 }
 
 // ============ Recipe Ingredients ============

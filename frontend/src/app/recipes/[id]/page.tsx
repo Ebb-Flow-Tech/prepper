@@ -1,13 +1,13 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Edit2, Eye, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes } from '@/lib/hooks';
+import { ArrowLeft, Edit2, Eye, ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Pencil, X, Loader2 } from 'lucide-react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useGenerateRecipeImage } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
-import { formatCurrency, formatTimer } from '@/lib/utils';
+import { formatCurrency, formatTimer, cn } from '@/lib/utils';
 import type { RecipeStatus, TastingDecision } from '@/types';
 
 interface RecipePageProps {
@@ -33,11 +33,10 @@ function StarRating({ rating }: { rating: number | null }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={`h-3.5 w-3.5 ${
-            star <= rating
+          className={`h-3.5 w-3.5 ${star <= rating
               ? 'fill-amber-400 text-amber-400'
               : 'text-zinc-300 dark:text-zinc-600'
-          }`}
+            }`}
         />
       ))}
     </div>
@@ -51,10 +50,182 @@ function formatTastingDate(dateString: string): string {
   });
 }
 
+interface ImageEditModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  recipeId: number;
+  recipeName: string;
+  ingredientNames: string[];
+  currentImageUrl?: string | null;
+}
+
+function ImageEditModal({ isOpen, onClose, recipeId, recipeName, ingredientNames, currentImageUrl }: ImageEditModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const generateImage = useGenerateRecipeImage();
+
+  const handleGenerateImage = () => {
+    setError(null);
+    generateImage.mutate(
+      { recipeId, recipeName, ingredients: ingredientNames },
+      {
+        onSuccess: (data) => {
+          setGeneratedImageUrl(data.image_url);
+          // Close modal after successful storage
+          if (data.stored) {
+            onClose();
+          }
+        },
+        onError: (err) => {
+          setError(err instanceof Error ? err.message : 'Failed to generate image');
+        },
+      }
+    );
+  };
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
+
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [isOpen]);
+
+  // Reset state when modal opens, using current image if available
+  useEffect(() => {
+    if (isOpen) {
+      setGeneratedImageUrl(currentImageUrl || null);
+      setError(null);
+    }
+  }, [isOpen, currentImageUrl]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-modal-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        aria-hidden="true"
+        onClick={onClose}
+      />
+
+      {/* Modal content */}
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className={cn(
+          'relative z-10 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl',
+          'dark:bg-zinc-900 dark:border dark:border-zinc-800',
+          'focus:outline-none'
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <h2
+            id="image-modal-title"
+            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          >
+            Recipe Image
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            aria-label="Close modal"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Image Display */}
+        <div className="aspect-video w-full rounded-lg bg-gradient-to-br from-amber-100 via-orange-100 to-red-100 dark:from-amber-900/30 dark:via-orange-900/30 dark:to-red-900/30 flex items-center justify-center overflow-hidden">
+          {generateImage.isPending ? (
+            <div className="text-center">
+              <Loader2 className="h-16 w-16 mx-auto text-orange-400 dark:text-orange-600 mb-2 animate-spin" />
+              <p className="text-sm text-orange-400 dark:text-orange-600">Generating image...</p>
+            </div>
+          ) : generatedImageUrl ? (
+            <img
+              src={generatedImageUrl}
+              alt={`Generated image for ${recipeName}`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="text-center">
+              <ImagePlus className="h-16 w-16 mx-auto text-orange-300 dark:text-orange-700 mb-2" />
+              <p className="text-sm text-orange-400 dark:text-orange-600">Click generate to create an image</p>
+            </div>
+          )}
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 mt-6">
+          <Button
+            onClick={handleGenerateImage}
+            disabled={generateImage.isPending}
+          >
+            {generateImage.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : generatedImageUrl ? (
+              'Regenerate Image'
+            ) : (
+              'Generate Image'
+            )}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RecipePage({ params }: RecipePageProps) {
   const { id } = use(params);
   const recipeId = parseInt(id, 10);
-  const { userId } = useAppState();
+  const { userId, userType } = useAppState();
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  // Check if user can edit the recipe (owner or admin)
+  const canEdit = (recipe: { owner_id: string | null }) =>
+    userType === 'admin' || (userId !== null && recipe.owner_id === userId);
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(recipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(recipeId);
@@ -114,9 +285,28 @@ export default function RecipePage({ params }: RecipePageProps) {
             <Card className="mb-6">
               <CardContent className="p-6">
                 <div className="flex items-start gap-6">
-                  {/* Placeholder for hero image */}
-                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-                    <ImagePlus className="h-8 w-8" />
+                  {/* Recipe hero image */}
+                  <div className="relative w-24 h-24 md:w-32 md:h-32 shrink-0">
+                    {recipe.image_url ? (
+                      <img
+                        src={recipe.image_url}
+                        alt={recipe.name}
+                        className="w-full h-full rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                        <ImagePlus className="h-8 w-8" />
+                      </div>
+                    )}
+                    {canEdit(recipe) && (
+                      <button
+                        onClick={() => setIsImageModalOpen(true)}
+                        className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center shadow-md transition-colors"
+                        aria-label="Edit recipe image"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -416,6 +606,16 @@ export default function RecipePage({ params }: RecipePageProps) {
           </>
         ) : null}
       </div>
+
+      {/* Image Edit Modal */}
+      <ImageEditModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        recipeId={recipe?.id || 0}
+        recipeName={recipe?.name || ''}
+        ingredientNames={ingredients?.map((ri) => ri.ingredient?.name || '').filter(Boolean) || []}
+        currentImageUrl={recipe?.image_url}
+      />
     </div>
   );
 }

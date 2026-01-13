@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useRef, useEffect } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus } from 'lucide-react';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/lib/hooks';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, EditableCell, Input, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, ConfirmModal, EditableCell, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateSupplierIngredientRequest } from '@/types';
 
@@ -47,6 +47,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const updateIngredientMutation = useUpdateSupplierIngredient();
   const removeIngredientMutation = useRemoveSupplierIngredient();
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [formData, setFormData] = useState({
     ingredient_id: '',
     sku: '',
@@ -67,11 +68,15 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     );
   };
 
-  const handleDelete = () => {
-    if (!confirm(`Delete supplier "${supplier?.name}"? This action cannot be undone.`)) return;
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = () => {
     deleteSupplierMutation.mutate(supplierId, {
       onSuccess: () => {
         toast.success('Supplier deleted');
+        setShowDeleteModal(false);
         router.push('/suppliers');
       },
       onError: () => toast.error('Failed to delete supplier'),
@@ -209,13 +214,23 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleDelete}
+                          onClick={handleDeleteClick}
                           disabled={deleteSupplierMutation.isPending}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
                           Delete
                         </Button>
+                        <ConfirmModal
+                          isOpen={showDeleteModal}
+                          onClose={() => setShowDeleteModal(false)}
+                          onConfirm={handleDeleteConfirm}
+                          title="Delete Supplier"
+                          message={`Are you sure you want to delete "${supplier.name}"? This action cannot be undone.`}
+                          confirmLabel="Delete"
+                          cancelLabel="Cancel"
+                          variant="destructive"
+                        />
                       </div>
                     </div>
 
