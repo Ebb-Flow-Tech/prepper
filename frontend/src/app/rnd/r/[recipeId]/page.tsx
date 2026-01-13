@@ -418,9 +418,17 @@ function OverviewTab({
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-              <ImagePlus className="h-8 w-8" />
-            </div>
+            {recipe.image_url ? (
+              <img
+                src={recipe.image_url}
+                alt={recipe.name}
+                className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
+                <ImagePlus className="h-8 w-8" />
+              </div>
+            )}
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-4">

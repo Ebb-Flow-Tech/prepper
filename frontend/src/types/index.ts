@@ -28,6 +28,7 @@ export interface Recipe {
   owner_id: string | null;
   version: number;
   root_id: number | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
@@ -106,6 +107,7 @@ export interface CreateRecipeRequest {
   owner_id?: string;
   version?: number;
   root_id?: number | null;
+  image_url?: string | null;
 }
 
 export interface UpdateRecipeRequest {
@@ -117,6 +119,11 @@ export interface UpdateRecipeRequest {
   instructions_structured?: InstructionsStructured | null;
   status?: RecipeStatus;
   is_public?: boolean;
+  image_url?: string | null;
+}
+
+export interface UpdateRecipeImageRequest {
+  image_base64: string;
 }
 
 export interface CreateIngredientRequest {

@@ -1,18 +1,27 @@
 """Recipe core API routes."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
 from app.models import Recipe, RecipeCreate, RecipeUpdate, RecipeStatus, RecipeStatusUpdate
-from app.domain import RecipeService
+from app.domain import RecipeService, StorageService, StorageError, is_storage_configured
 
 
 class ForkRecipeRequest(BaseModel):
     """Request body for forking a recipe."""
 
     new_owner_id: str | None = None
+
+
+class UpdateRecipeImageRequest(BaseModel):
+    """Request body for updating recipe image with base64 data."""
+
+    image_base64: str
+
 
 router = APIRouter()
 
@@ -143,3 +152,62 @@ def get_recipe_versions(
             detail="Recipe not found",
         )
     return service.get_version_tree(recipe_id, user_id=user_id)
+
+
+@router.patch("/{recipe_id}/image", response_model=Recipe)
+async def update_recipe_image(
+    recipe_id: int,
+    data: UpdateRecipeImageRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Update a recipe's image by uploading base64 data to Supabase Storage.
+
+    Args:
+        image_base64: Base64-encoded image data (without data URL prefix)
+
+    The image is uploaded to Supabase Storage and the resulting storage URL
+    is saved to the recipe's image_url field.
+    """
+    if not is_storage_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service not configured",
+        )
+
+    service = RecipeService(session)
+    recipe = service.get_recipe(recipe_id)
+    if not recipe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+
+    try:
+        storage = StorageService()
+
+        # Delete old image if it exists and is from our storage
+        if recipe.image_url:
+            await storage.delete_image(recipe.image_url)
+
+        # Upload new image from base64
+        storage_url = await storage.upload_image_from_base64(
+            data.image_base64, recipe_id
+        )
+        print("storage_url", storage_url)
+
+        # Update recipe with new image URL
+        recipe.image_url = storage_url
+        recipe.updated_at = datetime.utcnow()
+        session.add(recipe)
+        session.commit()
+        session.refresh(recipe)
+
+        return recipe
+
+    except StorageError as e:
+        print("Storage error:", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        )

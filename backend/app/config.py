@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Supabase Storage
+    supabase_url: str | None = None
+    supabase_key: str | None = None
+    supabase_bucket: str = "recipe-images"
+
 
 @lru_cache
 def get_settings() -> Settings:

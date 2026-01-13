@@ -31,10 +31,18 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCard
             </p>
           </div>
 
-          {/* Placeholder for recipe image */}
-          <div className="w-16 h-16 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
-            <ImagePlus className="h-6 w-6" />
-          </div>
+          {/* Recipe image */}
+          {recipe.image_url ? (
+            <img
+              src={recipe.image_url}
+              alt={recipe.name}
+              className="w-16 h-16 rounded-md object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+              <ImagePlus className="h-6 w-6" />
+            </div>
+          )}
         </CardHeader>
 
         <CardContent>

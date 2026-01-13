@@ -10,6 +10,7 @@ from app.domain.tasting_session_service import TastingSessionService
 from app.domain.tasting_note_service import TastingNoteService
 from app.domain.supplier_service import SupplierService
 from app.domain.recipe_tasting_service import RecipeTastingService
+from app.domain.storage_service import StorageService, StorageError, is_storage_configured
 
 __all__ = [
     "IngredientService",
@@ -23,4 +24,7 @@ __all__ = [
     "TastingNoteService",
     "SupplierService",
     "RecipeTastingService",
+    "StorageService",
+    "StorageError",
+    "is_storage_configured",
 ]

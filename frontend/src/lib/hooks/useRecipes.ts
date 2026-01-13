@@ -87,3 +87,48 @@ export function useRecipeVersions(recipeId: number | null, userId?: string | nul
     enabled: recipeId !== null,
   });
 }
+
+export interface GenerateImageResponse {
+  image_url: string;
+  stored: boolean;
+}
+
+export function useGenerateRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      recipeId,
+      recipeName,
+      ingredients,
+    }: {
+      recipeId?: number;
+      recipeName: string;
+      ingredients?: string[];
+    }): Promise<GenerateImageResponse> => {
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipe_id: recipeId,
+          recipe_name: recipeName,
+          ingredients,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to generate image');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate recipe queries if image was stored
+      if (data.stored && variables.recipeId) {
+        queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
+        queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      }
+    },
+  });
+}

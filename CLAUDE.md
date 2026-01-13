@@ -59,7 +59,7 @@ app/
 ├── database.py          # SQLModel engine + session management
 ├── models/              # SQLModel entities
 │   ├── ingredient.py            # Ingredient, SupplierEntry
-│   ├── recipe.py                # Recipe, RecipeStatus, Instructions (+ version, root_id for versioning)
+│   ├── recipe.py                # Recipe, RecipeStatus, Instructions (+ version, root_id, image_url)
 │   ├── recipe_ingredient.py     # RecipeIngredient (ingredient links)
 │   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
 │   ├── outlet.py                # Outlet, RecipeOutlet (multi-brand support)
@@ -77,9 +77,10 @@ app/
 │   ├── tasting_session_service.py   # Tasting session CRUD + stats
 │   ├── tasting_note_service.py      # Tasting notes + recipe history
 │   ├── recipe_tasting_service.py    # Session-recipe relationships
-│   └── supplier_service.py      # Supplier CRUD + supplier-ingredient links
+│   ├── supplier_service.py      # Supplier CRUD + supplier-ingredient links
+│   └── storage_service.py       # Supabase Storage for recipe images
 ├── api/                 # FastAPI routers (one per resource)
-│   ├── recipes.py               # Recipe CRUD + fork + versions
+│   ├── recipes.py               # Recipe CRUD + fork + versions + image upload
 │   ├── recipe_ingredients.py    # Recipe ingredient links
 │   ├── ingredients.py           # Ingredient CRUD + suppliers + variants
 │   ├── instructions.py          # Recipe instructions (raw, parse, structured)
@@ -110,7 +111,8 @@ app/                     # Next.js App Router pages
 ├── finance/             # Finance/analytics
 ├── rnd/                 # R&D workspace
 ├── login/               # Login page (mock auth)
-└── register/            # Registration page (mock auth)
+├── register/            # Registration page (mock auth)
+└── api/generate-image/  # DALL-E 3 image generation API route
 
 lib/
 ├── api.ts               # Typed fetch wrapper for 40+ endpoints
@@ -120,7 +122,7 @@ lib/
 ├── utils.ts             # Utility functions (cn for classnames)
 ├── mock-users.json      # Mock user data for frontend-only auth
 └── hooks/               # TanStack Query hooks with cache invalidation
-    ├── useRecipes.ts            # includes useRecipeVersions for version tree
+    ├── useRecipes.ts            # includes useRecipeVersions, useGenerateRecipeImage
     ├── useIngredients.ts
     ├── useRecipeIngredients.ts
     ├── useCosting.ts
@@ -157,7 +159,8 @@ All endpoints under `/api/v1`:
 - `/suppliers` — CRUD + contact info (address, phone, email)
 
 **Recipe Sub-resources:**
-- `/recipes/{id}/fork` — create editable copy with ingredients & instructions (sets version + root_id)
+- `/recipes/{id}/fork` — create editable copy with ingredients & instructions (sets version + root_id, excludes image)
+- `/recipes/{id}/image` — upload recipe image (base64 → Supabase Storage)
 - `/recipes/{id}/versions` — get all recipes in version tree (with user_id filtering for visibility)
 - `/recipes/{id}/ingredients` — add, update, remove, reorder
 - `/recipes/{id}/sub-recipes` — sub-recipe hierarchy (BOM) with cycle detection
@@ -197,6 +200,10 @@ All endpoints under `/api/v1`:
 **Backend** (`.env`):
 - `DATABASE_URL` — PostgreSQL connection (defaults to SQLite for local dev)
 - `CORS_ORIGINS` — JSON array of allowed origins
+- `SUPABASE_URL` — Supabase project URL (optional, for image storage)
+- `SUPABASE_KEY` — Supabase anon key (optional, for image storage)
+- `SUPABASE_BUCKET` — Storage bucket name (default: `recipe-images`)
 
 **Frontend** (`.env.local`):
 - `NEXT_PUBLIC_API_URL` — Backend URL (default: `http://localhost:8000/api/v1`)
+- `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
