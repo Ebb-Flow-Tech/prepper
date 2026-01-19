@@ -1,0 +1,552 @@
+'use client';
+
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { X, Plus, Trash2 } from 'lucide-react';
+import { useCreateIngredient, useSuppliers, useCategories } from '@/lib/hooks';
+import { Button, Input, Select } from '@/components/ui';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import type { Supplier } from '@/types';
+
+const UNIT_OPTIONS = [
+  { value: 'g', label: 'g (grams)' },
+  { value: 'kg', label: 'kg (kilograms)' },
+  { value: 'ml', label: 'ml (milliliters)' },
+  { value: 'l', label: 'l (liters)' },
+  { value: 'pcs', label: 'pcs (pieces)' },
+];
+
+// Auto-assign category based on ingredient name keywords
+function autoAssignCategory(name: string): string {
+  const lowerName = name.toLowerCase();
+
+  if (/\b(chicken|beef|pork|lamb|fish|salmon|tuna|shrimp|prawn|crab|lobster|egg|tofu|tempeh|seitan|turkey|duck|bacon|ham|sausage|meat|steak|fillet|mince|ground)\b/.test(lowerName)) {
+    return 'proteins';
+  }
+  if (/\b(carrot|onion|garlic|tomato|potato|lettuce|spinach|broccoli|cauliflower|pepper|cucumber|celery|cabbage|mushroom|zucchini|eggplant|corn|pea|bean|asparagus|leek|kale|chard|arugula|radish|beet|turnip|squash|pumpkin)\b/.test(lowerName)) {
+    return 'vegetables';
+  }
+  if (/\b(apple|banana|orange|lemon|lime|grape|strawberry|blueberry|raspberry|mango|pineapple|peach|pear|plum|cherry|watermelon|melon|kiwi|papaya|coconut|avocado|fig|date|raisin|cranberry)\b/.test(lowerName)) {
+    return 'fruits';
+  }
+  if (/\b(milk|cheese|butter|cream|yogurt|yoghurt|curd|ghee|paneer|mozzarella|cheddar|parmesan|ricotta|feta|brie|mascarpone|sour cream|whey|casein)\b/.test(lowerName)) {
+    return 'dairy';
+  }
+  if (/\b(rice|pasta|noodle|bread|flour|wheat|oat|barley|quinoa|couscous|bulgur|cornmeal|semolina|rye|millet|sorghum|cereal|cracker|tortilla|pita)\b/.test(lowerName)) {
+    return 'grains';
+  }
+  if (/\b(salt|pepper|cumin|coriander|turmeric|paprika|cinnamon|nutmeg|clove|cardamom|ginger|oregano|basil|thyme|rosemary|parsley|cilantro|dill|mint|bay leaf|chili|cayenne|saffron|vanilla|fennel|anise|mustard seed)\b/.test(lowerName)) {
+    return 'spices';
+  }
+  if (/\b(oil|olive oil|vegetable oil|coconut oil|sesame oil|sunflower oil|canola oil|lard|shortening|margarine|ghee|fat|dripping)\b/.test(lowerName)) {
+    return 'oils_fats';
+  }
+  if (/\b(sauce|ketchup|mayonnaise|mayo|mustard|vinegar|soy sauce|fish sauce|oyster sauce|hoisin|sriracha|tabasco|worcestershire|dressing|marinade|relish|chutney|salsa|pesto|hummus)\b/.test(lowerName)) {
+    return 'sauces_condiments';
+  }
+  if (/\b(water|juice|wine|beer|coffee|tea|milk|soda|cola|broth|stock|coconut water|lemonade|smoothie)\b/.test(lowerName)) {
+    return 'beverages';
+  }
+
+  return 'other';
+}
+
+interface SupplierEntry {
+  id: string; // Temporary ID for list management
+  supplier_id: string;
+  supplier_name: string;
+  sku: string;
+  pack_size: string;
+  pack_unit: string;
+  price_per_pack: string;
+  cost_per_unit: string;
+  is_preferred: boolean;
+}
+
+interface AddIngredientModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const createIngredient = useCreateIngredient();
+  const { data: categories = [] } = useCategories();
+  const { data: suppliers = [] } = useSuppliers();
+
+  const [name, setName] = useState('');
+  const [baseUnit, setBaseUnit] = useState('g');
+  const [cost, setCost] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [supplierEntries, setSupplierEntries] = useState<SupplierEntry[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-assign category when name changes
+  const autoCategory = useMemo(() => autoAssignCategory(name), [name]);
+  const effectiveCategory = selectedCategory || autoCategory;
+
+  const categoryOptions = useMemo(() => {
+    return categories.map((cat) => ({
+      value: String(cat.id),
+      label: cat.name,
+    }));
+  }, [categories]);
+
+  // Get suppliers that haven't been added yet
+  const availableSuppliers = useMemo(() => {
+    const addedSupplierIds = new Set(supplierEntries.map((e) => e.supplier_id));
+    return suppliers.filter((s) => !addedSupplierIds.has(s.id.toString()));
+  }, [suppliers, supplierEntries]);
+
+  // Handle escape key to close modal
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
+
+  // Focus trap
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [isOpen]);
+
+  // Reset form only after successful submission (handled in handleSubmit via onClose)
+  const resetForm = useCallback(() => {
+    setName('');
+    setBaseUnit('g');
+    setCost('');
+    setSelectedCategory('');
+    setSupplierEntries([]);
+    setIsSubmitting(false);
+  }, []);
+
+  const handleAddSupplierEntry = () => {
+    if (availableSuppliers.length === 0) return;
+
+    const newEntry: SupplierEntry = {
+      id: crypto.randomUUID(),
+      supplier_id: '',
+      supplier_name: '',
+      sku: '',
+      pack_size: '',
+      pack_unit: baseUnit,
+      price_per_pack: '',
+      cost_per_unit: '',
+      is_preferred: supplierEntries.length === 0, // First supplier is preferred by default
+    };
+    setSupplierEntries((prev) => [...prev, newEntry]);
+  };
+
+  const handleRemoveSupplierEntry = (id: string) => {
+    setSupplierEntries((prev) => {
+      const updated = prev.filter((e) => e.id !== id);
+      // If we removed the preferred supplier and there are still entries, make the first one preferred
+      if (updated.length > 0 && !updated.some((e) => e.is_preferred)) {
+        updated[0].is_preferred = true;
+      }
+      return updated;
+    });
+  };
+
+  const handleSupplierEntryChange = (id: string, field: keyof SupplierEntry, value: string | boolean) => {
+    setSupplierEntries((prev) =>
+      prev.map((entry) => {
+        if (entry.id !== id) {
+          return entry;
+        }
+
+        const updated = { ...entry, [field]: value };
+
+        // If supplier_id changed, update supplier_name
+        if (field === 'supplier_id') {
+          const supplier = suppliers.find((s) => s.id.toString() === value);
+          updated.supplier_name = supplier?.name ?? '';
+        }
+
+        return updated;
+      })
+    );
+  };
+
+  const isSupplierEntryValid = (entry: SupplierEntry) => {
+    return (
+      entry.supplier_id &&
+      entry.pack_size &&
+      entry.pack_unit &&
+      entry.price_per_pack &&
+      entry.cost_per_unit
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+
+    // Validate supplier entries
+    const validSupplierEntries = supplierEntries.filter(isSupplierEntryValid);
+    const invalidEntries = supplierEntries.filter((e) => e.supplier_id && !isSupplierEntryValid(e));
+    if (invalidEntries.length > 0) {
+      toast.error('Please complete all supplier fields or remove incomplete entries');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Build suppliers array for the request
+      const suppliersData = validSupplierEntries.map((entry) => ({
+        supplier_id: entry.supplier_id,
+        supplier_name: entry.supplier_name,
+        sku: entry.sku || null,
+        pack_size: parseFloat(entry.pack_size),
+        pack_unit: entry.pack_unit,
+        price_per_pack: parseFloat(entry.price_per_pack),
+        cost_per_unit: parseFloat(entry.cost_per_unit),
+        currency: 'SGD',
+        is_preferred: entry.is_preferred,
+        source: 'manual',
+      }));
+
+      // Create the ingredient with suppliers in a single request
+      await createIngredient.mutateAsync({
+        name: name.trim(),
+        base_unit: baseUnit,
+        cost_per_base_unit: cost ? parseFloat(cost) : null,
+        suppliers: suppliersData.length > 0 ? suppliersData : undefined,
+      });
+
+      const supplierCount = validSupplierEntries.length;
+      const message = supplierCount > 0
+        ? `Ingredient created with ${supplierCount} supplier${supplierCount > 1 ? 's' : ''} (Category: ${effectiveCategory})`
+        : `Ingredient created (Category: ${effectiveCategory})`;
+      toast.success(message);
+      resetForm();
+      onClose();
+    } catch {
+      toast.error('Failed to create ingredient');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      {/* Backdrop - click to close */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        aria-hidden="true"
+        onClick={onClose}
+      />
+
+      {/* Modal content */}
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className={cn(
+          'relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl',
+          'dark:bg-zinc-900 dark:border dark:border-zinc-800',
+          'focus:outline-none'
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <h2
+            id="modal-title"
+            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+          >
+            Add New Ingredient
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            aria-label="Close modal"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Info Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Basic Information
+            </h3>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Ingredient Name *
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Olive Oil, Chicken Breast"
+                autoFocus
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Base Unit *
+                </label>
+                <Select
+                  value={baseUnit}
+                  onChange={(e) => setBaseUnit(e.target.value)}
+                  options={UNIT_OPTIONS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Cost per Unit (optional)
+                </label>
+                <Input
+                  type="number"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                  min={0}
+                  step={0.01}
+                />
+              </div>
+            </div>
+
+            {categoryOptions.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Category {!selectedCategory && name && `(auto: ${autoCategory})`}
+                </label>
+                <Select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Suppliers Section */}
+          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Suppliers (optional)
+              </h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddSupplierEntry}
+                disabled={availableSuppliers.length === 0 && supplierEntries.length === suppliers.length}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Supplier
+              </Button>
+            </div>
+
+            {supplierEntries.length === 0 ? (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg">
+                No suppliers added. Click "Add Supplier" to link suppliers to this ingredient.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {supplierEntries.map((entry, index) => (
+                  <SupplierEntryForm
+                    key={entry.id}
+                    entry={entry}
+                    index={index}
+                    suppliers={suppliers}
+                    usedSupplierIds={supplierEntries.filter((e) => e.id !== entry.id).map((e) => e.supplier_id)}
+                    baseUnit={baseUnit}
+                    onChange={handleSupplierEntryChange}
+                    onRemove={handleRemoveSupplierEntry}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-700">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting || !name.trim()}>
+              {isSubmitting ? 'Creating...' : 'Create Ingredient'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface SupplierEntryFormProps {
+  entry: SupplierEntry;
+  index: number;
+  suppliers: Supplier[];
+  usedSupplierIds: string[];
+  baseUnit: string;
+  onChange: (id: string, field: keyof SupplierEntry, value: string | boolean) => void;
+  onRemove: (id: string) => void;
+}
+
+function SupplierEntryForm({
+  entry,
+  index,
+  suppliers,
+  usedSupplierIds,
+  baseUnit,
+  onChange,
+  onRemove,
+}: SupplierEntryFormProps) {
+  const availableSuppliers = suppliers.filter(
+    (s) => !usedSupplierIds.includes(s.id.toString()) || s.id.toString() === entry.supplier_id
+  );
+
+  return (
+    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Supplier {index + 1}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onRemove(entry.id)}
+          className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Supplier *
+          </label>
+          <Select
+            value={entry.supplier_id}
+            onChange={(e) => onChange(entry.id, 'supplier_id', e.target.value)}
+            options={[
+              { value: '', label: 'Select supplier...' },
+              ...availableSuppliers.map((s) => ({
+                value: s.id.toString(),
+                label: s.name,
+              })),
+            ]}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            SKU
+          </label>
+          <Input
+            type="text"
+            placeholder="e.g., SKU-001"
+            value={entry.sku}
+            onChange={(e) => onChange(entry.id, 'sku', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Pack Size *
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={entry.pack_size}
+            onChange={(e) => onChange(entry.id, 'pack_size', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Pack Unit *
+          </label>
+          <Select
+            value={entry.pack_unit}
+            onChange={(e) => onChange(entry.id, 'pack_unit', e.target.value)}
+            options={[
+              { value: '', label: 'Select unit...' },
+              ...UNIT_OPTIONS,
+            ]}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Price per Pack *
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={entry.price_per_pack}
+            onChange={(e) => onChange(entry.id, 'price_per_pack', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Cost per Unit ({baseUnit}) *
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={entry.cost_per_unit}
+            onChange={(e) => onChange(entry.id, 'cost_per_unit', e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="checkbox"
+          id={`preferred-${entry.id}`}
+          checked={entry.is_preferred}
+          onChange={(e) => onChange(entry.id, 'is_preferred', e.target.checked)}
+          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500"
+        />
+        <label
+          htmlFor={`preferred-${entry.id}`}
+          className="text-sm text-zinc-700 dark:text-zinc-300"
+        >
+          Preferred Supplier
+        </label>
+      </div>
+    </div>
+  );
+}

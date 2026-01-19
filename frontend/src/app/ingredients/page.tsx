@@ -3,20 +3,20 @@
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories } from '@/lib/hooks';
-import { IngredientCard, CategoriesTab } from '@/components/ingredients';
+import { IngredientCard, CategoriesTab, FilterButtons, AddIngredientModal } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
-import { NewIngredientForm } from '@/components/layout/RightPanel';
 import { useAppState, type IngredientTab } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-type GroupByOption = 'none' | 'unit' | 'status';
+type GroupByOption = 'none' | 'unit' | 'status' | 'category';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
   { value: 'unit', label: 'By Unit' },
   { value: 'status', label: 'By Status' },
+  { value: 'category', label: 'By Category' },
 ];
 
 const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
@@ -24,7 +24,11 @@ const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
   { id: 'categories', label: 'Categories' },
 ];
 
-function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Record<string, Ingredient[]> {
+function groupIngredients(
+  ingredients: Ingredient[],
+  groupBy: GroupByOption,
+  categoryMap?: Map<number, string>
+): Record<string, Ingredient[]> {
   if (groupBy === 'none') {
     return { 'All Ingredients': ingredients };
   }
@@ -47,6 +51,17 @@ function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Re
     }, {} as Record<string, Ingredient[]>);
   }
 
+  if (groupBy === 'category') {
+    return ingredients.reduce((acc, ingredient) => {
+      const key = ingredient.category_id
+        ? categoryMap?.get(ingredient.category_id) ?? 'Unknown'
+        : 'Uncategorized';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(ingredient);
+      return acc;
+    }, {} as Record<string, Ingredient[]>);
+  }
+
   return { 'All Ingredients': ingredients };
 }
 
@@ -58,6 +73,8 @@ function IngredientsListTab() {
   const [showForm, setShowForm] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
   const { data: categories } = useCategories();
 
@@ -65,16 +82,30 @@ function IngredientsListTab() {
     if (!ingredients) return [];
 
     return ingredients.filter((ing) => {
+      // Search filter
       if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+      // Category filter (if any selected)
+      if (selectedCategories.length > 0 && !selectedCategories.includes(ing.category_id ?? -1)) {
+        return false;
+      }
+      // Unit filter (if any selected)
+      if (selectedUnits.length > 0 && !selectedUnits.includes(ing.base_unit)) {
         return false;
       }
       return true;
     });
-  }, [ingredients, search]);
+  }, [ingredients, search, selectedCategories, selectedUnits]);
+
+  const categoryMap = useMemo(() => {
+    if (!categories) return new Map<number, string>();
+    return new Map(categories.map((c) => [c.id, c.name]));
+  }, [categories]);
 
   const groupedIngredients = useMemo(() => {
-    return groupIngredients(filteredIngredients, groupBy);
-  }, [filteredIngredients, groupBy]);
+    return groupIngredients(filteredIngredients, groupBy, categoryMap);
+  }, [filteredIngredients, groupBy, categoryMap]);
 
   const handleArchive = (ingredient: Ingredient) => {
     deactivateIngredient.mutate(ingredient.id, {
@@ -115,13 +146,7 @@ function IngredientsListTab() {
             <span className="hidden sm:inline">Add Ingredient</span>
           </Button>
         </PageHeader>
-        {showForm && (
-          <div className="w-full d-flex justify-items-end">
-            <div className="w-fit mb-3">
-              <NewIngredientForm onClose={() => setShowForm(false)} />
-            </div>
-          </div>
-        )}
+        <AddIngredientModal isOpen={showForm} onClose={() => setShowForm(false)} />
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">
@@ -153,6 +178,17 @@ function IngredientsListTab() {
           </div>
         </div>
 
+        {/* Filter Buttons */}
+        <div className="mb-6">
+          <FilterButtons
+            categories={categories}
+            selectedCategories={selectedCategories}
+            onCategoryChange={setSelectedCategories}
+            selectedUnits={selectedUnits}
+            onUnitChange={setSelectedUnits}
+          />
+        </div>
+
         {/* Loading State */}
         {isLoading && (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -166,7 +202,9 @@ function IngredientsListTab() {
         {!isLoading && filteredIngredients.length === 0 && (
           <div className="text-center py-12">
             <p className="text-zinc-500 dark:text-zinc-400">
-              {search ? 'No ingredients match your search' : 'No ingredients yet'}
+              {search || selectedCategories.length > 0 || selectedUnits.length > 0
+                ? 'No ingredients match your filters'
+                : 'No ingredients yet'}
             </p>
           </div>
         )}

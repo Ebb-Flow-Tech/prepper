@@ -127,10 +127,24 @@ export interface UpdateRecipeImageRequest {
   image_base64: string;
 }
 
+export interface CreateIngredientSupplier {
+  supplier_id: string;
+  supplier_name: string;
+  sku?: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency?: string;
+  is_preferred?: boolean;
+  source?: string;
+}
+
 export interface CreateIngredientRequest {
   name: string;
   base_unit: string;
   cost_per_base_unit?: number | null;
+  suppliers?: CreateIngredientSupplier[];
 }
 
 export interface UpdateIngredientRequest {

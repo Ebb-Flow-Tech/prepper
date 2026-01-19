@@ -238,7 +238,7 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
 
   const categoryOptions = useMemo(() => {
     return categories.map((cat) => ({
-      value: cat.slug,
+      value: String(cat.id),
       label: cat.name,
     }));
   }, [categories]);

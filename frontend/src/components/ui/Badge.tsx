@@ -5,7 +5,7 @@ import { ReactNode } from 'react';
 
 interface BadgeProps {
   children: ReactNode;
-  variant?: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'info';
+  variant?: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'info' | 'unit';
   className?: string;
 }
 
@@ -27,6 +27,8 @@ export function Badge({ children, variant = 'default', className }: BadgeProps) 
             variant === 'warning',
           'bg-[hsl(var(--status-archived-bg))] text-[hsl(var(--status-archived))]':
             variant === 'destructive',
+          'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300':
+            variant === 'unit',
         },
         className
       )}

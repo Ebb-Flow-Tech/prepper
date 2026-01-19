@@ -29,12 +29,12 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
       <CardHeader>
         <div className="flex-1 min-w-0">
           <Link href={`/ingredients/${ingredient.id}`}>
-            <CardTitle className="truncate hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
+            <CardTitle className="truncate text-xl hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
               {ingredient.name}
             </CardTitle>
           </Link>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {formatCurrency(ingredient.cost_per_base_unit)}/{ingredient.base_unit}
+          <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
+            {formatCurrency(ingredient.cost_per_base_unit)} per unit
           </p>
         </div>
 
@@ -50,12 +50,12 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
 
       <CardContent>
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary">{ingredient.base_unit}</Badge>
+          <Badge variant="unit" className="text-sm">{ingredient.base_unit}</Badge>
           {!ingredient.is_active && (
-            <Badge variant="warning">Archived</Badge>
+            <Badge variant="warning" className="text-sm">Archived</Badge>
           )}
           {currentCategory && (
-            <Badge variant="info">{currentCategory.name}</Badge>
+            <Badge variant="info" className="text-sm">{currentCategory.name}</Badge>
           )}
         </div>
       </CardContent>
