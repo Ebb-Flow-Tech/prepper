@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     supabase_key: str | None = None
     supabase_bucket: str = "recipe-images"
 
+    # Anthropic API
+    anthropic_api_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

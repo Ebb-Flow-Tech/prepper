@@ -144,6 +144,7 @@ export interface CreateIngredientRequest {
   name: string;
   base_unit: string;
   cost_per_base_unit?: number | null;
+  category_id?: number | null;
   suppliers?: CreateIngredientSupplier[];
 }
 

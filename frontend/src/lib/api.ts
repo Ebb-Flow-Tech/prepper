@@ -604,3 +604,22 @@ export async function deactivateCategory(id: number): Promise<Category> {
     method: 'DELETE',
   });
 }
+
+// ============ Agents ============
+
+interface CategorizeIngredientRequest {
+  ingredient_name: string;
+}
+
+interface CategorizeIngredientResponse {
+  category_id: number;
+}
+
+export async function categorizeIngredient(
+  data: CategorizeIngredientRequest
+): Promise<CategorizeIngredientResponse> {
+  return fetchApi<CategorizeIngredientResponse>('/agents/categorize-ingredient', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}

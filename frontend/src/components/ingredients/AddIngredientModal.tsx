@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useCreateIngredient, useSuppliers, useCategories } from '@/lib/hooks';
+import { useCreateIngredient, useSuppliers, useCategorizeIngredient } from '@/lib/hooks';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
@@ -14,41 +14,6 @@ const UNIT_OPTIONS = [
   { value: 'l', label: 'l (liters)' },
   { value: 'pcs', label: 'pcs (pieces)' },
 ];
-
-// Auto-assign category based on ingredient name keywords
-function autoAssignCategory(name: string): string {
-  const lowerName = name.toLowerCase();
-
-  if (/\b(chicken|beef|pork|lamb|fish|salmon|tuna|shrimp|prawn|crab|lobster|egg|tofu|tempeh|seitan|turkey|duck|bacon|ham|sausage|meat|steak|fillet|mince|ground)\b/.test(lowerName)) {
-    return 'proteins';
-  }
-  if (/\b(carrot|onion|garlic|tomato|potato|lettuce|spinach|broccoli|cauliflower|pepper|cucumber|celery|cabbage|mushroom|zucchini|eggplant|corn|pea|bean|asparagus|leek|kale|chard|arugula|radish|beet|turnip|squash|pumpkin)\b/.test(lowerName)) {
-    return 'vegetables';
-  }
-  if (/\b(apple|banana|orange|lemon|lime|grape|strawberry|blueberry|raspberry|mango|pineapple|peach|pear|plum|cherry|watermelon|melon|kiwi|papaya|coconut|avocado|fig|date|raisin|cranberry)\b/.test(lowerName)) {
-    return 'fruits';
-  }
-  if (/\b(milk|cheese|butter|cream|yogurt|yoghurt|curd|ghee|paneer|mozzarella|cheddar|parmesan|ricotta|feta|brie|mascarpone|sour cream|whey|casein)\b/.test(lowerName)) {
-    return 'dairy';
-  }
-  if (/\b(rice|pasta|noodle|bread|flour|wheat|oat|barley|quinoa|couscous|bulgur|cornmeal|semolina|rye|millet|sorghum|cereal|cracker|tortilla|pita)\b/.test(lowerName)) {
-    return 'grains';
-  }
-  if (/\b(salt|pepper|cumin|coriander|turmeric|paprika|cinnamon|nutmeg|clove|cardamom|ginger|oregano|basil|thyme|rosemary|parsley|cilantro|dill|mint|bay leaf|chili|cayenne|saffron|vanilla|fennel|anise|mustard seed)\b/.test(lowerName)) {
-    return 'spices';
-  }
-  if (/\b(oil|olive oil|vegetable oil|coconut oil|sesame oil|sunflower oil|canola oil|lard|shortening|margarine|ghee|fat|dripping)\b/.test(lowerName)) {
-    return 'oils_fats';
-  }
-  if (/\b(sauce|ketchup|mayonnaise|mayo|mustard|vinegar|soy sauce|fish sauce|oyster sauce|hoisin|sriracha|tabasco|worcestershire|dressing|marinade|relish|chutney|salsa|pesto|hummus)\b/.test(lowerName)) {
-    return 'sauces_condiments';
-  }
-  if (/\b(water|juice|wine|beer|coffee|tea|milk|soda|cola|broth|stock|coconut water|lemonade|smoothie)\b/.test(lowerName)) {
-    return 'beverages';
-  }
-
-  return 'other';
-}
 
 interface SupplierEntry {
   id: string; // Temporary ID for list management
@@ -69,26 +34,14 @@ interface AddIngredientModalProps {
 
 export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps) {
   const createIngredient = useCreateIngredient();
-  const { data: categories = [] } = useCategories();
+  const categorizeIngredient = useCategorizeIngredient();
   const { data: suppliers = [] } = useSuppliers();
 
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');
   const [cost, setCost] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [supplierEntries, setSupplierEntries] = useState<SupplierEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Auto-assign category when name changes
-  const autoCategory = useMemo(() => autoAssignCategory(name), [name]);
-  const effectiveCategory = selectedCategory || autoCategory;
-
-  const categoryOptions = useMemo(() => {
-    return categories.map((cat) => ({
-      value: String(cat.id),
-      label: cat.name,
-    }));
-  }, [categories]);
 
   // Get suppliers that haven't been added yet
   const availableSuppliers = useMemo(() => {
@@ -101,7 +54,6 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
     setName('');
     setBaseUnit('g');
     setCost('');
-    setSelectedCategory('');
     setSupplierEntries([]);
     setIsSubmitting(false);
   }, []);
@@ -196,18 +148,23 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
         source: 'manual',
       }));
 
+      // get the category ID (AGENT CALL)
+      const categoryData = await categorizeIngredient.mutateAsync(name);
+      const categoryId = categoryData.category_id;
+
       // Create the ingredient with suppliers in a single request
       await createIngredient.mutateAsync({
         name: name.trim(),
         base_unit: baseUnit,
         cost_per_base_unit: cost ? parseFloat(cost) : null,
+        category_id: categoryId,
         suppliers: suppliersData.length > 0 ? suppliersData : undefined,
       });
 
       const supplierCount = validSupplierEntries.length;
       const message = supplierCount > 0
-        ? `Ingredient created with ${supplierCount} supplier${supplierCount > 1 ? 's' : ''} (Category: ${effectiveCategory})`
-        : `Ingredient created (Category: ${effectiveCategory})`;
+        ? `Ingredient created with ${supplierCount} supplier${supplierCount > 1 ? 's' : ''}`
+        : 'Ingredient created';
       toast.success(message);
       resetForm();
       onClose();
@@ -264,19 +221,6 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
               />
             </div>
           </div>
-
-          {categoryOptions.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                Category {!selectedCategory && name && `(auto: ${autoCategory})`}
-              </label>
-              <Select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
-              />
-            </div>
-          )}
         </div>
 
         {/* Suppliers Section */}
