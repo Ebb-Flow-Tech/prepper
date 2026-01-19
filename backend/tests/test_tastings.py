@@ -1,6 +1,6 @@
 """Tests for tasting sessions and notes endpoints."""
 
-from datetime import date
+from datetime import datetime
 from fastapi.testclient import TestClient
 
 
@@ -10,7 +10,7 @@ def test_create_tasting_session(client: TestClient):
         "/api/v1/tasting-sessions",
         json={
             "name": "December Menu Tasting",
-            "date": "2024-12-15",
+            "date": "2024-12-15T10:00:00",
             "location": "Main Kitchen",
             "attendees": ["Chef Marco", "Sarah", "James"],
         },
@@ -18,7 +18,7 @@ def test_create_tasting_session(client: TestClient):
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "December Menu Tasting"
-    assert data["date"] == "2024-12-15"
+    assert data["date"] == "2024-12-15T10:00:00"
     assert data["location"] == "Main Kitchen"
     assert data["attendees"] == ["Chef Marco", "Sarah", "James"]
     assert "id" in data
@@ -29,11 +29,11 @@ def test_list_tasting_sessions(client: TestClient):
     # Create sessions
     client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 1", "date": "2024-12-10"},
+        json={"name": "Session 1", "date": "2024-12-10T09:00:00"},
     )
     client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 2", "date": "2024-12-15"},
+        json={"name": "Session 2", "date": "2024-12-15T14:00:00"},
     )
 
     response = client.get("/api/v1/tasting-sessions")
@@ -41,7 +41,7 @@ def test_list_tasting_sessions(client: TestClient):
     data = response.json()
     assert len(data) == 2
     # Should be ordered by date descending
-    assert data[0]["date"] == "2024-12-15"
+    assert data[0]["date"] == "2024-12-15T14:00:00"
 
 
 def test_get_tasting_session(client: TestClient):
@@ -49,7 +49,7 @@ def test_get_tasting_session(client: TestClient):
     # Create session
     create_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = create_response.json()["id"]
 
@@ -70,7 +70,7 @@ def test_update_tasting_session(client: TestClient):
     # Create session
     create_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Original Name", "date": "2024-12-15"},
+        json={"name": "Original Name", "date": "2024-12-15T10:00:00"},
     )
     session_id = create_response.json()["id"]
 
@@ -90,7 +90,7 @@ def test_delete_tasting_session(client: TestClient):
     # Create session
     create_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "To Delete", "date": "2024-12-15"},
+        json={"name": "To Delete", "date": "2024-12-15T10:00:00"},
     )
     session_id = create_response.json()["id"]
 
@@ -115,7 +115,7 @@ def test_add_note_to_session(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Menu Tasting", "date": "2024-12-15"},
+        json={"name": "Menu Tasting", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -153,7 +153,7 @@ def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -191,7 +191,7 @@ def test_list_session_notes(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -224,7 +224,7 @@ def test_update_tasting_note(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -259,7 +259,7 @@ def test_delete_tasting_note(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -298,7 +298,7 @@ def test_session_stats(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -338,11 +338,11 @@ def test_recipe_tasting_notes(client: TestClient):
     # Create two sessions with notes for the same recipe
     session1 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 1", "date": "2024-12-10"},
+        json={"name": "Session 1", "date": "2024-12-10T09:00:00"},
     ).json()
     session2 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 2", "date": "2024-12-15"},
+        json={"name": "Session 2", "date": "2024-12-15T14:00:00"},
     ).json()
 
     client.post(
@@ -360,7 +360,7 @@ def test_recipe_tasting_notes(client: TestClient):
     data = response.json()
     assert len(data) == 2
     # Should be ordered by date descending
-    assert data[0]["session_date"] == "2024-12-15"
+    assert data[0]["session_date"] == "2024-12-15T14:00:00"
     assert data[0]["overall_rating"] == 5
 
 
@@ -376,11 +376,11 @@ def test_recipe_tasting_summary(client: TestClient):
     # Create sessions with notes
     session1 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 1", "date": "2024-12-10"},
+        json={"name": "Session 1", "date": "2024-12-10T09:00:00"},
     ).json()
     session2 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 2", "date": "2024-12-15"},
+        json={"name": "Session 2", "date": "2024-12-15T14:00:00"},
     ).json()
 
     client.post(
@@ -411,7 +411,7 @@ def test_recipe_tasting_summary(client: TestClient):
     assert data["average_overall_rating"] == 4.0  # (3 + 5) / 2
     assert data["latest_decision"] == "approved"
     assert data["latest_feedback"] == "Perfect!"
-    assert data["latest_tasting_date"] == "2024-12-15"
+    assert data["latest_tasting_date"] == "2024-12-15T14:00:00"
 
 
 def test_recipe_tasting_summary_empty(client: TestClient):
@@ -445,7 +445,7 @@ def test_create_note_with_action_items_done(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -477,7 +477,7 @@ def test_create_note_action_items_done_defaults_to_false(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -508,7 +508,7 @@ def test_update_action_items_done(client: TestClient):
     # Create session
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 
@@ -553,7 +553,7 @@ def test_cascade_delete_session_notes(client: TestClient):
     # Create session with note
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
     )
     session_id = session_response.json()["id"]
 

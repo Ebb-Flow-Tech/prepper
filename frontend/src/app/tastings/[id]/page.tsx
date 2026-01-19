@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -11,9 +11,14 @@ import {
   Users,
   ChefHat,
   X,
+  Clock,
 } from 'lucide-react';
+import { DayPicker } from 'react-day-picker';
+import { format, startOfDay } from 'date-fns';
+import 'react-day-picker/style.css';
 import {
   useTastingSession,
+  useUpdateTastingSession,
   useDeleteTastingSession,
   useSessionRecipes,
   useAddRecipeToSession,
@@ -25,7 +30,9 @@ import {
   Skeleton,
   Card,
   CardContent,
-  Select,
+  Input,
+  EditableCell,
+  SearchInput,
 } from '@/components/ui';
 import type { Recipe, RecipeTasting } from '@/types';
 import { useAppState } from '@/lib/store';
@@ -68,18 +75,31 @@ function SessionRecipesSection({
 }: SessionRecipesSectionProps) {
   const { userId } = useAppState();
   const [showAddRecipe, setShowAddRecipe] = useState(false);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<number | ''>('');
+  const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const linkedRecipeIds = sessionRecipes.map((sr) => sr.recipe_id);
   const availableRecipes = allRecipes.filter(
     (r) => !linkedRecipeIds.includes(r.id) && r.created_by === userId
   );
 
+  // Filter recipes based on search query
+  const filteredRecipes = searchQuery
+    ? availableRecipes.filter((r) =>
+        r.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : availableRecipes;
+
   const handleAddRecipe = () => {
     if (!selectedRecipeId) return;
-    onAddRecipe(selectedRecipeId as number);
-    setSelectedRecipeId('');
+    onAddRecipe(selectedRecipeId);
+    setSelectedRecipeId(null);
+    setSearchQuery('');
     setShowAddRecipe(false);
+  };
+
+  const handleSelectRecipe = (recipeId: number) => {
+    setSelectedRecipeId(recipeId);
   };
 
   return (
@@ -107,26 +127,61 @@ function SessionRecipesSection({
       {showAddRecipe && (
         <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
           <CardContent className="pt-4">
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
+            <div className="space-y-3">
+              <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Select Recipe
+                  Search Recipes
                 </label>
-                <Select
-                  value={selectedRecipeId}
-                  onChange={(e) => setSelectedRecipeId(e.target.value ? Number(e.target.value) : '')}
-                  options={[
-                    { value: '', label: 'Select a recipe...' },
-                    ...availableRecipes.map((r) => ({ value: String(r.id), label: r.name })),
-                  ]}
+                <SearchInput
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClear={() => setSearchQuery('')}
+                  placeholder="Type to filter recipes..."
+                  className="w-full"
                 />
               </div>
-              <Button onClick={handleAddRecipe} disabled={!selectedRecipeId}>
-                Add
-              </Button>
-              <Button variant="outline" onClick={() => setShowAddRecipe(false)}>
-                Cancel
-              </Button>
+              <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-700 rounded-md">
+                {filteredRecipes.length === 0 ? (
+                  <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400 text-center">
+                    {searchQuery ? 'No recipes match your search' : 'No recipes available'}
+                  </div>
+                ) : (
+                  filteredRecipes.map((recipe) => (
+                    <button
+                      key={recipe.id}
+                      type="button"
+                      onClick={() => handleSelectRecipe(recipe.id)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 ${
+                        selectedRecipeId === recipe.id
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                          : 'text-zinc-900 dark:text-zinc-100'
+                      }`}
+                    >
+                      {recipe.name}
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button onClick={handleAddRecipe} disabled={!selectedRecipeId}>
+                  Add
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAddRecipe(false);
+                    setSearchQuery('');
+                    setSelectedRecipeId(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                {selectedRecipeId && (
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Selected: {availableRecipes.find((r) => r.id === selectedRecipeId)?.name}
+                  </span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -182,6 +237,28 @@ function SessionRecipesSection({
   );
 }
 
+// Helper to parse datetime string into components
+function parseDateTimeComponents(dateString: string) {
+  const date = new Date(dateString);
+  let hour = date.getHours();
+  const minute = date.getMinutes();
+  const period: 'AM' | 'PM' = hour >= 12 ? 'PM' : 'AM';
+
+  // Convert to 12-hour format
+  if (hour === 0) hour = 12;
+  else if (hour > 12) hour -= 12;
+
+  // Round minutes to nearest 15
+  const roundedMinute = Math.round(minute / 15) * 15;
+
+  return {
+    date,
+    hour: String(hour),
+    minute: (roundedMinute === 60 ? 0 : roundedMinute).toString().padStart(2, '0'),
+    period,
+  };
+}
+
 export default function TastingSessionDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -192,10 +269,69 @@ export default function TastingSessionDetailPage() {
   const { data: recipes } = useRecipes();
 
   const deleteSession = useDeleteTastingSession();
+  const updateSession = useUpdateTastingSession();
   const addRecipeToSession = useAddRecipeToSession();
   const removeRecipeFromSession = useRemoveRecipeFromSession();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  // DateTime state for editing
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedHour, setSelectedHour] = useState('10');
+  const [selectedMinute, setSelectedMinute] = useState('00');
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
+
+  const hours = ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
+  const minutes = ['00', '15', '30', '45'];
+
+  // Initialize datetime state when session loads
+  useEffect(() => {
+    if (session?.date) {
+      const parsed = parseDateTimeComponents(session.date);
+      setSelectedDate(parsed.date);
+      setSelectedHour(parsed.hour);
+      setSelectedMinute(parsed.minute);
+      setSelectedPeriod(parsed.period);
+    }
+  }, [session?.date]);
+
+  const get24HourTime = (): string => {
+    let hour = parseInt(selectedHour);
+    if (selectedPeriod === 'AM') {
+      if (hour === 12) hour = 0;
+    } else {
+      if (hour !== 12) hour += 12;
+    }
+    return `${hour.toString().padStart(2, '0')}:${selectedMinute}`;
+  };
+
+  const getDisplayTime = (): string => {
+    return `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
+  };
+
+  const getDateTimeString = (): string => {
+    if (!selectedDate) return '';
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    return `${dateStr}T${get24HourTime()}`;
+  };
+
+  const handleUpdateSession = async (data: { name?: string; location?: string | null; date?: string }) => {
+    if (!sessionId) return;
+    try {
+      await updateSession.mutateAsync({ id: sessionId, data });
+    } catch (error) {
+      console.error('Failed to update session:', error);
+    }
+  };
+
+  const handleDateTimeConfirm = () => {
+    const newDateTime = getDateTimeString();
+    if (newDateTime && newDateTime !== session?.date) {
+      handleUpdateSession({ date: newDateTime });
+    }
+    setShowCalendar(false);
+  };
 
   const handleAddRecipeToSession = async (recipeId: number) => {
     if (!sessionId) return;
@@ -263,18 +399,126 @@ export default function TastingSessionDetailPage() {
 
         {/* Session Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{session.name}</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+            <EditableCell
+              value={session.name}
+              onSave={(value) => handleUpdateSession({ name: value })}
+              className="text-2xl font-bold"
+              placeholder="Session name"
+            />
+          </h1>
           <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-600 dark:text-zinc-300">
-            <div className="flex items-center gap-1.5">
+            {/* Editable DateTime */}
+            <div className="flex items-center gap-1.5 relative">
               <Calendar className="h-4 w-4 text-zinc-400" />
-              <span>{formatDate(session.date)}</span>
+              <button
+                type="button"
+                onClick={() => setShowCalendar(!showCalendar)}
+                className="hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded cursor-pointer flex items-center gap-2"
+              >
+                <span>{formatDate(session.date)}</span>
+                <Clock className="h-3 w-3 text-zinc-400" />
+                <span>{getDisplayTime()}</span>
+              </button>
+              {showCalendar && (
+                <div className="absolute z-20 top-full left-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3">
+                  <style>{`
+                    .rdp-root {
+                      --rdp-accent-color: hsl(270 65% 50%);
+                      --rdp-accent-background-color: hsl(270 65% 95%);
+                    }
+                    .dark .rdp-root {
+                      --rdp-accent-color: hsl(270 65% 60%);
+                      --rdp-accent-background-color: hsl(270 65% 15%);
+                    }
+                  `}</style>
+                  <DayPicker
+                    mode="single"
+                    selected={selectedDate || undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setSelectedDate(date);
+                      }
+                    }}
+                  />
+                  <div className="border-t border-zinc-200 dark:border-zinc-700 mt-3 pt-3">
+                    <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
+                      Select Time
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => setSelectedHour(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        {hours.map((h) => (
+                          <option key={h} value={h}>
+                            {h}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-zinc-500 font-medium">:</span>
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => setSelectedMinute(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        {minutes.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedPeriod}
+                        onChange={(e) => setSelectedPeriod(e.target.value as 'AM' | 'PM')}
+                        className="flex-1 px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={handleDateTimeConfirm}
+                      className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Reset to original values
+                        if (session?.date) {
+                          const parsed = parseDateTimeComponents(session.date);
+                          setSelectedDate(parsed.date);
+                          setSelectedHour(parsed.hour);
+                          setSelectedMinute(parsed.minute);
+                          setSelectedPeriod(parsed.period);
+                        }
+                        setShowCalendar(false);
+                      }}
+                      className="flex-1 px-3 py-2 border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            {session.location && (
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-zinc-400" />
-                <span>{session.location}</span>
-              </div>
-            )}
+
+            {/* Editable Location */}
+            <div className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4 text-zinc-400" />
+              <EditableCell
+                value={session.location || ''}
+                onSave={(value) => handleUpdateSession({ location: value || null })}
+                placeholder="Add location"
+              />
+            </div>
+
             {session.attendees && session.attendees.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Users className="h-4 w-4 text-zinc-400" />
