@@ -4,13 +4,14 @@ import { useEffect, Suspense } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 
-const PUBLIC_ROUTES = ['/login', '/register'];
+const PUBLIC_ROUTES = ['/', '/login', '/register'];
 
 // Valid route patterns in the app
 const VALID_ROUTE_PATTERNS = [
-  /^\/$/,                                    // Home
+  /^\/$/,                                    // Home (redirects)
   /^\/login$/,                               // Login
   /^\/register$/,                            // Register
+  /^\/canvas$/,                              // Canvas
   /^\/recipes$/,                             // Recipes list
   /^\/recipes\/[^/]+$/,                      // Recipe detail
   /^\/ingredients$/,                         // Ingredients list

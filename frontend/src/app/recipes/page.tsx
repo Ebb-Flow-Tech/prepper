@@ -93,7 +93,7 @@ export default function RecipesPage() {
     // Clear selected recipe and navigate to canvas for new recipe creation
     selectRecipe(null);
     setCanvasTab('canvas');
-    router.push('/');
+    router.push('/canvas');
   };
 
   const groupedRecipes = useMemo(() => {

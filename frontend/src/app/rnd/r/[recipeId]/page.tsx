@@ -448,7 +448,7 @@ function OverviewTab({
                   <Badge variant={STATUS_VARIANTS[recipe.status]}>
                     {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
                   </Badge>
-                  <Link href={`/?recipe=${recipe.id}`}>
+                  <Link href={`/canvas?recipe=${recipe.id}`}>
                     <Button variant="outline" size="sm">
                       {userId !== null && recipe.owner_id === userId ? (
                         <Edit2 className="h-4 w-4" />

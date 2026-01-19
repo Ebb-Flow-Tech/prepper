@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { TopAppBar } from './TopAppBar';
+import { TopAppBar } from '@/components/layout/TopAppBar';
 import {
   CanvasTab,
   OverviewTab,
@@ -11,7 +11,7 @@ import {
   InstructionsTab,
   TastingTab,
   VersionsTab,
-} from './tabs';
+} from '@/components/layout/tabs';
 import { useAppState } from '@/lib/store';
 
 function TabContent() {
@@ -37,7 +37,7 @@ function TabContent() {
   }
 }
 
-export function AppShell() {
+export default function CanvasPage() {
   const { selectedRecipeId, selectRecipe } = useAppState();
   const searchParams = useSearchParams();
 
