@@ -3,11 +3,13 @@
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useIngredients, useDeactivateIngredient, useUpdateIngredient } from '@/lib/hooks';
-import { IngredientCard } from '@/components/ingredients';
+import { IngredientCard, CategoriesTab } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
 import { NewIngredientForm } from '@/components/layout/RightPanel';
+import { useAppState, type IngredientTab } from '@/lib/store';
+import { cn } from '@/lib/utils';
 
 type GroupByOption = 'none' | 'unit' | 'status';
 
@@ -15,6 +17,11 @@ const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
   { value: 'unit', label: 'By Unit' },
   { value: 'status', label: 'By Status' },
+];
+
+const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
+  { id: 'ingredients', label: 'Ingredients' },
+  { id: 'categories', label: 'Categories' },
 ];
 
 function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Record<string, Ingredient[]> {
@@ -43,28 +50,26 @@ function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Re
   return { 'All Ingredients': ingredients };
 }
 
-export default function IngredientsPage() {
+function IngredientsListTab() {
   const deactivateIngredient = useDeactivateIngredient();
   const updateIngredient = useUpdateIngredient();
 
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
 
-  // Filter and group ingredients
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
 
     return ingredients.filter((ing) => {
-      // Filter by search
       if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
       }
       return true;
     });
-  }, [ingredients, search, showArchived]);
+  }, [ingredients, search]);
 
   const groupedIngredients = useMemo(() => {
     return groupIngredients(filteredIngredients, groupBy);
@@ -115,7 +120,6 @@ export default function IngredientsPage() {
               <NewIngredientForm onClose={() => setShowForm(false)} />
             </div>
           </div>
-
         )}
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
@@ -183,6 +187,52 @@ export default function IngredientsPage() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TabContent() {
+  const { ingredientTab } = useAppState();
+
+  switch (ingredientTab) {
+    case 'ingredients':
+      return <IngredientsListTab />;
+    case 'categories':
+      return <CategoriesTab />;
+    default:
+      return <IngredientsListTab />;
+  }
+}
+
+export default function IngredientsPage() {
+  const { ingredientTab, setIngredientTab } = useAppState();
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Tab Navigation Header */}
+      <header className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <nav className="flex gap-1 px-4" aria-label="Ingredient tabs">
+          {INGREDIENT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setIngredientTab(tab.id)}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-colors',
+                ingredientTab === tab.id
+                  ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* Tab Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <TabContent />
       </div>
     </div>
   );

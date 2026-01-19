@@ -406,3 +406,28 @@ export interface SubRecipeUpdate {
 export interface SubRecipeReorder {
   ordered_ids: number[];
 }
+
+// ============ Category Types ============
+
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+  slug?: string;
+  description?: string | null;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  slug?: string;
+  description?: string | null;
+  is_active?: boolean;
+}

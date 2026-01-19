@@ -37,6 +37,9 @@ import type {
   SubRecipeCreate,
   SubRecipeUpdate,
   SubRecipeReorder,
+  Category,
+  CreateCategoryRequest,
+  UpdateCategoryRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -562,4 +565,102 @@ export async function reorderSubRecipes(
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ============ Categories (Fake/Mock API) ============
+
+// Hardcoded categories data (stored in memory for CRUD operations)
+const categoriesData: Category[] = [
+  { id: 1, name: 'Proteins', slug: 'proteins', description: 'Meat, poultry, seafood, eggs, and plant-based proteins', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 2, name: 'Vegetables', slug: 'vegetables', description: 'Fresh, frozen, and canned vegetables', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 3, name: 'Fruits', slug: 'fruits', description: 'Fresh, frozen, dried, and canned fruits', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 4, name: 'Dairy', slug: 'dairy', description: 'Milk, cheese, yogurt, butter, and cream', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 5, name: 'Grains', slug: 'grains', description: 'Rice, pasta, bread, flour, and cereals', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 6, name: 'Spices', slug: 'spices', description: 'Herbs, spices, and seasonings', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 7, name: 'Oils & Fats', slug: 'oils_fats', description: 'Cooking oils, butter, lard, and shortening', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 8, name: 'Sauces & Condiments', slug: 'sauces_condiments', description: 'Sauces, dressings, marinades, and condiments', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 9, name: 'Beverages', slug: 'beverages', description: 'Drinks, juices, and liquid ingredients', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  { id: 10, name: 'Other', slug: 'other', description: 'Miscellaneous ingredients', is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+];
+
+let nextCategoryId = 11;
+
+function generateSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+export async function getCategories(activeOnly: boolean = true): Promise<Category[]> {
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  if (activeOnly) {
+    return categoriesData.filter((c) => c.is_active);
+  }
+  return [...categoriesData];
+}
+
+export async function getCategory(id: number): Promise<Category> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const category = categoriesData.find((c) => c.id === id);
+  if (!category) {
+    throw new ApiError(404, 'Category not found');
+  }
+  return { ...category };
+}
+
+export async function createCategory(data: CreateCategoryRequest): Promise<Category> {
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const now = new Date().toISOString();
+  const newCategory: Category = {
+    id: nextCategoryId++,
+    name: data.name,
+    slug: data.slug || generateSlug(data.name),
+    description: data.description || null,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+  };
+
+  categoriesData.push(newCategory);
+  return { ...newCategory };
+}
+
+export async function updateCategory(
+  id: number,
+  data: UpdateCategoryRequest
+): Promise<Category> {
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const index = categoriesData.findIndex((c) => c.id === id);
+  if (index === -1) {
+    throw new ApiError(404, 'Category not found');
+  }
+
+  const updated: Category = {
+    ...categoriesData[index],
+    ...data,
+    updated_at: new Date().toISOString(),
+  };
+
+  categoriesData[index] = updated;
+  return { ...updated };
+}
+
+export async function deactivateCategory(id: number): Promise<Category> {
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const index = categoriesData.findIndex((c) => c.id === id);
+  if (index === -1) {
+    throw new ApiError(404, 'Category not found');
+  }
+
+  categoriesData[index] = {
+    ...categoriesData[index],
+    is_active: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  return { ...categoriesData[index] };
 }
