@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical } from 'lucide-react';
+import { Plus, Search, GripVertical, ImagePlus } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
@@ -37,25 +37,47 @@ function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
       ref={setNodeRef}
       data-ingredient-card
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-border bg-card p-3',
+        'game-card game-card-ingredient game-card-sm game-card-hover',
         isDragging && 'opacity-50'
       )}
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{ingredient.name}</p>
-        <p className="text-sm text-muted-foreground">
-          {ingredient.base_unit} •{' '}
-          {ingredient.cost_per_base_unit !== null
-            ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
-            : 'no cost set'}
-        </p>
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-ingredient" />
+
+      {/* Card Art */}
+      <div className="game-card-art game-card-art-ingredient flex items-center justify-center">
+        <ImagePlus className="h-8 w-8 text-blue-300/50" />
+      </div>
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button
+            {...listeners}
+            {...attributes}
+            className="cursor-grab touch-none text-blue-300 hover:text-blue-100 active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
+            {ingredient.name}
+          </h3>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        <div className="flex items-center justify-between">
+          <span className="game-card-stat game-card-stat-ingredient">{ingredient.base_unit}</span>
+          <span className="text-sm text-blue-200/80">
+            {ingredient.cost_per_base_unit !== null
+              ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
+              : 'no cost'}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -76,28 +98,62 @@ function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
       ref={setNodeRef}
       data-recipe-card
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800',
+        'game-card game-card-recipe game-card-sm game-card-hover',
         isDragging && 'opacity-50',
         isCurrentRecipe && 'opacity-40 cursor-not-allowed'
       )}
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className={cn(
-          'touch-none text-zinc-400 hover:text-zinc-600',
-          isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
-        )}
-        disabled={isCurrentRecipe}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{recipe.name}</p>
-        <p className="text-sm text-zinc-500">
-          {recipe.yield_quantity} {recipe.yield_unit}
-          {isCurrentRecipe && ' • Current recipe'}
-        </p>
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-recipe" />
+
+      {/* Card Art */}
+      {recipe.image_url ? (
+        <div className="game-card-art relative">
+          <img
+            src={recipe.image_url}
+            alt={recipe.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="game-card-art game-card-art-recipe flex items-center justify-center">
+          <ImagePlus className="h-8 w-8 text-green-300/50" />
+        </div>
+      )}
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button
+            {...listeners}
+            {...attributes}
+            className={cn(
+              'touch-none text-green-300 hover:text-green-100',
+              isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+            )}
+            disabled={isCurrentRecipe}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
+            {recipe.name}
+          </h3>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        <div className="flex items-center justify-between">
+          <span className="game-card-stat game-card-stat-recipe">
+            {recipe.yield_quantity} {recipe.yield_unit}
+          </span>
+          {isCurrentRecipe && (
+            <span className="text-xs text-green-300/60 uppercase tracking-wide">Current</span>
+          )}
+        </div>
       </div>
     </div>
   );
