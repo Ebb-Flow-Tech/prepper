@@ -359,6 +359,10 @@ export async function deleteTastingNote(
 
 // ============ Recipe Tasting History ============
 
+export async function getRecipesWithFeedback(userId: string): Promise<Recipe[]> {
+  return fetchApi<Recipe[]>(`/recipes/with-feedback/${userId}`);
+}
+
 export async function getRecipeTastingNotes(
   recipeId: number
 ): Promise<TastingNoteWithRecipe[]> {

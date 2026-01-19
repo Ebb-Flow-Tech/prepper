@@ -123,6 +123,33 @@ class TastingNoteService:
 
         return notes_with_info
 
+    def get_recipes_with_feedback(self, user_id: Optional[str] = None) -> list[Recipe]:
+        """Get all unique recipes that have at least one tasting note.
+
+        Only returns recipes that are public or owned by the user.
+        """
+        from sqlalchemy import or_
+
+        # Get distinct recipe IDs from tasting notes using subquery
+        recipe_ids_with_notes = (
+            select(TastingNote.recipe_id)
+            .distinct()
+            .scalar_subquery()
+        )
+
+        statement = (
+            select(Recipe)
+            .where(Recipe.id.in_(recipe_ids_with_notes))
+            .where(
+                or_(
+                    Recipe.owner_id == user_id,
+                    Recipe.is_public == True
+                )
+            )
+            .order_by(Recipe.name)
+        )
+        return list(self.session.exec(statement).all())
+
     def get_recipe_summary(self, recipe_id: int) -> RecipeTastingSummary:
         """Get aggregated tasting data for a recipe."""
         # Get all notes for recipe

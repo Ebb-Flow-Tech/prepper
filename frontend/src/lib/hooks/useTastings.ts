@@ -161,6 +161,14 @@ export function useDeleteTastingNote() {
 
 // ============ Recipe Tasting History ============
 
+export function useRecipesWithFeedback(userId: string | null) {
+  return useQuery({
+    queryKey: ['recipes-with-feedback', userId],
+    queryFn: () => api.getRecipesWithFeedback(userId!),
+    enabled: userId !== null,
+  });
+}
+
 export function useRecipeTastingNotes(recipeId: number | null) {
   return useQuery({
     queryKey: ['recipe', recipeId, 'tasting-notes'],

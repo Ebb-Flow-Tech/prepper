@@ -1,40 +1,464 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FlaskConical } from 'lucide-react';
-import { useRecipes } from '@/lib/hooks';
-import { RecipeCard } from '@/components/recipes';
-import { PageHeader, SearchInput, Skeleton } from '@/components/ui';
+import Link from 'next/link';
+import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus } from 'lucide-react';
+import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes } from '@/lib/hooks/useTastings';
+import { useRecipes, useForkRecipe } from '@/lib/hooks/useRecipes';
+import { PageHeader, SearchInput, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge, Button, Modal, Input } from '@/components/ui';
 import { useAppState } from '@/lib/store';
+import { formatCurrency } from '@/lib/utils';
+import type { Recipe, RecipeStatus, TastingNoteWithRecipe, TastingSession, RecipeTasting } from '@/types';
+
+const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
+  draft: 'secondary',
+  active: 'success',
+  archived: 'warning',
+};
+
+interface RndRecipeCardProps {
+  recipe: Recipe;
+  isOwned: boolean;
+  onFork?: () => void;
+  isFork?: boolean;
+  isForking?: boolean;
+}
+
+function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipeCardProps) {
+  return (
+    <Card className={isFork ? 'border-l-4 border-l-blue-500' : ''}>
+      <Link href={`/rnd/r/${recipe.id}`} className="block">
+        <CardHeader>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <CardTitle className="truncate text-xl">{recipe.name}</CardTitle>
+              {onFork && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 h-7 px-2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onFork();
+                  }}
+                  disabled={isForking}
+                >
+                  <GitFork className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {recipe.yield_quantity} {recipe.yield_unit}
+            </p>
+          </div>
+
+          {recipe.image_url ? (
+            <img
+              src={recipe.image_url}
+              alt={recipe.name}
+              className="w-16 h-16 rounded-md object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+              <ImagePlus className="h-6 w-6" />
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
+              {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+            </Badge>
+            {isFork && (
+              <Badge variant="info" className="text-sm">
+                <GitFork className="h-3 w-3 mr-1" />
+                Fork
+              </Badge>
+            )}
+            {isOwned && (
+              <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+            )}
+          </div>
+        </CardContent>
+
+        <CardFooter>
+          <div className="flex items-center justify-between w-full">
+            <div className="text-base">
+              <span className="text-zinc-500 dark:text-zinc-400">Cost: </span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {formatCurrency(recipe.cost_price)}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-500">/portion</span>
+            </div>
+            <ExternalLink className="h-4 w-4 text-zinc-400" />
+          </div>
+        </CardFooter>
+      </Link>
+    </Card>
+  );
+}
+
+// WIP card with sessions
+interface WipRecipeCardProps {
+  recipe: Recipe;
+  isOwned: boolean;
+}
+
+function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
+  const { data: tastingNotes } = useRecipeTastingNotes(recipe.id);
+  const createSession = useCreateTastingSession();
+  const addRecipeToSession = useAddRecipeToSession();
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [sessionName, setSessionName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Get unique sessions from tasting notes
+  const sessions = useMemo(() => {
+    if (!tastingNotes) return [];
+    const sessionMap = new Map<number, { id: number; name: string; date: string }>();
+    tastingNotes.forEach((note: TastingNoteWithRecipe) => {
+      if (note.session_id && note.session_name && !sessionMap.has(note.session_id)) {
+        sessionMap.set(note.session_id, {
+          id: note.session_id,
+          name: note.session_name,
+          date: note.session_date || '',
+        });
+      }
+    });
+    return Array.from(sessionMap.values());
+  }, [tastingNotes]);
+
+  const handleCreateSession = async () => {
+    if (!sessionName.trim()) return;
+
+    setIsCreating(true);
+    try {
+      // Create the session with tomorrow at midnight as default
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+
+      const session = await createSession.mutateAsync({
+        name: sessionName.trim(),
+        date: tomorrow.toISOString(),
+      });
+
+      // Add the current recipe to the session
+      await addRecipeToSession.mutateAsync({
+        sessionId: session.id,
+        data: { recipe_id: recipe.id },
+      });
+
+      setShowCreateModal(false);
+      setSessionName('');
+    } catch (error) {
+      console.error('Failed to create tasting session:', error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <>
+      <Card className="border-l-4 border-l-blue-500">
+        <Link href={`/rnd/r/${recipe.id}`} className="block">
+          <CardHeader>
+            <div className="flex-1 min-w-0">
+              <CardTitle className="truncate text-xl">{recipe.name}</CardTitle>
+              <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
+                {recipe.yield_quantity} {recipe.yield_unit}
+              </p>
+            </div>
+
+            {recipe.image_url ? (
+              <img
+                src={recipe.image_url}
+                alt={recipe.name}
+                className="w-16 h-16 rounded-md object-cover"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                <ImagePlus className="h-6 w-6" />
+              </div>
+            )}
+          </CardHeader>
+
+          <CardContent>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
+                {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+              </Badge>
+              <Badge variant="info" className="text-sm">
+                <GitFork className="h-3 w-3 mr-1" />
+                Fork
+              </Badge>
+              {isOwned && (
+                <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+              )}
+            </div>
+
+            {/* Sessions */}
+            <div className="mt-3 space-y-1">
+              <p className="text-xs text-muted-foreground font-medium">Tasting Sessions:</p>
+              <div className="flex flex-wrap gap-1">
+                {sessions.map((session) => (
+                  <Badge key={session.id} variant="secondary" className="text-xs">
+                    <Wine className="h-3 w-3 mr-1" />
+                    {session.name}
+                  </Badge>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Session
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter>
+            <div className="flex items-center justify-between w-full">
+              <div className="text-base">
+                <span className="text-zinc-500 dark:text-zinc-400">Cost: </span>
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {formatCurrency(recipe.cost_price)}
+                </span>
+                <span className="text-zinc-400 dark:text-zinc-500">/portion</span>
+              </div>
+              <ExternalLink className="h-4 w-4 text-zinc-400" />
+            </div>
+          </CardFooter>
+        </Link>
+      </Card>
+
+      {/* Create Tasting Session Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setSessionName('');
+        }}
+        title="Create Tasting Session"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Create a new tasting session that includes "{recipe.name}".
+          </p>
+          <div>
+            <label
+              htmlFor="session-name"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
+              Session Name
+            </label>
+            <Input
+              id="session-name"
+              placeholder="e.g., December Menu Tasting"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && sessionName.trim()) {
+                  handleCreateSession();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreateModal(false);
+                setSessionName('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSession}
+              disabled={!sessionName.trim() || isCreating}
+            >
+              {isCreating ? 'Creating...' : 'Create Session'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// Review column session card - filters to show only if session contains WIP recipes
+interface ReviewSessionCardProps {
+  session: TastingSession;
+  wipRecipeIds: Set<number>;
+}
+
+function ReviewSessionCard({ session, wipRecipeIds }: ReviewSessionCardProps) {
+  const { data: sessionRecipes } = useSessionRecipes(session.id);
+
+  // Check if this session has any WIP recipes
+  const hasWipRecipes = useMemo(() => {
+    if (!sessionRecipes) return false;
+    return sessionRecipes.some((rt: RecipeTasting) => wipRecipeIds.has(rt.recipe_id));
+  }, [sessionRecipes, wipRecipeIds]);
+
+  // Don't render if no WIP recipes in this session
+  if (!hasWipRecipes) return null;
+
+  const formattedDate = new Date(session.date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  return (
+    <Card>
+      <Link href={`/tastings/${session.id}`} className="block">
+        <CardHeader>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="truncate text-xl">{session.name}</CardTitle>
+            <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {formattedDate}
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+            <Wine className="h-6 w-6" />
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="default" className="text-sm">
+              <Wine className="h-3 w-3 mr-1" />
+              Tasting Session
+            </Badge>
+            {session.location && (
+              <Badge variant="secondary" className="text-sm">
+                {session.location}
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+
+        <CardFooter>
+          <div className="flex items-center justify-between w-full">
+            <div className="text-sm text-muted-foreground">
+              {session.attendees?.length ?? 0} attendee{session.attendees?.length !== 1 ? 's' : ''}
+            </div>
+            <ExternalLink className="h-4 w-4 text-zinc-400" />
+          </div>
+        </CardFooter>
+      </Link>
+    </Card>
+  );
+}
+
+// Group structure for WIP column: parent recipe ID -> its forks
+interface WipGroup {
+  parentId: number;
+  parentName: string;
+  forks: Recipe[];
+}
 
 export default function RndPage() {
   const { userId } = useAppState();
-  const { data: recipes, isLoading, error } = useRecipes();
+  const { data: recipesWithFeedback, isLoading: isLoadingFeedback, error: feedbackError } = useRecipesWithFeedback(userId);
+  const { data: allRecipes, isLoading: isLoadingRecipes } = useRecipes();
+  const { data: tastingSessions, isLoading: isLoadingSessions } = useTastingSessions();
+  const forkMutation = useForkRecipe();
 
   const [search, setSearch] = useState('');
 
-  // Filter draft recipes that the user created
-  const filteredRecipes = useMemo(() => {
-    if (!recipes) return [];
+  const isLoading = isLoadingFeedback || isLoadingRecipes || isLoadingSessions;
 
-    return recipes.filter((recipe) => {
-      // Only show draft recipes
-      if (recipe.status !== 'draft') {
+  // Filter tasting sessions by search
+  const filteredSessions = useMemo(() => {
+    if (!tastingSessions) return [];
+
+    return tastingSessions.filter((session) => {
+      if (search && !session.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
       }
-      // Only show recipes created by the current user
-      if (recipe.created_by !== userId) {
-        return false;
-      }
-      // Filter by search
+      return true;
+    });
+  }, [tastingSessions, search]);
+
+  // Filter recipes by search
+  const filteredTodoRecipes = useMemo(() => {
+    if (!recipesWithFeedback) return [];
+
+    return recipesWithFeedback.filter((recipe) => {
       if (search && !recipe.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
       }
       return true;
     });
-  }, [recipes, search, userId]);
+  }, [recipesWithFeedback, search]);
 
-  if (error) {
+  // Find direct forks of To Do recipes (owned by user) for WIP column
+  const wipGroups = useMemo(() => {
+    if (!allRecipes || !recipesWithFeedback) return [];
+
+    const groups: WipGroup[] = [];
+
+    // For each To Do recipe, find its direct forks owned by the user
+    filteredTodoRecipes.forEach((todoRecipe) => {
+      const forks = allRecipes.filter((recipe) =>
+        recipe.root_id === todoRecipe.id &&
+        recipe.owner_id === userId
+      );
+
+      // Apply search filter to forks as well
+      const filteredForks = forks.filter((fork) => {
+        if (search && !fork.name.toLowerCase().includes(search.toLowerCase())) {
+          return false;
+        }
+        return true;
+      });
+
+      if (filteredForks.length > 0) {
+        groups.push({
+          parentId: todoRecipe.id,
+          parentName: todoRecipe.name,
+          forks: filteredForks,
+        });
+      }
+    });
+
+    return groups;
+  }, [allRecipes, recipesWithFeedback, filteredTodoRecipes, userId, search]);
+
+  // Count total WIP items
+  const wipCount = useMemo(() => {
+    return wipGroups.reduce((sum, group) => sum + group.forks.length, 0);
+  }, [wipGroups]);
+
+  // Get all WIP recipe IDs
+  const wipRecipeIds = useMemo(() => {
+    const ids = new Set<number>();
+    wipGroups.forEach((group) => {
+      group.forks.forEach((fork) => ids.add(fork.id));
+    });
+    return ids;
+  }, [wipGroups]);
+
+  const handleFork = (recipeId: number) => {
+    if (!userId) return;
+    forkMutation.mutate({ id: recipeId, newOwnerId: userId });
+  };
+
+  if (feedbackError) {
     return (
       <div className="p-6">
         <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
@@ -46,17 +470,17 @@ export default function RndPage() {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6">
         <PageHeader
           title="R&D Workspace"
-          description="Experiment with recipe ideas and iterate on dishes"
+          description="Track and iterate on recipes with tasting feedback"
         />
 
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">
             <SearchInput
-              placeholder="Search experiments..."
+              placeholder="Search recipes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onClear={() => setSearch('')}
@@ -66,37 +490,107 @@ export default function RndPage() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-4">
+                <Skeleton className="h-10 rounded-lg" />
+                <Skeleton className="h-48 rounded-lg" />
+                <Skeleton className="h-48 rounded-lg" />
+              </div>
             ))}
           </div>
         )}
 
-        {/* Empty State */}
-        {!isLoading && filteredRecipes.length === 0 && (
-          <div className="text-center py-12">
-            <FlaskConical className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
-            <p className="text-zinc-500 dark:text-zinc-400">
-              {search ? 'No experiments match your search' : 'No experiments yet'}
-            </p>
-            <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-2">
-              Create a new recipe in the Canvas to start experimenting
-            </p>
-          </div>
-        )}
+        {/* Kanban Board */}
+        {!isLoading && (
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+            {/* To Do Column */}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
+                <span className="text-muted-foreground"><ClipboardList className="h-5 w-5" /></span>
+                <h2 className="font-semibold text-lg">To Do</h2>
+                <span className="ml-auto text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                  {filteredTodoRecipes.length}
+                </span>
+              </div>
 
-        {/* Recipe Grid */}
-        {!isLoading && filteredRecipes.length > 0 && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredRecipes.map((recipe) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                href={`/rnd/r/${recipe.id}`}
-                isOwned={userId !== null && recipe.owner_id === userId}
-              />
-            ))}
+              <div className="flex-1 space-y-4 min-h-[200px]">
+                {filteredTodoRecipes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                    <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
+                    <p className="text-sm text-muted-foreground">No recipes to work on</p>
+                  </div>
+                ) : (
+                  filteredTodoRecipes.map((recipe) => (
+                    <RndRecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      isOwned={userId !== null && recipe.owner_id === userId}
+                      onFork={() => handleFork(recipe.id)}
+                      isForking={forkMutation.isPending && forkMutation.variables?.id === recipe.id}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* WIP Column */}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
+                <span className="text-muted-foreground"><Loader2 className="h-5 w-5" /></span>
+                <h2 className="font-semibold text-lg">WIP</h2>
+                <span className="ml-auto text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                  {wipCount}
+                </span>
+              </div>
+
+              <div className="flex-1 space-y-4 min-h-[200px]">
+                {wipGroups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                    <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
+                    <p className="text-sm text-muted-foreground">No work in progress</p>
+                    <p className="text-xs text-muted-foreground mt-1">Fork a recipe from To Do to start</p>
+                  </div>
+                ) : (
+                  wipGroups.map((group) => (
+                    <div key={group.parentId} className="space-y-2">
+                      <p className="text-xs text-muted-foreground font-medium px-1">
+                        Forks of "{group.parentName}"
+                      </p>
+                      {group.forks.map((fork) => (
+                        <WipRecipeCard
+                          key={fork.id}
+                          recipe={fork}
+                          isOwned={userId !== null && fork.owner_id === userId}
+                        />
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Review Column */}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
+                <span className="text-muted-foreground"><CheckCircle className="h-5 w-5" /></span>
+                <h2 className="font-semibold text-lg">Review</h2>
+              </div>
+
+              <div className="flex-1 space-y-4 min-h-[200px]">
+                {filteredSessions.length === 0 || wipRecipeIds.size === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                    <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
+                    <p className="text-sm text-muted-foreground">No tasting sessions</p>
+                    <p className="text-xs text-muted-foreground mt-1">Create a session from a WIP recipe</p>
+                  </div>
+                ) : (
+                  filteredSessions.map((session) => (
+                    <ReviewSessionCard key={session.id} session={session} wipRecipeIds={wipRecipeIds} />
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

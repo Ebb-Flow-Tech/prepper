@@ -7,11 +7,25 @@ from app.api.deps import get_session
 from app.models import (
     TastingNoteWithRecipe,
     RecipeTastingSummary,
+    Recipe,
 )
 from app.domain import TastingNoteService
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/with-feedback/{user_id}",
+    response_model=list[Recipe],
+)
+def get_recipes_with_feedback(
+    user_id: str,
+    session: Session = Depends(get_session),
+):
+    """Get all unique recipes that have at least one tasting note."""
+    service = TastingNoteService(session)
+    return service.get_recipes_with_feedback(user_id=user_id)
 
 
 @router.get(

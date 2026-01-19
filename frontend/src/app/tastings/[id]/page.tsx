@@ -12,9 +12,10 @@ import {
   ChefHat,
   X,
   Clock,
+  Pencil,
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
-import { format, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import 'react-day-picker/style.css';
 import {
   useTastingSession,
@@ -33,6 +34,7 @@ import {
   Input,
   EditableCell,
   SearchInput,
+  Badge,
 } from '@/components/ui';
 import type { Recipe, RecipeTasting } from '@/types';
 import { useAppState } from '@/lib/store';
@@ -259,6 +261,192 @@ function parseDateTimeComponents(dateString: string) {
   };
 }
 
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+interface EditableRecipientsProps {
+  recipients: string[];
+  onUpdate: (recipients: string[]) => void;
+}
+
+function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localRecipients, setLocalRecipients] = useState<string[]>(recipients);
+  const [currentEmail, setCurrentEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local state when recipients prop changes (e.g., after API update)
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalRecipients(recipients);
+    }
+  }, [recipients, isEditing]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
+
+  const handleEmailInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setError(null);
+
+    if (value.endsWith(' ') && value.trim()) {
+      const email = value.trim();
+      if (email && !localRecipients.includes(email)) {
+        setLocalRecipients([...localRecipients, email]);
+      }
+      setCurrentEmail('');
+    } else {
+      setCurrentEmail(value);
+    }
+  };
+
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const email = currentEmail.trim();
+      if (email && !localRecipients.includes(email)) {
+        setLocalRecipients([...localRecipients, email]);
+      }
+      setCurrentEmail('');
+    } else if (e.key === 'Backspace' && !currentEmail && localRecipients.length > 0) {
+      setLocalRecipients(localRecipients.slice(0, -1));
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setCurrentEmail('');
+      setLocalRecipients(recipients); // Reset to original
+    }
+  };
+
+  const removeRecipient = (emailToRemove: string) => {
+    setLocalRecipients(localRecipients.filter((email) => email !== emailToRemove));
+    setError(null);
+  };
+
+  const handleDone = () => {
+    // Add current email if there's one being typed
+    let finalRecipients = localRecipients;
+    const trimmedEmail = currentEmail.trim();
+    if (trimmedEmail && !localRecipients.includes(trimmedEmail)) {
+      finalRecipients = [...localRecipients, trimmedEmail];
+    }
+
+    // Check for invalid emails before closing
+    const invalidEmails = finalRecipients.filter((email) => !isValidEmail(email));
+    if (invalidEmails.length > 0) {
+      setError(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`);
+      setLocalRecipients(finalRecipients); // Update local state to show the invalid email
+      setCurrentEmail('');
+      return;
+    }
+
+    // Only call onUpdate (API) when clicking Done
+    onUpdate(finalRecipients);
+    setIsEditing(false);
+    setCurrentEmail('');
+    setError(null);
+  };
+
+  if (!isEditing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Users className="h-4 w-4 text-zinc-400" />
+        {recipients.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {recipients.map((email) => (
+              <Badge
+                key={email}
+                variant={isValidEmail(email) ? 'secondary' : 'destructive'}
+                className="text-xs"
+              >
+                {email}
+              </Badge>
+            ))}
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              title="Edit recipients"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-sm italic"
+          >
+            Add recipients
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <Users className="h-4 w-4 text-zinc-400" />
+        <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Recipients</span>
+      </div>
+      <div
+        className={`flex flex-wrap items-center gap-2 p-2 border rounded-md bg-white dark:bg-zinc-900 min-h-[42px] cursor-text ${
+          error ? 'border-red-500' : 'border-zinc-300 dark:border-zinc-700'
+        }`}
+        onClick={() => inputRef.current?.focus()}
+      >
+        {localRecipients.map((email) => (
+          <Badge
+            key={email}
+            variant={isValidEmail(email) ? 'default' : 'destructive'}
+            className="flex items-center gap-1 pr-1"
+          >
+            {email}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeRecipient(email);
+              }}
+              className="ml-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full p-0.5"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder={localRecipients.length === 0 ? 'Enter email addresses...' : ''}
+          value={currentEmail}
+          onChange={handleEmailInput}
+          onKeyDown={handleEmailKeyDown}
+          className="flex-1 min-w-[150px] bg-transparent border-none outline-none text-sm placeholder:text-zinc-400"
+        />
+      </div>
+      {error ? (
+        <p className="text-xs text-red-500">{error}</p>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Press space or enter to add. Backspace to remove last. Escape to cancel.
+        </p>
+      )}
+      <div className="flex items-center gap-2 mt-1">
+        <Button type="button" size="sm" onClick={handleDone}>
+          Done
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function TastingSessionDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -316,7 +504,7 @@ export default function TastingSessionDetailPage() {
     return `${dateStr}T${get24HourTime()}`;
   };
 
-  const handleUpdateSession = async (data: { name?: string; location?: string | null; date?: string }) => {
+  const handleUpdateSession = async (data: { name?: string; location?: string | null; date?: string; attendees?: string[] }) => {
     if (!sessionId) return;
     try {
       await updateSession.mutateAsync({ id: sessionId, data });
@@ -519,12 +707,10 @@ export default function TastingSessionDetailPage() {
               />
             </div>
 
-            {session.attendees && session.attendees.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <Users className="h-4 w-4 text-zinc-400" />
-                <span>{session.attendees.join(', ')}</span>
-              </div>
-            )}
+            <EditableRecipients
+              recipients={session.attendees || []}
+              onUpdate={(attendees) => handleUpdateSession({ attendees })}
+            />
           </div>
 
           {session.notes && (
