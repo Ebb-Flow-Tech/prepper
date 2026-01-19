@@ -77,7 +77,7 @@ The core of the agent is the agentic loop in `categorize_ingredient()`:
 ```python
 while True:
     response = self.client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=1024,
         system=SYSTEM_PROMPT,
         tools=TOOLS,

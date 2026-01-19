@@ -2,7 +2,7 @@
 
 import { use, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
+import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, RefreshCw, Trash2, Truck } from 'lucide-react';
 import {
   useIngredient,
   useUpdateIngredient,
@@ -13,6 +13,7 @@ import {
   useRemoveIngredientSupplier,
   useUpdateIngredientSupplier,
   useCategories,
+  useCategorizeIngredient,
 } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Select, Skeleton } from '@/components/ui';
@@ -119,21 +120,28 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const updateSupplierMutation = useUpdateIngredientSupplier();
   const updateIngredientMutation = useUpdateIngredient();
   const deactivateIngredientMutation = useDeactivateIngredient();
+  const categorizeIngredientMutation = useCategorizeIngredient();
 
   const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean; category_id?: number | null }) => {
     updateIngredientMutation.mutate({ id: ingredientId, data });
   };
 
-  const handleCategoryChange = (categoryId: number | null) => {
-    handleUpdateIngredient({ category_id: categoryId });
-    const categoryName = categoryId ? categories.find((c) => c.id === categoryId)?.name : 'None';
-    toast.success(`Category updated to ${categoryName}`);
-  };
+  const handleReassignCategory = async () => {
+    if (!ingredient) return;
 
-  const categoryOptions = [
-    { value: '', label: 'No category' },
-    ...categories.map((cat) => ({ value: String(cat.id), label: cat.name })),
-  ];
+    try {
+      const result = await categorizeIngredientMutation.mutateAsync(ingredient.name);
+      if (result.category_id) {
+        handleUpdateIngredient({ category_id: result.category_id });
+        const categoryName = categories.find((c) => c.id === result.category_id)?.name ?? 'Unknown';
+        toast.success(`Category assigned: ${categoryName}`);
+      } else {
+        toast.error('Failed to determine category');
+      }
+    } catch {
+      toast.error('Failed to reassign category');
+    }
+  };
 
   const currentCategory = categories.find((c) => c.id === ingredient?.category_id);
 
@@ -426,15 +434,19 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-zinc-500 dark:text-zinc-400">Category:</span>
-                        <Select
-                          value={ingredient.category_id ? String(ingredient.category_id) : ''}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            handleCategoryChange(value === '' ? null : Number(value));
-                          }}
-                          options={categoryOptions}
-                          className="w-48"
-                        />
+                        <Badge variant={currentCategory ? 'default' : 'secondary'}>
+                          {currentCategory?.name ?? 'N/A'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleReassignCategory}
+                          disabled={categorizeIngredientMutation.isPending}
+                          className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-orange-950"
+                        >
+                          <RefreshCw className={`h-3 w-3 mr-1 ${categorizeIngredientMutation.isPending ? 'animate-spin' : ''}`} />
+                          {categorizeIngredientMutation.isPending ? 'Assigning...' : 'Reassign'}
+                        </Button>
                       </div>
                     </div>
 
