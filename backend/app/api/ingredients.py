@@ -12,8 +12,10 @@ from app.models import (
     IngredientSource,
     SupplierEntryCreate,
     SupplierEntryUpdate,
+    Category,
 )
 from app.domain import IngredientService
+from app.domain.category_service import CategoryService
 
 router = APIRouter()
 
@@ -53,10 +55,13 @@ def list_ingredients(
     )
 
 
-@router.get("/categories", response_model=list[str])
-def list_categories():
-    """List all available food categories."""
-    return [c.value for c in FoodCategory]
+@router.get("/categories", response_model=list[Category])
+def list_categories(
+    session: Session = Depends(get_session),
+):
+    """List all available ingredient categories from the database."""
+    service = CategoryService(session)
+    return service.list_categories(active_only=True)
 
 
 @router.get("/{ingredient_id}", response_model=Ingredient)

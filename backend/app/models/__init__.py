@@ -69,6 +69,11 @@ from app.models.recipe_tasting import (
     RecipeTasting,
     RecipeTastingCreate,
 )
+from app.models.category import (
+    Category,
+    CategoryCreate,
+    CategoryUpdate,
+)
 
 __all__ = [
     # Ingredient
@@ -131,4 +136,8 @@ __all__ = [
     # RecipeTasting
     "RecipeTasting",
     "RecipeTastingCreate",
+    # Category
+    "Category",
+    "CategoryCreate",
+    "CategoryUpdate",
 ]

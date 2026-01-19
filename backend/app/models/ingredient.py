@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.recipe_ingredient import RecipeIngredient
+    from app.models.category import Category
 
 
 class FoodCategory(str, Enum):
@@ -94,8 +95,11 @@ class Ingredient(IngredientBase, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Food category - stored as VARCHAR to avoid native ENUM issues
+    # Food category - stored as VARCHAR to avoid native ENUM issues (legacy field)
     category: str | None = Field(default=None, sa_column=Column(String(50), nullable=True))
+
+    # Foreign key to categories table
+    category_id: int | None = Field(default=None, foreign_key="categories.id", index=True)
 
     # Source tracking - stored as VARCHAR to avoid native ENUM issues
     source: str = Field(
@@ -121,6 +125,9 @@ class Ingredient(IngredientBase, table=True):
 
     # Relationship to RecipeIngredient
     recipe_ingredients: list["RecipeIngredient"] = Relationship(back_populates="ingredient")
+
+    # Relationship to Category
+    category_rel: Optional["Category"] = Relationship(back_populates="ingredients")
 
 
 class IngredientCreate(SQLModel):
