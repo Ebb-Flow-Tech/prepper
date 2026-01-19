@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
-import { useCategories, useCreateCategory, useUpdateCategory, useDeactivateCategory } from '@/lib/hooks';
-import { CategoryCard } from '@/components/categories';
+import { useCategories, useUpdateCategory, useDeactivateCategory } from '@/lib/hooks';
+import { CategoryCard, AddCategoryModal } from '@/components/categories';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Category } from '@/types';
@@ -11,83 +11,6 @@ import type { Category } from '@/types';
 interface CategoryFormData {
   name: string;
   description: string;
-}
-
-function NewCategoryForm({ onClose }: { onClose: () => void }) {
-  const createCategory = useCreateCategory();
-  const [formData, setFormData] = useState<CategoryFormData>({
-    name: '',
-    description: '',
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Category name is required');
-      return;
-    }
-
-    createCategory.mutate(
-      {
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
-      },
-      {
-        onSuccess: () => {
-          toast.success('Category created');
-          onClose();
-        },
-        onError: () => {
-          toast.error('Failed to create category');
-        },
-      }
-    );
-  };
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 shadow-sm"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium">New Category</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} type="button">
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Name *</label>
-          <Input
-            value={formData.name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g., Proteins"
-            autoFocus
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <Textarea
-            value={formData.description}
-            onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder="Optional description for this category"
-            rows={2}
-          />
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} type="button">
-            Cancel
-          </Button>
-          <Button type="submit" disabled={createCategory.isPending}>
-            {createCategory.isPending ? 'Creating...' : 'Create Category'}
-          </Button>
-        </div>
-      </div>
-    </form>
-  );
 }
 
 interface EditCategoryModalProps {
@@ -233,19 +156,13 @@ export function CategoriesTab() {
           title="Categories"
           description="Manage ingredient categories"
         >
-          <Button onClick={() => setShowForm(true)} disabled={showForm}>
+          <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Category</span>
           </Button>
         </PageHeader>
 
-        {showForm && (
-          <div className="w-full mb-4">
-            <div className="w-fit">
-              <NewCategoryForm onClose={() => setShowForm(false)} />
-            </div>
-          </div>
-        )}
+        <AddCategoryModal isOpen={showForm} onClose={() => setShowForm(false)} />
 
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">

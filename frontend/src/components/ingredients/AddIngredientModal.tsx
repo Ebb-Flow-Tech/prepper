@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useCreateIngredient, useSuppliers, useCategories } from '@/lib/hooks';
-import { Button, Input, Select } from '@/components/ui';
-import { cn } from '@/lib/utils';
+import { Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
@@ -69,7 +68,6 @@ interface AddIngredientModalProps {
 }
 
 export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
   const createIngredient = useCreateIngredient();
   const { data: categories = [] } = useCategories();
   const { data: suppliers = [] } = useSuppliers();
@@ -98,35 +96,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
     return suppliers.filter((s) => !addedSupplierIds.has(s.id.toString()));
   }, [suppliers, supplierEntries]);
 
-  // Handle escape key to close modal
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, handleKeyDown]);
-
-  // Focus trap
-  useEffect(() => {
-    if (isOpen && modalRef.current) {
-      modalRef.current.focus();
-    }
-  }, [isOpen]);
-
-  // Reset form only after successful submission (handled in handleSubmit via onClose)
+  // Reset form only after successful submission
   const resetForm = useCallback(() => {
     setName('');
     setBaseUnit('g');
@@ -248,160 +218,118 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      {/* Backdrop - click to close */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        aria-hidden="true"
-        onClick={onClose}
-      />
+    <Modal isOpen={isOpen} onClose={onClose} title="Add New Ingredient" maxWidth="max-w-2xl">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Info Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Basic Information
+          </h3>
 
-      {/* Modal content */}
-      <div
-        ref={modalRef}
-        tabIndex={-1}
-        className={cn(
-          'relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl',
-          'dark:bg-zinc-900 dark:border dark:border-zinc-800',
-          'focus:outline-none'
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <h2
-            id="modal-title"
-            className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
-          >
-            Add New Ingredient
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            aria-label="Close modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+              Ingredient Name *
+            </label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Olive Oil, Chicken Breast"
+              autoFocus
+            />
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Info Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Basic Information
-            </h3>
-
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                Ingredient Name *
+                Base Unit *
               </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Olive Oil, Chicken Breast"
-                autoFocus
+              <Select
+                value={baseUnit}
+                onChange={(e) => setBaseUnit(e.target.value)}
+                options={UNIT_OPTIONS}
               />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                  Base Unit *
-                </label>
-                <Select
-                  value={baseUnit}
-                  onChange={(e) => setBaseUnit(e.target.value)}
-                  options={UNIT_OPTIONS}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                  Cost per Unit (optional)
-                </label>
-                <Input
-                  type="number"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  placeholder="0.00"
-                  min={0}
-                  step={0.01}
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Cost per Unit (optional)
+              </label>
+              <Input
+                type="number"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="0.00"
+                min={0}
+                step={0.01}
+              />
             </div>
-
-            {categoryOptions.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                  Category {!selectedCategory && name && `(auto: ${autoCategory})`}
-                </label>
-                <Select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
-                />
-              </div>
-            )}
           </div>
 
-          {/* Suppliers Section */}
-          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Suppliers (optional)
-              </h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddSupplierEntry}
-                disabled={availableSuppliers.length === 0 && supplierEntries.length === suppliers.length}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Supplier
-              </Button>
+          {categoryOptions.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Category {!selectedCategory && name && `(auto: ${autoCategory})`}
+              </label>
+              <Select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
+              />
             </div>
+          )}
+        </div>
 
-            {supplierEntries.length === 0 ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg">
-                No suppliers added. Click "Add Supplier" to link suppliers to this ingredient.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {supplierEntries.map((entry, index) => (
-                  <SupplierEntryForm
-                    key={entry.id}
-                    entry={entry}
-                    index={index}
-                    suppliers={suppliers}
-                    usedSupplierIds={supplierEntries.filter((e) => e.id !== entry.id).map((e) => e.supplier_id)}
-                    baseUnit={baseUnit}
-                    onChange={handleSupplierEntryChange}
-                    onRemove={handleRemoveSupplierEntry}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-700">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !name.trim()}>
-              {isSubmitting ? 'Creating...' : 'Create Ingredient'}
+        {/* Suppliers Section */}
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Suppliers (optional)
+            </h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddSupplierEntry}
+              disabled={availableSuppliers.length === 0 && supplierEntries.length === suppliers.length}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Supplier
             </Button>
           </div>
-        </form>
-      </div>
-    </div>
+
+          {supplierEntries.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg">
+              No suppliers added. Click "Add Supplier" to link suppliers to this ingredient.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {supplierEntries.map((entry, index) => (
+                <SupplierEntryForm
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  suppliers={suppliers}
+                  usedSupplierIds={supplierEntries.filter((e) => e.id !== entry.id).map((e) => e.supplier_id)}
+                  baseUnit={baseUnit}
+                  onChange={handleSupplierEntryChange}
+                  onRemove={handleRemoveSupplierEntry}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-700">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting || !name.trim()}>
+            {isSubmitting ? 'Creating...' : 'Create Ingredient'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

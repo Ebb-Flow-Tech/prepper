@@ -3,8 +3,9 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
-import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
+import { useSuppliers, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ConfirmModal } from '@/components/ui';
+import { AddSupplierModal } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
@@ -102,7 +103,7 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
         ) : (
           <div className="flex items-center justify-between w-full">
             <Link href={`/suppliers/${supplier.id}`} className="truncate flex-1">
-              <CardTitle className="truncate cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
+              <CardTitle className="truncate text-xl cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
                 {supplier.name}
               </CardTitle>
             </Link>
@@ -189,84 +190,6 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
   );
 }
 
-function NewSupplierForm({ onClose }: { onClose: () => void }) {
-  const createSupplier = useCreateSupplier();
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      toast.error('Supplier name is required');
-      return;
-    }
-    createSupplier.mutate(
-      {
-        name: name.trim(),
-        address: address.trim() || undefined,
-        phone_number: phone.trim() || undefined,
-        email: email.trim() || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success('Supplier created');
-          onClose();
-        },
-        onError: () => toast.error('Failed to create supplier'),
-      }
-    );
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800">
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Supplier name"
-        autoFocus
-      />
-      <div className="flex items-center gap-2">
-        <MapPin className="h-4 w-4 text-zinc-400 shrink-0" />
-        <Input
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Address"
-          className="flex-1"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Phone className="h-4 w-4 text-zinc-400 shrink-0" />
-        <Input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone number"
-          className="flex-1"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Mail className="h-4 w-4 text-zinc-400 shrink-0" />
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="flex-1"
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={createSupplier.isPending}>
-          Add
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 export default function SuppliersPage() {
   const { data: suppliers, isLoading, error } = useSuppliers();
   const [search, setSearch] = useState('');
@@ -300,18 +223,12 @@ export default function SuppliersPage() {
           title="Suppliers"
           description="Manage your ingredient suppliers"
         >
-          <Button onClick={() => setShowForm(true)} disabled={showForm}>
+          <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Supplier</span>
           </Button>
         </PageHeader>
-        {showForm && (
-          <div className="w-full d-flex justify-items-end">
-            <div className="w-fit mb-3">
-              <NewSupplierForm onClose={() => setShowForm(false)} />
-            </div>
-          </div>
-        )}
+        <AddSupplierModal isOpen={showForm} onClose={() => setShowForm(false)} />
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">

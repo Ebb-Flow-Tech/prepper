@@ -633,10 +633,12 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                           >
                             <td className="py-3 px-2 text-zinc-900 dark:text-zinc-100 font-medium">
-                              <EditableCell
-                                value={supplier.supplier_name}
-                                onSave={(value) => handleUpdateSupplier(supplier.supplier_id, { supplier_name: value })}
-                              />
+                              <Link
+                                href={`/suppliers/${supplier.supplier_id}`}
+                                className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                              >
+                                {supplier.supplier_name}
+                              </Link>
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                               <EditableCell
