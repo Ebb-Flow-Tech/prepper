@@ -8,6 +8,7 @@ export interface Ingredient {
   base_unit: string;
   cost_per_base_unit: number | null;
   is_active: boolean;
+  category_id: number | null;
   created_at: string;
   updated_at: string;
   suppliers?: IngredientSupplierEntry[];
@@ -137,6 +138,7 @@ export interface UpdateIngredientRequest {
   base_unit?: string;
   cost_per_base_unit?: number | null;
   is_active?: boolean;
+  category_id?: number | null;
 }
 
 export interface AddRecipeIngredientRequest {
@@ -412,7 +414,6 @@ export interface SubRecipeReorder {
 export interface Category {
   id: number;
   name: string;
-  slug: string;
   description: string | null;
   is_active: boolean;
   created_at: string;
@@ -421,13 +422,11 @@ export interface Category {
 
 export interface CreateCategoryRequest {
   name: string;
-  slug?: string;
   description?: string | null;
 }
 
 export interface UpdateCategoryRequest {
   name?: string;
-  slug?: string;
   description?: string | null;
   is_active?: boolean;
 }

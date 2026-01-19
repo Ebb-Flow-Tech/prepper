@@ -5,17 +5,20 @@ import Link from 'next/link';
 import { Edit2, Archive, ArchiveRestore, ImagePlus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
-import type { Ingredient } from '@/types';
+import type { Ingredient, Category } from '@/types';
 
 interface IngredientCardProps {
   ingredient: Ingredient;
+  categories?: Category[];
   onEdit?: (ingredient: Ingredient) => void;
   onArchive?: (ingredient: Ingredient) => void;
   onUnarchive?: (ingredient: Ingredient) => void;
 }
 
-export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
+export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
   const [showActions, setShowActions] = useState(false);
+
+  const currentCategory = categories?.find((c) => c.id === ingredient.category_id);
 
   return (
     <Card
@@ -46,10 +49,13 @@ export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: I
       </CardHeader>
 
       <CardContent>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary">{ingredient.base_unit}</Badge>
           {!ingredient.is_active && (
             <Badge variant="warning">Archived</Badge>
+          )}
+          {currentCategory && (
+            <Badge variant="info">{currentCategory.name}</Badge>
           )}
         </div>
       </CardContent>

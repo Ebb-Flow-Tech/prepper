@@ -26,9 +26,6 @@ export function CategoryCard({ category, onEdit, onArchive, onUnarchive }: Categ
           <CardTitle className="truncate">
             {category.name}
           </CardTitle>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {category.slug}
-          </p>
         </div>
 
         <div

@@ -12,6 +12,7 @@ import {
   useAddIngredientSupplier,
   useRemoveIngredientSupplier,
   useUpdateIngredientSupplier,
+  useCategories,
 } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Select, Skeleton } from '@/components/ui';
@@ -111,6 +112,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const { data: ingredient, isLoading, error } = useIngredient(ingredientId);
   const { data: availableSuppliers } = useSuppliers();
   const { data: suppliers = [] } = useIngredientSuppliers(ingredientId);
+  const { data: categories = [] } = useCategories();
 
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();
@@ -118,9 +120,22 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const updateIngredientMutation = useUpdateIngredient();
   const deactivateIngredientMutation = useDeactivateIngredient();
 
-  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean }) => {
+  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean; category_id?: number | null }) => {
     updateIngredientMutation.mutate({ id: ingredientId, data });
   };
+
+  const handleCategoryChange = (categoryId: number | null) => {
+    handleUpdateIngredient({ category_id: categoryId });
+    const categoryName = categoryId ? categories.find((c) => c.id === categoryId)?.name : 'None';
+    toast.success(`Category updated to ${categoryName}`);
+  };
+
+  const categoryOptions = [
+    { value: '', label: 'No category' },
+    ...categories.map((cat) => ({ value: String(cat.id), label: cat.name })),
+  ];
+
+  const currentCategory = categories.find((c) => c.id === ingredient?.category_id);
 
   // Recalculate and update median cost based on current suppliers
   const recalculateMedianCost = (updatedSuppliers: typeof suppliers) => {
@@ -407,6 +422,18 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             });
                           }}
                           options={UNIT_OPTIONS}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-zinc-500 dark:text-zinc-400">Category:</span>
+                        <Select
+                          value={ingredient.category_id ? String(ingredient.category_id) : ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            handleCategoryChange(value === '' ? null : Number(value));
+                          }}
+                          options={categoryOptions}
+                          className="w-48"
                         />
                       </div>
                     </div>

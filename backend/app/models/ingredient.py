@@ -149,6 +149,7 @@ class IngredientUpdate(SQLModel):
     base_unit: str | None = None
     cost_per_base_unit: float | None = None
     category: str | None = None  # Use FoodCategory enum values
+    category_id: int | None = None  # Foreign key to categories table
     source: str | None = None  # "fmh" or "manual"
     master_ingredient_id: int | None = None
     suppliers: list[dict] | None = None

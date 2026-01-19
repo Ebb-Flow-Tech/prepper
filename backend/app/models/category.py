@@ -47,3 +47,4 @@ class CategoryUpdate(SQLModel):
 
     name: str | None = None
     description: str | None = None
+    is_active: bool | None = None

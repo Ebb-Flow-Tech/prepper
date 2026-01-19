@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient, useUpdateIngredient } from '@/lib/hooks';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories } from '@/lib/hooks';
 import { IngredientCard, CategoriesTab } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
@@ -59,6 +59,7 @@ function IngredientsListTab() {
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
+  const { data: categories } = useCategories();
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
@@ -103,7 +104,7 @@ function IngredientsListTab() {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full w-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
           title="Ingredients"
@@ -179,6 +180,7 @@ function IngredientsListTab() {
                   <IngredientCard
                     key={ingredient.id}
                     ingredient={ingredient}
+                    categories={categories}
                     onArchive={handleArchive}
                     onUnarchive={handleUnarchive}
                   />
