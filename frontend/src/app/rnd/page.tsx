@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus } from 'lucide-react';
-import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes } from '@/lib/hooks/useTastings';
+import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus, ChevronDown } from 'lucide-react';
+import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useRecipes, useForkRecipe } from '@/lib/hooks/useRecipes';
 import { PageHeader, SearchInput, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge, Button, Modal, Input } from '@/components/ui';
 import { useAppState } from '@/lib/store';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import type { Recipe, RecipeStatus, TastingNoteWithRecipe, TastingSession, RecipeTasting } from '@/types';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -25,6 +25,9 @@ interface RndRecipeCardProps {
 }
 
 function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipeCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { data: tastingSummary } = useRecipeTastingSummary(recipe.id);
+
   return (
     <Card className={isFork ? 'border-l-4 border-l-blue-500' : ''}>
       <Link href={`/rnd/r/${recipe.id}`} className="block">
@@ -96,6 +99,35 @@ function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipe
           </div>
         </CardFooter>
       </Link>
+
+      {/* Feedback Summary Dropdown */}
+      {tastingSummary && tastingSummary.latest_feedback && (
+        <div className="border-t border-zinc-200 dark:border-zinc-700">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="w-full px-4 py-2 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+              Feedback Summary
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-zinc-500 dark:text-zinc-400 transition-transform ${
+                isExpanded ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {isExpanded && (
+            <div className="px-4 pb-3 text-sm text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/50">
+              <p>{tastingSummary.latest_feedback}</p>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
