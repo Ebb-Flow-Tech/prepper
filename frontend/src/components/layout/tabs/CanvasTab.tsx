@@ -847,6 +847,7 @@ export function CanvasTab() {
           version: 1,
           root_id: null,
           image_url: null,
+          summary_feedback: null,
           created_at: '',
           updated_at: '',
           created_by: '',

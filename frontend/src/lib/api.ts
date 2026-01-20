@@ -623,3 +623,16 @@ export async function categorizeIngredient(
     body: JSON.stringify(data),
   });
 }
+
+export interface FeedbackSummaryResponse {
+  summary: string | null;
+  success: boolean;
+}
+
+export async function summarizeFeedback(
+  recipeId: number
+): Promise<FeedbackSummaryResponse> {
+  return fetchApi<FeedbackSummaryResponse>(`/agents/summarize-feedback/${recipeId}`, {
+    method: 'POST',
+  });
+}

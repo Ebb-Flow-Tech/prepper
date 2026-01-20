@@ -2,12 +2,16 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus, ChevronDown } from 'lucide-react';
-import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useQueryClient } from '@tanstack/react-query';
+import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus, ChevronDown, ChevronUp, RotateCcw, RefreshCw } from 'lucide-react';
+import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes } from '@/lib/hooks/useTastings';
 import { useRecipes, useForkRecipe } from '@/lib/hooks/useRecipes';
+import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
 import { PageHeader, SearchInput, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge, Button, Modal, Input } from '@/components/ui';
 import { useAppState } from '@/lib/store';
 import { formatCurrency, cn } from '@/lib/utils';
+import { updateRecipe } from '@/lib/api';
+import { toast } from 'sonner';
 import type { Recipe, RecipeStatus, TastingNoteWithRecipe, TastingSession, RecipeTasting } from '@/types';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -26,7 +30,71 @@ interface RndRecipeCardProps {
 
 function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipeCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { data: tastingSummary } = useRecipeTastingSummary(recipe.id);
+  const queryClient = useQueryClient();
+  const summarizeMutation = useSummarizeFeedback();
+
+  const handleOpenDropdown = async () => {
+    // If no feedback summary exists, trigger the agent to generate it
+    if (!recipe.summary_feedback) {
+      try {
+        // 1. Use mutation to call the agent to generate the summary
+        const result = await summarizeMutation.mutateAsync(recipe.id);
+
+        if (!result.success || !result.summary) {
+          toast.error('Failed to generate feedback summary');
+          return;
+        }
+
+        // 2. Update the recipe with the generated summary
+        await updateRecipe(recipe.id, {
+          summary_feedback: result.summary,
+        });
+
+        // 3. Refetch to get the updated recipe
+        await queryClient.refetchQueries({
+          queryKey: ['recipes-with-feedback'],
+        });
+
+        // Expand after the mutation completes
+        setIsExpanded(true);
+        toast.success('Feedback summary generated successfully');
+      } catch (error) {
+        toast.error('Failed to generate feedback summary');
+      }
+    } else {
+      // If summary already exists, just toggle
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    try {
+      // 1. Use mutation to call the agent to generate the summary
+      const result = await summarizeMutation.mutateAsync(recipe.id);
+
+      if (!result.success || !result.summary) {
+        toast.error('Failed to regenerate feedback summary');
+        return;
+      }
+
+      // 2. Update the recipe with the generated summary
+      await updateRecipe(recipe.id, {
+        summary_feedback: result.summary,
+      });
+
+      // 3. Refetch to get the updated recipe
+      await queryClient.refetchQueries({
+        queryKey: ['recipes-with-feedback'],
+      });
+
+      toast.success('Feedback summary regenerated successfully');
+      setIsExpanded(false);
+    } catch (error) {
+      toast.error('Failed to regenerate feedback summary');
+    }
+  };
+
+  const displaySummary = recipe.summary_feedback;
 
   return (
     <Card className={isFork ? 'border-l-4 border-l-blue-500' : ''}>
@@ -101,33 +169,56 @@ function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipe
       </Link>
 
       {/* Feedback Summary Dropdown */}
-      {tastingSummary && tastingSummary.latest_feedback && (
-        <div className="border-t border-zinc-200 dark:border-zinc-700">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="w-full px-4 py-2 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
-              Feedback Summary
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 text-zinc-500 dark:text-zinc-400 transition-transform ${
-                isExpanded ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-
-          {isExpanded && (
-            <div className="px-4 pb-3 text-sm text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/50">
-              <p>{tastingSummary.latest_feedback}</p>
-            </div>
+      <div className="border-t border-zinc-200 dark:border-zinc-700">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleOpenDropdown();
+          }}
+          disabled={summarizeMutation.isPending}
+          className="w-full px-4 py-2 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+        >
+          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+            Feedback Summary
+          </span>
+          {summarizeMutation.isPending ? (
+            <RefreshCw className="h-4 w-4 text-zinc-500 dark:text-zinc-400 animate-spin" />
+          ) : isExpanded && displaySummary ? (
+            <ChevronUp className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
           )}
-        </div>
-      )}
+        </button>
+
+        {isExpanded && (
+          <div className="pb-3 text-sm text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/50 space-y-3 px-4">
+            {displaySummary ? (
+              <>
+                <p>{displaySummary}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRegenerate();
+                  }}
+                  disabled={summarizeMutation.isPending}
+                  className="w-full"
+                >
+                  <RotateCcw className={`h-3 w-3 mr-1 ${summarizeMutation.isPending ? 'animate-spin' : ''}`} />
+                  {summarizeMutation.isPending ? 'Generating...' : 'Regenerate Summary'}
+                </Button>
+              </>
+            ) : (
+              <p className="text-zinc-500 dark:text-zinc-400">
+                {summarizeMutation.isPending ? 'Generating summary...' : 'No summary available'}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
