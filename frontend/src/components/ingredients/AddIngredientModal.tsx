@@ -243,7 +243,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
 
           {supplierEntries.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg">
-              No suppliers added. Click "Add Supplier" to link suppliers to this ingredient.
+              No suppliers added. Click &quot;Add Supplier&quot; to link suppliers to this ingredient.
             </p>
           ) : (
             <div className="space-y-4">

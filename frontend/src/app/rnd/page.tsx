@@ -285,7 +285,7 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Create a new tasting session that includes "{recipe.name}".
+            Create a new tasting session that includes &quot;{recipe.name}&quot;.
           </p>
           <div>
             <label
@@ -587,7 +587,7 @@ export default function RndPage() {
                   wipGroups.map((group) => (
                     <div key={group.parentId} className="space-y-2">
                       <p className="text-xs text-muted-foreground font-medium px-1">
-                        Forks of "{group.parentName}"
+                        Forks of &quot;{group.parentName}&quot;
                       </p>
                       {group.forks.map((fork) => (
                         <WipRecipeCard
