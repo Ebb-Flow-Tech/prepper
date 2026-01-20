@@ -42,6 +42,58 @@ def test_update_recipe_status(client: TestClient):
     assert response.json()["status"] == "active"
 
 
+def test_update_recipe_summary_feedback(client: TestClient):
+    """Test updating recipe with summary_feedback."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Verify summary_feedback is initially None
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["summary_feedback"] is None
+
+    # Update summary_feedback
+    feedback = "Great recipe, easy to follow"
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={"summary_feedback": feedback},
+    )
+    assert response.status_code == 200
+    assert response.json()["summary_feedback"] == feedback
+
+    # Verify it persists
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["summary_feedback"] == feedback
+
+
+def test_update_recipe_multiple_fields_including_summary_feedback(client: TestClient):
+    """Test updating multiple fields including summary_feedback."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original Name", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Update multiple fields
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={
+            "name": "Updated Name",
+            "selling_price_est": 15.99,
+            "summary_feedback": "Needs more salt",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["selling_price_est"] == 15.99
+    assert data["summary_feedback"] == "Needs more salt"
+
+
 def test_soft_delete_recipe(client: TestClient):
     """Test soft-deleting a recipe."""
     # Create recipe

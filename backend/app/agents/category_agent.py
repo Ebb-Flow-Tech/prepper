@@ -363,7 +363,17 @@ class CategoryAgent:
                     return result.model_dump()
 
             else:
-                # Claude has finished without finalization - shouldn't happen with proper prompting
+                # Claude has finished without finalization - extract explanation from text
+                # Extract any text content as explanation
+                text_content = None
+                for block in response.content:
+                    if hasattr(block, 'type') and block.type == "text":
+                        text_content = block.text
+                        break
+
+                if text_content and not self._last_explanation:
+                    self._last_explanation = text_content
+
                 overall_elapsed_ms = (time.perf_counter() - overall_start) * 1000
                 print(f"\n{'='*60}")
                 print(f"[Category Agent] TIMING SUMMARY")
