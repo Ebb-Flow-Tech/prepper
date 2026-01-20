@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Calendar,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import {
   ReactFlow,
@@ -47,7 +48,7 @@ interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
 }
 
-type TabType = 'overview' | 'followups' | 'versions';
+type TabType = 'overview' | 'versions';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
   draft: 'secondary',
@@ -412,6 +413,39 @@ function OverviewTab({
   tastingSummary: RecipeTastingSummary | undefined;
   userId: string | null;
 }) {
+  const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
+  const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
+  const [isFollowUpsOpen, setIsFollowUpsOpen] = useState(false);
+
+  // Extract actionables from tasting notes
+  const actionables = useMemo(() => {
+    if (!tastingNotes) return [];
+    const items: ActionableItem[] = [];
+    for (const note of tastingNotes) {
+      if (note.action_items && note.action_items.trim()) {
+        items.push({
+          noteId: note.id,
+          sessionId: note.session_id,
+          text: note.action_items.trim(),
+          sessionName: note.session_name,
+          sessionDate: note.session_date,
+          checked: note.action_items_done,
+        });
+      }
+    }
+    return items;
+  }, [tastingNotes]);
+
+  const updateTastingNote = useUpdateTastingNote();
+  const handleToggle = useCallback((noteId: number, sessionId: number, currentValue: boolean) => {
+    updateTastingNote.mutate({
+      sessionId,
+      noteId,
+      data: { action_items_done: !currentValue },
+      recipeId: recipe.id,
+    });
+  }, [updateTastingNote, recipe.id]);
+
   return (
     <>
       {/* Recipe Header */}
@@ -448,7 +482,7 @@ function OverviewTab({
                   <Badge variant={STATUS_VARIANTS[recipe.status]}>
                     {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
                   </Badge>
-                  <Link href={`/?recipe=${recipe.id}`}>
+                  <Link href={`/canvas?recipe=${recipe.id}`}>
                     <Button variant="outline" size="sm">
                       {userId !== null && recipe.owner_id === userId ? (
                         <Edit2 className="h-4 w-4" />
@@ -474,175 +508,57 @@ function OverviewTab({
         </CardContent>
       </Card>
 
-      {/* Ingredients | Sub Recipes | Costing Grid */}
-      <div className="grid gap-6 md:grid-cols-3 mb-6">
-        {/* Ingredients Card */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-              Ingredients
+      {/* Follow Ups Section (Collapsible) */}
+      <Card className="mb-6">
+        <button
+          onClick={() => setIsFollowUpsOpen(!isFollowUpsOpen)}
+          className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Follow Ups
             </h2>
-
-            {ingredients && ingredients.length > 0 ? (
-              <ul className="space-y-2">
-                {ingredients.map((ri) => (
-                  <li
-                    key={ri.id}
-                    className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
-                  >
-                    <div>
-                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {ri.ingredient?.name || `Ingredient #${ri.ingredient_id}`}
-                      </span>
-                    </div>
-                    <span className="text-zinc-500 dark:text-zinc-400">
-                      {ri.quantity} {ri.unit}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-400 dark:text-zinc-500">
-                No ingredients added yet
-              </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {actionables.length > 0 && (
+              <span className="text-sm text-zinc-500">
+                {actionables.filter(a => !a.checked).length} of {actionables.length}
+              </span>
             )}
+            <ChevronDown
+              className={cn(
+                'h-5 w-5 text-zinc-600 dark:text-zinc-400 transition-transform shrink-0',
+                isFollowUpsOpen && 'rotate-180'
+              )}
+            />
+          </div>
+        </button>
+
+        {isFollowUpsOpen && (
+          <CardContent className="p-6 border-t border-zinc-200 dark:border-zinc-800">
+            <ActionablesList
+              actionables={actionables}
+              onToggle={handleToggle}
+              isUpdating={updateTastingNote.isPending}
+            />
           </CardContent>
-        </Card>
-
-        {/* Sub Recipes Card */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-              Sub Recipes
-            </h2>
-
-            {subRecipes && subRecipes.length > 0 ? (
-              <ul className="space-y-2">
-                {[...subRecipes]
-                  .sort((a, b) => a.position - b.position)
-                  .map((sr) => (
-                    <li
-                      key={sr.id}
-                      className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
-                    >
-                      <div>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {recipeMap.get(sr.child_recipe_id) || `Recipe #${sr.child_recipe_id}`}
-                        </span>
-                      </div>
-                      <span className="text-zinc-500 dark:text-zinc-400">
-                        {sr.quantity} {sr.unit}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-400 dark:text-zinc-500">
-                No sub-recipes added yet
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Costing Card */}
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-              Costing
-            </h2>
-
-            {costing ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Batch Cost</span>
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    {formatCurrency(costing.total_batch_cost)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
-                  <span className="text-zinc-500 dark:text-zinc-400">Cost per Portion</span>
-                  <span className="font-semibold text-xl text-zinc-900 dark:text-zinc-100">
-                    {formatCurrency(costing.cost_per_portion)}
-                  </span>
-                </div>
-
-                {recipe.selling_price_est && costing.cost_per_portion && (
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-zinc-500 dark:text-zinc-400">Margin</span>
-                    <span className="font-semibold text-green-600 dark:text-green-400">
-                      {((1 - costing.cost_per_portion / recipe.selling_price_est) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-zinc-400 dark:text-zinc-500">
-                No costing data available
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Instructions Card */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-            Instructions
-          </h2>
-
-          {recipe.instructions_structured?.steps && recipe.instructions_structured.steps.length > 0 ? (
-            <ol className="space-y-4">
-              {recipe.instructions_structured.steps.map((step, index) => (
-                <li key={index} className="flex gap-4">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                    {step.order || index + 1}
-                  </span>
-                  <div className="flex-1 pt-0.5">
-                    <p className="text-zinc-700 dark:text-zinc-300">{step.text}</p>
-                    <div className="mt-2 flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-                      {step.timer_seconds && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
-                          {formatTimer(step.timer_seconds)}
-                        </span>
-                      )}
-                      {step.temperature_c && (
-                        <span className="flex items-center gap-1">
-                          <Thermometer className="h-4 w-4" />
-                          {step.temperature_c}°C
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : recipe.instructions_raw ? (
-            <div className="prose prose-zinc dark:prose-invert max-w-none">
-              <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                {recipe.instructions_raw}
-              </p>
-            </div>
-          ) : (
-            <p className="text-zinc-400 dark:text-zinc-500">
-              No instructions added yet
-            </p>
-          )}
-        </CardContent>
+        )}
       </Card>
 
-      {/* Tasting History Card */}
-      <Card className="mt-6">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                Tasting History
-              </h2>
-            </div>
+      {/* Tasting History Card (Collapsible) */}
+      <Card className="mb-6">
+        <button
+          onClick={() => setIsTastingHistoryOpen(!isTastingHistoryOpen)}
+          className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Tasting History
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
             {tastingSummary && tastingSummary.total_tastings > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-zinc-500">
@@ -656,129 +572,252 @@ function OverviewTab({
                 )}
               </div>
             )}
+            <ChevronDown
+              className={cn(
+                'h-5 w-5 text-zinc-600 dark:text-zinc-400 transition-transform shrink-0',
+                isTastingHistoryOpen && 'rotate-180'
+              )}
+            />
           </div>
+        </button>
 
-          {tastingNotes && tastingNotes.length > 0 ? (
-            <div className="space-y-3">
-              {tastingNotes.slice(0, 5).map((note) => {
-                const config = note.decision ? DECISION_CONFIG[note.decision] : null;
-                const Icon = config?.icon;
-                return (
-                  <div
-                    key={note.id}
-                    className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Link
-                          href={`/tastings/${note.session_id}`}
-                          className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+        {isTastingHistoryOpen && (
+          <CardContent className="p-6 border-t border-zinc-200 dark:border-zinc-800">
+            {tastingNotes && tastingNotes.length > 0 ? (
+              <div className="space-y-3">
+                {tastingNotes.map((note) => {
+                  const config = note.decision ? DECISION_CONFIG[note.decision] : null;
+                  const Icon = config?.icon;
+                  return (
+                    <div
+                      key={note.id}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Link
+                            href={`/tastings/${note.session_id}`}
+                            className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+                          >
+                            {note.session_name}
+                          </Link>
+                          {config && (
+                            <Badge variant={config.variant} className="text-xs">
+                              {Icon && <Icon className="h-3 w-3 mr-1" />}
+                              {config.label}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+                          {note.session_date && (
+                            <span>{formatTastingDate(note.session_date)}</span>
+                          )}
+                          {note.overall_rating && (
+                            <StarRating rating={note.overall_rating} />
+                          )}
+                        </div>
+                        {note.feedback && (
+                          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300 line-clamp-2">
+                            &ldquo;{note.feedback}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Wine className="h-8 w-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+                <p className="text-zinc-400 dark:text-zinc-500">
+                  No tastings recorded yet
+                </p>
+                <Link href="/tastings/new" className="mt-2 inline-block">
+                  <Button variant="outline" size="sm">
+                    Create Tasting Session
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* More Info Section (Collapsible) */}
+      <Card className="mb-6">
+        <button
+          onClick={() => setIsMoreInfoOpen(!isMoreInfoOpen)}
+          className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            More Info
+          </h2>
+          <ChevronDown
+            className={cn(
+              'h-5 w-5 text-zinc-600 dark:text-zinc-400 transition-transform',
+              isMoreInfoOpen && 'rotate-180'
+            )}
+          />
+        </button>
+
+        {isMoreInfoOpen && (
+          <>
+            {/* Ingredients | Sub Recipes | Costing Grid */}
+            <div className="px-6 pb-6 border-t border-zinc-200 dark:border-zinc-800 pt-6">
+              <div className="grid gap-6 md:grid-cols-3 mb-6">
+                {/* Ingredients Card */}
+                <div>
+                  <h3 className="text-base font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                    Ingredients
+                  </h3>
+
+                  {ingredients && ingredients.length > 0 ? (
+                    <ul className="space-y-2">
+                      {ingredients.map((ri) => (
+                        <li
+                          key={ri.id}
+                          className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
                         >
-                          {note.session_name}
-                        </Link>
-                        {config && (
-                          <Badge variant={config.variant} className="text-xs">
-                            {Icon && <Icon className="h-3 w-3 mr-1" />}
-                            {config.label}
-                          </Badge>
-                        )}
+                          <div>
+                            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                              {ri.ingredient?.name || `Ingredient #${ri.ingredient_id}`}
+                            </span>
+                          </div>
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            {ri.quantity} {ri.unit}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-zinc-400 dark:text-zinc-500">
+                      No ingredients added yet
+                    </p>
+                  )}
+                </div>
+
+                {/* Sub Recipes */}
+                <div>
+                  <h3 className="text-base font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                    Sub Recipes
+                  </h3>
+
+                  {subRecipes && subRecipes.length > 0 ? (
+                    <ul className="space-y-2">
+                      {[...subRecipes]
+                        .sort((a, b) => a.position - b.position)
+                        .map((sr) => (
+                          <li
+                            key={sr.id}
+                            className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
+                          >
+                            <div>
+                              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                                {recipeMap.get(sr.child_recipe_id) || `Recipe #${sr.child_recipe_id}`}
+                              </span>
+                            </div>
+                            <span className="text-zinc-500 dark:text-zinc-400">
+                              {sr.quantity} {sr.unit}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : (
+                    <p className="text-zinc-400 dark:text-zinc-500">
+                      No sub-recipes added yet
+                    </p>
+                  )}
+                </div>
+
+                {/* Costing */}
+                <div>
+                  <h3 className="text-base font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                    Costing
+                  </h3>
+
+                  {costing ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
+                        <span className="text-zinc-500 dark:text-zinc-400">Batch Cost</span>
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                          {formatCurrency(costing.total_batch_cost)}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                        {note.session_date && (
-                          <span>{formatTastingDate(note.session_date)}</span>
-                        )}
-                        {note.overall_rating && (
-                          <StarRating rating={note.overall_rating} />
-                        )}
+
+                      <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-800">
+                        <span className="text-zinc-500 dark:text-zinc-400">Cost per Portion</span>
+                        <span className="font-semibold text-xl text-zinc-900 dark:text-zinc-100">
+                          {formatCurrency(costing.cost_per_portion)}
+                        </span>
                       </div>
-                      {note.feedback && (
-                        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300 line-clamp-2">
-                          &ldquo;{note.feedback}&rdquo;
-                        </p>
+
+                      {recipe.selling_price_est && costing.cost_per_portion && (
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-zinc-500 dark:text-zinc-400">Margin</span>
+                          <span className="font-semibold text-green-600 dark:text-green-400">
+                            {((1 - costing.cost_per_portion / recipe.selling_price_est) * 100).toFixed(1)}%
+                          </span>
+                        </div>
                       )}
                     </div>
+                  ) : (
+                    <p className="text-zinc-400 dark:text-zinc-500">
+                      No costing data available
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
+                <h3 className="text-base font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                  Instructions
+                </h3>
+
+                {recipe.instructions_structured?.steps && recipe.instructions_structured.steps.length > 0 ? (
+                  <ol className="space-y-4">
+                    {recipe.instructions_structured.steps.map((step, index) => (
+                      <li key={index} className="flex gap-4">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                          {step.order || index + 1}
+                        </span>
+                        <div className="flex-1 pt-0.5">
+                          <p className="text-zinc-700 dark:text-zinc-300">{step.text}</p>
+                          <div className="mt-2 flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+                            {step.timer_seconds && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {formatTimer(step.timer_seconds)}
+                              </span>
+                            )}
+                            {step.temperature_c && (
+                              <span className="flex items-center gap-1">
+                                <Thermometer className="h-4 w-4" />
+                                {step.temperature_c}°C
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ) : recipe.instructions_raw ? (
+                  <div className="prose prose-zinc dark:prose-invert max-w-none">
+                    <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+                      {recipe.instructions_raw}
+                    </p>
                   </div>
-                );
-              })}
-              {tastingNotes.length > 5 && (
-                <Link
-                  href="/tastings"
-                  className="block text-center text-sm text-purple-600 dark:text-purple-400 hover:underline pt-2"
-                >
-                  View all {tastingNotes.length} tastings
-                </Link>
-              )}
+                ) : (
+                  <p className="text-zinc-400 dark:text-zinc-500">
+                    No instructions added yet
+                  </p>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <Wine className="h-8 w-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
-              <p className="text-zinc-400 dark:text-zinc-500">
-                No tastings recorded yet
-              </p>
-              <Link href="/tastings/new" className="mt-2 inline-block">
-                <Button variant="outline" size="sm">
-                  Create Tasting Session
-                </Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
+          </>
+        )}
       </Card>
     </>
-  );
-}
-
-function ActionablesTab({
-  tastingNotes,
-  recipeId,
-}: {
-  tastingNotes: TastingNoteWithRecipe[] | undefined;
-  recipeId: number;
-}) {
-  const updateTastingNote = useUpdateTastingNote();
-
-  // Extract actionables from tasting notes, filtering out empty ones
-  // Each tasting note with action_items becomes one actionable item
-  const actionables = useMemo(() => {
-    if (!tastingNotes) return [];
-
-    const items: ActionableItem[] = [];
-
-    for (const note of tastingNotes) {
-      if (note.action_items && note.action_items.trim()) {
-        items.push({
-          noteId: note.id,
-          sessionId: note.session_id,
-          text: note.action_items.trim(),
-          sessionName: note.session_name,
-          sessionDate: note.session_date,
-          checked: note.action_items_done,
-        });
-      }
-    }
-
-    return items;
-  }, [tastingNotes]);
-
-  const handleToggle = useCallback((noteId: number, sessionId: number, currentValue: boolean) => {
-    updateTastingNote.mutate({
-      sessionId,
-      noteId,
-      data: { action_items_done: !currentValue },
-      recipeId,
-    });
-  }, [updateTastingNote, recipeId]);
-
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <ActionablesList
-          actionables={actionables}
-          onToggle={handleToggle}
-          isUpdating={updateTastingNote.isPending}
-        />
-      </CardContent>
-    </Card>
   );
 }
 
@@ -903,7 +942,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
 
   const tabFromUrl = searchParams.get('tab') as TabType | null;
   const [activeTab, setActiveTab] = useState<TabType>(
-    tabFromUrl && ['overview', 'followups', 'versions'].includes(tabFromUrl)
+    tabFromUrl && ['overview', 'versions'].includes(tabFromUrl)
       ? tabFromUrl
       : 'overview'
   );
@@ -925,7 +964,6 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
-    { id: 'followups' as const, label: 'Follow Ups', icon: ClipboardList },
     { id: 'versions' as const, label: 'Version History', icon: History },
   ];
 
@@ -1004,10 +1042,6 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 tastingSummary={tastingSummary}
                 userId={userId}
               />
-            )}
-
-            {activeTab === 'followups' && (
-              <ActionablesTab tastingNotes={tastingNotes} recipeId={recipeId} />
             )}
 
             {activeTab === 'versions' && (

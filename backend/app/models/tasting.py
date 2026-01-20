@@ -25,7 +25,7 @@ class TastingSessionBase(SQLModel):
     """Shared fields for TastingSession."""
 
     name: str = Field(max_length=200, description="e.g. 'December Menu Tasting'")
-    date: datetime.date
+    date: datetime.datetime
     location: Optional[str] = Field(default=None, max_length=200)
     notes: Optional[str] = Field(default=None)
 
@@ -51,7 +51,7 @@ class TastingSessionUpdate(SQLModel):
     """Schema for updating a tasting session (all fields optional)."""
 
     name: Optional[str] = None
-    date: Optional[datetime.date] = None
+    date: Optional[datetime.datetime] = None
     location: Optional[str] = None
     attendees: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -133,7 +133,7 @@ class TastingNoteWithRecipe(TastingNoteRead):
 
     recipe_name: Optional[str] = None
     session_name: Optional[str] = None
-    session_date: Optional[datetime.date] = None
+    session_date: Optional[datetime.datetime] = None
 
 
 # -----------------------------------------------------------------------------
@@ -149,4 +149,4 @@ class RecipeTastingSummary(SQLModel):
     average_overall_rating: Optional[float]
     latest_decision: Optional[str]
     latest_feedback: Optional[str]
-    latest_tasting_date: Optional[datetime.date]
+    latest_tasting_date: Optional[datetime.datetime]

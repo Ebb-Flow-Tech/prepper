@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/suppliers', label: 'Suppliers', icon: Truck },
   { href: '/recipes', label: 'Recipes', icon: BookOpen },
   { href: '/tastings', label: 'Tastings', icon: Wine },
+  { href: '/canvas', label: 'Canvas', icon: LayoutGrid },
   { href: '/rnd', label: 'R&D', icon: FlaskConical },
   { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/design-system', label: 'Design', icon: Palette },
@@ -73,8 +74,7 @@ export function TopNav() {
       <nav className="flex h-12 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         {/* Logo */}
         <Link
-          href="/"
-          onClick={(e) => handleNavClick(e, '/')}
+          href="/recipes"
           className="flex items-center gap-2 font-semibold text-lg mr-8"
         >
           <ChefHat className="h-5 w-5" />

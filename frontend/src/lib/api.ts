@@ -37,6 +37,9 @@ import type {
   SubRecipeCreate,
   SubRecipeUpdate,
   SubRecipeReorder,
+  Category,
+  CreateCategoryRequest,
+  UpdateCategoryRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -356,6 +359,10 @@ export async function deleteTastingNote(
 
 // ============ Recipe Tasting History ============
 
+export async function getRecipesWithFeedback(userId: string): Promise<Recipe[]> {
+  return fetchApi<Recipe[]>(`/recipes/with-feedback/${userId}`);
+}
+
 export async function getRecipeTastingNotes(
   recipeId: number
 ): Promise<TastingNoteWithRecipe[]> {
@@ -561,5 +568,71 @@ export async function reorderSubRecipes(
   return fetchApi<SubRecipe[]>(`/recipes/${recipeId}/sub-recipes/reorder`, {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+// ============ Categories ============
+
+export async function getCategories(activeOnly: boolean = true): Promise<Category[]> {
+  const params = new URLSearchParams({ active_only: String(activeOnly) });
+  return fetchApi<Category[]>(`/categories?${params}`);
+}
+
+export async function getCategory(id: number): Promise<Category> {
+  return fetchApi<Category>(`/categories/${id}`);
+}
+
+export async function createCategory(data: CreateCategoryRequest): Promise<Category> {
+  return fetchApi<Category>('/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCategory(
+  id: number,
+  data: UpdateCategoryRequest
+): Promise<Category> {
+  return fetchApi<Category>(`/categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateCategory(id: number): Promise<Category> {
+  return fetchApi<Category>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Agents ============
+
+interface CategorizeIngredientRequest {
+  ingredient_name: string;
+}
+
+interface CategorizeIngredientResponse {
+  category_id: number;
+}
+
+export async function categorizeIngredient(
+  data: CategorizeIngredientRequest
+): Promise<CategorizeIngredientResponse> {
+  return fetchApi<CategorizeIngredientResponse>('/agents/categorize-ingredient', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface FeedbackSummaryResponse {
+  summary: string | null;
+  success: boolean;
+}
+
+export async function summarizeFeedback(
+  recipeId: number
+): Promise<FeedbackSummaryResponse> {
+  return fetchApi<FeedbackSummaryResponse>(`/agents/summarize-feedback/${recipeId}`, {
+    method: 'POST',
   });
 }

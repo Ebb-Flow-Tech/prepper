@@ -2,22 +2,33 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient, useUpdateIngredient } from '@/lib/hooks';
-import { IngredientCard } from '@/components/ingredients';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories } from '@/lib/hooks';
+import { IngredientCard, CategoriesTab, FilterButtons, AddIngredientModal } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
-import { NewIngredientForm } from '@/components/layout/RightPanel';
+import { useAppState, type IngredientTab } from '@/lib/store';
+import { cn } from '@/lib/utils';
 
-type GroupByOption = 'none' | 'unit' | 'status';
+type GroupByOption = 'none' | 'unit' | 'status' | 'category';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
   { value: 'unit', label: 'By Unit' },
   { value: 'status', label: 'By Status' },
+  { value: 'category', label: 'By Category' },
 ];
 
-function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Record<string, Ingredient[]> {
+const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
+  { id: 'ingredients', label: 'Ingredients' },
+  { id: 'categories', label: 'Categories' },
+];
+
+function groupIngredients(
+  ingredients: Ingredient[],
+  groupBy: GroupByOption,
+  categoryMap?: Map<number, string>
+): Record<string, Ingredient[]> {
   if (groupBy === 'none') {
     return { 'All Ingredients': ingredients };
   }
@@ -40,35 +51,61 @@ function groupIngredients(ingredients: Ingredient[], groupBy: GroupByOption): Re
     }, {} as Record<string, Ingredient[]>);
   }
 
+  if (groupBy === 'category') {
+    return ingredients.reduce((acc, ingredient) => {
+      const key = ingredient.category_id
+        ? categoryMap?.get(ingredient.category_id) ?? 'Unknown'
+        : 'Uncategorized';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(ingredient);
+      return acc;
+    }, {} as Record<string, Ingredient[]>);
+  }
+
   return { 'All Ingredients': ingredients };
 }
 
-export default function IngredientsPage() {
+function IngredientsListTab() {
   const deactivateIngredient = useDeactivateIngredient();
   const updateIngredient = useUpdateIngredient();
 
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
+  const { data: categories } = useCategories();
 
-  // Filter and group ingredients
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
 
     return ingredients.filter((ing) => {
-      // Filter by search
+      // Search filter
       if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+      // Category filter (if any selected)
+      if (selectedCategories.length > 0 && !selectedCategories.includes(ing.category_id ?? -1)) {
+        return false;
+      }
+      // Unit filter (if any selected)
+      if (selectedUnits.length > 0 && !selectedUnits.includes(ing.base_unit)) {
         return false;
       }
       return true;
     });
-  }, [ingredients, search, showArchived]);
+  }, [ingredients, search, selectedCategories, selectedUnits]);
+
+  const categoryMap = useMemo(() => {
+    if (!categories) return new Map<number, string>();
+    return new Map(categories.map((c) => [c.id, c.name]));
+  }, [categories]);
 
   const groupedIngredients = useMemo(() => {
-    return groupIngredients(filteredIngredients, groupBy);
-  }, [filteredIngredients, groupBy]);
+    return groupIngredients(filteredIngredients, groupBy, categoryMap);
+  }, [filteredIngredients, groupBy, categoryMap]);
 
   const handleArchive = (ingredient: Ingredient) => {
     deactivateIngredient.mutate(ingredient.id, {
@@ -98,7 +135,7 @@ export default function IngredientsPage() {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full w-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
           title="Ingredients"
@@ -109,14 +146,7 @@ export default function IngredientsPage() {
             <span className="hidden sm:inline">Add Ingredient</span>
           </Button>
         </PageHeader>
-        {showForm && (
-          <div className="w-full d-flex justify-items-end">
-            <div className="w-fit mb-3">
-              <NewIngredientForm onClose={() => setShowForm(false)} />
-            </div>
-          </div>
-
-        )}
+        <AddIngredientModal isOpen={showForm} onClose={() => setShowForm(false)} />
         {/* Toolbar */}
         <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
           <div className="flex-1 max-w-md">
@@ -148,6 +178,17 @@ export default function IngredientsPage() {
           </div>
         </div>
 
+        {/* Filter Buttons */}
+        <div className="mb-6">
+          <FilterButtons
+            categories={categories}
+            selectedCategories={selectedCategories}
+            onCategoryChange={setSelectedCategories}
+            selectedUnits={selectedUnits}
+            onUnitChange={setSelectedUnits}
+          />
+        </div>
+
         {/* Loading State */}
         {isLoading && (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -161,7 +202,9 @@ export default function IngredientsPage() {
         {!isLoading && filteredIngredients.length === 0 && (
           <div className="text-center py-12">
             <p className="text-zinc-500 dark:text-zinc-400">
-              {search ? 'No ingredients match your search' : 'No ingredients yet'}
+              {search || selectedCategories.length > 0 || selectedUnits.length > 0
+                ? 'No ingredients match your filters'
+                : 'No ingredients yet'}
             </p>
           </div>
         )}
@@ -175,6 +218,7 @@ export default function IngredientsPage() {
                   <IngredientCard
                     key={ingredient.id}
                     ingredient={ingredient}
+                    categories={categories}
                     onArchive={handleArchive}
                     onUnarchive={handleUnarchive}
                   />
@@ -183,6 +227,52 @@ export default function IngredientsPage() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TabContent() {
+  const { ingredientTab } = useAppState();
+
+  switch (ingredientTab) {
+    case 'ingredients':
+      return <IngredientsListTab />;
+    case 'categories':
+      return <CategoriesTab />;
+    default:
+      return <IngredientsListTab />;
+  }
+}
+
+export default function IngredientsPage() {
+  const { ingredientTab, setIngredientTab } = useAppState();
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Tab Navigation Header */}
+      <header className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <nav className="flex gap-1 px-4" aria-label="Ingredient tabs">
+          {INGREDIENT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setIngredientTab(tab.id)}
+              className={cn(
+                'px-4 py-2 text-sm font-medium transition-colors',
+                ingredientTab === tab.id
+                  ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* Tab Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <TabContent />
       </div>
     </div>
   );

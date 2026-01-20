@@ -25,8 +25,8 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCard
       <Card interactive className="mb-4 h-full">
         <CardHeader>
           <div className="flex-1 min-w-0">
-            <CardTitle className="truncate">{recipe.name}</CardTitle>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <CardTitle className="truncate text-xl">{recipe.name}</CardTitle>
+            <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
               {recipe.yield_quantity} {recipe.yield_unit}
             </p>
           </div>
@@ -47,21 +47,21 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCard
 
         <CardContent>
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={STATUS_VARIANTS[recipe.status]}>
+            <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
               {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
             </Badge>
             {recipe.is_prep_recipe && (
-              <Badge variant="default">Prep</Badge>
+              <Badge variant="default" className="text-sm">Prep</Badge>
             )}
             {isOwned && (
-              <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+              <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
             )}
           </div>
         </CardContent>
 
         <CardFooter>
           <div className="flex items-center justify-between w-full">
-            <div className="text-sm">
+            <div className="text-base">
               <span className="text-zinc-500 dark:text-zinc-400">Cost: </span>
               <span className="font-medium text-zinc-900 dark:text-zinc-100">
                 {formatCurrency(costPerPortion ?? recipe.cost_price)}

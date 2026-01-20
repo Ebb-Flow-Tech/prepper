@@ -30,7 +30,6 @@ import {
   Skeleton,
   Card,
   CardHeader,
-  CardTitle,
   CardContent,
   Badge,
   Input,
@@ -105,44 +104,164 @@ function StarRating({ rating, onChange }: { rating: number | null; onChange?: (v
   );
 }
 
+interface FeedbackFormData {
+  taster_name: string;
+  decision: TastingDecision | '';
+  feedback: string;
+  action_items: string;
+  taste_rating: number | null;
+  presentation_rating: number | null;
+  texture_rating: number | null;
+  overall_rating: number | null;
+}
+
+interface FeedbackFormProps {
+  initialData?: Partial<FeedbackFormData>;
+  onSubmit: (data: FeedbackFormData) => Promise<void>;
+  onCancel: () => void;
+  submitLabel?: string;
+}
+
+function FeedbackForm({ initialData, onSubmit, onCancel, submitLabel = 'Save' }: FeedbackFormProps) {
+  const [tasterName, setTasterName] = useState(initialData?.taster_name || '');
+  const [decision, setDecision] = useState<TastingDecision | ''>(initialData?.decision || '');
+  const [feedback, setFeedback] = useState(initialData?.feedback || '');
+  const [actionItems, setActionItems] = useState(initialData?.action_items || '');
+  const [tasteRating, setTasteRating] = useState<number | null>(initialData?.taste_rating ?? null);
+  const [presentationRating, setPresentationRating] = useState<number | null>(initialData?.presentation_rating ?? null);
+  const [textureRating, setTextureRating] = useState<number | null>(initialData?.texture_rating ?? null);
+  const [overallRating, setOverallRating] = useState<number | null>(initialData?.overall_rating ?? null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        taster_name: tasterName.trim(),
+        decision,
+        feedback: feedback.trim(),
+        action_items: actionItems.trim(),
+        taste_rating: tasteRating,
+        presentation_rating: presentationRating,
+        texture_rating: textureRating,
+        overall_rating: overallRating,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Ratings */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Taste</label>
+          <StarRating rating={tasteRating} onChange={setTasteRating} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Presentation</label>
+          <StarRating rating={presentationRating} onChange={setPresentationRating} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Texture</label>
+          <StarRating rating={textureRating} onChange={setTextureRating} />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</label>
+          <StarRating rating={overallRating} onChange={setOverallRating} />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Taster Name
+        </label>
+        <Input
+          value={tasterName}
+          onChange={(e) => setTasterName(e.target.value)}
+          placeholder="e.g., Chef Marco"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Decision
+        </label>
+        <Select
+          value={decision}
+          onChange={(e) => setDecision(e.target.value as TastingDecision | '')}
+          options={[
+            { value: '', label: 'Select decision...' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'needs_work', label: 'Needs Work' },
+            { value: 'rejected', label: 'Rejected' },
+          ]}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Feedback
+        </label>
+        <Textarea
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="Tasting notes and observations..."
+          rows={3}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Action Items
+        </label>
+        <Textarea
+          value={actionItems}
+          onChange={(e) => setActionItems(e.target.value)}
+          placeholder="What needs to change..."
+          rows={2}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={isSubmitting}>
+          {submitLabel}
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 interface FeedbackNoteCardProps {
   note: TastingNote;
-  sessionId: number;
   isExpired: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
 }
 
-function FeedbackNoteCard({ note, sessionId, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [feedback, setFeedback] = useState(note.feedback || '');
-  const [actionItems, setActionItems] = useState(note.action_items || '');
-  const [decision, setDecision] = useState<TastingDecision | ''>(note.decision || '');
-  const [tasterName, setTasterName] = useState(note.taster_name || '');
 
   const decisionConfig = note.decision ? DECISION_CONFIG[note.decision] : null;
   const DecisionIcon = decisionConfig?.icon;
 
-  const handleStartEditing = () => {
-    setFeedback(note.feedback || '');
-    setActionItems(note.action_items || '');
-    setDecision(note.decision || '');
-    setTasterName(note.taster_name || '');
-    setIsEditing(true);
-  };
-
-  const handleSave = async () => {
+  const handleSave = async (data: FeedbackFormData) => {
     await onUpdate(note.id, {
-      feedback: feedback.trim() || null,
-      action_items: actionItems.trim() || null,
-      decision: decision || null,
-      taster_name: tasterName.trim() || null,
+      taster_name: data.taster_name || null,
+      decision: data.decision || null,
+      feedback: data.feedback || null,
+      action_items: data.action_items || null,
+      taste_rating: data.taste_rating,
+      presentation_rating: data.presentation_rating,
+      texture_rating: data.texture_rating,
+      overall_rating: data.overall_rating,
     });
     setIsEditing(false);
-  };
-
-  const handleUpdateRating = async (field: string, value: number) => {
-    await onUpdate(note.id, { [field]: value });
   };
 
   return (
@@ -166,7 +285,7 @@ function FeedbackNoteCard({ note, sessionId, isExpired, onUpdate, onDelete }: Fe
         {!isExpired && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => isEditing ? setIsEditing(false) : handleStartEditing()}
+              onClick={() => setIsEditing(!isEditing)}
               className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
             >
               <Edit className="h-4 w-4" />
@@ -182,98 +301,43 @@ function FeedbackNoteCard({ note, sessionId, isExpired, onUpdate, onDelete }: Fe
       </CardHeader>
 
       <CardContent>
-        {/* Ratings */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Taste</p>
-            <StarRating
-              rating={note.taste_rating}
-              onChange={isEditing ? (v) => handleUpdateRating('taste_rating', v) : undefined}
-            />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Presentation</p>
-            <StarRating
-              rating={note.presentation_rating}
-              onChange={isEditing ? (v) => handleUpdateRating('presentation_rating', v) : undefined}
-            />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Texture</p>
-            <StarRating
-              rating={note.texture_rating}
-              onChange={isEditing ? (v) => handleUpdateRating('texture_rating', v) : undefined}
-            />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</p>
-            <StarRating
-              rating={note.overall_rating}
-              onChange={isEditing ? (v) => handleUpdateRating('overall_rating', v) : undefined}
-            />
-          </div>
-        </div>
-
         {isEditing ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Chef Name
-              </label>
-              <Input
-                value={tasterName}
-                onChange={(e) => setTasterName(e.target.value)}
-                placeholder="e.g., Chef Marco"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Decision
-              </label>
-              <Select
-                value={decision}
-                onChange={(e) => setDecision(e.target.value as TastingDecision | '')}
-                options={[
-                  { value: '', label: 'Select decision...' },
-                  { value: 'approved', label: 'Approved' },
-                  { value: 'needs_work', label: 'Needs Work' },
-                  { value: 'rejected', label: 'Rejected' },
-                ]}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Feedback
-              </label>
-              <Textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Tasting notes and observations..."
-                rows={3}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Action Items
-              </label>
-              <Textarea
-                value={actionItems}
-                onChange={(e) => setActionItems(e.target.value)}
-                placeholder="What needs to change..."
-                rows={2}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={handleSave}>
-                Save Changes
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
+          <FeedbackForm
+            initialData={{
+              taster_name: note.taster_name || '',
+              decision: note.decision || '',
+              feedback: note.feedback || '',
+              action_items: note.action_items || '',
+              taste_rating: note.taste_rating,
+              presentation_rating: note.presentation_rating,
+              texture_rating: note.texture_rating,
+              overall_rating: note.overall_rating,
+            }}
+            onSubmit={handleSave}
+            onCancel={() => setIsEditing(false)}
+            submitLabel="Save Changes"
+          />
         ) : (
           <>
+            {/* Ratings */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Taste</p>
+                <StarRating rating={note.taste_rating} />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Presentation</p>
+                <StarRating rating={note.presentation_rating} />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Texture</p>
+                <StarRating rating={note.texture_rating} />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</p>
+                <StarRating rating={note.overall_rating} />
+              </div>
+            </div>
             {note.feedback && (
               <div className="mb-3">
                 <p className="text-sm text-zinc-600 dark:text-zinc-300">&ldquo;{note.feedback}&rdquo;</p>
@@ -310,30 +374,24 @@ export default function RecipeTastingPage() {
 
   // For new notes
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newTasterName, setNewTasterName] = useState('');
-  const [newOverallRating, setNewOverallRating] = useState<number | null>(null);
-  const [newFeedback, setNewFeedback] = useState('');
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddNote = async (data: FeedbackFormData) => {
     if (!sessionId || !recipeId) return;
-    try {
-      await addNote.mutateAsync({
-        sessionId,
-        data: {
-          recipe_id: recipeId,
-          overall_rating: newOverallRating || null,
-          taster_name: newTasterName.trim() || null,
-          feedback: newFeedback.trim() || null,
-        },
-      });
-      setShowAddForm(false);
-      setNewTasterName('');
-      setNewOverallRating(null);
-      setNewFeedback('');
-    } catch (error) {
-      console.error('Failed to add note:', error);
-    }
+    await addNote.mutateAsync({
+      sessionId,
+      data: {
+        recipe_id: recipeId,
+        taster_name: data.taster_name || null,
+        decision: data.decision || null,
+        feedback: data.feedback || null,
+        action_items: data.action_items || null,
+        taste_rating: data.taste_rating,
+        presentation_rating: data.presentation_rating,
+        texture_rating: data.texture_rating,
+        overall_rating: data.overall_rating,
+      },
+    });
+    setShowAddForm(false);
   };
 
   const handleUpdateNote = async (noteId: number, data: Partial<TastingNote>) => {
@@ -446,46 +504,11 @@ export default function RecipeTastingPage() {
         {showAddForm && (
           <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
             <CardContent className="pt-4">
-              <form onSubmit={handleAddNote} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Initial Overall Rating
-                  </label>
-                  <StarRating rating={newOverallRating} onChange={setNewOverallRating} />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Your Name
-                  </label>
-                  <Input
-                    value={newTasterName}
-                    onChange={(e) => setNewTasterName(e.target.value)}
-                    placeholder="e.g., Chef Marco"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Feedback
-                  </label>
-                  <Textarea
-                    value={newFeedback}
-                    onChange={(e) => setNewFeedback(e.target.value)}
-                    placeholder="Tasting notes and observations..."
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button type="submit">
-                    Add Feedback
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowAddForm(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
+              <FeedbackForm
+                onSubmit={handleAddNote}
+                onCancel={() => setShowAddForm(false)}
+                submitLabel="Add Feedback"
+              />
             </CardContent>
           </Card>
         )}
@@ -504,7 +527,6 @@ export default function RecipeTastingPage() {
               <FeedbackNoteCard
                 key={note.id}
                 note={note}
-                sessionId={sessionId!}
                 isExpired={isSessionExpired(session.date)}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}

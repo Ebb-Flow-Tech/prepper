@@ -5,17 +5,20 @@ import Link from 'next/link';
 import { Edit2, Archive, ArchiveRestore, ImagePlus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
-import type { Ingredient } from '@/types';
+import type { Ingredient, Category } from '@/types';
 
 interface IngredientCardProps {
   ingredient: Ingredient;
+  categories?: Category[];
   onEdit?: (ingredient: Ingredient) => void;
   onArchive?: (ingredient: Ingredient) => void;
   onUnarchive?: (ingredient: Ingredient) => void;
 }
 
-export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
+export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
   const [showActions, setShowActions] = useState(false);
+
+  const currentCategory = categories?.find((c) => c.id === ingredient.category_id);
 
   return (
     <Card
@@ -26,12 +29,12 @@ export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: I
       <CardHeader>
         <div className="flex-1 min-w-0">
           <Link href={`/ingredients/${ingredient.id}`}>
-            <CardTitle className="truncate hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
+            <CardTitle className="truncate text-xl hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
               {ingredient.name}
             </CardTitle>
           </Link>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {formatCurrency(ingredient.cost_per_base_unit)}/{ingredient.base_unit}
+          <p className="text-base text-zinc-500 dark:text-zinc-400 mt-0.5">
+            {formatCurrency(ingredient.cost_per_base_unit)} per unit
           </p>
         </div>
 
@@ -46,10 +49,13 @@ export function IngredientCard({ ingredient, onEdit, onArchive, onUnarchive }: I
       </CardHeader>
 
       <CardContent>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">{ingredient.base_unit}</Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="unit" className="text-sm">{ingredient.base_unit}</Badge>
           {!ingredient.is_active && (
-            <Badge variant="warning">Archived</Badge>
+            <Badge variant="warning" className="text-sm">Archived</Badge>
+          )}
+          {currentCategory && (
+            <Badge variant="info" className="text-sm">{currentCategory.name}</Badge>
           )}
         </div>
       </CardContent>

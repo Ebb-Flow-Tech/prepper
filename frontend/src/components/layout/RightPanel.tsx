@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical } from 'lucide-react';
+import { Plus, Search, GripVertical, ImagePlus } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useIngredients, useCreateIngredient, useRecipes } from '@/lib/hooks';
+import { useIngredients, useCreateIngredient, useRecipes, useCategories } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -37,25 +37,47 @@ function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
       ref={setNodeRef}
       data-ingredient-card
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-border bg-card p-3',
+        'game-card game-card-ingredient game-card-sm game-card-hover',
         isDragging && 'opacity-50'
       )}
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{ingredient.name}</p>
-        <p className="text-sm text-muted-foreground">
-          {ingredient.base_unit} •{' '}
-          {ingredient.cost_per_base_unit !== null
-            ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
-            : 'no cost set'}
-        </p>
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-ingredient" />
+
+      {/* Card Art */}
+      <div className="game-card-art game-card-art-ingredient flex items-center justify-center">
+        <ImagePlus className="h-8 w-8 text-blue-300/50" />
+      </div>
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button
+            {...listeners}
+            {...attributes}
+            className="cursor-grab touch-none text-blue-300 hover:text-blue-100 active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
+            {ingredient.name}
+          </h3>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        <div className="flex items-center justify-between">
+          <span className="game-card-stat game-card-stat-ingredient">{ingredient.base_unit}</span>
+          <span className="text-sm text-blue-200/80">
+            {ingredient.cost_per_base_unit !== null
+              ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
+              : 'no cost'}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -76,28 +98,62 @@ function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
       ref={setNodeRef}
       data-recipe-card
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800',
+        'game-card game-card-recipe game-card-sm game-card-hover',
         isDragging && 'opacity-50',
         isCurrentRecipe && 'opacity-40 cursor-not-allowed'
       )}
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className={cn(
-          'touch-none text-zinc-400 hover:text-zinc-600',
-          isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
-        )}
-        disabled={isCurrentRecipe}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{recipe.name}</p>
-        <p className="text-sm text-zinc-500">
-          {recipe.yield_quantity} {recipe.yield_unit}
-          {isCurrentRecipe && ' • Current recipe'}
-        </p>
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-recipe" />
+
+      {/* Card Art */}
+      {recipe.image_url ? (
+        <div className="game-card-art relative">
+          <img
+            src={recipe.image_url}
+            alt={recipe.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="game-card-art game-card-art-recipe flex items-center justify-center">
+          <ImagePlus className="h-8 w-8 text-green-300/50" />
+        </div>
+      )}
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button
+            {...listeners}
+            {...attributes}
+            className={cn(
+              'touch-none text-green-300 hover:text-green-100',
+              isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+            )}
+            disabled={isCurrentRecipe}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
+            {recipe.name}
+          </h3>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        <div className="flex items-center justify-between">
+          <span className="game-card-stat game-card-stat-recipe">
+            {recipe.yield_quantity} {recipe.yield_unit}
+          </span>
+          {isCurrentRecipe && (
+            <span className="text-xs text-green-300/60 uppercase tracking-wide">Current</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -116,11 +172,76 @@ function ListSkeleton() {
   );
 }
 
+// Auto-assign category based on ingredient name keywords
+function autoAssignCategory(name: string): string {
+  const lowerName = name.toLowerCase();
+
+  // Proteins
+  if (/\b(chicken|beef|pork|lamb|fish|salmon|tuna|shrimp|prawn|crab|lobster|egg|tofu|tempeh|seitan|turkey|duck|bacon|ham|sausage|meat|steak|fillet|mince|ground)\b/.test(lowerName)) {
+    return 'proteins';
+  }
+
+  // Vegetables
+  if (/\b(carrot|onion|garlic|tomato|potato|lettuce|spinach|broccoli|cauliflower|pepper|cucumber|celery|cabbage|mushroom|zucchini|eggplant|corn|pea|bean|asparagus|leek|kale|chard|arugula|radish|beet|turnip|squash|pumpkin)\b/.test(lowerName)) {
+    return 'vegetables';
+  }
+
+  // Fruits
+  if (/\b(apple|banana|orange|lemon|lime|grape|strawberry|blueberry|raspberry|mango|pineapple|peach|pear|plum|cherry|watermelon|melon|kiwi|papaya|coconut|avocado|fig|date|raisin|cranberry)\b/.test(lowerName)) {
+    return 'fruits';
+  }
+
+  // Dairy
+  if (/\b(milk|cheese|butter|cream|yogurt|yoghurt|curd|ghee|paneer|mozzarella|cheddar|parmesan|ricotta|feta|brie|mascarpone|sour cream|whey|casein)\b/.test(lowerName)) {
+    return 'dairy';
+  }
+
+  // Grains
+  if (/\b(rice|pasta|noodle|bread|flour|wheat|oat|barley|quinoa|couscous|bulgur|cornmeal|semolina|rye|millet|sorghum|cereal|cracker|tortilla|pita)\b/.test(lowerName)) {
+    return 'grains';
+  }
+
+  // Spices
+  if (/\b(salt|pepper|cumin|coriander|turmeric|paprika|cinnamon|nutmeg|clove|cardamom|ginger|oregano|basil|thyme|rosemary|parsley|cilantro|dill|mint|bay leaf|chili|cayenne|saffron|vanilla|fennel|anise|mustard seed)\b/.test(lowerName)) {
+    return 'spices';
+  }
+
+  // Oils & Fats
+  if (/\b(oil|olive oil|vegetable oil|coconut oil|sesame oil|sunflower oil|canola oil|lard|shortening|margarine|ghee|fat|dripping)\b/.test(lowerName)) {
+    return 'oils_fats';
+  }
+
+  // Sauces & Condiments
+  if (/\b(sauce|ketchup|mayonnaise|mayo|mustard|vinegar|soy sauce|fish sauce|oyster sauce|hoisin|sriracha|tabasco|worcestershire|dressing|marinade|relish|chutney|salsa|pesto|hummus)\b/.test(lowerName)) {
+    return 'sauces_condiments';
+  }
+
+  // Beverages
+  if (/\b(water|juice|wine|beer|coffee|tea|milk|soda|cola|broth|stock|coconut water|lemonade|smoothie)\b/.test(lowerName)) {
+    return 'beverages';
+  }
+
+  return 'other';
+}
+
 export function NewIngredientForm({ onClose }: { onClose: () => void }) {
   const createIngredient = useCreateIngredient();
+  const { data: categories = [] } = useCategories();
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');
   const [cost, setCost] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+
+  // Auto-assign category when name changes
+  const autoCategory = useMemo(() => autoAssignCategory(name), [name]);
+  const effectiveCategory = selectedCategory || autoCategory;
+
+  const categoryOptions = useMemo(() => {
+    return categories.map((cat) => ({
+      value: String(cat.id),
+      label: cat.name,
+    }));
+  }, [categories]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +257,7 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
       },
       {
         onSuccess: () => {
-          toast.success('Ingredient created');
+          toast.success(`Ingredient created (Category: ${effectiveCategory})`);
           onClose();
         },
         onError: () => toast.error('Failed to create ingredient'),
@@ -169,6 +290,19 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
           step={0.01}
         />
       </div>
+      {categoryOptions.length > 0 && (
+        <div>
+          <label className="mb-1 block text-xs text-zinc-500">
+            Category {!selectedCategory && name && `(auto: ${autoCategory})`}
+          </label>
+          <Select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
+            className="w-full"
+          />
+        </div>
+      )}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={createIngredient.isPending}>
           Add

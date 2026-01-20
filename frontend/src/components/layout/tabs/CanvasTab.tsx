@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
@@ -82,11 +82,18 @@ function DragOverlayContent({
 }) {
   if (item.type === 'panel-ingredient') {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-blue-400 bg-white p-3 shadow-lg dark:bg-zinc-800">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-        <div>
-          <p className="font-medium">{item.ingredient.name}</p>
-          <p className="text-sm text-zinc-500">{item.ingredient.base_unit}</p>
+      <div className="game-card game-card-ingredient game-card-dragging w-44 opacity-95">
+        <div className="game-card-art game-card-art-ingredient h-20 flex items-center justify-center">
+          <ImagePlus className="h-10 w-10 text-blue-300/50" />
+        </div>
+        <div className="game-card-title py-2">
+          <div className="flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-blue-300" />
+            <span className="font-bold text-white text-sm truncate uppercase">{item.ingredient.name}</span>
+          </div>
+        </div>
+        <div className="game-card-body py-2">
+          <span className="game-card-stat game-card-stat-ingredient">{item.ingredient.base_unit}</span>
         </div>
       </div>
     );
@@ -94,13 +101,24 @@ function DragOverlayContent({
 
   if (item.type === 'panel-recipe') {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-400 bg-white p-3 shadow-lg dark:bg-zinc-800">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-        <div>
-          <p className="font-medium">{item.recipe.name}</p>
-          <p className="text-sm text-zinc-500">
-            {item.recipe.yield_quantity} {item.recipe.yield_unit}
-          </p>
+      <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
+        {item.recipe.image_url ? (
+          <div className="h-20 relative overflow-hidden rounded-t-xl">
+            <img src={item.recipe.image_url} alt={item.recipe.name} className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
+            <ImagePlus className="h-10 w-10 text-green-300/50" />
+          </div>
+        )}
+        <div className="game-card-title py-2">
+          <div className="flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-green-300" />
+            <span className="font-bold text-white text-sm truncate uppercase">{item.recipe.name}</span>
+          </div>
+        </div>
+        <div className="game-card-body py-2">
+          <span className="game-card-stat game-card-stat-recipe">{item.recipe.yield_quantity} {item.recipe.yield_unit}</span>
         </div>
       </div>
     );
@@ -110,11 +128,18 @@ function DragOverlayContent({
     const staged = stagedIngredients.find((s) => s.id === item.stagedId);
     if (!staged) return null;
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-blue-400 bg-white p-3 shadow-lg dark:bg-zinc-800">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-        <div>
-          <p className="font-medium">{staged.ingredient.name}</p>
-          <p className="text-sm text-zinc-500">{staged.ingredient.base_unit}</p>
+      <div className="game-card game-card-ingredient game-card-dragging w-44 opacity-95">
+        <div className="game-card-art game-card-art-ingredient h-20 flex items-center justify-center">
+          <ImagePlus className="h-10 w-10 text-blue-300/50" />
+        </div>
+        <div className="game-card-title py-2">
+          <div className="flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-blue-300" />
+            <span className="font-bold text-white text-sm truncate uppercase">{staged.ingredient.name}</span>
+          </div>
+        </div>
+        <div className="game-card-body py-2">
+          <span className="game-card-stat game-card-stat-ingredient">{staged.ingredient.base_unit}</span>
         </div>
       </div>
     );
@@ -124,13 +149,24 @@ function DragOverlayContent({
     const staged = stagedRecipes.find((s) => s.id === item.stagedId);
     if (!staged) return null;
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-400 bg-white p-3 shadow-lg dark:bg-zinc-800">
-        <GripVertical className="h-4 w-4 text-zinc-400" />
-        <div>
-          <p className="font-medium">{staged.recipe.name}</p>
-          <p className="text-sm text-zinc-500">
-            {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
-          </p>
+      <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
+        {staged.recipe.image_url ? (
+          <div className="h-20 relative overflow-hidden rounded-t-xl">
+            <img src={staged.recipe.image_url} alt={staged.recipe.name} className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
+            <ImagePlus className="h-10 w-10 text-green-300/50" />
+          </div>
+        )}
+        <div className="game-card-title py-2">
+          <div className="flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-green-300" />
+            <span className="font-bold text-white text-sm truncate uppercase">{staged.recipe.name}</span>
+          </div>
+        </div>
+        <div className="game-card-body py-2">
+          <span className="game-card-stat game-card-stat-recipe">{staged.recipe.yield_quantity} {staged.recipe.yield_unit}</span>
         </div>
       </div>
     );
@@ -171,18 +207,42 @@ function StagedIngredientCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-lg border border-blue-200 bg-blue-50 shadow-sm dark:border-blue-800 dark:bg-blue-950"
+      className="game-card game-card-ingredient game-card-hover w-56"
     >
-      <div className="flex items-center gap-2 p-3">
-        <button {...listeners} {...attributes} className="cursor-grab touch-none">
-          <GripVertical className="h-4 w-4 text-zinc-400" />
-        </button>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex-1 text-left cursor-pointer hover:opacity-80"
-        >
-          <p className="font-medium text-sm">{staged.ingredient.name}</p>
-          <div className="flex items-center gap-2 mt-1">
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-ingredient" />
+
+      {/* Card Art */}
+      <div className="game-card-art game-card-art-ingredient flex items-center justify-center">
+        <ImagePlus className="h-12 w-12 text-blue-300/50" />
+      </div>
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button {...listeners} {...attributes} className="cursor-grab touch-none text-blue-300 hover:text-blue-100">
+            <GripVertical className="h-5 w-5" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-base tracking-wide uppercase">
+            {staged.ingredient.name}
+          </h3>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-blue-300 hover:text-white hover:bg-white/10"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        {/* Stats row */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
             <input
               type="number"
               value={staged.quantity}
@@ -191,64 +251,70 @@ function StagedIngredientCard({
                 onQuantityChange(parseFloat(e.target.value) || 0);
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-base text-white text-center focus:border-blue-400 focus:outline-none"
               min="0"
               step="0.1"
             />
-            <span className="text-xs text-zinc-500">{staged.ingredient.base_unit}</span>
+            <span className="game-card-stat game-card-stat-ingredient">{staged.ingredient.base_unit}</span>
           </div>
-        </button>
-        <div className="flex items-center gap-1">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="rounded p-1 text-zinc-400 hover:bg-blue-100 hover:text-zinc-600 dark:hover:bg-blue-900"
+            className="rounded p-1.5 text-blue-300 hover:text-white hover:bg-white/10"
           >
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={onRemove}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-          >
-            <X className="h-4 w-4" />
+            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </button>
         </div>
-      </div>
 
-      {isExpanded && (
-        <div className="border-t border-blue-200 dark:border-blue-800 px-3 py-2 text-xs space-y-2">
-          <div>
-            <span className="text-zinc-500">Unit Cost: </span>
-            <span className="font-medium">
-              {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.ingredient.base_unit}` : 'N/A'}
-            </span>
-          </div>
-          <div>
-            <span className="text-zinc-500">Suppliers: </span>
-            {suppliers.length > 0 ? (
-              <ul className="mt-1 space-y-1">
-                {suppliers.map((supplier) => (
-                  <li
-                    key={supplier.supplier_id}
-                    className={`flex items-center gap-1 ${supplier.is_preferred ? 'font-medium' : ''}`}
-                  >
-                    <span>{supplier.supplier_name}</span>
-                    {supplier.is_preferred && (
-                      <span className="text-[10px] bg-blue-200 dark:bg-blue-800 px-1 rounded">
-                        preferred
-                      </span>
-                    )}
-                    <span className="text-zinc-400">
-                      (${supplier.cost_per_unit.toFixed(2)}/{supplier.pack_unit})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className="text-zinc-400">No suppliers</span>
-            )}
-          </div>
+        {/* Cost display */}
+        <div className="text-sm text-blue-200/80">
+          {preferredSupplier ? (
+            <span>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit.toFixed(2)}/{preferredSupplier.pack_unit}</span>
+          ) : suppliers.length > 0 ? (
+            <span>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit.toFixed(2)}/{suppliers[0].pack_unit}</span>
+          ) : (
+            <span className="text-blue-300/50">No supplier</span>
+          )}
         </div>
-      )}
+
+        {/* Expanded details */}
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-blue-400/20 text-sm space-y-2">
+            <div className="flex justify-between">
+              <span className="text-blue-300/60">Unit Cost</span>
+              <span className="text-blue-100 font-medium">
+                {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.ingredient.base_unit}` : 'N/A'}
+              </span>
+            </div>
+            <div>
+              <span className="text-blue-300/60">Suppliers</span>
+              {suppliers.length > 0 ? (
+                <ul className="mt-1 space-y-1.5">
+                  {suppliers.map((supplier) => (
+                    <li
+                      key={supplier.supplier_id}
+                      className="flex items-center justify-between text-blue-100"
+                    >
+                      <span className={supplier.is_preferred ? 'font-medium' : ''}>
+                        {supplier.supplier_name}
+                        {supplier.is_preferred && (
+                          <span className="ml-1 text-xs bg-blue-500/30 text-blue-200 px-1.5 py-0.5 rounded">
+                            preferred
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-blue-200/60">
+                        ${supplier.cost_per_unit.toFixed(2)}/{supplier.pack_unit}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-blue-300/50">No suppliers</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -287,18 +353,52 @@ function StagedRecipeCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-lg border border-green-200 bg-green-50 shadow-sm dark:border-green-800 dark:bg-green-950 max-w-xs"
+      className="game-card game-card-recipe game-card-hover w-56"
     >
-      <div className="flex items-center gap-2 p-3">
-        <button {...listeners} {...attributes} className="cursor-grab touch-none">
-          <GripVertical className="h-4 w-4 text-zinc-400" />
-        </button>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex-1 text-left cursor-pointer hover:opacity-80"
-        >
-          <p className="font-medium text-sm">{staged.recipe.name}</p>
-          <div className="flex items-center gap-2 mt-1">
+      {/* Card frame */}
+      <div className="game-card-frame" />
+
+      {/* Rarity indicator */}
+      <div className="game-card-rarity game-card-rarity-recipe" />
+
+      {/* Card Art */}
+      {staged.recipe.image_url ? (
+        <div className="game-card-art relative">
+          <img
+            src={staged.recipe.image_url}
+            alt={staged.recipe.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="game-card-art game-card-art-recipe flex items-center justify-center">
+          <ImagePlus className="h-12 w-12 text-green-300/50" />
+        </div>
+      )}
+
+      {/* Title Banner */}
+      <div className="game-card-title">
+        <div className="flex items-center gap-2">
+          <button {...listeners} {...attributes} className="cursor-grab touch-none text-green-300 hover:text-green-100">
+            <GripVertical className="h-5 w-5" />
+          </button>
+          <h3 className="flex-1 font-bold text-white truncate text-base tracking-wide uppercase">
+            {staged.recipe.name}
+          </h3>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-green-300 hover:text-white hover:bg-white/10"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="game-card-body">
+        {/* Stats row */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
             <input
               type="number"
               value={staged.quantity}
@@ -307,85 +407,81 @@ function StagedRecipeCard({
                 onQuantityChange(parseFloat(e.target.value) || 0);
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+              className="w-16 rounded bg-black/30 border border-green-400/30 px-2 py-1 text-base text-white text-center focus:border-green-400 focus:outline-none"
               min="0"
               step="0.1"
             />
-            <span className="text-xs text-zinc-500">portion</span>
+            <span className="game-card-stat game-card-stat-recipe">portion</span>
           </div>
-        </button>
-        <div className="flex items-center gap-1">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="rounded p-1 text-zinc-400 hover:bg-green-100 hover:text-zinc-600 dark:hover:bg-green-900"
+            className="rounded p-1.5 text-green-300 hover:text-white hover:bg-white/10"
           >
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={onRemove}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-          >
-            <X className="h-4 w-4" />
+            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </button>
         </div>
-      </div>
 
-      {isExpanded && (
-        <div className="border-t border-green-200 dark:border-green-800 px-3 py-2 text-xs space-y-3 max-h-64 overflow-y-auto">
-          {/* Ingredients Section */}
-          <div>
-            <span className="text-zinc-500 font-medium">Ingredients:</span>
-            {recipeIngredients && recipeIngredients.length > 0 ? (
-              <ul className="mt-1 space-y-1.5">
-                {recipeIngredients.map((ri) => {
-                  const ingredient = ri.ingredient;
-                  const suppliers = ingredient?.suppliers || [];
-                  const preferredSupplier = suppliers.find((s) => s.is_preferred);
-                  return (
-                    <li key={ri.id} className="bg-white dark:bg-zinc-900 rounded p-1.5">
-                      <div className="font-medium">{ingredient?.name || `Ingredient #${ri.ingredient_id}`}</div>
-                      <div className="text-zinc-500 flex flex-wrap gap-x-2">
-                        <span>{ri.quantity} {ri.base_unit || ri.unit}</span>
-                        <span>
-                          @ ${ri.unit_price?.toFixed(2) ?? 'N/A'}/{ri.base_unit || ri.unit}
-                        </span>
-                      </div>
-                      {suppliers.length > 0 && (
-                        <div className="text-zinc-400 mt-0.5">
-                          Supplier: {preferredSupplier?.supplier_name || suppliers[0]?.supplier_name}
-                          {preferredSupplier && <span className="ml-1 text-[10px] bg-green-200 dark:bg-green-800 px-1 rounded">preferred</span>}
+        {/* Yield display */}
+        <div className="text-sm text-green-200/80">
+          Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
+        </div>
+
+        {/* Expanded details */}
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-green-400/20 text-sm space-y-3 max-h-48 overflow-y-auto">
+            {/* Ingredients Section */}
+            <div>
+              <span className="text-green-300/60 font-medium">Ingredients</span>
+              {recipeIngredients && recipeIngredients.length > 0 ? (
+                <ul className="mt-1.5 space-y-1.5">
+                  {recipeIngredients.map((ri) => {
+                    const ingredient = ri.ingredient;
+                    const suppliers = ingredient?.suppliers || [];
+                    const preferredSupplier = suppliers.find((s) => s.is_preferred);
+                    return (
+                      <li key={ri.id} className="bg-black/20 rounded p-2">
+                        <div className="font-medium text-green-100">{ingredient?.name || `Ingredient #${ri.ingredient_id}`}</div>
+                        <div className="text-green-200/60 flex flex-wrap gap-x-2">
+                          <span>{ri.quantity} {ri.base_unit || ri.unit}</span>
+                          <span>@ ${ri.unit_price?.toFixed(2) ?? 'N/A'}/{ri.base_unit || ri.unit}</span>
                         </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <span className="text-zinc-400 ml-1">No ingredients</span>
+                        {suppliers.length > 0 && (
+                          <div className="text-green-300/50 mt-0.5">
+                            {preferredSupplier?.supplier_name || suppliers[0]?.supplier_name}
+                            {preferredSupplier && <span className="ml-1 text-xs bg-green-500/30 text-green-200 px-1.5 py-0.5 rounded">preferred</span>}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-1 text-green-300/50">No ingredients</p>
+              )}
+            </div>
+
+            {/* Sub-Recipes Section */}
+            {subRecipes && subRecipes.length > 0 && (
+              <div>
+                <span className="text-green-300/60 font-medium">Sub-Recipes</span>
+                <ul className="mt-1.5 space-y-1.5">
+                  {subRecipes.map((sr) => {
+                    const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
+                    return (
+                      <li key={sr.id} className="bg-black/20 rounded p-2">
+                        <div className="font-medium text-green-100">{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</div>
+                        <div className="text-green-200/60">
+                          {sr.quantity} {sr.unit}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </div>
-
-          {/* Sub-Recipes Section */}
-          {subRecipes && subRecipes.length > 0 && (
-            <div>
-              <span className="text-zinc-500 font-medium">Sub-Recipes:</span>
-              <ul className="mt-1 space-y-1">
-                {subRecipes.map((sr) => {
-                  const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
-                  return (
-                    <li key={sr.id} className="bg-white dark:bg-zinc-900 rounded p-1.5">
-                      <div className="font-medium">{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</div>
-                      <div className="text-zinc-500">
-                        {sr.quantity} {sr.unit}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -423,7 +519,7 @@ function CanvasDropZone({
           canvasRef.current = node;
         }
       }}
-      className={`relative flex-1 min-h-[500px] rounded-lg border-2 border-dashed transition-colors mb-4 ${isOver
+      className={`relative flex-1 min-h-[500px] overflow-auto rounded-lg border-2 border-dashed transition-colors mb-4 ${isOver
           ? 'border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-950/30'
           : 'border-zinc-300 dark:border-zinc-700'
         }`}
@@ -721,6 +817,7 @@ export function CanvasTab() {
         base_unit: ri.unit,
         cost_per_base_unit: ri.unit_price,
         is_active: true,
+        category_id: null,
         created_at: '',
         updated_at: '',
       },
@@ -750,6 +847,7 @@ export function CanvasTab() {
           version: 1,
           root_id: null,
           image_url: null,
+          summary_feedback: null,
           created_at: '',
           updated_at: '',
           created_by: '',
@@ -950,6 +1048,7 @@ export function CanvasTab() {
           base_unit: ri.unit,
           cost_per_base_unit: ri.unit_price,
           is_active: true,
+          category_id: null,
           created_at: '',
           updated_at: '',
         },

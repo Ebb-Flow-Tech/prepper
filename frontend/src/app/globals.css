@@ -36,6 +36,247 @@
     @apply active:scale-[0.98] transition-transform duration-100;
   }
 
+  /* =========================================
+     GAME CARD STYLES
+     Collectible card game aesthetic
+     ========================================= */
+
+  .game-card {
+    @apply relative overflow-hidden rounded-xl;
+    background: linear-gradient(145deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--card)) 100%);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -2px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .game-card::before {
+    content: '';
+    @apply absolute inset-0 rounded-xl pointer-events-none;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(0, 0, 0, 0.05) 100%) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Ingredient card - Blue rarity */
+  .game-card-ingredient {
+    --card-accent: 210 100% 50%;
+    --card-accent-light: 210 100% 95%;
+    --card-glow: 210 100% 60%;
+    border: 2px solid hsl(210 60% 50% / 0.5);
+  }
+
+  .game-card-ingredient::after {
+    content: '';
+    @apply absolute inset-0 rounded-xl pointer-events-none opacity-0 transition-opacity duration-300;
+    box-shadow:
+      0 0 20px 2px hsl(var(--card-glow) / 0.3),
+      inset 0 0 20px 2px hsl(var(--card-glow) / 0.1);
+  }
+
+  .game-card-ingredient:hover::after {
+    @apply opacity-100;
+  }
+
+  /* Recipe card - Green rarity (epic) */
+  .game-card-recipe {
+    --card-accent: 140 70% 40%;
+    --card-accent-light: 140 70% 95%;
+    --card-glow: 140 70% 50%;
+    border: 2px solid hsl(140 50% 40% / 0.5);
+  }
+
+  .game-card-recipe::after {
+    content: '';
+    @apply absolute inset-0 rounded-xl pointer-events-none opacity-0 transition-opacity duration-300;
+    box-shadow:
+      0 0 20px 2px hsl(var(--card-glow) / 0.3),
+      inset 0 0 20px 2px hsl(var(--card-glow) / 0.1);
+  }
+
+  .game-card-recipe:hover::after {
+    @apply opacity-100;
+  }
+
+  /* Card frame border effect */
+  .game-card-frame {
+    @apply absolute inset-1 rounded-lg pointer-events-none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Card art area */
+  .game-card-art {
+    @apply relative overflow-hidden;
+    aspect-ratio: 4/3;
+  }
+
+  .game-card-art::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      to bottom,
+      transparent 60%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
+  }
+
+  /* Card art for ingredient */
+  .game-card-art-ingredient {
+    background: linear-gradient(
+      135deg,
+      hsl(210 80% 25%) 0%,
+      hsl(210 60% 35%) 50%,
+      hsl(210 80% 20%) 100%
+    );
+  }
+
+  /* Card art for recipe */
+  .game-card-art-recipe {
+    background: linear-gradient(
+      135deg,
+      hsl(140 60% 20%) 0%,
+      hsl(140 50% 30%) 50%,
+      hsl(140 60% 15%) 100%
+    );
+  }
+
+  /* Card title banner */
+  .game-card-title {
+    @apply relative px-3 py-2;
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.6) 0%,
+      rgba(0, 0, 0, 0.4) 50%,
+      rgba(0, 0, 0, 0.6) 100%
+    );
+  }
+
+  .game-card-title::before,
+  .game-card-title::after {
+    content: '';
+    @apply absolute left-0 right-0 h-px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      transparent 100%
+    );
+  }
+
+  .game-card-title::before {
+    top: 0;
+  }
+
+  .game-card-title::after {
+    bottom: 0;
+  }
+
+  /* Card stats badge */
+  .game-card-stat {
+    @apply inline-flex items-center justify-center px-2.5 py-1 rounded-full text-sm font-bold;
+    background: linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.7) 0%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .game-card-stat-ingredient {
+    @apply text-blue-200;
+    border-color: hsl(210 60% 50% / 0.5);
+  }
+
+  .game-card-stat-recipe {
+    @apply text-green-200;
+    border-color: hsl(140 50% 40% / 0.5);
+  }
+
+  /* Card body/content area */
+  .game-card-body {
+    @apply p-3;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.3) 0%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+  }
+
+  /* Card rarity indicator */
+  .game-card-rarity {
+    @apply absolute top-2 right-2 w-3 h-3 rounded-full;
+    box-shadow: 0 0 8px 2px currentColor;
+  }
+
+  .game-card-rarity-ingredient {
+    @apply bg-blue-400 text-blue-400;
+  }
+
+  .game-card-rarity-recipe {
+    @apply bg-green-400 text-green-400;
+  }
+
+  /* Card hover effects */
+  .game-card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .game-card-hover:hover {
+    @apply -translate-y-1;
+    box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.2),
+      0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Drag overlay game card */
+  .game-card-dragging {
+    @apply rotate-3;
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.4),
+      0 0 30px 5px hsl(var(--card-glow) / 0.2);
+  }
+
+  /* Small card variant (for right panel) */
+  .game-card-sm .game-card-art {
+    aspect-ratio: 16/9;
+  }
+
+  .game-card-sm .game-card-title {
+    @apply px-3 py-2;
+  }
+
+  .game-card-sm .game-card-body {
+    @apply p-3;
+  }
+
+  .game-card-sm .game-card-stat {
+    @apply text-xs px-2 py-0.5;
+  }
+
+  /* Dark mode adjustments */
+  .dark .game-card {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -2px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .dark .game-card::before {
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.02) 50%,
+      rgba(0, 0, 0, 0.1) 100%) border-box;
+  }
+
   /* Status Label Utilities */
   .status-label,
   .status-draft,

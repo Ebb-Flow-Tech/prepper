@@ -58,6 +58,9 @@ class Recipe(RecipeBase, table=True):
     # Image
     image_url: str | None = Field(default=None, description="URL to recipe image in storage")
 
+    # Feedback
+    summary_feedback: str | None = Field(default=None, description="Summary feedback on the recipe")
+
     # Authorship tracking
     created_by: str | None = Field(default=None, max_length=100)
     updated_by: str | None = Field(default=None, max_length=100)
@@ -91,6 +94,7 @@ class RecipeUpdate(SQLModel):
     status: RecipeStatus | None = None
     updated_by: str | None = None
     image_url: str | None = None
+    summary_feedback: str | None = None
 
 
 class RecipeStatusUpdate(SQLModel):

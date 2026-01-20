@@ -8,6 +8,7 @@ export interface Ingredient {
   base_unit: string;
   cost_per_base_unit: number | null;
   is_active: boolean;
+  category_id: number | null;
   created_at: string;
   updated_at: string;
   suppliers?: IngredientSupplierEntry[];
@@ -29,6 +30,7 @@ export interface Recipe {
   version: number;
   root_id: number | null;
   image_url: string | null;
+  summary_feedback?: string | null;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
@@ -120,16 +122,32 @@ export interface UpdateRecipeRequest {
   status?: RecipeStatus;
   is_public?: boolean;
   image_url?: string | null;
+  summary_feedback?: string | null;
 }
 
 export interface UpdateRecipeImageRequest {
   image_base64: string;
 }
 
+export interface CreateIngredientSupplier {
+  supplier_id: string;
+  supplier_name: string;
+  sku?: string | null;
+  pack_size: number;
+  pack_unit: string;
+  price_per_pack: number;
+  cost_per_unit: number;
+  currency?: string;
+  is_preferred?: boolean;
+  source?: string;
+}
+
 export interface CreateIngredientRequest {
   name: string;
   base_unit: string;
   cost_per_base_unit?: number | null;
+  category_id?: number | null;
+  suppliers?: CreateIngredientSupplier[];
 }
 
 export interface UpdateIngredientRequest {
@@ -137,6 +155,7 @@ export interface UpdateIngredientRequest {
   base_unit?: string;
   cost_per_base_unit?: number | null;
   is_active?: boolean;
+  category_id?: number | null;
 }
 
 export interface AddRecipeIngredientRequest {
@@ -405,4 +424,26 @@ export interface SubRecipeUpdate {
 
 export interface SubRecipeReorder {
   ordered_ids: number[];
+}
+
+// ============ Category Types ============
+
+export interface Category {
+  id: number;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
 }

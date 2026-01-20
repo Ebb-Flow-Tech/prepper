@@ -2,7 +2,7 @@
 
 import { use, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, Trash2, Truck } from 'lucide-react';
+import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, RefreshCw, Trash2, Truck } from 'lucide-react';
 import {
   useIngredient,
   useUpdateIngredient,
@@ -12,6 +12,8 @@ import {
   useAddIngredientSupplier,
   useRemoveIngredientSupplier,
   useUpdateIngredientSupplier,
+  useCategories,
+  useCategorizeIngredient,
 } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Select, Skeleton } from '@/components/ui';
@@ -111,16 +113,37 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const { data: ingredient, isLoading, error } = useIngredient(ingredientId);
   const { data: availableSuppliers } = useSuppliers();
   const { data: suppliers = [] } = useIngredientSuppliers(ingredientId);
+  const { data: categories = [] } = useCategories();
 
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();
   const updateSupplierMutation = useUpdateIngredientSupplier();
   const updateIngredientMutation = useUpdateIngredient();
   const deactivateIngredientMutation = useDeactivateIngredient();
+  const categorizeIngredientMutation = useCategorizeIngredient();
 
-  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean }) => {
+  const handleUpdateIngredient = (data: { name?: string; base_unit?: string; cost_per_base_unit?: number | null; is_active?: boolean; category_id?: number | null }) => {
     updateIngredientMutation.mutate({ id: ingredientId, data });
   };
+
+  const handleReassignCategory = async () => {
+    if (!ingredient) return;
+
+    try {
+      const result = await categorizeIngredientMutation.mutateAsync(ingredient.name);
+      if (result.category_id) {
+        handleUpdateIngredient({ category_id: result.category_id });
+        const categoryName = categories.find((c) => c.id === result.category_id)?.name ?? 'Unknown';
+        toast.success(`Category assigned: ${categoryName}`);
+      } else {
+        toast.error('Failed to determine category');
+      }
+    } catch {
+      toast.error('Failed to reassign category');
+    }
+  };
+
+  const currentCategory = categories.find((c) => c.id === ingredient?.category_id);
 
   // Recalculate and update median cost based on current suppliers
   const recalculateMedianCost = (updatedSuppliers: typeof suppliers) => {
@@ -409,6 +432,22 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                           options={UNIT_OPTIONS}
                         />
                       </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-zinc-500 dark:text-zinc-400">Category:</span>
+                        <Badge variant={currentCategory ? 'default' : 'secondary'}>
+                          {currentCategory?.name ?? 'N/A'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleReassignCategory}
+                          disabled={categorizeIngredientMutation.isPending}
+                          className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-orange-950"
+                        >
+                          <RefreshCw className={`h-3 w-3 mr-1 ${categorizeIngredientMutation.isPending ? 'animate-spin' : ''}`} />
+                          {categorizeIngredientMutation.isPending ? 'Assigning...' : 'Reassign'}
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-sm text-zinc-500 dark:text-zinc-400">
@@ -606,10 +645,12 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                           >
                             <td className="py-3 px-2 text-zinc-900 dark:text-zinc-100 font-medium">
-                              <EditableCell
-                                value={supplier.supplier_name}
-                                onSave={(value) => handleUpdateSupplier(supplier.supplier_id, { supplier_name: value })}
-                              />
+                              <Link
+                                href={`/suppliers/${supplier.supplier_id}`}
+                                className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                              >
+                                {supplier.supplier_name}
+                              </Link>
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                               <EditableCell
