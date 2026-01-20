@@ -10,7 +10,7 @@ export default function Home() {
 
   useEffect(() => {
     if (userId) {
-      router.replace('/ingredients');
+      router.replace('/recipes');
     } else {
       router.replace('/login');
     }

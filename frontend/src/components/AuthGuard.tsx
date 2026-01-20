@@ -35,7 +35,7 @@ const LAST_ROUTE_KEY = 'prepper_last_route';
 
 function getLastRoute(): string {
   if (typeof window === 'undefined') return '/';
-  return localStorage.getItem(LAST_ROUTE_KEY) || '/';
+  return localStorage.getItem(LAST_ROUTE_KEY) || '/recipes';
 }
 
 function setLastRoute(route: string) {
