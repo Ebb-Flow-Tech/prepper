@@ -8,6 +8,7 @@ import { DayPicker } from 'react-day-picker';
 import { format, startOfDay } from 'date-fns';
 import 'react-day-picker/style.css';
 import { useCreateTastingSession } from '@/lib/hooks/useTastings';
+import { useSendTastingInvitation } from '@/lib/hooks/useSendTastingInvitation';
 import { PageHeader, Button, Input, Textarea, Badge } from '@/components/ui';
 
 function isValidEmail(email: string): boolean {
@@ -18,6 +19,7 @@ function isValidEmail(email: string): boolean {
 export default function NewTastingSessionPage() {
   const router = useRouter();
   const createSession = useCreateTastingSession();
+  const sendInvitation = useSendTastingInvitation();
 
   const [name, setName] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -136,6 +138,17 @@ export default function NewTastingSessionPage() {
         attendees: attendees.length > 0 ? attendees : null,
         notes: notes.trim() || null,
       });
+
+      // Send email invitations if there are attendees
+      if (attendees.length > 0) {
+        sendInvitation.mutate({
+          session_id: session.id,
+          session_name: name.trim(),
+          session_date: getDateTimeString(),
+          session_location: location.trim() || null,
+          recipients: attendees,
+        });
+      }
 
       router.push(`/tastings/${session.id}`);
     } catch (error) {
