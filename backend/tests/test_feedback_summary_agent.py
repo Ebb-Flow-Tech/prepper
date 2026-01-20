@@ -23,15 +23,10 @@ class TestFeedbackSummaryAgentInit:
         assert agent.session == session
         assert agent._last_summary is None
 
-    def test_init_no_api_key(self, session: Session):
+    def test_init_no_api_key(self, session: Session, agent_no_api_key):
         """Test initialization fails without API key."""
-        with patch("app.agents.feedback_summary_agent.get_settings") as mock:
-            settings = MagicMock()
-            settings.anthropic_api_key = None
-            mock.return_value = settings
-
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not configured"):
-                FeedbackSummaryAgent(session)
+        with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not configured"):
+            FeedbackSummaryAgent(session)
 
 
 class TestRetrieveFeedback:
@@ -388,8 +383,8 @@ class TestSummarizeFeedbackAPI:
         session.commit()
 
         with (
-            patch("app.agents.feedback_summary_agent.get_settings") as mock_settings,
-            patch("app.agents.feedback_summary_agent.anthropic.Anthropic") as mock_anthropic,
+            patch("app.agents.base_agent.get_settings") as mock_settings,
+            patch("app.agents.base_agent.anthropic.Anthropic") as mock_anthropic,
         ):
             settings = MagicMock()
             settings.anthropic_api_key = "test-key"
@@ -433,8 +428,8 @@ class TestSummarizeFeedbackAPI:
         session.refresh(recipe)
 
         with (
-            patch("app.agents.feedback_summary_agent.get_settings") as mock_settings,
-            patch("app.agents.feedback_summary_agent.anthropic.Anthropic") as mock_anthropic,
+            patch("app.agents.base_agent.get_settings") as mock_settings,
+            patch("app.agents.base_agent.anthropic.Anthropic") as mock_anthropic,
         ):
             settings = MagicMock()
             settings.anthropic_api_key = "test-key"
@@ -457,27 +452,22 @@ class TestSummarizeFeedbackAPI:
             assert data["success"] is False
             assert data["summary"] is None
 
-    def test_summarize_feedback_endpoint_no_api_key(self, client):
+    def test_summarize_feedback_endpoint_no_api_key(self, client, agent_no_api_key):
         """Test endpoint fails gracefully without API key."""
         recipe_id = 999
 
-        with patch("app.agents.feedback_summary_agent.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.anthropic_api_key = None
-            mock_settings.return_value = settings
+        response = client.post(f"/api/v1/agents/summarize-feedback/{recipe_id}")
 
-            response = client.post(f"/api/v1/agents/summarize-feedback/{recipe_id}")
-
-            assert response.status_code == 500
-            assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+        assert response.status_code == 500
+        assert "ANTHROPIC_API_KEY" in response.json()["detail"]
 
     def test_summarize_feedback_endpoint_path_parameter(self, client):
         """Test endpoint correctly handles path parameter recipe_id."""
         recipe_id = 12345
 
         with (
-            patch("app.agents.feedback_summary_agent.get_settings") as mock_settings,
-            patch("app.agents.feedback_summary_agent.anthropic.Anthropic") as mock_anthropic,
+            patch("app.agents.base_agent.get_settings") as mock_settings,
+            patch("app.agents.base_agent.anthropic.Anthropic") as mock_anthropic,
         ):
             settings = MagicMock()
             settings.anthropic_api_key = "test-key"

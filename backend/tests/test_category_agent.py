@@ -23,15 +23,10 @@ class TestCategoryAgentInit:
         assert agent._last_category_name is None
         mock_anthropic.assert_called_once_with(api_key="test-api-key")
 
-    def test_init_no_api_key(self, session: Session):
+    def test_init_no_api_key(self, session: Session, agent_no_api_key):
         """Test initialization fails without API key."""
-        with patch("app.agents.category_agent.get_settings") as mock:
-            settings = MagicMock()
-            settings.anthropic_api_key = None
-            mock.return_value = settings
-
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not configured"):
-                CategoryAgent(session)
+        with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not configured"):
+            CategoryAgent(session)
 
 
 class TestSimilarityCalculation:
@@ -273,13 +268,23 @@ class TestCategorizeIngredient:
             stop_reason="tool_use"
         )
 
-        # Second response: final answer
-        final_response = MockClaudeResponse(
-            content=[MockContentBlock("I categorized this as Dairy.")],
-            stop_reason="end_turn"
+        # Second response: finalize categorization tool
+        finalize_response = MockClaudeResponse(
+            content=[
+                MockToolUseBlock(
+                    "tool-2",
+                    "finalize_categorization",
+                    {
+                        "category_id": category.id,
+                        "category_name": "Dairy",
+                        "explanation": "Milk is a dairy product."
+                    }
+                )
+            ],
+            stop_reason="tool_use"
         )
 
-        mock_client.messages.create.side_effect = [tool_use_response, final_response]
+        mock_client.messages.create.side_effect = [tool_use_response, finalize_response]
         mock_anthropic.return_value = mock_client
 
         agent = CategoryAgent(session)
@@ -288,7 +293,7 @@ class TestCategorizeIngredient:
         assert result["category_id"] == category.id
         assert result["category_name"] == "Dairy"
         assert result["success"] is True
-        assert "Dairy" in result["explanation"]
+        assert result["explanation"]  # Ensure explanation is not empty
 
     @pytest.mark.asyncio
     async def test_categorize_creates_new_category(
@@ -313,13 +318,23 @@ class TestCategorizeIngredient:
             stop_reason="tool_use"
         )
 
-        # Third response: final answer
-        final_response = MockClaudeResponse(
-            content=[MockContentBlock("I created and assigned the Seafood category.")],
-            stop_reason="end_turn"
+        # Third response: finalize categorization tool
+        finalize_response = MockClaudeResponse(
+            content=[
+                MockToolUseBlock(
+                    "tool-3",
+                    "finalize_categorization",
+                    {
+                        "category_id": 1,  # Placeholder, will be set by agent
+                        "category_name": "Seafood",
+                        "explanation": "Salmon is a seafood product."
+                    }
+                )
+            ],
+            stop_reason="tool_use"
         )
 
-        mock_client.messages.create.side_effect = [query_response, add_response, final_response]
+        mock_client.messages.create.side_effect = [query_response, add_response, finalize_response]
         mock_anthropic.return_value = mock_client
 
         agent = CategoryAgent(session)
@@ -348,8 +363,8 @@ class TestCategorizeIngredientAPI:
         session.refresh(category)
 
         with (
-            patch("app.agents.category_agent.get_settings") as mock_settings,
-            patch("app.agents.category_agent.anthropic.Anthropic") as mock_anthropic,
+            patch("app.agents.base_agent.get_settings") as mock_settings,
+            patch("app.agents.base_agent.anthropic.Anthropic") as mock_anthropic,
         ):
             settings = MagicMock()
             settings.anthropic_api_key = "test-key"
@@ -382,17 +397,12 @@ class TestCategorizeIngredientAPI:
             assert data["category_name"] == "Dairy"
             assert data["success"] is True
 
-    def test_categorize_ingredient_no_api_key(self, client):
+    def test_categorize_ingredient_no_api_key(self, client, agent_no_api_key):
         """Test endpoint fails gracefully without API key."""
-        with patch("app.agents.category_agent.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.anthropic_api_key = None
-            mock_settings.return_value = settings
+        response = client.post(
+            "/api/v1/agents/categorize-ingredient",
+            json={"ingredient_name": "Cheese"}
+        )
 
-            response = client.post(
-                "/api/v1/agents/categorize-ingredient",
-                json={"ingredient_name": "Cheese"}
-            )
-
-            assert response.status_code == 500
-            assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+        assert response.status_code == 500
+        assert "ANTHROPIC_API_KEY" in response.json()["detail"]

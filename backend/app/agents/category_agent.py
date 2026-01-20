@@ -7,15 +7,14 @@ This agent uses Claude with tool use to:
 """
 
 import json
-import time
 from difflib import SequenceMatcher
 from typing import Any
 
-import anthropic
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select, func
 
-from app.config import get_settings
+from app.agents.base_agent import BaseAgent
+from app.agents.agent_utils import print_tool_call, print_tool_timing, run_async_in_sync, time_it
 from app.models.category import Category, CategoryCreate
 
 
@@ -28,65 +27,80 @@ class CategoryResult(BaseModel):
     success: bool = Field(default=True, description="Whether categorization was successful")
 
 
-# Tool definitions for the Claude agent
-TOOLS = [
-    {
-        "name": "query_category_by_name",
-        "description": "Search for a category by name using semantic similarity. Returns the closest matching category if similarity is >= 0.8, otherwise returns null.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "The category name to search for"
-                }
-            },
-            "required": ["name"]
-        }
-    },
-    {
-        "name": "add_category",
-        "description": "Add a new category to the database. The name will be converted to title case.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "The name of the category to add"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Optional description for the category"
-                }
-            },
-            "required": ["name"]
-        }
-    },
-    {
-        "name": "finalize_categorization",
-        "description": "Finalize the categorization with the result. Call this when you have determined the final category.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "category_id": {
-                    "type": "integer",
-                    "description": "ID of the selected/created category"
-                },
-                "category_name": {
-                    "type": "string",
-                    "description": "Name of the selected/created category"
-                },
-                "explanation": {
-                    "type": "string",
-                    "description": "Brief explanation for the categorization choice"
-                }
-            },
-            "required": ["category_id", "category_name", "explanation"]
-        }
-    }
-]
+class CategoryAgent(BaseAgent):
+    """Agent for categorizing ingredients using Claude with tool use."""
 
-SYSTEM_PROMPT = """You are a helpful assistant that categorizes ingredients into food categories.
+    SIMILARITY_THRESHOLD = 0.8
+
+    @property
+    def agent_name(self) -> str:
+        """Name of the agent for logging purposes."""
+        return "Category Agent"
+
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        """Tool definitions for the agent."""
+        return [
+            {
+                "name": "query_category_by_name",
+                "description": "Search for a category by name using semantic similarity. Returns the closest matching category if similarity is >= 0.8, otherwise returns null.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The category name to search for"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            },
+            {
+                "name": "add_category",
+                "description": "Add a new category to the database. The name will be converted to title case.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the category to add"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional description for the category"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            },
+            {
+                "name": "finalize_categorization",
+                "description": "Finalize the categorization with the result. Call this when you have determined the final category.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "category_id": {
+                            "type": "integer",
+                            "description": "ID of the selected/created category"
+                        },
+                        "category_name": {
+                            "type": "string",
+                            "description": "Name of the selected/created category"
+                        },
+                        "explanation": {
+                            "type": "string",
+                            "description": "Brief explanation for the categorization choice"
+                        }
+                    },
+                    "required": ["category_id", "category_name", "explanation"]
+                }
+            }
+        ]
+
+    @property
+    def system_prompt(self) -> str:
+        """System prompt for the agent."""
+        return """You are a helpful assistant that categorizes ingredients into food categories.
 
 Your task is to:
 1. When given an ingredient name, determine the most appropriate food category for it
@@ -103,28 +117,16 @@ Guidelines for categorization:
 
 Always provide a brief explanation of why the category fits the ingredient."""
 
-
-class CategoryAgent:
-    """Agent for categorizing ingredients using Claude with tool use."""
-
-    SIMILARITY_THRESHOLD = 0.8
-
     def __init__(self, session: Session):
         """Initialize the category agent.
 
         Args:
             session: SQLModel database session for category operations
         """
-        self.session = session
-        self.settings = get_settings()
+        super().__init__(session)
         self._last_category_id: int | None = None
         self._last_category_name: str | None = None
         self._last_explanation: str | None = None
-
-        if not self.settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY is not configured")
-
-        self.client = anthropic.Anthropic(api_key=self.settings.anthropic_api_key)
 
     def _calculate_similarity(self, str1: str, str2: str) -> float:
         """Calculate similarity ratio between two strings (case-insensitive).
@@ -225,47 +227,55 @@ class CategoryAgent:
         Returns:
             JSON string with the tool result
         """
-        start_time = time.perf_counter()
-        print(f"[Tool Call] {tool_name}")
-        print(f"[Tool Input] {json.dumps(tool_input, indent=2)}")
+        print_tool_call(tool_name, tool_input)
 
-        if tool_name == "query_category_by_name":
-            result = self._query_category_by_name(tool_input["name"])
-            if result:
+        def execute_tool() -> str:
+            if tool_name == "query_category_by_name":
+                result = self._query_category_by_name(tool_input["name"])
+                if result:
+                    self._last_category_id = result["id"]
+                    self._last_category_name = result["name"]
+                return json.dumps(result) if result else json.dumps(None)
+
+            elif tool_name == "add_category":
+                result = self._add_category(
+                    name=tool_input["name"],
+                    description=tool_input.get("description")
+                )
                 self._last_category_id = result["id"]
                 self._last_category_name = result["name"]
-            output = json.dumps(result) if result else json.dumps(None)
+                return json.dumps(result)
 
-        elif tool_name == "add_category":
-            result = self._add_category(
-                name=tool_input["name"],
-                description=tool_input.get("description")
-            )
-            self._last_category_id = result["id"]
-            self._last_category_name = result["name"]
-            output = json.dumps(result)
+            elif tool_name == "finalize_categorization":
+                # Store the final result
+                self._last_category_id = tool_input["category_id"]
+                self._last_category_name = tool_input["category_name"]
+                self._last_explanation = tool_input["explanation"]
+                return json.dumps({"status": "finalized"})
 
-        elif tool_name == "finalize_categorization":
-            # Store the final result
-            self._last_category_id = tool_input["category_id"]
-            self._last_category_name = tool_input["category_name"]
-            self._last_explanation = tool_input["explanation"]
-            output = json.dumps({"status": "finalized"})
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
-        else:
-            output = json.dumps({"error": f"Unknown tool: {tool_name}"})
-
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
-        print(f"[Tool Time] {tool_name}: {elapsed_ms:.2f}ms")
+        output, elapsed_ms = time_it(lambda: execute_tool())
+        print_tool_timing(tool_name, elapsed_ms)
         return output
+
+    def _on_finalization(self) -> dict[str, Any]:
+        """Return the final result when agent finalization is complete.
+
+        Returns:
+            Dictionary with the agent's result
+        """
+        result = CategoryResult(
+            category_id=self._last_category_id or 0,
+            category_name=self._last_category_name or "Unknown",
+            explanation=self._last_explanation or "Categorization completed",
+            success=self._last_category_id is not None
+        )
+        return result.model_dump()
 
     async def categorize_ingredient(self, ingredient_name: str) -> dict[str, Any]:
         """Categorize an ingredient by name using Claude with tool use.
-
-        This method implements the agentic loop:
-        1. Send ingredient name to Claude
-        2. Claude performs semantic analysis and calls tools
-        3. Process tool results and continue until Claude provides final answer
 
         Args:
             ingredient_name: The name of the ingredient to categorize
@@ -273,124 +283,8 @@ class CategoryAgent:
         Returns:
             Dict with category info and agent's explanation
         """
-        overall_start = time.perf_counter()
-        api_call_count = 0
-        total_api_time_ms = 0.0
-
-        print(f"\n{'='*60}")
-        print(f"[Category Agent] Starting categorization for: '{ingredient_name}'")
-        print(f"{'='*60}")
-
-        messages = [
-            {
-                "role": "user",
-                "content": f"Please categorize this ingredient: '{ingredient_name}'\n\nFirst, search for an existing category that might match. If none is found, create an appropriate new category."
-            }
-        ]
-
-        # Agentic loop - continue until we get a final response
-        while True:
-            api_call_count += 1
-            api_start = time.perf_counter()
-            print(f"\n[API Call #{api_call_count}] Calling Claude...")
-
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages
-            )
-
-            api_elapsed_ms = (time.perf_counter() - api_start) * 1000
-            total_api_time_ms += api_elapsed_ms
-            print(f"[API Call #{api_call_count}] Completed in {api_elapsed_ms:.2f}ms (stop_reason: {response.stop_reason})")
-
-            # Check if Claude wants to use a tool
-            if response.stop_reason == "tool_use":
-                # Find tool use blocks
-                tool_uses = [
-                    block for block in response.content
-                    if block.type == "tool_use"
-                ]
-
-                # Add assistant message with tool use
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content
-                })
-
-                # Process each tool call and add results
-                tool_results = []
-                finalized = False
-                for tool_use in tool_uses:
-                    result = self._process_tool_call(
-                        tool_use.name,
-                        tool_use.input
-                    )
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": result
-                    })
-                    # Check if finalization tool was called
-                    if tool_use.name == "finalize_categorization":
-                        finalized = True
-
-                messages.append({
-                    "role": "user",
-                    "content": tool_results
-                })
-
-                # If finalized, break the loop and return the result
-                if finalized:
-                    overall_elapsed_ms = (time.perf_counter() - overall_start) * 1000
-                    print(f"\n{'='*60}")
-                    print(f"[Category Agent] TIMING SUMMARY")
-                    print(f"{'='*60}")
-                    print(f"  Total API calls: {api_call_count}")
-                    print(f"  Total API time: {total_api_time_ms:.2f}ms")
-                    print(f"  Overall time: {overall_elapsed_ms:.2f}ms")
-                    print(f"  Overhead (non-API): {overall_elapsed_ms - total_api_time_ms:.2f}ms")
-                    print(f"{'='*60}\n")
-
-                    result = CategoryResult(
-                        category_id=self._last_category_id or 0,
-                        category_name=self._last_category_name or "Unknown",
-                        explanation=self._last_explanation or "Categorization completed",
-                        success=self._last_category_id is not None
-                    )
-                    return result.model_dump()
-
-            else:
-                # Claude has finished without finalization - extract explanation from text
-                # Extract any text content as explanation
-                text_content = None
-                for block in response.content:
-                    if hasattr(block, 'type') and block.type == "text":
-                        text_content = block.text
-                        break
-
-                if text_content and not self._last_explanation:
-                    self._last_explanation = text_content
-
-                overall_elapsed_ms = (time.perf_counter() - overall_start) * 1000
-                print(f"\n{'='*60}")
-                print(f"[Category Agent] TIMING SUMMARY")
-                print(f"{'='*60}")
-                print(f"  Total API calls: {api_call_count}")
-                print(f"  Total API time: {total_api_time_ms:.2f}ms")
-                print(f"  Overall time: {overall_elapsed_ms:.2f}ms")
-                print(f"  Overhead (non-API): {overall_elapsed_ms - total_api_time_ms:.2f}ms")
-                print(f"{'='*60}\n")
-
-                result = CategoryResult(
-                    category_id=self._last_category_id or 0,
-                    category_name=self._last_category_name or "Unknown",
-                    explanation=self._last_explanation or "Categorization completed",
-                    success=self._last_category_id is not None
-                )
-                return result.model_dump()
+        initial_message = f"Please categorize this ingredient: '{ingredient_name}'\n\nFirst, search for an existing category that might match. If none is found, create an appropriate new category."
+        return await self._run_agentic_loop(initial_message)
 
     def categorize_ingredient_sync(self, ingredient_name: str) -> dict[str, Any]:
         """Synchronous version of categorize_ingredient.
@@ -401,21 +295,4 @@ class CategoryAgent:
         Returns:
             Dict with category info and agent's explanation
         """
-        import asyncio
-
-        # Get or create event loop
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're already in an async context, create a new loop
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self.categorize_ingredient(ingredient_name)
-                    )
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.categorize_ingredient(ingredient_name))
-        except RuntimeError:
-            return asyncio.run(self.categorize_ingredient(ingredient_name))
+        return run_async_in_sync(self.categorize_ingredient(ingredient_name))

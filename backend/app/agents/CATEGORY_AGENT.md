@@ -2,6 +2,8 @@
 
 This document explains the implementation of the Category Agent, an AI-powered agent that categorizes ingredients using Claude with tool use.
 
+**See also:** [BASE_AGENT.md](BASE_AGENT.md) for the foundation this agent builds upon.
+
 ## Overview
 
 The Category Agent uses the Anthropic Claude API with tool calling to intelligently categorize ingredients. When given an ingredient name, it:
@@ -15,33 +17,60 @@ The Category Agent uses the Anthropic Claude API with tool calling to intelligen
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
 │  API Endpoint   │────▶│  CategoryAgent   │────▶│   Claude    │
-│  /agents/       │     │                  │◀────│   API       │
-│  categorize-    │     │  ┌────────────┐  │     └─────────────┘
-│  ingredient     │     │  │   Tools    │  │
-└─────────────────┘     │  │            │  │     ┌─────────────┐
-                        │  │ - query    │──┼────▶│  Supabase   │
-                        │  │ - add      │  │     │  Database   │
-                        │  └────────────┘  │     └─────────────┘
+│  /agents/       │     │  (extends        │◀────│   API       │
+│  categorize-    │     │   BaseAgent)     │     └─────────────┘
+│  ingredient     │     │  ┌────────────┐  │
+└─────────────────┘     │  │   Tools    │  │     ┌─────────────┐
+                        │  │            │  │     │  Supabase   │
+                        │  │ - query    │──┼────▶│  Database   │
+                        │  │ - add      │  │     │  (Category) │
+                        │  │ - finalize │  │     └─────────────┘
+                        │  └────────────┘  │
                         └──────────────────┘
 ```
 
 ## Components
 
-### 1. Tool Definitions (`TOOLS`)
+### 1. Tool Definitions
 
-Two tools are exposed to Claude:
+Three tools are exposed to Claude:
 
 #### `query_category_by_name`
 - **Purpose**: Search for existing categories using similarity matching
 - **Input**: `name` (string) - the category name to search for
 - **Output**: Category object with similarity score, or `null` if no match ≥ 0.8
+- **Example**:
+  ```json
+  {
+    "id": 3,
+    "name": "Dairy",
+    "description": "Milk products",
+    "similarity": 1.0
+  }
+  ```
 
 #### `add_category`
 - **Purpose**: Create a new category in the database
 - **Input**: `name` (string, required), `description` (string, optional)
 - **Output**: Created category object with `already_existed` flag
+- **Example**:
+  ```json
+  {
+    "id": 15,
+    "name": "Herbs",
+    "description": "Fresh and dried herbs",
+    "already_existed": false
+  }
+  ```
+
+#### `finalize_categorization`
+- **Purpose**: Signal that categorization is complete and store the result
+- **Input**: `category_id` (int), `category_name` (string), `explanation` (string)
+- **Output**: Status confirmation
 
 ### 2. Similarity Matching
+
+The agent uses Python's built-in `SequenceMatcher` for lexical similarity:
 
 ```python
 from difflib import SequenceMatcher
@@ -57,58 +86,32 @@ def _calculate_similarity(self, str1: str, str2: str) -> float:
 - Case-insensitive comparison via `.lower()`
 
 **Threshold: 0.8 (80%)**
-- "Dairy" vs "Dairy Products" → ~0.67 ✗
-- "Vegetables" vs "Vegetable" → ~0.95 ✓
-- "Spices" vs "Spice" → ~0.91 ✓
+- "Dairy" vs "Dairy Products" → ~0.67 ✗ (too dissimilar)
+- "Vegetables" vs "Vegetable" → ~0.95 ✓ (plural match)
+- "Spices" vs "Spice" → ~0.91 ✓ (plural match)
+- "Herbs" vs "Seasonings" → ~0.43 ✗ (different meaning)
 
-### 3. System Prompt (`SYSTEM_PROMPT`)
+### 3. System Prompt
 
 The system prompt instructs Claude to:
 - Determine appropriate food categories for ingredients
 - Use common ingredient category names (Dairy, Meat, Poultry, Seafood, Vegetables, Fruits, Grains, Spices, Herbs, Oils, Condiments, Baking, Nuts, Legumes, etc.)
 - Convert names to Title Case
 - Be specific but not overly granular
-- Explain the categorization decision
+- Provide clear explanation of the categorization choice
+- Use the `finalize_categorization` tool to complete the task
 
-### 4. Agentic Loop
+### 4. Tool Processing
 
-The core of the agent is the agentic loop in `categorize_ingredient()`:
-
-```python
-while True:
-    response = self.client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        tools=TOOLS,
-        messages=messages
-    )
-
-    if response.stop_reason == "tool_use":
-        # Process tool calls and continue
-        ...
-    else:
-        # Final response - exit loop
-        return result
-```
-
-**Flow:**
-1. Send user message to Claude
-2. If Claude wants to use a tool (`stop_reason == "tool_use"`):
-   - Extract tool use blocks from response
-   - Execute the requested tool(s)
-   - Append tool results to messages
-   - Loop back to step 1
-3. If Claude is done (any other stop reason):
-   - Extract final text response
-   - Return result
-
-### 5. Tool Processing
+The agent processes tool calls through the `_process_tool_call` method:
 
 ```python
-def _process_tool_call(self, tool_name: str, tool_input: dict) -> str:
+def _process_tool_call(self, tool_name: str, tool_input: dict[str, Any]) -> str:
     if tool_name == "query_category_by_name":
         result = self._query_category_by_name(tool_input["name"])
+        if result:
+            self._last_category_id = result["id"]
+            self._last_category_name = result["name"]
         return json.dumps(result) if result else json.dumps(None)
 
     elif tool_name == "add_category":
@@ -116,7 +119,15 @@ def _process_tool_call(self, tool_name: str, tool_input: dict) -> str:
             name=tool_input["name"],
             description=tool_input.get("description")
         )
+        self._last_category_id = result["id"]
+        self._last_category_name = result["name"]
         return json.dumps(result)
+
+    elif tool_name == "finalize_categorization":
+        self._last_category_id = tool_input["category_id"]
+        self._last_category_name = tool_input["category_name"]
+        self._last_explanation = tool_input["explanation"]
+        return json.dumps({"status": "finalized"})
 ```
 
 Tool results are serialized as JSON strings and returned to Claude as `tool_result` messages.
@@ -126,7 +137,7 @@ Tool results are serialized as JSON strings and returned to Claude as `tool_resu
 ### Query Category
 
 ```python
-def _query_category_by_name(self, name: str) -> dict | None:
+def _query_category_by_name(self, name: str) -> dict[str, Any] | None:
     # 1. Get all active categories
     statement = select(Category).where(Category.is_active == True)
     categories = list(self.session.exec(statement).all())
@@ -141,15 +152,21 @@ def _query_category_by_name(self, name: str) -> dict | None:
             best_match = category
 
     # 3. Return only if above threshold
-    if best_match and best_similarity >= 0.8:
-        return {"id": ..., "name": ..., "similarity": ...}
+    if best_match and best_similarity >= self.SIMILARITY_THRESHOLD:
+        return {
+            "id": best_match.id,
+            "name": best_match.name,
+            "description": best_match.description,
+            "similarity": round(best_similarity, 3)
+        }
+
     return None
 ```
 
 ### Add Category
 
 ```python
-def _add_category(self, name: str, description: str | None = None) -> dict:
+def _add_category(self, name: str, description: str | None = None) -> dict[str, Any]:
     # 1. Convert to title case
     title_case_name = name.title()
 
@@ -162,13 +179,26 @@ def _add_category(self, name: str, description: str | None = None) -> dict:
     ).first()
 
     if existing:
-        return {..., "already_existed": True}
+        return {
+            "id": existing.id,
+            "name": existing.name,
+            "description": existing.description,
+            "already_existed": True
+        }
 
     # 3. Create new category
-    category = Category.model_validate(CategoryCreate(name=title_case_name))
+    category_data = CategoryCreate(name=title_case_name, description=description)
+    category = Category.model_validate(category_data)
     self.session.add(category)
     self.session.commit()
-    return {..., "already_existed": False}
+    self.session.refresh(category)
+
+    return {
+        "id": category.id,
+        "name": category.name,
+        "description": category.description,
+        "already_existed": False
+    }
 ```
 
 ## API Endpoint
@@ -187,8 +217,9 @@ POST /api/v1/agents/categorize-ingredient
 **Response:**
 ```json
 {
+  "category_id": 3,
   "category_name": "Dairy",
-  "explanation": "I categorized 'Parmesan Cheese' into the 'Dairy' category because it is a cheese product made from milk...",
+  "explanation": "I categorized 'Parmesan Cheese' into the 'Dairy' category because it is a cheese product made from milk.",
   "success": true
 }
 ```
@@ -198,15 +229,23 @@ POST /api/v1/agents/categorize-ingredient
 ```
 User: Please categorize this ingredient: 'Fresh Basil'
 
-Claude: [Uses query_category_by_name with "Herbs"]
+Claude: I'll help you categorize Fresh Basil. Let me start by searching for similar categories.
+
+[Uses query_category_by_name with "Herbs"]
 Tool Result: null
 
-Claude: [Uses add_category with name="Herbs", description="Fresh and dried herbs used for flavoring"]
+Claude: No existing category matched. Let me create an appropriate new category.
+
+[Uses add_category with name="Herbs", description="Fresh and dried herbs used for flavoring"]
 Tool Result: {"id": 15, "name": "Herbs", "already_existed": false}
 
-Claude: I've categorized 'Fresh Basil' into the 'Herbs' category.
-Since no existing category matched, I created a new 'Herbs' category, which is
-appropriate for aromatic plants like basil used for flavoring dishes.
+Claude: Great! Now I'll finalize the categorization.
+
+[Uses finalize_categorization]
+Tool Result: {"status": "finalized"}
+
+Claude: I've successfully categorized 'Fresh Basil' into the 'Herbs' category.
+Since no existing category matched, I created a new 'Herbs' category, which is appropriate for aromatic plants like basil used for flavoring dishes.
 ```
 
 ## Configuration
@@ -216,7 +255,29 @@ Required environment variable:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-The agent checks for this key on initialization and raises `ValueError` if not configured.
+The agent checks for this key on initialization (via BaseAgent) and raises `ValueError` if not configured.
+
+## Testing
+
+Tests are located in `tests/test_category_agent.py` and cover:
+
+- **Initialization**: Agent creation, API key validation
+- **Similarity calculation**: Exact matches, case-insensitive matching, similar strings, different strings
+- **Category querying**: Exact match, similar match, no match, inactive categories
+- **Category adding**: New categories, title case conversion, existing categories, no description
+- **Tool processing**: Query, add, and finalize operations
+- **Integration**: Full agent flow with mocked Claude API
+- **API endpoints**: HTTP request/response validation
+
+**Test fixtures** (from `conftest.py`):
+- `mock_settings`: Mocks settings with valid API key
+- `mock_anthropic`: Mocks Anthropic client
+- `agent_no_api_key`: Tests missing API key scenarios
+
+Run tests:
+```bash
+pytest tests/test_category_agent.py -v
+```
 
 ## Limitations
 
@@ -226,9 +287,13 @@ The agent checks for this key on initialization and raises `ValueError` if not c
 
 3. **No learning**: The agent doesn't improve from past categorizations. Each request is independent.
 
+4. **Title case only**: Categories are stored in Title Case. Very specific naming conventions may be lost.
+
 ## Future Improvements
 
 - Use embedding-based semantic search (e.g., OpenAI embeddings or Supabase pgvector)
 - Support multiple category suggestions with confidence scores
 - Add category hierarchy (e.g., Dairy → Cheese → Hard Cheese)
 - Cache common categorizations for faster responses
+- Support for category aliases/synonyms
+- Confidence scoring for suggested categories
