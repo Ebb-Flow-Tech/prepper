@@ -74,8 +74,7 @@ export function TopNav() {
       <nav className="flex h-12 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         {/* Logo */}
         <Link
-          href="/canvas"
-          onClick={(e) => handleNavClick(e, '/canvas')}
+          href="/recipes"
           className="flex items-center gap-2 font-semibold text-lg mr-8"
         >
           <ChefHat className="h-5 w-5" />
