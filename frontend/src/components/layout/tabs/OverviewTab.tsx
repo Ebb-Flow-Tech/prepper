@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes } from '@/lib/hooks';
+import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Loader2, Wand2 } from 'lucide-react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useGenerateRecipeImage, useUpdateRecipe } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
-import { Badge, Card, CardContent, Skeleton, Button } from '@/components/ui';
+import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
+import { useState } from 'react';
 import type { RecipeStatus, TastingDecision } from '@/types';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -48,6 +49,8 @@ function formatTastingDate(dateString: string): string {
 
 export function OverviewTab() {
   const { selectedRecipeId, userId } = useAppState();
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
@@ -57,7 +60,39 @@ export function OverviewTab() {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
 
+  const generateImageMutation = useGenerateRecipeImage();
+  const updateRecipeMutation = useUpdateRecipe();
+
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
+
+  const canEditRecipe = userId !== null && recipe?.owner_id === userId;
+
+  const handleGenerateImage = async () => {
+    if (!recipe || !selectedRecipeId) return;
+    setIsGeneratingImage(true);
+    try {
+      const ingredientNames = ingredients?.map(i => i.ingredient?.name).filter(Boolean) || [];
+      const result = await generateImageMutation.mutateAsync({
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        ingredients: ingredientNames as string[],
+      });
+
+      if (result.image_url) {
+        await updateRecipeMutation.mutateAsync({
+          id: selectedRecipeId,
+          data: {
+            image_url: result.image_url,
+          },
+        });
+        setIsImageModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Failed to generate image:', error);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
   // Create a map of recipe IDs to names for sub-recipe display
   const recipeMap = new Map<number, string>();
@@ -105,18 +140,29 @@ export function OverviewTab() {
             <Card className="mb-6">
               <CardContent className="p-6">
                 <div className="flex items-start gap-6">
-                  {/* Recipe hero image */}
-                  {recipe.image_url ? (
-                    <img
-                      src={recipe.image_url}
-                      alt={recipe.name}
-                      className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-                      <ImagePlus className="h-8 w-8" />
-                    </div>
-                  )}
+                  {/* Recipe hero image with edit button */}
+                  <div className="relative shrink-0 group">
+                    {recipe.image_url ? (
+                      <img
+                        src={recipe.image_url}
+                        alt={recipe.name}
+                        className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                        <ImagePlus className="h-8 w-8" />
+                      </div>
+                    )}
+                    {canEditRecipe && (
+                      <button
+                        onClick={() => setIsImageModalOpen(true)}
+                        className="absolute bottom-1 right-1 rounded-full h-8 w-8 bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center transition-colors shadow-lg"
+                        title="Edit recipe image"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
@@ -148,12 +194,24 @@ export function OverviewTab() {
                       </div>
                     </div>
 
-                    <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
-                      Created: {new Date(recipe.created_at).toLocaleDateString()}
-                      {recipe.updated_at !== recipe.created_at && (
-                        <span className="ml-4">
-                          Updated: {new Date(recipe.updated_at).toLocaleDateString()}
-                        </span>
+                    <div className="mt-4 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                      <div>
+                        Created: {new Date(recipe.created_at).toLocaleDateString()}
+                        {recipe.updated_at !== recipe.created_at && (
+                          <span className="ml-4">
+                            Updated: {new Date(recipe.updated_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      {recipe.created_by && (
+                        <div>
+                          Created by: <span className="font-medium text-zinc-600 dark:text-zinc-300">{recipe.created_by}</span>
+                        </div>
+                      )}
+                      {recipe.owner_id && (
+                        <div>
+                          Owner ID: <span className="font-medium text-zinc-600 dark:text-zinc-300">{recipe.owner_id}</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -413,6 +471,50 @@ export function OverviewTab() {
             </Card>
           </>
         ) : null}
+
+        {/* Image Edit Modal */}
+        <Modal
+          isOpen={isImageModalOpen}
+          onClose={() => setIsImageModalOpen(false)}
+          title="Edit Recipe Image"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4">
+            {recipe?.image_url && (
+              <div className="mb-4">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2">Current Image:</p>
+                <img
+                  src={recipe.image_url}
+                  alt={recipe.name}
+                  className="w-full h-40 rounded-lg object-cover"
+                />
+              </div>
+            )}
+
+            <Button
+              onClick={handleGenerateImage}
+              disabled={isGeneratingImage}
+              className="w-full"
+              variant="default"
+            >
+              {isGeneratingImage ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Generate with AI
+                </>
+              )}
+            </Button>
+
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
+              Generate a new image using AI based on the recipe name and ingredients
+            </p>
+          </div>
+        </Modal>
       </div>
     </div>
   );
