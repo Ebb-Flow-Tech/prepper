@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2 } from 'lucide-react';
+import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X } from 'lucide-react';
 import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
 import { RecipeImageCarousel } from '@/components/recipe/RecipeImageCarousel';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { RecipeStatus, TastingDecision } from '@/types';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -51,6 +51,8 @@ function formatTastingDate(dateString: string): string {
 export function OverviewTab() {
   const { selectedRecipeId, userId } = useAppState();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [descriptionValue, setDescriptionValue] = useState('');
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
@@ -60,10 +62,33 @@ export function OverviewTab() {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: mainImage } = useMainRecipeImage(selectedRecipeId);
+  const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
   const canEditRecipe = userId !== null && recipe?.owner_id === userId;
+
+  // Initialize description value when recipe loads
+  useEffect(() => {
+    if (recipe) {
+      setDescriptionValue(recipe.description || '');
+    }
+  }, [recipe?.id]);
+
+  const handleSaveDescription = () => {
+    if (selectedRecipeId && descriptionValue !== recipe?.description) {
+      updateRecipe(
+        { id: selectedRecipeId, data: { description: descriptionValue } },
+        {
+          onSuccess: () => {
+            setIsEditingDescription(false);
+          },
+        }
+      );
+    } else {
+      setIsEditingDescription(false);
+    }
+  };
 
   // Create a map of recipe IDs to names for sub-recipe display
   const recipeMap = new Map<number, string>();
@@ -127,7 +152,7 @@ export function OverviewTab() {
                     {canEditRecipe && (
                       <button
                         onClick={() => setIsImageModalOpen(true)}
-                        className="absolute bottom-1 right-1 rounded-full h-8 w-8 bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center transition-colors shadow-lg"
+                        className="absolute bottom-1 right-1 rounded-full h-8 w-8 bg-[hsl(var(--primary))] hover:opacity-90 text-black flex items-center justify-center transition-colors shadow-lg"
                         title="Edit recipe image"
                       >
                         <Wand2 className="h-4 w-4" />
@@ -186,6 +211,72 @@ export function OverviewTab() {
                       )}
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Description Section */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                      Description
+                    </h2>
+                    {isEditingDescription ? (
+                      <div className="space-y-3">
+                        <textarea
+                          value={descriptionValue}
+                          onChange={(e) => setDescriptionValue(e.target.value)}
+                          className="w-full p-3 border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                          placeholder="Enter recipe description..."
+                          rows={4}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveDescription}
+                            disabled={isUpdating}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--status-approved))] hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium transition-colors disabled:pointer-events-none"
+                          >
+                            <Check className="h-4 w-4" />
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsEditingDescription(false);
+                              setDescriptionValue(recipe?.description || '');
+                            }}
+                            disabled={isUpdating}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted)/0.8)] disabled:opacity-50 text-[hsl(var(--foreground))] text-sm font-medium transition-colors disabled:pointer-events-none"
+                          >
+                            <X className="h-4 w-4" />
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        {recipe?.description ? (
+                          <p className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                            {recipe.description}
+                          </p>
+                        ) : (
+                          <p className="text-zinc-400 dark:text-zinc-500 italic">
+                            No description added yet
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {canEditRecipe && !isEditingDescription && (
+                    <button
+                      onClick={() => setIsEditingDescription(true)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary))] hover:opacity-90 text-black text-sm font-medium transition-colors mt-1 shrink-0"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                      Edit
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>

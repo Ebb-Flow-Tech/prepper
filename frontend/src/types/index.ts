@@ -30,6 +30,7 @@ export interface Recipe {
   version: number;
   root_id: number | null;
   image_url: string | null;
+  description: string | null;
   summary_feedback?: string | null;
   created_at: string;
   updated_at: string;
@@ -122,6 +123,7 @@ export interface UpdateRecipeRequest {
   status?: RecipeStatus;
   is_public?: boolean;
   image_url?: string | null;
+  description?: string | null;
   summary_feedback?: string | null;
 }
 
