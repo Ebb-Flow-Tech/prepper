@@ -65,6 +65,9 @@ class Recipe(RecipeBase, table=True):
     created_by: str | None = Field(default=None, max_length=100)
     updated_by: str | None = Field(default=None, max_length=100)
 
+    # R&D workflow
+    rnd_started: bool = Field(default=False, description="Flag indicating if R&D workflow has been started")
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -80,6 +83,7 @@ class RecipeCreate(RecipeBase):
     version: int = 1
     root_id: int | None = None
     description: str | None = None
+    rnd_started: bool = False
 
 
 class RecipeUpdate(SQLModel):
@@ -95,6 +99,7 @@ class RecipeUpdate(SQLModel):
     updated_by: str | None = None
     description: str | None = None
     summary_feedback: str | None = None
+    rnd_started: bool | None = None
 
 
 class RecipeStatusUpdate(SQLModel):

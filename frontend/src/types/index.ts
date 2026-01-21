@@ -32,6 +32,7 @@ export interface Recipe {
   image_url: string | null;
   description: string | null;
   summary_feedback?: string | null;
+  rnd_started: boolean;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
@@ -125,6 +126,7 @@ export interface UpdateRecipeRequest {
   image_url?: string | null;
   description?: string | null;
   summary_feedback?: string | null;
+  rnd_started?: boolean;
 }
 
 export interface RecipeImage {

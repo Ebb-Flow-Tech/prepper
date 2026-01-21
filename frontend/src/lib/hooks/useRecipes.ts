@@ -72,10 +72,19 @@ export function useForkRecipe() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, newOwnerId }: { id: number; newOwnerId?: string }) =>
-      api.forkRecipe(id, newOwnerId),
+    mutationFn: async ({ id, newOwnerId }: { id: number; newOwnerId?: string }) => {
+      // Fork the recipe
+      const forkedRecipe = await api.forkRecipe(id, newOwnerId);
+
+      // Update the original recipe to set rnd_started = true
+      // Forked recipe keeps rnd_started = false by default
+      await api.updateRecipe(id, { rnd_started: true });
+
+      return forkedRecipe;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['recipes-with-feedback'] });
     },
   });
 }

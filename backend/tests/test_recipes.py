@@ -22,6 +22,7 @@ def test_create_recipe(client: TestClient):
     assert data["created_by"] == "234"
     assert data["version"] == 1
     assert data["root_id"] is None
+    assert data["rnd_started"] is False
 
 
 def test_update_recipe_status(client: TestClient):
@@ -40,6 +41,32 @@ def test_update_recipe_status(client: TestClient):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "active"
+
+
+def test_update_recipe_rnd_started(client: TestClient):
+    """Test updating recipe rnd_started flag."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Verify rnd_started is initially False
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["rnd_started"] is False
+
+    # Update rnd_started to True
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={"rnd_started": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["rnd_started"] is True
+
+    # Verify it persists
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["rnd_started"] is True
 
 
 def test_update_recipe_summary_feedback(client: TestClient):
@@ -67,6 +94,31 @@ def test_update_recipe_summary_feedback(client: TestClient):
     # Verify it persists
     get_response = client.get(f"/api/v1/recipes/{recipe_id}")
     assert get_response.json()["summary_feedback"] == feedback
+
+
+def test_update_recipe_multiple_fields_including_rnd_started(client: TestClient):
+    """Test updating multiple fields including rnd_started."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original Name", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Update multiple fields
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={
+            "name": "Updated Name",
+            "selling_price_est": 15.99,
+            "rnd_started": True,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["selling_price_est"] == 15.99
+    assert data["rnd_started"] is True
 
 
 def test_update_recipe_multiple_fields_including_summary_feedback(client: TestClient):
@@ -142,6 +194,8 @@ def test_fork_recipe_basic(client: TestClient):
     # Verify version and root_id
     assert forked["version"] == 2
     assert forked["root_id"] == original["id"]
+    # Verify rnd_started is reset to False on fork
+    assert forked["rnd_started"] is False
 
 
 def test_fork_recipe_with_new_owner(client: TestClient):

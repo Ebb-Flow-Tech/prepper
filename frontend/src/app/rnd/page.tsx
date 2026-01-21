@@ -529,38 +529,39 @@ export default function RndPage() {
     });
   }, [recipesWithFeedback, search]);
 
-  // Find direct forks of To Do recipes (owned by user) for WIP column
+  // Find recipes in WIP column: children of recipes that have rnd_started = true
   const wipGroups = useMemo(() => {
     if (!allRecipes || !recipesWithFeedback) return [];
 
-    const groups: WipGroup[] = [];
+    // Get all recipes that have rnd_started = true
+    const startedRecipes = allRecipes.filter((recipe) => recipe.rnd_started === true);
 
-    // For each To Do recipe, find its direct forks owned by the user
-    filteredTodoRecipes.forEach((todoRecipe) => {
-      const forks = allRecipes.filter((recipe) =>
-        recipe.root_id === todoRecipe.id &&
-        recipe.owner_id === userId
-      );
+    // Get all children (forks) of started recipes
+    const wipRecipes = allRecipes.filter((recipe) =>
+      recipe.root_id !== null &&
+      startedRecipes.some((started) => started.id === recipe.root_id) &&
+      recipe.owner_id === userId
+    );
 
-      // Apply search filter to forks as well
-      const filteredForks = forks.filter((fork) => {
-        if (search && !fork.name.toLowerCase().includes(search.toLowerCase())) {
-          return false;
-        }
-        return true;
-      });
-
-      if (filteredForks.length > 0) {
-        groups.push({
-          parentId: todoRecipe.id,
-          parentName: todoRecipe.name,
-          forks: filteredForks,
-        });
+    // Apply search filter
+    const filteredRecipes = wipRecipes.filter((recipe) => {
+      if (search && !recipe.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
       }
+      return true;
     });
 
-    return groups;
-  }, [allRecipes, recipesWithFeedback, filteredTodoRecipes, userId, search]);
+    // Return as a single group with no parent info (no "Forks of..." header)
+    if (filteredRecipes.length > 0) {
+      return [{
+        parentId: 0,
+        parentName: '',
+        forks: filteredRecipes,
+      }];
+    }
+
+    return [];
+  }, [allRecipes, recipesWithFeedback, userId, search]);
 
   // Count total WIP items
   const wipCount = useMemo(() => {
@@ -677,9 +678,11 @@ export default function RndPage() {
                 ) : (
                   wipGroups.map((group) => (
                     <div key={group.parentId} className="space-y-2">
-                      <p className="text-xs text-muted-foreground font-medium px-1">
-                        Forks of &quot;{group.parentName}&quot;
-                      </p>
+                      {group.parentName && (
+                        <p className="text-xs text-muted-foreground font-medium px-1">
+                          Forks of &quot;{group.parentName}&quot;
+                        </p>
+                      )}
                       {group.forks.map((fork) => (
                         <WipRecipeCard
                           key={fork.id}
