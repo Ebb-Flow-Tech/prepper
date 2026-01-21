@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Grid3x3, List } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
@@ -25,6 +25,7 @@ import {
   useRemoveSubRecipe,
   useRecipeIngredients,
   useSubRecipes,
+  useCategories,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
 import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
@@ -202,16 +203,20 @@ function StagedIngredientCard({
   staged,
   onRemove,
   onQuantityChange,
+  categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
+  categoryMap: Record<number, string>;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `staged-ingredient-${staged.id}`,
     data: { type: 'staged-ingredient', stagedId: staged.id },
   });
+
+  const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
 
   const style = {
     position: 'absolute' as const,
@@ -264,6 +269,15 @@ function StagedIngredientCard({
 
       {/* Card Body */}
       <div className="game-card-body">
+        {/* Category Badge */}
+        {categoryName && (
+          <div className="mb-3 pb-3 border-b border-blue-400/20">
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 inline-block">
+              {categoryName}
+            </span>
+          </div>
+        )}
+
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1">
@@ -349,6 +363,179 @@ function StagedIngredientCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StagedIngredientListItem({
+  staged,
+  onRemove,
+  onQuantityChange,
+  categoryMap,
+}: {
+  staged: StagedIngredient;
+  onRemove: () => void;
+  onQuantityChange: (quantity: number) => void;
+  categoryMap: Record<number, string>;
+}) {
+  const suppliers = staged.ingredient.suppliers || [];
+  const preferredSupplier = suppliers.find((s) => s.is_preferred);
+  const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
+
+  return (
+    <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 flex items-center justify-between gap-4 hover:shadow-sm transition-shadow">
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-zinc-900 dark:text-white truncate">{staged.ingredient.name}</h4>
+        <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span>Base Unit: {staged.ingredient.base_unit}</span>
+            {categoryName && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 truncate">
+                {categoryName}
+              </span>
+            )}
+          </div>
+          {preferredSupplier ? (
+            <div>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit.toFixed(2)}/{preferredSupplier.pack_unit}</div>
+          ) : suppliers.length > 0 ? (
+            <div>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit.toFixed(2)}/{suppliers[0].pack_unit}</div>
+          ) : (
+            <div className="text-zinc-400">No supplier</div>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              const newQty = Math.max(1, staged.quantity - 1);
+              onQuantityChange(parseFloat(newQty.toFixed(1)));
+            }}
+            className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+            title="Decrease quantity"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            type="number"
+            value={staged.quantity}
+            onChange={(e) => {
+              e.stopPropagation();
+              onQuantityChange(parseFloat(e.target.value) || 0);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-base text-white text-center focus:border-blue-400 focus:outline-none"
+            min="0"
+            step="0.1"
+          />
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">{staged.ingredient.base_unit}</span>
+        </div>
+        <button
+          onClick={onRemove}
+          className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StagedRecipeListItem({
+  staged,
+  onRemove,
+  onQuantityChange,
+  allRecipes,
+}: {
+  staged: StagedRecipe;
+  onRemove: () => void;
+  onQuantityChange: (quantity: number) => void;
+  allRecipes?: Recipe[];
+}) {
+  const { data: recipeIngredients } = useRecipeIngredients(staged.recipe.id);
+  const { data: subRecipes } = useSubRecipes(staged.recipe.id);
+
+  return (
+    <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-zinc-900 dark:text-white truncate">{staged.recipe.name}</h4>
+          <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+            Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <input
+              type="number"
+              value={staged.quantity}
+              onChange={(e) => {
+                e.stopPropagation();
+                onQuantityChange(parseFloat(e.target.value) || 0);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-16 rounded bg-black/30 border border-green-400/30 px-2 py-1 text-base text-white text-center focus:border-green-400 focus:outline-none"
+              min="0"
+              step="0.1"
+            />
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">portion</span>
+          </div>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Ingredients Section */}
+      {recipeIngredients && recipeIngredients.length > 0 && (
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+          <h5 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Ingredients:</h5>
+          <ul className="space-y-1.5 text-sm">
+            {recipeIngredients.map((ri) => {
+              const ingredient = ri.ingredient;
+              const suppliers = ingredient?.suppliers || [];
+              const preferredSupplier = suppliers.find((s) => s.is_preferred);
+              return (
+                <li key={ri.id} className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                  <span>{ingredient?.name || `Ingredient #${ri.ingredient_id}`} ({ri.quantity} {ri.base_unit || ri.unit})</span>
+                  <span className="text-zinc-500">@ ${ri.unit_price?.toFixed(2) ?? 'N/A'}/{ri.base_unit || ri.unit}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Sub-Recipes Section */}
+      {subRecipes && subRecipes.length > 0 && (
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+          <h5 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Sub-Recipes:</h5>
+          <ul className="space-y-1.5 text-sm">
+            {subRecipes.map((sr) => {
+              const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
+              return (
+                <li key={sr.id} className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                  <span>{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</span>
+                  <span className="text-zinc-500">{sr.quantity} {sr.unit}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -541,6 +728,8 @@ function CanvasDropZone({
   canvasRef,
   allRecipes,
   gridConfig,
+  viewMode = 'grid',
+  categoryMap,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -551,6 +740,8 @@ function CanvasDropZone({
   canvasRef: React.RefObject<HTMLDivElement | null>;
   allRecipes?: Recipe[];
   gridConfig: ReturnType<typeof getGridConfig>;
+  viewMode?: 'grid' | 'list';
+  categoryMap: Record<number, string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-drop-zone',
@@ -569,10 +760,15 @@ function CanvasDropZone({
       className={`relative flex-1 min-h-[500px] overflow-auto rounded-lg border-2 border-dashed transition-colors mb-4 ${isOver
           ? 'border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-950/30'
           : 'border-zinc-300 dark:border-zinc-700'
-        }`}
-      style={{
+        } ${viewMode === 'list' ? 'flex flex-col' : ''}`}
+      style={viewMode === 'grid' ? {
         position: 'relative',
         padding: '20px',
+      } : {
+        position: 'relative',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {!hasItems && (
@@ -582,23 +778,49 @@ function CanvasDropZone({
           </p>
         </div>
       )}
-      {stagedIngredients.map((staged) => (
-        <StagedIngredientCard
-          key={staged.id}
-          staged={staged}
-          onRemove={() => onRemoveIngredient(staged.id)}
-          onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
-        />
-      ))}
-      {stagedRecipes.map((staged) => (
-        <StagedRecipeCard
-          key={staged.id}
-          staged={staged}
-          onRemove={() => onRemoveRecipe(staged.id)}
-          onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
-          allRecipes={allRecipes}
-        />
-      ))}
+      {viewMode === 'grid' ? (
+        <>
+          {stagedIngredients.map((staged) => (
+            <StagedIngredientCard
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveIngredient(staged.id)}
+              onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              categoryMap={categoryMap}
+            />
+          ))}
+          {stagedRecipes.map((staged) => (
+            <StagedRecipeCard
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveRecipe(staged.id)}
+              onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
+              allRecipes={allRecipes}
+            />
+          ))}
+        </>
+      ) : (
+        <div className="space-y-3">
+          {stagedIngredients.map((staged) => (
+            <StagedIngredientListItem
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveIngredient(staged.id)}
+              onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              categoryMap={categoryMap}
+            />
+          ))}
+          {stagedRecipes.map((staged) => (
+            <StagedRecipeListItem
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveRecipe(staged.id)}
+              onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
+              allRecipes={allRecipes}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -634,6 +856,9 @@ function CanvasContent({
   gridConfig,
   isDragDropEnabled,
   onDragDropEnabledChange,
+  viewMode,
+  onViewModeChange,
+  categoryMap,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -659,6 +884,9 @@ function CanvasContent({
   gridConfig: ReturnType<typeof getGridConfig>;
   isDragDropEnabled: boolean;
   onDragDropEnabledChange: (enabled: boolean) => void;
+  viewMode: 'grid' | 'list';
+  onViewModeChange: (mode: 'grid' | 'list') => void;
+  categoryMap: Record<number, string>;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -726,6 +954,31 @@ function CanvasContent({
               />
               <span className="text-sm text-zinc-500">Drag & Drop</span>
             </div>
+            <div className="flex items-center gap-2 border-l border-zinc-300 dark:border-zinc-700 pl-4">
+              <label className="text-sm text-zinc-500">View:</label>
+              <button
+                onClick={() => onViewModeChange('grid')}
+                className={`p-1.5 rounded ${
+                  viewMode === 'grid'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onViewModeChange('list')}
+                className={`p-1.5 rounded ${
+                  viewMode === 'list'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                }`}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -742,6 +995,8 @@ function CanvasContent({
           canvasRef={canvasRef}
           allRecipes={allRecipes}
           gridConfig={gridConfig}
+          viewMode={viewMode}
+          categoryMap={categoryMap}
         />
       </div>
 
@@ -799,10 +1054,20 @@ function CanvasContent({
 
 export function CanvasTab() {
   const router = useRouter();
-  const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled } = useAppState();
+  const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipes } = useRecipes();
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
+  const { data: categories } = useCategories();
+
+  // Create a mapping of category ID to name for efficient lookups
+  const categoryMap = useMemo(() => {
+    if (!categories) return {} as Record<number, string>;
+    return categories.reduce<Record<number, string>>((acc, cat) => {
+      acc[cat.id] = cat.name;
+      return acc;
+    }, {});
+  }, [categories]);
 
   const createRecipe = useCreateRecipe();
   const updateRecipe = useUpdateRecipe();
@@ -1686,6 +1951,9 @@ export function CanvasTab() {
       gridConfig={gridConfig}
       isDragDropEnabled={isDragDropEnabled}
       onDragDropEnabledChange={setIsDragDropEnabled}
+      viewMode={canvasViewMode}
+      onViewModeChange={setCanvasViewMode}
+      categoryMap={categoryMap}
     />
   );
 

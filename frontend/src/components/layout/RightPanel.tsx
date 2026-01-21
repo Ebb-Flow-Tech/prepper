@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical, ImagePlus } from 'lucide-react';
+import { Plus, Search, GripVertical, ImagePlus, ChevronDown } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
@@ -26,13 +26,15 @@ const UNIT_OPTIONS = [
   { value: 'pcs', label: 'pcs (pieces)' },
 ];
 
-function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
+function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingredient; categoryMap: Record<number, string> }) {
   const { isDragDropEnabled } = useAppState();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `ingredient-${ingredient.id}`,
     data: { ingredient, type: 'ingredient' },
     disabled: !isDragDropEnabled,
   });
+
+  const categoryName = ingredient.category_id ? categoryMap[ingredient.category_id] : null;
 
   const handleAddClick = () => {
     // Dispatch custom event for CanvasTab to listen to
@@ -90,9 +92,16 @@ function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
 
       {/* Card Body */}
       <div className="game-card-body">
-        <div className="flex items-center justify-between">
-          <span className="game-card-stat game-card-stat-ingredient">{ingredient.base_unit}</span>
-          <span className="text-sm text-blue-200/80">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="game-card-stat game-card-stat-ingredient">{ingredient.base_unit}</span>
+            {categoryName && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 truncate">
+                {categoryName}
+              </span>
+            )}
+          </div>
+          <span className="text-sm text-blue-200/80 flex-shrink-0">
             {ingredient.cost_per_base_unit !== null
               ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
               : 'no cost'}
@@ -361,18 +370,56 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
 export function RightPanel() {
   const { data: ingredients, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients();
   const { data: recipes, isLoading: recipesLoading, error: recipesError } = useRecipes();
+  const { data: categories } = useCategories();
   const { userId, userType } = useAppState();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+
+  // Create a mapping of category ID to name for efficient lookups
+  const categoryMap = useMemo(() => {
+    if (!categories) return {};
+    return categories.reduce((acc, cat) => {
+      acc[cat.id] = cat.name;
+      return acc;
+    }, {} as Record<number, string>);
+  }, [categories]);
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
     const active = ingredients.filter((i) => i.is_active);
-    if (!search.trim()) return active;
-    const lower = search.toLowerCase();
-    return active.filter((i) => i.name.toLowerCase().includes(lower));
-  }, [ingredients, search]);
+
+    let filtered = active;
+
+    // Search filter
+    if (search.trim()) {
+      const lower = search.toLowerCase();
+      filtered = filtered.filter((i) => i.name.toLowerCase().includes(lower));
+    }
+
+    // Category filter
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter((i) =>
+        selectedCategories.includes(i.category_id ?? -1)
+      );
+    }
+
+    return filtered;
+  }, [ingredients, search, selectedCategories]);
+
+  const toggleCategory = (categoryId: number) => {
+    if (selectedCategories.includes(categoryId)) {
+      setSelectedCategories(selectedCategories.filter((id) => id !== categoryId));
+    } else {
+      setSelectedCategories([...selectedCategories, categoryId]);
+    }
+  };
+
+  const clearCategoryFilters = () => {
+    setSelectedCategories([]);
+  };
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
@@ -456,6 +503,48 @@ export function RightPanel() {
         </div>
       </div>
 
+      {/* Category Filter - Only show for ingredients tab */}
+      {(activeTab === 'all' || activeTab === 'ingredients') && categories && categories.length > 0 && (
+        <div className="border-b border-border">
+          <button
+            onClick={() => setShowCategoryFilter(!showCategoryFilter)}
+            className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <span>Categories {selectedCategories.length > 0 && `(${selectedCategories.length})`}</span>
+            <ChevronDown className={cn("h-4 w-4 transition-transform", showCategoryFilter && "rotate-180")} />
+          </button>
+
+          {showCategoryFilter && (
+            <div className="p-3 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {categories.filter(c => c.is_active).map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => toggleCategory(category.id)}
+                    className={cn(
+                      'px-2 py-1 text-xs font-medium rounded transition-colors',
+                      selectedCategories.includes(category.id)
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                    )}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+              {selectedCategories.length > 0 && (
+                <button
+                  onClick={clearCategoryFilters}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* List */}
       <div
         className="flex-1 overflow-y-auto p-3"
@@ -500,6 +589,7 @@ export function RightPanel() {
                       <DraggableIngredientCard
                         key={ingredient.id}
                         ingredient={ingredient}
+                        categoryMap={categoryMap}
                       />
                     ))}
                   </div>

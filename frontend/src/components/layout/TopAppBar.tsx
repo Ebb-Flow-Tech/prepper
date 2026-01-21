@@ -13,7 +13,7 @@ const CANVAS_TABS: { id: CanvasTab; label: string }[] = [
   { id: 'costs', label: 'Costs' },
   { id: 'instructions', label: 'Instructions' },
   { id: 'tasting', label: 'Tasting' },
-  { id: 'versions', label: 'Versions' },
+  { id: 'versions', label: 'Iterations' },
 ];
 
 export function TopAppBar() {

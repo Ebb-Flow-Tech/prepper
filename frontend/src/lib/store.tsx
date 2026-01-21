@@ -36,6 +36,7 @@ function setStoredAuth(auth: StoredAuth) {
 
 export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'categories';
+export type CanvasViewMode = 'grid' | 'list';
 
 interface AppState {
   selectedRecipeId: number | null;
@@ -44,6 +45,7 @@ interface AppState {
   ingredientTab: IngredientTab;
   canvasHasUnsavedChanges: boolean;
   isDragDropEnabled: boolean;
+  canvasViewMode: CanvasViewMode;
   userId: string | null;
   jwt: string | null;
   userType: 'normal' | 'admin' | null;
@@ -56,6 +58,7 @@ interface AppContextValue extends AppState {
   setIngredientTab: (tab: IngredientTab) => void;
   setCanvasHasUnsavedChanges: (hasChanges: boolean) => void;
   setIsDragDropEnabled: (enabled: boolean) => void;
+  setCanvasViewMode: (mode: CanvasViewMode) => void;
   setUserId: (id: string | null) => void;
   setJwt: (jwt: string | null) => void;
   setUserType: (userType: 'normal' | 'admin' | null) => void;
@@ -74,6 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ingredientTab: 'ingredients',
     canvasHasUnsavedChanges: false,
     isDragDropEnabled: true,
+    canvasViewMode: 'grid',
     userId: null,
     jwt: null,
     userType: null
@@ -126,6 +130,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isDragDropEnabled: enabled }));
   }, []);
 
+  const setCanvasViewMode = useCallback((mode: CanvasViewMode) => {
+    setState((prev) => ({ ...prev, canvasViewMode: mode }));
+  }, []);
+
   const setUserId = useCallback((id: string | null) => {
     setState((prev) => ({ ...prev, userId: id }));
   }, []);
@@ -156,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIngredientTab,
         setCanvasHasUnsavedChanges,
         setIsDragDropEnabled,
+        setCanvasViewMode,
         setUserId,
         setJwt,
         setUserType,
