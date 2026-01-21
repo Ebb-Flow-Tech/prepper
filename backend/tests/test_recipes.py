@@ -23,6 +23,7 @@ def test_create_recipe(client: TestClient):
     assert data["version"] == 1
     assert data["root_id"] is None
     assert data["rnd_started"] is False
+    assert data["review_ready"] is False
 
 
 def test_update_recipe_status(client: TestClient):
@@ -67,6 +68,32 @@ def test_update_recipe_rnd_started(client: TestClient):
     # Verify it persists
     get_response = client.get(f"/api/v1/recipes/{recipe_id}")
     assert get_response.json()["rnd_started"] is True
+
+
+def test_update_recipe_review_ready(client: TestClient):
+    """Test updating recipe review_ready flag."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Verify review_ready is initially False
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["review_ready"] is False
+
+    # Update review_ready to True
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={"review_ready": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["review_ready"] is True
+
+    # Verify it persists
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["review_ready"] is True
 
 
 def test_update_recipe_summary_feedback(client: TestClient):
@@ -146,6 +173,31 @@ def test_update_recipe_multiple_fields_including_summary_feedback(client: TestCl
     assert data["summary_feedback"] == "Needs more salt"
 
 
+def test_update_recipe_multiple_fields_including_review_ready(client: TestClient):
+    """Test updating multiple fields including review_ready."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original Name", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Update multiple fields
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={
+            "name": "Updated Name",
+            "selling_price_est": 15.99,
+            "review_ready": True,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["selling_price_est"] == 15.99
+    assert data["review_ready"] is True
+
+
 def test_soft_delete_recipe(client: TestClient):
     """Test soft-deleting a recipe."""
     # Create recipe
@@ -196,6 +248,8 @@ def test_fork_recipe_basic(client: TestClient):
     assert forked["root_id"] == original["id"]
     # Verify rnd_started is reset to False on fork
     assert forked["rnd_started"] is False
+    # Verify review_ready is reset to False on fork
+    assert forked["review_ready"] is False
 
 
 def test_fork_recipe_with_new_owner(client: TestClient):

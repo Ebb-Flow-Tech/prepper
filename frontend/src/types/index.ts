@@ -33,6 +33,7 @@ export interface Recipe {
   description: string | null;
   summary_feedback?: string | null;
   rnd_started: boolean;
+  review_ready: boolean;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
@@ -127,6 +128,7 @@ export interface UpdateRecipeRequest {
   description?: string | null;
   summary_feedback?: string | null;
   rnd_started?: boolean;
+  review_ready?: boolean;
 }
 
 export interface RecipeImage {

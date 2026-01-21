@@ -230,6 +230,7 @@ interface WipRecipeCardProps {
 }
 
 function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
+  const queryClient = useQueryClient();
   const { data: tastingNotes } = useRecipeTastingNotes(recipe.id);
   const createSession = useCreateTastingSession();
   const addRecipeToSession = useAddRecipeToSession();
@@ -275,10 +276,39 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
         data: { recipe_id: recipe.id },
       });
 
+      // Mark the parent recipe (root_id) as review_ready if this is a fork
+      if (recipe.root_id) {
+        try {
+          await updateRecipe(recipe.root_id, {
+            review_ready: true,
+          });
+          console.log(`Successfully marked parent recipe ${recipe.root_id} as review_ready`);
+          toast.success('Parent recipe marked as ready for review');
+        } catch (error) {
+          console.error('Failed to mark parent recipe as review_ready:', error);
+          toast.error('Failed to mark parent recipe as ready for review');
+        }
+      }
+
       setShowCreateModal(false);
       setSessionName('');
+      toast.success('Tasting session created successfully');
+
+      // Refetch to get updated data - use exact match for more reliable refetch
+      await queryClient.invalidateQueries({
+        queryKey: ['recipes'],
+        exact: false,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['recipes-with-feedback'],
+        exact: false,
+      });
+
+      // Wait a moment for the queries to invalidate before they refetch
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       console.error('Failed to create tasting session:', error);
+      toast.error('Failed to create tasting session');
     } finally {
       setIsCreating(false);
     }
@@ -421,23 +451,23 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
   );
 }
 
-// Review column session card - filters to show only if session contains WIP recipes
+// Review column session card - filters to show only if session contains recipes ready for review
 interface ReviewSessionCardProps {
   session: TastingSession;
-  wipRecipeIds: Set<number>;
+  readyForReviewRecipeIds: Set<number>;
 }
 
-function ReviewSessionCard({ session, wipRecipeIds }: ReviewSessionCardProps) {
+function ReviewSessionCard({ session, readyForReviewRecipeIds }: ReviewSessionCardProps) {
   const { data: sessionRecipes } = useSessionRecipes(session.id);
 
-  // Check if this session has any WIP recipes
-  const hasWipRecipes = useMemo(() => {
+  // Check if this session has any recipes whose parents are ready for review
+  const hasReadyForReviewRecipes = useMemo(() => {
     if (!sessionRecipes) return false;
-    return sessionRecipes.some((rt: RecipeTasting) => wipRecipeIds.has(rt.recipe_id));
-  }, [sessionRecipes, wipRecipeIds]);
+    return sessionRecipes.some((rt: RecipeTasting) => readyForReviewRecipeIds.has(rt.recipe_id));
+  }, [sessionRecipes, readyForReviewRecipeIds]);
 
-  // Don't render if no WIP recipes in this session
-  if (!hasWipRecipes) return null;
+  // Don't render if no ready-for-review recipes in this session
+  if (!hasReadyForReviewRecipes) return null;
 
   const formattedDate = new Date(session.date).toLocaleDateString('en-US', {
     month: 'short',
@@ -517,11 +547,15 @@ export default function RndPage() {
     });
   }, [tastingSessions, search]);
 
-  // Filter recipes by search
+  // Filter recipes by search and status for To Do column
   const filteredTodoRecipes = useMemo(() => {
     if (!recipesWithFeedback) return [];
 
     return recipesWithFeedback.filter((recipe) => {
+      // Only show recipes that haven't been started and aren't ready for review
+      if (recipe.rnd_started || recipe.review_ready) {
+        return false;
+      }
       if (search && !recipe.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
       }
@@ -533,14 +567,15 @@ export default function RndPage() {
   const wipGroups = useMemo(() => {
     if (!allRecipes || !recipesWithFeedback) return [];
 
-    // Get all recipes that have rnd_started = true
-    const startedRecipes = allRecipes.filter((recipe) => recipe.rnd_started === true);
+    // Get all recipes that have rnd_started = true and review_ready = false
+    const startedRecipes = allRecipes.filter((recipe) => recipe.rnd_started === true && !recipe.review_ready);
 
-    // Get all children (forks) of started recipes
+    // Get all children (forks) of started recipes where review_ready is false or null
     const wipRecipes = allRecipes.filter((recipe) =>
       recipe.root_id !== null &&
       startedRecipes.some((started) => started.id === recipe.root_id) &&
-      recipe.owner_id === userId
+      recipe.owner_id === userId &&
+      (!recipe.review_ready)
     );
 
     // Apply search filter
@@ -576,6 +611,22 @@ export default function RndPage() {
     });
     return ids;
   }, [wipGroups]);
+
+  // Get all recipe IDs whose parents are ready for review
+  const readyForReviewRecipeIds = useMemo(() => {
+    if (!allRecipes) return new Set<number>();
+    const ids = new Set<number>();
+    // Find all recipes whose root_id points to a recipe with review_ready = true
+    allRecipes.forEach((recipe) => {
+      if (recipe.root_id) {
+        const parent = allRecipes.find((r) => r.id === recipe.root_id);
+        if (parent && parent.review_ready) {
+          ids.add(recipe.id);
+        }
+      }
+    });
+    return ids;
+  }, [allRecipes]);
 
   const handleFork = (recipeId: number) => {
     if (!userId) return;
@@ -704,7 +755,7 @@ export default function RndPage() {
               </div>
 
               <div className="flex-1 space-y-4 min-h-[200px]">
-                {filteredSessions.length === 0 || wipRecipeIds.size === 0 ? (
+                {filteredSessions.length === 0 || readyForReviewRecipeIds.size === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                     <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
                     <p className="text-sm text-muted-foreground">No tasting sessions</p>
@@ -712,7 +763,7 @@ export default function RndPage() {
                   </div>
                 ) : (
                   filteredSessions.map((session) => (
-                    <ReviewSessionCard key={session.id} session={session} wipRecipeIds={wipRecipeIds} />
+                    <ReviewSessionCard key={session.id} session={session} readyForReviewRecipeIds={readyForReviewRecipeIds} />
                   ))
                 )}
               </div>
