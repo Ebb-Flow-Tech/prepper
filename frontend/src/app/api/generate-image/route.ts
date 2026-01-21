@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { experimental_generateImage as generateImage } from 'ai';
-import { updateRecipeImage } from '@/lib/api';
+import { uploadRecipeImage } from '@/lib/api';
 
 export async function POST(request: Request) {
   try {
@@ -42,14 +42,12 @@ Appetizing and delicious looking.
       );
     }
 
-    // If recipe_id is provided, store the image in Supabase via backend
+    // If recipe_id is provided, upload the image to backend
     if (recipe_id) {
       try {
-        const updatedRecipe = await updateRecipeImage(recipe_id, {
-          image_base64: imageBase64,
-        });
+        const uploadedImage = await uploadRecipeImage(recipe_id, imageBase64);
         return Response.json({
-          image_url: updatedRecipe.image_url,
+          image_url: uploadedImage.image_url,
           stored: true,
         });
       } catch (storageError) {

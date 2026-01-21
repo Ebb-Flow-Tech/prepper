@@ -74,6 +74,12 @@ from app.models.category import (
     CategoryCreate,
     CategoryUpdate,
 )
+from app.models.recipe_image import (
+    RecipeImage,
+    RecipeImageCreate,
+    RecipeImageUpdate,
+    RecipeImageReorder,
+)
 
 __all__ = [
     # Ingredient
@@ -140,4 +146,9 @@ __all__ = [
     "Category",
     "CategoryCreate",
     "CategoryUpdate",
+    # RecipeImage
+    "RecipeImage",
+    "RecipeImageCreate",
+    "RecipeImageUpdate",
+    "RecipeImageReorder",
 ]

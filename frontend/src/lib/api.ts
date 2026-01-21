@@ -2,6 +2,7 @@ import type {
   Recipe,
   Ingredient,
   RecipeIngredient,
+  RecipeImage,
   CostingResult,
   CreateRecipeRequest,
   UpdateRecipeRequest,
@@ -145,6 +146,22 @@ export async function updateRecipeImage(
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+}
+
+export async function uploadRecipeImage(
+  recipeId: number,
+  imageBase64: string
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/${recipeId}`, {
+    method: 'POST',
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  });
+}
+
+export async function getRecipeImages(
+  recipeId: number
+): Promise<RecipeImage[]> {
+  return fetchApi<RecipeImage[]>(`/recipe-images/${recipeId}`);
 }
 
 // ============ Recipe Ingredients ============

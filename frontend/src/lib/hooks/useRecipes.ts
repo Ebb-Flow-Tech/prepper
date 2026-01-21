@@ -126,9 +126,28 @@ export function useGenerateRecipeImage() {
     onSuccess: (data, variables) => {
       // Invalidate recipe queries if image was stored
       if (data.stored && variables.recipeId) {
-        queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
-        queryClient.invalidateQueries({ queryKey: ['recipes'] });
+        queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
       }
+    },
+  });
+}
+
+export function useRecipeImages(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-images', recipeId],
+    queryFn: () => api.getRecipeImages(recipeId!),
+    enabled: recipeId !== null,
+  });
+}
+
+export function useUploadRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ recipeId, imageBase64 }: { recipeId: number; imageBase64: string }) =>
+      api.uploadRecipeImage(recipeId, imageBase64),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
     },
   });
 }

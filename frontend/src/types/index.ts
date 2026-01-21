@@ -125,6 +125,16 @@ export interface UpdateRecipeRequest {
   summary_feedback?: string | null;
 }
 
+export interface RecipeImage {
+  id: number;
+  recipe_id: number;
+  image_url: string;
+  is_main: boolean;
+  order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UpdateRecipeImageRequest {
   image_base64: string;
 }

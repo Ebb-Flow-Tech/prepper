@@ -55,8 +55,8 @@ class Recipe(RecipeBase, table=True):
         description="ID of the original recipe this was forked from",
     )
 
-    # Image
-    image_url: str | None = Field(default=None, description="URL to recipe image in storage")
+    # Description
+    description: str | None = Field(default=None, description="Recipe description")
 
     # Feedback
     summary_feedback: str | None = Field(default=None, description="Summary feedback on the recipe")
@@ -79,7 +79,7 @@ class RecipeCreate(RecipeBase):
     owner_id: str | None = None
     version: int = 1
     root_id: int | None = None
-    image_url: str | None = None
+    description: str | None = None
 
 
 class RecipeUpdate(SQLModel):
@@ -93,7 +93,7 @@ class RecipeUpdate(SQLModel):
     is_public: bool | None = None
     status: RecipeStatus | None = None
     updated_by: str | None = None
-    image_url: str | None = None
+    description: str | None = None
     summary_feedback: str | None = None
 
 

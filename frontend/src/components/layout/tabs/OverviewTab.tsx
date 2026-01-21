@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Loader2, Wand2 } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useGenerateRecipeImage, useUpdateRecipe } from '@/lib/hooks';
+import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2 } from 'lucide-react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
+import { RecipeImageCarousel } from '@/components/recipe/RecipeImageCarousel';
 import { useState } from 'react';
 import type { RecipeStatus, TastingDecision } from '@/types';
 
@@ -49,7 +50,6 @@ function formatTastingDate(dateString: string): string {
 
 export function OverviewTab() {
   const { selectedRecipeId, userId } = useAppState();
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
@@ -60,39 +60,9 @@ export function OverviewTab() {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
 
-  const generateImageMutation = useGenerateRecipeImage();
-  const updateRecipeMutation = useUpdateRecipe();
-
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
   const canEditRecipe = userId !== null && recipe?.owner_id === userId;
-
-  const handleGenerateImage = async () => {
-    if (!recipe || !selectedRecipeId) return;
-    setIsGeneratingImage(true);
-    try {
-      const ingredientNames = ingredients?.map(i => i.ingredient?.name).filter(Boolean) || [];
-      const result = await generateImageMutation.mutateAsync({
-        recipeId: recipe.id,
-        recipeName: recipe.name,
-        ingredients: ingredientNames as string[],
-      });
-
-      if (result.image_url) {
-        await updateRecipeMutation.mutateAsync({
-          id: selectedRecipeId,
-          data: {
-            image_url: result.image_url,
-          },
-        });
-        setIsImageModalOpen(false);
-      }
-    } catch (error) {
-      console.error('Failed to generate image:', error);
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
 
   // Create a map of recipe IDs to names for sub-recipe display
   const recipeMap = new Map<number, string>();
@@ -472,48 +442,20 @@ export function OverviewTab() {
           </>
         ) : null}
 
-        {/* Image Edit Modal */}
+        {/* Image Carousel Modal */}
         <Modal
           isOpen={isImageModalOpen}
           onClose={() => setIsImageModalOpen(false)}
-          title="Edit Recipe Image"
-          maxWidth="max-w-md"
+          title="Recipe Images"
+          maxWidth="max-w-2xl"
         >
-          <div className="space-y-4">
-            {recipe?.image_url && (
-              <div className="mb-4">
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2">Current Image:</p>
-                <img
-                  src={recipe.image_url}
-                  alt={recipe.name}
-                  className="w-full h-40 rounded-lg object-cover"
-                />
-              </div>
-            )}
-
-            <Button
-              onClick={handleGenerateImage}
-              disabled={isGeneratingImage}
-              className="w-full"
-              variant="default"
-            >
-              {isGeneratingImage ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  Generate with AI
-                </>
-              )}
-            </Button>
-
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
-              Generate a new image using AI based on the recipe name and ingredients
-            </p>
-          </div>
+          {recipe && (
+            <RecipeImageCarousel
+              recipeId={recipe.id}
+              recipeName={recipe.name}
+              ingredients={ingredients?.map(i => i.ingredient?.name).filter(Boolean) as string[] | undefined}
+            />
+          )}
         </Modal>
       </div>
     </div>
