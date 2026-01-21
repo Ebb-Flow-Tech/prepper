@@ -34,7 +34,8 @@ class RecipeIngredient(RecipeIngredientBase, table=True):
 
     unit_price: float | None = Field(default=None)  # not all unit prices are known
     base_unit: str | None = Field(default=None)
-    supplier_id: int | None = Field(default=None)  # not all ingredients currently 
+    supplier_id: int | None = Field(default=None)  # not all ingredients currently
+    wastage_percentage: float = Field(default=0)  # wastage as percentage (0-100)
 
     # Relationship to Ingredient
     ingredient: Optional["Ingredient"] = Relationship(back_populates="recipe_ingredients")
@@ -45,6 +46,7 @@ class RecipeIngredientCreate(RecipeIngredientBase):
     base_unit: str | None = None
     unit_price: float | None = None
     supplier_id: int | None = None
+    wastage_percentage: float = 0
 
 
 class RecipeIngredientUpdate(SQLModel):
@@ -55,6 +57,7 @@ class RecipeIngredientUpdate(SQLModel):
     base_unit: str | None = None
     unit_price: float | None = None
     supplier_id: int | None = None
+    wastage_percentage: float | None = None
 
 
 class RecipeIngredientReorder(SQLModel):
@@ -87,4 +90,5 @@ class RecipeIngredientRead(SQLModel):
     base_unit: str | None = None
     unit_price: float | None = None
     supplier_id: int | None = None
+    wastage_percentage: float = 0
     ingredient: IngredientNested | None = None

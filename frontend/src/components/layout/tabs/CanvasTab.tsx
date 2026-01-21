@@ -39,6 +39,7 @@ interface StagedIngredient {
   id: string; // unique id for this staged item
   ingredient: Ingredient;
   quantity: number;
+  wastage_percentage: number;
   x: number;
   y: number;
 }
@@ -203,11 +204,13 @@ function StagedIngredientCard({
   staged,
   onRemove,
   onQuantityChange,
+  onWastageChange,
   categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
+  onWastageChange: (wastage: number) => void;
   categoryMap: Record<number, string>;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -334,6 +337,25 @@ function StagedIngredientCard({
               </span>
             </div>
             <div>
+              <label className="text-blue-300/60 flex items-center justify-between">
+                <span>Wastage %</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={staged.wastage_percentage}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    const value = parseFloat(e.target.value) || 0;
+                    onWastageChange(Math.min(100, Math.max(0, value)));
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+                />
+              </label>
+            </div>
+            <div>
               <span className="text-blue-300/60">Suppliers</span>
               {suppliers.length > 0 ? (
                 <ul className="mt-1 space-y-1.5">
@@ -371,11 +393,13 @@ function StagedIngredientListItem({
   staged,
   onRemove,
   onQuantityChange,
+  onWastageChange,
   categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
+  onWastageChange: (wastage: number) => void;
   categoryMap: Record<number, string>;
 }) {
   const suppliers = staged.ingredient.suppliers || [];
@@ -429,6 +453,24 @@ function StagedIngredientListItem({
             step="0.1"
           />
           <span className="text-sm text-zinc-500 dark:text-zinc-400">{staged.ingredient.base_unit}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-zinc-500 dark:text-zinc-400">Wastage:</label>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={staged.wastage_percentage}
+            onChange={(e) => {
+              e.stopPropagation();
+              const value = parseFloat(e.target.value) || 0;
+              onWastageChange(Math.min(100, Math.max(0, value)));
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+          />
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">%</span>
         </div>
         <button
           onClick={onRemove}
@@ -724,6 +766,7 @@ function CanvasDropZone({
   onRemoveIngredient,
   onRemoveRecipe,
   onIngredientQuantityChange,
+  onIngredientWastageChange,
   onRecipeQuantityChange,
   canvasRef,
   allRecipes,
@@ -736,6 +779,7 @@ function CanvasDropZone({
   onRemoveIngredient: (id: string) => void;
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
+  onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   canvasRef: React.RefObject<HTMLDivElement | null>;
   allRecipes?: Recipe[];
@@ -786,6 +830,7 @@ function CanvasDropZone({
               staged={staged}
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
               categoryMap={categoryMap}
             />
           ))}
@@ -807,6 +852,7 @@ function CanvasDropZone({
               staged={staged}
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
               categoryMap={categoryMap}
             />
           ))}
@@ -839,6 +885,7 @@ function CanvasContent({
   onRemoveIngredient,
   onRemoveRecipe,
   onIngredientQuantityChange,
+  onIngredientWastageChange,
   onRecipeQuantityChange,
   onSubmit,
   onFork,
@@ -867,6 +914,7 @@ function CanvasContent({
   onRemoveIngredient: (id: string) => void;
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
+  onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onSubmit: () => void;
   onFork: () => void;
@@ -991,6 +1039,7 @@ function CanvasContent({
           onRemoveIngredient={onRemoveIngredient}
           onRemoveRecipe={onRemoveRecipe}
           onIngredientQuantityChange={onIngredientQuantityChange}
+          onIngredientWastageChange={onIngredientWastageChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
           canvasRef={canvasRef}
           allRecipes={allRecipes}
@@ -1142,6 +1191,7 @@ export function CanvasTab() {
           id: `ing-${Date.now()}-${Math.random()}`,
           ingredient,
           quantity: 1,
+          wastage_percentage: 0,
           x: 0,
           y: 0,
         };
@@ -1260,16 +1310,17 @@ export function CanvasTab() {
         updated_at: '',
       },
       quantity: ri.quantity,
+      wastage_percentage: ri.wastage_percentage,
       x: 0, // Placeholder - will be set by position recalculation effect
       y: 0,
     }));
 
     // Load sub-recipes onto canvas
     const loadedSubRecipes: StagedRecipe[] = subRecipes.map((sr) => {
-      const childRecipe = recipes?.find((r) => r.id === sr.child_recipe_id);
+      const childRecipe = recipes!.find((r) => r.id === sr.child_recipe_id);
       return {
         id: `existing-rec-${sr.id}`,
-        recipe: childRecipe || {
+        recipe: childRecipe || ({
           id: sr.child_recipe_id,
           name: `Recipe #${sr.child_recipe_id}`,
           instructions_raw: null,
@@ -1285,11 +1336,14 @@ export function CanvasTab() {
           version: 1,
           root_id: null,
           image_url: null,
+          description: null,
           summary_feedback: null,
+          rnd_started: false,
+          review_ready: false,
           created_at: '',
           updated_at: '',
           created_by: '',
-        },
+        } as Recipe),
         quantity: sr.quantity,
         x: 0, // Placeholder - will be set by position recalculation effect
         y: 0,
@@ -1398,6 +1452,7 @@ export function CanvasTab() {
             id: `ing-${Date.now()}-${Math.random()}`,
             ingredient: dragItem.ingredient,
             quantity: 1,
+            wastage_percentage: 0,
             x: 0, // Placeholder - will be set by position recalculation effect
             y: 0,
           };
@@ -1453,6 +1508,12 @@ export function CanvasTab() {
     );
   }, []);
 
+  const handleIngredientWastageChange = useCallback((id: string, wastage_percentage: number) => {
+    setStagedIngredients((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, wastage_percentage } : item))
+    );
+  }, []);
+
   const handleRecipeQuantityChange = useCallback((id: string, quantity: number) => {
     setStagedRecipes((prev) =>
       prev.map((item) => (item.id === id ? { ...item, quantity } : item))
@@ -1487,6 +1548,7 @@ export function CanvasTab() {
           updated_at: '',
         },
         quantity: ri.quantity,
+        wastage_percentage: ri.wastage_percentage,
         x: 20 + (index % 3) * 220,
         y: 20 + Math.floor(index / 3) * 100,
       }));
@@ -1501,7 +1563,7 @@ export function CanvasTab() {
         const childRecipe = recipes?.find((r) => r.id === sr.child_recipe_id);
         return {
           id: `existing-rec-${sr.id}`,
-          recipe: childRecipe || {
+          recipe: childRecipe || ({
             id: sr.child_recipe_id,
             name: `Recipe #${sr.child_recipe_id}`,
             instructions_raw: null,
@@ -1517,10 +1579,14 @@ export function CanvasTab() {
             version: 1,
             root_id: null,
             image_url: null,
+            description: null,
+            summary_feedback: null,
+            rnd_started: false,
+            review_ready: false,
             created_at: '',
             updated_at: '',
             created_by: '',
-          },
+          } as Recipe),
           quantity: sr.quantity,
           x: 20 + (index % 3) * 220,
           y: 20 + Math.floor(index / 3) * 100,
@@ -1603,6 +1669,7 @@ export function CanvasTab() {
             base_unit,
             unit_price,
             supplier_id,
+            wastage_percentage: staged.wastage_percentage,
           },
         });
       }
@@ -1727,6 +1794,7 @@ export function CanvasTab() {
                 base_unit,
                 unit_price,
                 supplier_id,
+                wastage_percentage: staged.wastage_percentage,
               },
             });
           } else {
@@ -1740,6 +1808,7 @@ export function CanvasTab() {
                 base_unit,
                 unit_price,
                 supplier_id,
+                wastage_percentage: staged.wastage_percentage,
               },
             });
           }
@@ -1806,6 +1875,7 @@ export function CanvasTab() {
               base_unit,
               unit_price,
               supplier_id,
+              wastage_percentage: staged.wastage_percentage,
             },
           });
         }
@@ -1939,6 +2009,7 @@ export function CanvasTab() {
       onRemoveIngredient={handleRemoveIngredient}
       onRemoveRecipe={handleRemoveRecipe}
       onIngredientQuantityChange={handleIngredientQuantityChange}
+      onIngredientWastageChange={handleIngredientWastageChange}
       onRecipeQuantityChange={handleRecipeQuantityChange}
       onSubmit={handleSubmitClick}
       onFork={handleForkClick}

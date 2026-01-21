@@ -702,3 +702,159 @@ def test_get_version_tree_preserves_recipe_data(client: TestClient):
     assert fork["name"] == "Detailed Recipe (Fork)"
     assert fork["version"] == 2
     assert fork["root_id"] == recipe["id"]
+
+
+# ============ Wastage Percentage Tests ============
+
+
+def test_add_ingredient_with_wastage_percentage(client: TestClient):
+    """Test adding an ingredient with wastage_percentage."""
+    # Create an ingredient
+    ingredient_response = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Tomatoes", "base_unit": "g", "cost_per_base_unit": 0.005},
+    )
+    ingredient_id = ingredient_response.json()["id"]
+
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Tomato Sauce", "yield_quantity": 1, "yield_unit": "batch"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Add ingredient with wastage_percentage
+    response = client.post(
+        f"/api/v1/recipes/{recipe_id}/ingredients",
+        json={
+            "ingredient_id": ingredient_id,
+            "quantity": 1000,
+            "unit": "g",
+            "wastage_percentage": 15.5,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["wastage_percentage"] == 15.5
+
+
+def test_add_ingredient_with_default_wastage_percentage(client: TestClient):
+    """Test that wastage_percentage defaults to 0 when not provided."""
+    # Create an ingredient
+    ingredient_response = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Flour", "base_unit": "g", "cost_per_base_unit": 0.002},
+    )
+    ingredient_id = ingredient_response.json()["id"]
+
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Bread", "yield_quantity": 1, "yield_unit": "loaf"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Add ingredient without wastage_percentage
+    response = client.post(
+        f"/api/v1/recipes/{recipe_id}/ingredients",
+        json={"ingredient_id": ingredient_id, "quantity": 500, "unit": "g"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["wastage_percentage"] == 0
+
+
+def test_update_ingredient_wastage_percentage(client: TestClient):
+    """Test updating wastage_percentage for a recipe ingredient."""
+    # Create an ingredient
+    ingredient_response = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Chicken", "base_unit": "g", "cost_per_base_unit": 0.01},
+    )
+    ingredient_id = ingredient_response.json()["id"]
+
+    # Create recipe and add ingredient
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Chicken Dish", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    add_response = client.post(
+        f"/api/v1/recipes/{recipe_id}/ingredients",
+        json={"ingredient_id": ingredient_id, "quantity": 300, "unit": "g"},
+    )
+    ri_id = add_response.json()["id"]
+
+    # Update wastage_percentage
+    update_response = client.patch(
+        f"/api/v1/recipes/{recipe_id}/ingredients/{ri_id}",
+        json={"wastage_percentage": 20},
+    )
+    assert update_response.status_code == 200
+    data = update_response.json()
+    assert data["wastage_percentage"] == 20
+
+    # Verify the update persists
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}/ingredients")
+    ingredients = get_response.json()
+    found_ingredient = next(
+        (ing for ing in ingredients if ing["id"] == ri_id), None
+    )
+    assert found_ingredient is not None
+    assert found_ingredient["wastage_percentage"] == 20
+
+
+def test_fork_recipe_preserves_wastage_percentage(client: TestClient):
+    """Test that forking preserves wastage_percentage for all ingredients."""
+    # Create ingredients
+    ing1 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Ingredient A", "base_unit": "g", "cost_per_base_unit": 0.01},
+    ).json()
+    ing2 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Ingredient B", "base_unit": "ml", "cost_per_base_unit": 0.02},
+    ).json()
+
+    # Create recipe and add ingredients with wastage
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Recipe with Wastage", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    client.post(
+        f"/api/v1/recipes/{recipe['id']}/ingredients",
+        json={
+            "ingredient_id": ing1["id"],
+            "quantity": 100,
+            "unit": "g",
+            "wastage_percentage": 10,
+        },
+    )
+    client.post(
+        f"/api/v1/recipes/{recipe['id']}/ingredients",
+        json={
+            "ingredient_id": ing2["id"],
+            "quantity": 200,
+            "unit": "ml",
+            "wastage_percentage": 5,
+        },
+    )
+
+    # Fork the recipe
+    forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
+
+    # Get forked ingredients
+    forked_ingredients = client.get(f"/api/v1/recipes/{forked['id']}/ingredients").json()
+
+    # Verify wastage_percentage is preserved
+    assert len(forked_ingredients) == 2
+    ing_a = next((ing for ing in forked_ingredients if ing["ingredient_id"] == ing1["id"]), None)
+    ing_b = next((ing for ing in forked_ingredients if ing["ingredient_id"] == ing2["id"]), None)
+
+    assert ing_a is not None
+    assert ing_a["wastage_percentage"] == 10
+
+    assert ing_b is not None
+    assert ing_b["wastage_percentage"] == 5

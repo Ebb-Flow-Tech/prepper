@@ -51,6 +51,7 @@ export interface RecipeIngredient {
   base_unit: string | null;
   unit_price: number | null;
   supplier_id: number | null;
+  wastage_percentage: number;
   ingredient?: Ingredient;
 }
 
@@ -73,6 +74,8 @@ export interface CostingBreakdown {
   quantity_in_base_unit: number;
   base_unit: string;
   cost_per_base_unit: number | null;
+  wastage_percentage: number;
+  adjusted_cost_per_unit: number | null;
   line_cost: number | null;
 }
 
@@ -181,6 +184,7 @@ export interface AddRecipeIngredientRequest {
   base_unit: string;
   unit_price: number;
   supplier_id: number | null;
+  wastage_percentage?: number;
 }
 
 export interface UpdateRecipeIngredientRequest {
@@ -189,6 +193,7 @@ export interface UpdateRecipeIngredientRequest {
   base_unit?: string;
   unit_price?: number;
   supplier_id?: number | null;
+  wastage_percentage?: number;
 }
 
 export interface ReorderIngredientsRequest {
