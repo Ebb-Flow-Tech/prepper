@@ -344,10 +344,6 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
               <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
                 {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
               </Badge>
-              <Badge variant="info" className="text-sm">
-                <GitFork className="h-3 w-3 mr-1" />
-                Fork
-              </Badge>
               {isOwned && (
                 <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
               )}
@@ -709,11 +705,11 @@ export default function RndPage() {
               </div>
             </div>
 
-            {/* WIP Column */}
+            {/* In Progress Column */}
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
                 <span className="text-muted-foreground"><Loader2 className="h-5 w-5" /></span>
-                <h2 className="font-semibold text-lg">WIP</h2>
+                <h2 className="font-semibold text-lg">In Progress</h2>
                 <span className="ml-auto text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                   {wipCount}
                 </span>
@@ -759,7 +755,7 @@ export default function RndPage() {
                   <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                     <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
                     <p className="text-sm text-muted-foreground">No tasting sessions</p>
-                    <p className="text-xs text-muted-foreground mt-1">Create a session from a WIP recipe</p>
+                    <p className="text-xs text-muted-foreground mt-1">Create a session from a 'In Progress' recipe</p>
                   </div>
                 ) : (
                   filteredSessions.map((session) => (

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X } from 'lucide-react';
+import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown } from 'lucide-react';
 import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
+import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
@@ -30,11 +31,10 @@ function StarRating({ rating }: { rating: number | null }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={`h-3.5 w-3.5 ${
-            star <= rating
+          className={`h-3.5 w-3.5 ${star <= rating
               ? 'fill-amber-400 text-amber-400'
               : 'text-zinc-300 dark:text-zinc-600'
-          }`}
+            }`}
         />
       ))}
     </div>
@@ -53,6 +53,7 @@ export function OverviewTab() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
+  const [isFeedbacksOpen, setIsFeedbacksOpen] = useState(false);
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
@@ -63,8 +64,23 @@ export function OverviewTab() {
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: mainImage } = useMainRecipeImage(selectedRecipeId);
   const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
+  const { mutate: summarizeFeedback, data: feedbackSummary, isPending: isSummarizingFeedback, error: feedbackSummaryError } = useSummarizeFeedback();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
+
+  // Save feedback summary to recipe when it's generated
+  useEffect(() => {
+    if (feedbackSummary?.summary && feedbackSummary.success && selectedRecipeId) {
+      updateRecipe(
+        { id: selectedRecipeId, data: { summary_feedback: feedbackSummary.summary } },
+        {
+          onError: (error) => {
+            console.error('Failed to save feedback summary to recipe:', error);
+          },
+        }
+      );
+    }
+  }, [feedbackSummary?.summary, feedbackSummary?.success, selectedRecipeId, updateRecipe]);
 
   const canEditRecipe = userId !== null && recipe?.owner_id === userId;
 
@@ -74,6 +90,21 @@ export function OverviewTab() {
       setDescriptionValue(recipe.description || '');
     }
   }, [recipe?.id]);
+
+  // Trigger feedback summary when user enters a recipe with tasting notes
+  useEffect(() => {
+    // Only trigger if: recipe has tasting notes AND not currently summarizing
+    if (
+      selectedRecipeId &&
+      tastingNotes &&
+      tastingNotes.length > 0 &&
+      !isSummarizingFeedback
+    ) {
+      summarizeFeedback(selectedRecipeId);
+    }
+    // Only re-trigger when recipe changes, not on other rerenders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRecipeId]);
 
   const handleSaveDescription = () => {
     if (selectedRecipeId && descriptionValue !== recipe?.description) {
@@ -440,81 +471,103 @@ export function OverviewTab() {
               </CardContent>
             </Card>
 
-            {/* Tasting History Card */}
+            {/* Tasting History - Summary Card */}
             <Card className="mt-6">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                      Tasting History
-                    </h2>
-                  </div>
-                  {tastingSummary && tastingSummary.total_tastings > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-zinc-500">
-                        {tastingSummary.total_tastings} tasting{tastingSummary.total_tastings !== 1 ? 's' : ''}
-                      </span>
-                      {tastingSummary.average_overall_rating && (
-                        <div className="flex items-center gap-1 text-sm">
-                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                          <span className="font-medium">{tastingSummary.average_overall_rating.toFixed(1)}</span>
+                <div className="flex items-center gap-2 mb-4">
+                  <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                    Tasting History
+                  </h2>
+                </div>
+
+                {tastingSummary && tastingSummary.total_tastings > 0 && tastingNotes && tastingNotes.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary Section - AI Generated */}
+                    <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Feedback Summary</p>
+                      <br></br>
+                      {isSummarizingFeedback ? (
+                        <div className="space-y-2">
+                          <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
+                          <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-5/6" />
+                          <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-4/6" />
+                        </div>
+                      ) : feedbackSummaryError ? (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300 italic">
+                          Unable to generate summary. Please try again.
+                        </p>
+                      ) : recipe?.summary_feedback ? (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                          {recipe.summary_feedback}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400 italic">
+                          No summary generated yet.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Feedbacks Section - Collapsible */}
+                    <div>
+                      <button
+                        onClick={() => setIsFeedbacksOpen(!isFeedbacksOpen)}
+                        className="w-full flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Feedbacks ({tastingNotes?.length || 0})
+                        </span>
+                        <ChevronDown
+                          className={`h-5 w-5 text-zinc-500 transition-transform ${isFeedbacksOpen ? 'rotate-180' : ''
+                            }`}
+                        />
+                      </button>
+
+                      {isFeedbacksOpen && (
+                        <div className="mt-3 space-y-3 pl-3 border-l-2 border-zinc-200 dark:border-zinc-700">
+                          {tastingNotes?.map((note) => {
+                            const config = note.decision ? DECISION_CONFIG[note.decision] : null;
+                            const Icon = config?.icon;
+                            return (
+                              <div
+                                key={note.id}
+                                className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Link
+                                      href={`/tastings/${note.session_id}`}
+                                      className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+                                    >
+                                      {note.session_name}
+                                    </Link>
+                                    {config && (
+                                      <Badge variant={config.variant} className="text-xs">
+                                        {Icon && <Icon className="h-3 w-3 mr-1" />}
+                                        {config.label}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+                                    {note.session_date && (
+                                      <span>{formatTastingDate(note.session_date)}</span>
+                                    )}
+                                    {note.overall_rating && (
+                                      <StarRating rating={note.overall_rating} />
+                                    )}
+                                  </div>
+                                  {note.feedback && (
+                                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                                      &ldquo;{note.feedback}&rdquo;
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {tastingNotes && tastingNotes.length > 0 ? (
-                  <div className="space-y-3">
-                    {tastingNotes.slice(0, 5).map((note) => {
-                      const config = note.decision ? DECISION_CONFIG[note.decision] : null;
-                      const Icon = config?.icon;
-                      return (
-                        <div
-                          key={note.id}
-                          className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Link
-                                href={`/tastings/${note.session_id}`}
-                                className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
-                              >
-                                {note.session_name}
-                              </Link>
-                              {config && (
-                                <Badge variant={config.variant} className="text-xs">
-                                  {Icon && <Icon className="h-3 w-3 mr-1" />}
-                                  {config.label}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                              {note.session_date && (
-                                <span>{formatTastingDate(note.session_date)}</span>
-                              )}
-                              {note.overall_rating && (
-                                <StarRating rating={note.overall_rating} />
-                              )}
-                            </div>
-                            {note.feedback && (
-                              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300 line-clamp-2">
-                                &ldquo;{note.feedback}&rdquo;
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {tastingNotes.length > 5 && (
-                      <Link
-                        href="/tastings"
-                        className="block text-center text-sm text-purple-600 dark:text-purple-400 hover:underline pt-2"
-                      >
-                        View all {tastingNotes.length} tastings
-                      </Link>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8">
