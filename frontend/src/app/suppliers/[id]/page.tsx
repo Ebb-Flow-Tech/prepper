@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus } from 'lucide-react';
+import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus, MoreVertical, Check, X, Edit as EditIcon } from 'lucide-react';
 import {
   useSupplier,
   useUpdateSupplier,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/hooks';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, ConfirmModal, EditableCell, Input, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, ConfirmModal, EditableCell, Input, Modal, Select, Skeleton } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateSupplierIngredientRequest } from '@/types';
 
@@ -48,6 +48,9 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const removeIngredientMutation = useRemoveSupplierIngredient();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Record<number, UpdateSupplierIngredientRequest>>({});
   const [formData, setFormData] = useState({
     ingredient_id: '',
     sku: '',
@@ -101,9 +104,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const handleAddIngredient = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.ingredient_id || !formData.unit_cost || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack) {
+    if (!formData.ingredient_id || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack) {
       return;
     }
+
+    const packSize = parseFloat(formData.pack_size);
+    const pricePerPack = parseFloat(formData.price_per_pack);
+    const calculatedUnitCost = packSize > 0 ? pricePerPack / packSize : 0;
 
     const selectedIngredient = availableIngredients?.find(
       (i) => i.id === parseInt(formData.ingredient_id, 10)
@@ -116,10 +123,10 @@ export default function SupplierPage({ params }: SupplierPageProps) {
           ingredient_id: parseInt(formData.ingredient_id, 10),
           supplier_name: supplier?.name || '',
           sku: formData.sku || null,
-          pack_size: parseFloat(formData.pack_size),
+          pack_size: packSize,
           pack_unit: formData.pack_unit,
-          price_per_pack: parseFloat(formData.price_per_pack),
-          cost_per_unit: parseFloat(formData.unit_cost),
+          price_per_pack: pricePerPack,
+          cost_per_unit: calculatedUnitCost,
           is_preferred: formData.is_preferred,
         },
       },
@@ -134,6 +141,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
             pack_unit: '',
             is_preferred: false,
           });
+          setShowAddModal(false);
           toast.success(`${selectedIngredient?.name || 'Ingredient'} added`);
         },
         onError: (error) => {
@@ -146,6 +154,10 @@ export default function SupplierPage({ params }: SupplierPageProps) {
         },
       }
     );
+  };
+
+  const calculateUnitCost = (packSize: number, pricePerPack: number): number => {
+    return packSize > 0 ? pricePerPack / packSize : 0;
   };
 
   // Filter out ingredients that already have this supplier
@@ -292,140 +304,149 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                   </h2>
                 </div>
 
-                {/* Add Ingredient Form */}
-                <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 mb-4">
-                  <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3 flex items-center gap-2">
+                {/* Add Ingredient Button */}
+                <div className="mb-4">
+                  <Button
+                    onClick={() => setShowAddModal(true)}
+                    className="flex items-center gap-2"
+                  >
                     <Plus className="h-4 w-4" />
                     Add Ingredient
-                  </h3>
+                  </Button>
+                </div>
+
+                {/* Add Ingredient Modal */}
+                <Modal
+                  isOpen={showAddModal}
+                  onClose={() => setShowAddModal(false)}
+                  title="Add Ingredient"
+                  maxWidth="max-w-lg"
+                >
                   <form onSubmit={handleAddIngredient} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          Ingredient
-                        </label>
-                        <Select
-                          value={formData.ingredient_id}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, ingredient_id: e.target.value }))
-                          }
-                          options={[
-                            { value: '', label: 'Select ingredient...' },
-                            ...availableToAdd.map((i) => ({
-                              value: i.id.toString(),
-                              label: i.name,
-                            })),
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          SKU
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="e.g., SKU-001"
-                          value={formData.sku}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, sku: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          Pack Size
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={formData.pack_size}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, pack_size: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          Price/Pack
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={formData.price_per_pack}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, price_per_pack: e.target.value }))
-                          }
-                        />
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Ingredient
+                      </label>
+                      <Select
+                        value={formData.ingredient_id}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, ingredient_id: e.target.value }))
+                        }
+                        options={[
+                          { value: '', label: 'Select ingredient...' },
+                          ...availableToAdd.map((i) => ({
+                            value: i.id.toString(),
+                            label: i.name,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        SKU
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="e.g., SKU-001"
+                        value={formData.sku}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, sku: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Pack Size
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={formData.pack_size}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, pack_size: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Pack Unit
+                      </label>
+                      <Select
+                        value={formData.pack_unit}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, pack_unit: e.target.value }))
+                        }
+                        options={[
+                          { value: '', label: 'Select unit...' },
+                          ...UNIT_OPTIONS,
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Price/Pack
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={formData.price_per_pack}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, price_per_pack: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Unit Cost
+                      </label>
+                      <div className="px-3 py-2 rounded border border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
+                        {formData.pack_size && formData.price_per_pack
+                          ? formatCurrency(calculateUnitCost(parseFloat(formData.pack_size), parseFloat(formData.price_per_pack)))
+                          : formatCurrency(0)}
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          Unit Cost
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={formData.unit_cost}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, unit_cost: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                          Pack Unit
-                        </label>
-                        <Select
-                          value={formData.pack_unit}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, pack_unit: e.target.value }))
-                          }
-                          options={[
-                            { value: '', label: 'Select unit...' },
-                            ...UNIT_OPTIONS,
-                          ]}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 pt-5">
-                        <input
-                          type="checkbox"
-                          id="is_preferred_ingredient"
-                          checked={formData.is_preferred}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, is_preferred: e.target.checked }))
-                          }
-                          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
-                        />
-                        <label htmlFor="is_preferred_ingredient" className="text-sm text-zinc-700 dark:text-zinc-300">
-                          Preferred Supplier
-                        </label>
-                      </div>
-                      <div className="flex items-end justify-end">
-                        <Button
-                          type="submit"
-                          disabled={
-                            !formData.ingredient_id ||
-                            !formData.unit_cost ||
-                            !formData.pack_unit ||
-                            !formData.pack_size ||
-                            !formData.price_per_pack ||
-                            addIngredientMutation.isPending
-                          }
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Ingredient
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="is_preferred_ingredient"
+                        checked={formData.is_preferred}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, is_preferred: e.target.checked }))
+                        }
+                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                      />
+                      <label htmlFor="is_preferred_ingredient" className="text-sm text-zinc-700 dark:text-zinc-300">
+                        Preferred Supplier
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-700">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowAddModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={
+                          !formData.ingredient_id ||
+                          !formData.pack_unit ||
+                          !formData.pack_size ||
+                          !formData.price_per_pack ||
+                          addIngredientMutation.isPending
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Ingredient
+                      </Button>
                     </div>
                   </form>
-                </div>
+                </Modal>
 
                 {/* Ingredients Table */}
                 {supplierIngredients.length > 0 ? (
@@ -442,14 +463,14 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                           <th className="text-right py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             Pack Size
                           </th>
+                          <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
+                            Pack Unit
+                          </th>
                           <th className="text-right py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             Price/Pack
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             Unit Cost
-                          </th>
-                          <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
-                            Pack Unit
                           </th>
                           <th className="py-3 px-2 w-12"></th>
                         </tr>
@@ -458,7 +479,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         {supplierIngredients.map((ingredient) => (
                           <tr
                             key={ingredient.ingredient_id}
-                            className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                            className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 group"
                           >
                             <td className="py-3 px-2 text-zinc-900 dark:text-zinc-100 font-medium">
                               <Link
@@ -469,61 +490,188 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               </Link>
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
-                              <EditableCell
-                                value={ingredient.sku ?? ''}
-                                onSave={(value) => handleUpdateIngredient(ingredient.ingredient_id, { sku: value || null })}
-                                displayValue={ingredient.sku ?? '-'}
-                              />
+                              {editingIngredient === ingredient.ingredient_id ? (
+                                <input
+                                  type="text"
+                                  value={editData[ingredient.ingredient_id]?.sku ?? ingredient.sku ?? ''}
+                                  onChange={(e) =>
+                                    setEditData({
+                                      ...editData,
+                                      [ingredient.ingredient_id]: {
+                                        ...editData[ingredient.ingredient_id],
+                                        sku: e.target.value || null,
+                                      },
+                                    })
+                                  }
+                                  placeholder="e.g., SKU-001"
+                                  className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                />
+                              ) : (
+                                ingredient.sku ?? '-'
+                              )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              <EditableCell
-                                value={ingredient.pack_size.toString()}
-                                onSave={(value) => handleUpdateIngredient(ingredient.ingredient_id, { pack_size: parseFloat(value) })}
-                                type="number"
-                                className="text-right"
-                              />
-                            </td>
-                            <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              <EditableCell
-                                value={ingredient.price_per_pack.toString()}
-                                onSave={(value) => handleUpdateIngredient(ingredient.ingredient_id, { price_per_pack: parseFloat(value) })}
-                                type="number"
-                                className="text-right"
-                                displayValue={formatCurrency(ingredient.price_per_pack)}
-                              />
-                            </td>
-                            <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              <EditableCell
-                                value={ingredient.cost_per_unit.toString()}
-                                onSave={(value) => handleUpdateIngredient(ingredient.ingredient_id, { cost_per_unit: parseFloat(value) })}
-                                type="number"
-                                className="text-right"
-                                displayValue={formatCurrency(ingredient.cost_per_unit)}
-                              />
+                              {editingIngredient === ingredient.ingredient_id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={editData[ingredient.ingredient_id]?.pack_size ?? ingredient.pack_size}
+                                  onChange={(e) =>
+                                    setEditData({
+                                      ...editData,
+                                      [ingredient.ingredient_id]: {
+                                        ...editData[ingredient.ingredient_id],
+                                        pack_size: parseFloat(e.target.value),
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                                />
+                              ) : (
+                                ingredient.pack_size
+                              )}
                             </td>
                             <td className="py-3 px-2">
-                              <select
-                                value={ingredient.pack_unit}
-                                onChange={(e) => handleUpdateIngredient(ingredient.ingredient_id, { pack_unit: e.target.value })}
-                                className="px-1 py-0.5 text-sm border border-zinc-200 dark:border-zinc-700 rounded bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-700 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
-                              >
-                                {UNIT_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.value}
-                                  </option>
-                                ))}
-                              </select>
+                              {editingIngredient === ingredient.ingredient_id ? (
+                                <select
+                                  value={editData[ingredient.ingredient_id]?.pack_unit ?? ingredient.pack_unit}
+                                  onChange={(e) =>
+                                    setEditData({
+                                      ...editData,
+                                      [ingredient.ingredient_id]: {
+                                        ...editData[ingredient.ingredient_id],
+                                        pack_unit: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 w-full"
+                                >
+                                  {UNIT_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                ingredient.pack_unit
+                              )}
+                            </td>
+                            <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
+                              {editingIngredient === ingredient.ingredient_id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={editData[ingredient.ingredient_id]?.price_per_pack ?? ingredient.price_per_pack}
+                                  onChange={(e) =>
+                                    setEditData({
+                                      ...editData,
+                                      [ingredient.ingredient_id]: {
+                                        ...editData[ingredient.ingredient_id],
+                                        price_per_pack: parseFloat(e.target.value),
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                                />
+                              ) : (
+                                formatCurrency(ingredient.price_per_pack)
+                              )}
+                            </td>
+                            <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
+                              {editingIngredient === ingredient.ingredient_id
+                                ? formatCurrency(
+                                    calculateUnitCost(
+                                      editData[ingredient.ingredient_id]?.pack_size ?? ingredient.pack_size,
+                                      editData[ingredient.ingredient_id]?.price_per_pack ?? ingredient.price_per_pack
+                                    )
+                                  )
+                                : formatCurrency(ingredient.cost_per_unit)}
                             </td>
                             <td className="py-3 px-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteIngredient(ingredient.ingredient_id)}
-                                disabled={removeIngredientMutation.isPending}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="relative group/menu">
+                                {/* Three dots button */}
+                                <button className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 p-1">
+                                  <MoreVertical className="h-4 w-4" />
+                                </button>
+
+                                {/* Dropdown menu */}
+                                <div className="absolute right-0 top-full mt-0 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-md shadow-lg opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
+                                  {editingIngredient === ingredient.ingredient_id ? (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingIngredient(null);
+                                          setEditData({});
+                                        }}
+                                        disabled={updateIngredientMutation.isPending}
+                                        className="w-full justify-start text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded-none first:rounded-t-md h-8 px-3"
+                                      >
+                                        <X className="h-4 w-4 mr-2" />
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          const dataToSave = editData[ingredient.ingredient_id];
+                                          if (dataToSave) {
+                                            const packSize = dataToSave.pack_size ?? ingredient.pack_size;
+                                            const pricePerPack = dataToSave.price_per_pack ?? ingredient.price_per_pack;
+                                            const calculatedCost = packSize > 0 ? pricePerPack / packSize : 0;
+                                            handleUpdateIngredient(ingredient.ingredient_id, {
+                                              ...dataToSave,
+                                              cost_per_unit: calculatedCost,
+                                            });
+                                            setEditingIngredient(null);
+                                            setEditData({});
+                                          }
+                                        }}
+                                        disabled={updateIngredientMutation.isPending}
+                                        className="w-full justify-start text-green-600 hover:text-green-700 dark:hover:text-green-400 rounded-none last:rounded-b-md h-8 px-3"
+                                      >
+                                        <Check className="h-4 w-4 mr-2" />
+                                        Save
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingIngredient(ingredient.ingredient_id);
+                                          setEditData({
+                                            [ingredient.ingredient_id]: {
+                                              sku: ingredient.sku,
+                                              pack_size: ingredient.pack_size,
+                                              price_per_pack: ingredient.price_per_pack,
+                                              pack_unit: ingredient.pack_unit,
+                                            },
+                                          });
+                                        }}
+                                        className="w-full justify-start text-[hsl(var(--primary))] hover:opacity-80 rounded-none first:rounded-t-md h-8 px-3"
+                                      >
+                                        <EditIcon className="h-4 w-4 mr-2" />
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteIngredient(ingredient.ingredient_id)}
+                                        disabled={removeIngredientMutation.isPending}
+                                        className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 rounded-none last:rounded-b-md h-8 px-3"
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </td>
                           </tr>
                         ))}
