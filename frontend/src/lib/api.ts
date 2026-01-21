@@ -164,6 +164,20 @@ export async function getRecipeImages(
   return fetchApi<RecipeImage[]>(`/recipe-images/${recipeId}`);
 }
 
+export async function getMainRecipeImage(
+  recipeId: number
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/main/${recipeId}`);
+}
+
+export async function setMainRecipeImage(
+  imageId: number
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/main/${imageId}`, {
+    method: 'PATCH',
+  });
+}
+
 // ============ Recipe Ingredients ============
 
 export async function getRecipeIngredients(

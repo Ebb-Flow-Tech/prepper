@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2 } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
@@ -59,6 +59,7 @@ export function OverviewTab() {
   const { data: allRecipes } = useRecipes();
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
+  const { data: mainImage } = useMainRecipeImage(selectedRecipeId);
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -112,9 +113,9 @@ export function OverviewTab() {
                 <div className="flex items-start gap-6">
                   {/* Recipe hero image with edit button */}
                   <div className="relative shrink-0 group">
-                    {recipe.image_url ? (
+                    {mainImage?.image_url ? (
                       <img
-                        src={recipe.image_url}
+                        src={mainImage.image_url}
                         alt={recipe.name}
                         className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover"
                       />

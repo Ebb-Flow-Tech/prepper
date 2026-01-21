@@ -272,3 +272,131 @@ def test_subsequent_images_not_main(client: TestClient, sample_recipe):
 
     image = response.json()
     assert image["is_main"] is False
+
+
+def test_get_main_recipe_image(client: TestClient, sample_recipe):
+    """Test retrieving the main image for a recipe."""
+    recipe_id = sample_recipe["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add three images
+    response1 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image1_id = response1.json()["id"]
+
+    client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+
+    client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+
+    # Get main image
+    response = client.get(f"/api/v1/recipe-images/main/{recipe_id}")
+    assert response.status_code == 200
+    main_image = response.json()
+    assert main_image["id"] == image1_id
+    assert main_image["is_main"] is True
+
+
+def test_get_main_image_not_found(client: TestClient):
+    """Test getting main image for recipe with no images."""
+    response = client.get("/api/v1/recipe-images/main/99999")
+    assert response.status_code == 404
+    assert "No main image found" in response.json()["detail"]
+
+
+def test_set_image_as_main(client: TestClient, sample_recipe):
+    """Test setting an image as the main image."""
+    recipe_id = sample_recipe["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add three images
+    response1 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image1_id = response1.json()["id"]
+
+    response2 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image2_id = response2.json()["id"]
+
+    response3 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image3_id = response3.json()["id"]
+
+    # Verify image1 is main initially
+    response = client.get(f"/api/v1/recipe-images/main/{recipe_id}")
+    assert response.json()["id"] == image1_id
+
+    # Set image3 as main
+    response = client.patch(f"/api/v1/recipe-images/main/{image3_id}")
+    assert response.status_code == 200
+    updated_image = response.json()
+    assert updated_image["id"] == image3_id
+    assert updated_image["is_main"] is True
+
+    # Verify image3 is now main
+    response = client.get(f"/api/v1/recipe-images/main/{recipe_id}")
+    assert response.json()["id"] == image3_id
+
+    # Verify image1 is no longer main
+    response = client.get(f"/api/v1/recipe-images/{recipe_id}")
+    images = response.json()
+    for image in images:
+        if image["id"] == image1_id:
+            assert image["is_main"] is False
+        elif image["id"] == image3_id:
+            assert image["is_main"] is True
+        else:
+            assert image["is_main"] is False
+
+
+def test_set_main_image_nonexistent(client: TestClient):
+    """Test setting a non-existent image as main."""
+    response = client.patch("/api/v1/recipe-images/main/99999")
+    assert response.status_code == 404
+    assert "Image not found" in response.json()["detail"]
+
+
+def test_set_main_image_multiple_times(client: TestClient, sample_recipe):
+    """Test setting different images as main multiple times."""
+    recipe_id = sample_recipe["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add two images
+    response1 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image1_id = response1.json()["id"]
+
+    response2 = client.post(
+        f"/api/v1/recipe-images/{recipe_id}",
+        json={"image_base64": base64_image},
+    )
+    image2_id = response2.json()["id"]
+
+    # Set image2 as main
+    client.patch(f"/api/v1/recipe-images/main/{image2_id}")
+
+    # Verify image2 is main
+    response = client.get(f"/api/v1/recipe-images/main/{recipe_id}")
+    assert response.json()["id"] == image2_id
+
+    # Set image1 as main again
+    client.patch(f"/api/v1/recipe-images/main/{image1_id}")
+
+    # Verify image1 is main
+    response = client.get(f"/api/v1/recipe-images/main/{recipe_id}")
+    assert response.json()["id"] == image1_id

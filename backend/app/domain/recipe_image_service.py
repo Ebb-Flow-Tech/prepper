@@ -150,6 +150,22 @@ class RecipeImageService:
         self.session.commit()
         return None
 
+    def get_main_image(self, recipe_id: int) -> RecipeImage | None:
+        """
+        Get the main image for a recipe.
+
+        Args:
+            recipe_id: Recipe ID
+
+        Returns:
+            RecipeImage instance or None if no main image exists
+        """
+        statement = select(RecipeImage).where(
+            RecipeImage.recipe_id == recipe_id,
+            RecipeImage.is_main == True,
+        )
+        return self.session.exec(statement).first()
+
     def _reorder_images(self, recipe_id: int) -> None:
         """
         Reorder all images for a recipe sequentially.

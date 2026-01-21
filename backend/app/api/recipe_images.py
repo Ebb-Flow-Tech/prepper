@@ -70,6 +70,55 @@ async def add_recipe_image(
     return image
 
 
+@router.get("/main/{recipe_id}", response_model=RecipeImage | None)
+def get_main_recipe_image(
+    recipe_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get the main (preferred) image for a recipe."""
+    service = RecipeImageService(session)
+    image = service.get_main_image(recipe_id)
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No main image found for recipe",
+        )
+    return image
+
+
+class SetMainImageRequest(BaseModel):
+    """Request body for setting an image as main."""
+
+    pass
+
+
+@router.patch("/main/{image_id}", response_model=RecipeImage)
+def set_main_image(
+    image_id: int,
+    session: Session = Depends(get_session),
+):
+    """Set an image as the main (preferred) image for its recipe."""
+    service = RecipeImageService(session)
+
+    # Get the image to find the recipe_id
+    image = service.get_image(image_id)
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image not found",
+        )
+
+    # Set as main
+    updated_image = service.set_main_image(image.recipe_id, image_id)
+    if not updated_image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Failed to set image as main",
+        )
+
+    return updated_image
+
+
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_recipe_image(
     image_id: int,

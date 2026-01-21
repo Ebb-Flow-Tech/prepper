@@ -151,3 +151,24 @@ export function useUploadRecipeImage() {
     },
   });
 }
+
+export function useMainRecipeImage(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-main-image', recipeId],
+    queryFn: () => api.getMainRecipeImage(recipeId!),
+    enabled: recipeId !== null,
+  });
+}
+
+export function useSetMainRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (imageId: number) => api.setMainRecipeImage(imageId),
+    onSuccess: (data) => {
+      // Invalidate queries related to this recipe's images and main image
+      queryClient.invalidateQueries({ queryKey: ['recipe-images', data.recipe_id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe-main-image', data.recipe_id] });
+    },
+  });
+}
