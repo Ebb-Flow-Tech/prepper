@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
@@ -27,7 +27,7 @@ import {
   useSubRecipes,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
-import { Button, Input, Select, ConfirmModal } from '@/components/ui';
+import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus } from '@/types';
 import { RightPanel } from '../RightPanel';
@@ -266,7 +266,17 @@ function StagedIngredientCard({
       <div className="game-card-body">
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
             <input
               type="number"
               value={staged.quantity}
@@ -423,7 +433,17 @@ function StagedRecipeCard({
       <div className="game-card-body">
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
             <input
               type="number"
               value={staged.quantity}
@@ -612,6 +632,8 @@ function CanvasContent({
   hasSelectedRecipe,
   isOwner,
   gridConfig,
+  isDragDropEnabled,
+  onDragDropEnabledChange,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -635,6 +657,8 @@ function CanvasContent({
   hasSelectedRecipe: boolean;
   isOwner: boolean;
   gridConfig: ReturnType<typeof getGridConfig>;
+  isDragDropEnabled: boolean;
+  onDragDropEnabledChange: (enabled: boolean) => void;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -695,6 +719,13 @@ function CanvasContent({
               />
               <span className="text-sm text-zinc-500">Public</span>
             </label>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={isDragDropEnabled}
+                onChange={(e) => onDragDropEnabledChange(e.currentTarget.checked)}
+              />
+              <span className="text-sm text-zinc-500">Drag & Drop</span>
+            </div>
           </div>
         </div>
 
@@ -768,7 +799,7 @@ function CanvasContent({
 
 export function CanvasTab() {
   const router = useRouter();
-  const { userId, selectedRecipeId, userType } = useAppState();
+  const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled } = useAppState();
   const { data: recipes } = useRecipes();
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
@@ -818,6 +849,75 @@ export function CanvasTab() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Handle custom events from RightPanel "Add" buttons
+  useEffect(() => {
+    const handleAddIngredient = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { ingredient } = customEvent.detail;
+
+      // Check if ingredient already exists on canvas
+      const existingIndex = stagedIngredients.findIndex(
+        (s) => s.ingredient.id === ingredient.id
+      );
+
+      if (existingIndex >= 0) {
+        // Increment quantity of existing ingredient
+        setStagedIngredients((prev) =>
+          prev.map((item, idx) =>
+            idx === existingIndex
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        );
+        toast.success(`Increased ${ingredient.name} quantity`);
+      } else {
+        // Add new ingredient
+        const newStaged: StagedIngredient = {
+          id: `ing-${Date.now()}-${Math.random()}`,
+          ingredient,
+          quantity: 1,
+          x: 0,
+          y: 0,
+        };
+        setStagedIngredients((prev) => [...prev, newStaged]);
+        toast.success(`Added ${ingredient.name} to canvas`);
+      }
+    };
+
+    const handleAddRecipe = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { recipe } = customEvent.detail;
+
+      // Check if recipe is already staged
+      const alreadyStaged = stagedRecipes.some(
+        (s) => s.recipe.id === recipe.id
+      );
+      if (alreadyStaged) {
+        toast.error(`${recipe.name} is already on the canvas`);
+        return;
+      }
+
+      // Add new recipe
+      const newStaged: StagedRecipe = {
+        id: `rec-${Date.now()}-${Math.random()}`,
+        recipe,
+        quantity: 1,
+        x: 0,
+        y: 0,
+      };
+      setStagedRecipes((prev) => [...prev, newStaged]);
+      toast.success(`Added ${recipe.name} to canvas`);
+    };
+
+    window.addEventListener('canvas-add-ingredient', handleAddIngredient);
+    window.addEventListener('canvas-add-recipe', handleAddRecipe);
+
+    return () => {
+      window.removeEventListener('canvas-add-ingredient', handleAddIngredient);
+      window.removeEventListener('canvas-add-recipe', handleAddRecipe);
+    };
+  }, [stagedIngredients, stagedRecipes]);
 
   // Initialize auto-flow layout hook with responsive config
   const totalItems = stagedIngredients.length + stagedRecipes.length;
@@ -1548,60 +1648,73 @@ export function CanvasTab() {
     setCanvasHasUnsavedChanges(hasUnsavedChanges);
   }, [hasUnsavedChanges, setCanvasHasUnsavedChanges]);
 
+  const canvasContent = (
+    <CanvasContent
+      stagedIngredients={stagedIngredients}
+      stagedRecipes={stagedRecipes}
+      metadata={metadata}
+      onMetadataChange={handleMetadataChange}
+      onRemoveIngredient={handleRemoveIngredient}
+      onRemoveRecipe={handleRemoveRecipe}
+      onIngredientQuantityChange={handleIngredientQuantityChange}
+      onRecipeQuantityChange={handleRecipeQuantityChange}
+      onSubmit={handleSubmitClick}
+      onFork={handleForkClick}
+      onReset={handleReset}
+      onClearAll={handleClearAll}
+      isSubmitting={isSubmitting}
+      isForking={isForking}
+      canvasRef={canvasRef}
+      rootRecipeName={(() => {
+        const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
+        if (!selectedRecipe?.root_id) return null;
+        return recipes?.find((r) => r.id === selectedRecipe.root_id)?.name ?? null;
+      })()}
+      currentVersion={(() => {
+        const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
+        return selectedRecipe?.version ?? null;
+      })()}
+      allRecipes={recipes}
+      hasUnsavedChanges={hasUnsavedChanges}
+      hasSelectedRecipe={selectedRecipeId !== null}
+      isOwner={(() => {
+        if (userType === 'admin') return true; // Admins bypass ownership restrictions
+        if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
+        const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
+        return selectedRecipe?.owner_id === userId;
+      })()}
+      gridConfig={gridConfig}
+      isDragDropEnabled={isDragDropEnabled}
+      onDragDropEnabledChange={setIsDragDropEnabled}
+    />
+  );
+
   return (
     <>
-      <DndContext
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <CanvasContent
-          stagedIngredients={stagedIngredients}
-          stagedRecipes={stagedRecipes}
-          metadata={metadata}
-          onMetadataChange={handleMetadataChange}
-          onRemoveIngredient={handleRemoveIngredient}
-          onRemoveRecipe={handleRemoveRecipe}
-          onIngredientQuantityChange={handleIngredientQuantityChange}
-          onRecipeQuantityChange={handleRecipeQuantityChange}
-          onSubmit={handleSubmitClick}
-          onFork={handleForkClick}
-          onReset={handleReset}
-          onClearAll={handleClearAll}
-          isSubmitting={isSubmitting}
-          isForking={isForking}
-          canvasRef={canvasRef}
-          rootRecipeName={(() => {
-            const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
-            if (!selectedRecipe?.root_id) return null;
-            return recipes?.find((r) => r.id === selectedRecipe.root_id)?.name ?? null;
-          })()}
-          currentVersion={(() => {
-            const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
-            return selectedRecipe?.version ?? null;
-          })()}
-          allRecipes={recipes}
-          hasUnsavedChanges={hasUnsavedChanges}
-          hasSelectedRecipe={selectedRecipeId !== null}
-          isOwner={(() => {
-            if (userType === 'admin') return true; // Admins bypass ownership restrictions
-            if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
-            const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
-            return selectedRecipe?.owner_id === userId;
-          })()}
-          gridConfig={gridConfig}
-        />
-        <RightPanel />
-        <DragOverlay>
-          {activeDragItem && (
-            <DragOverlayContent
-              item={activeDragItem}
-              stagedIngredients={stagedIngredients}
-              stagedRecipes={stagedRecipes}
-            />
-          )}
-        </DragOverlay>
-      </DndContext>
+      {isDragDropEnabled ? (
+        <DndContext
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {canvasContent}
+          <RightPanel />
+          <DragOverlay>
+            {activeDragItem && (
+              <DragOverlayContent
+                item={activeDragItem}
+                stagedIngredients={stagedIngredients}
+                stagedRecipes={stagedRecipes}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <>
+          {canvasContent}
+          <RightPanel />
+        </>
+      )}
 
       <ConfirmModal
         isOpen={showSubmitModal}

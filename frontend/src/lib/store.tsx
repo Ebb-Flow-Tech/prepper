@@ -43,6 +43,7 @@ interface AppState {
   canvasTab: CanvasTab;
   ingredientTab: IngredientTab;
   canvasHasUnsavedChanges: boolean;
+  isDragDropEnabled: boolean;
   userId: string | null;
   jwt: string | null;
   userType: 'normal' | 'admin' | null;
@@ -54,6 +55,7 @@ interface AppContextValue extends AppState {
   setCanvasTab: (tab: CanvasTab) => void;
   setIngredientTab: (tab: IngredientTab) => void;
   setCanvasHasUnsavedChanges: (hasChanges: boolean) => void;
+  setIsDragDropEnabled: (enabled: boolean) => void;
   setUserId: (id: string | null) => void;
   setJwt: (jwt: string | null) => void;
   setUserType: (userType: 'normal' | 'admin' | null) => void;
@@ -71,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     canvasTab: 'canvas',
     ingredientTab: 'ingredients',
     canvasHasUnsavedChanges: false,
+    isDragDropEnabled: true,
     userId: null,
     jwt: null,
     userType: null
@@ -119,6 +122,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, canvasHasUnsavedChanges: hasChanges }));
   }, []);
 
+  const setIsDragDropEnabled = useCallback((enabled: boolean) => {
+    setState((prev) => ({ ...prev, isDragDropEnabled: enabled }));
+  }, []);
+
   const setUserId = useCallback((id: string | null) => {
     setState((prev) => ({ ...prev, userId: id }));
   }, []);
@@ -148,6 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCanvasTab,
         setIngredientTab,
         setCanvasHasUnsavedChanges,
+        setIsDragDropEnabled,
         setUserId,
         setJwt,
         setUserType,

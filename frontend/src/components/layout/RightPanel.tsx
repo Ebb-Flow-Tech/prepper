@@ -27,10 +27,21 @@ const UNIT_OPTIONS = [
 ];
 
 function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
+  const { isDragDropEnabled } = useAppState();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `ingredient-${ingredient.id}`,
     data: { ingredient, type: 'ingredient' },
+    disabled: !isDragDropEnabled,
   });
+
+  const handleAddClick = () => {
+    // Dispatch custom event for CanvasTab to listen to
+    window.dispatchEvent(
+      new CustomEvent('canvas-add-ingredient', {
+        detail: { ingredient },
+      })
+    );
+  };
 
   return (
     <div
@@ -55,16 +66,25 @@ function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
       {/* Title Banner */}
       <div className="game-card-title">
         <div className="flex items-center gap-2">
-          <button
-            {...listeners}
-            {...attributes}
-            className="cursor-grab touch-none text-blue-300 hover:text-blue-100 active:cursor-grabbing"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
+          {isDragDropEnabled && (
+            <button
+              {...listeners}
+              {...attributes}
+              className="cursor-grab touch-none text-blue-300 hover:text-blue-100 active:cursor-grabbing"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
           <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
             {ingredient.name}
           </h3>
+          <button
+            onClick={handleAddClick}
+            className="ml-auto p-1 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+            aria-label="Add to canvas"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
         </div>
       </div>
 
@@ -84,14 +104,27 @@ function DraggableIngredientCard({ ingredient }: { ingredient: Ingredient }) {
 }
 
 function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
-  const { selectedRecipeId } = useAppState();
+  const { selectedRecipeId, isDragDropEnabled } = useAppState();
   const isCurrentRecipe = recipe.id === selectedRecipeId;
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `recipe-${recipe.id}`,
     data: { recipe, type: 'recipe' },
-    disabled: isCurrentRecipe,
+    disabled: isCurrentRecipe || !isDragDropEnabled,
   });
+
+  const handleAddClick = () => {
+    if (isCurrentRecipe) {
+      toast.warning('Cannot add this recipe to itself');
+      return;
+    }
+    // Dispatch custom event for CanvasTab to listen to
+    window.dispatchEvent(
+      new CustomEvent('canvas-add-recipe', {
+        detail: { recipe },
+      })
+    );
+  };
 
   return (
     <div
@@ -127,20 +160,30 @@ function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
       {/* Title Banner */}
       <div className="game-card-title">
         <div className="flex items-center gap-2">
-          <button
-            {...listeners}
-            {...attributes}
-            className={cn(
-              'touch-none text-green-300 hover:text-green-100',
-              isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
-            )}
-            disabled={isCurrentRecipe}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
+          {isDragDropEnabled && (
+            <button
+              {...listeners}
+              {...attributes}
+              className={cn(
+                'touch-none text-green-300 hover:text-green-100',
+                isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+              )}
+              disabled={isCurrentRecipe}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
           <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
             {recipe.name}
           </h3>
+          <button
+            onClick={handleAddClick}
+            disabled={isCurrentRecipe}
+            className="ml-auto p-1 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Add to canvas"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
         </div>
       </div>
 
