@@ -3,3 +3,4 @@ export { TopAppBar } from './TopAppBar';
 export { LeftPanel } from './LeftPanel';
 export { RightPanel } from './RightPanel';
 export { RecipeCanvas } from './RecipeCanvas';
+export { CanvasLayout } from './CanvasLayout';

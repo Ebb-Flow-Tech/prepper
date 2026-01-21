@@ -1154,25 +1154,33 @@ export function CanvasTab() {
       const customEvent = event as CustomEvent;
       const { recipe } = customEvent.detail;
 
-      // Check if recipe is already staged
-      const alreadyStaged = stagedRecipes.some(
+      // Check if recipe already exists on canvas
+      const existingIndex = stagedRecipes.findIndex(
         (s) => s.recipe.id === recipe.id
       );
-      if (alreadyStaged) {
-        toast.error(`${recipe.name} is already on the canvas`);
-        return;
-      }
 
-      // Add new recipe
-      const newStaged: StagedRecipe = {
-        id: `rec-${Date.now()}-${Math.random()}`,
-        recipe,
-        quantity: 1,
-        x: 0,
-        y: 0,
-      };
-      setStagedRecipes((prev) => [...prev, newStaged]);
-      toast.success(`Added ${recipe.name} to canvas`);
+      if (existingIndex >= 0) {
+        // Increment quantity of existing recipe
+        setStagedRecipes((prev) =>
+          prev.map((item, idx) =>
+            idx === existingIndex
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        );
+        toast.success(`Increased ${recipe.name} quantity`);
+      } else {
+        // Add new recipe
+        const newStaged: StagedRecipe = {
+          id: `rec-${Date.now()}-${Math.random()}`,
+          recipe,
+          quantity: 1,
+          x: 0,
+          y: 0,
+        };
+        setStagedRecipes((prev) => [...prev, newStaged]);
+        toast.success(`Added ${recipe.name} to canvas`);
+      }
     };
 
     window.addEventListener('canvas-add-ingredient', handleAddIngredient);
@@ -1321,7 +1329,7 @@ export function CanvasTab() {
         ...calculatePosition(index),
       }))
     );
-  }, [stagedIngredients.length, gridColumns]); // Only depend on column count, not calculatePosition
+  }, [stagedIngredients.length, gridColumns, loadedRecipeId]); // Also depend on loadedRecipeId to trigger recalc after recipe reload
 
   // Recalculate recipe positions when items change or grid columns change (offset by ingredient count)
   useEffect(() => {
@@ -1333,7 +1341,7 @@ export function CanvasTab() {
         ...calculatePosition(offset + index),
       }))
     );
-  }, [stagedRecipes.length, stagedIngredients.length, gridColumns]); // Only depend on column count, not calculatePosition
+  }, [stagedRecipes.length, stagedIngredients.length, gridColumns, loadedRecipeId]); // Also depend on loadedRecipeId to trigger recalc after recipe reload
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as {
@@ -1399,24 +1407,33 @@ export function CanvasTab() {
       }
 
       if (dragItem.type === 'panel-recipe') {
-        // Check if trying to add a recipe that's already staged
-        const alreadyStaged = stagedRecipes.some(
+        // Check if recipe already exists on canvas
+        const existingIndex = stagedRecipes.findIndex(
           (s) => s.recipe.id === dragItem.recipe.id
         );
-        if (alreadyStaged) {
-          toast.error(`${dragItem.recipe.name} is already on the canvas`);
-          return;
-        }
 
-        const newStaged: StagedRecipe = {
-          id: `rec-${Date.now()}-${Math.random()}`,
-          recipe: dragItem.recipe,
-          quantity: 1,
-          x: 0, // Placeholder - will be set by position recalculation effect
-          y: 0,
-        };
-        setStagedRecipes((prev) => [...prev, newStaged]);
-        toast.success(`Added ${dragItem.recipe.name} to canvas`);
+        if (existingIndex >= 0) {
+          // Increment quantity of existing recipe
+          setStagedRecipes((prev) =>
+            prev.map((item, idx) =>
+              idx === existingIndex
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            )
+          );
+          toast.success(`Increased ${dragItem.recipe.name} quantity`);
+        } else {
+          // Add new recipe - position will be calculated by effect
+          const newStaged: StagedRecipe = {
+            id: `rec-${Date.now()}-${Math.random()}`,
+            recipe: dragItem.recipe,
+            quantity: 1,
+            x: 0, // Placeholder - will be set by position recalculation effect
+            y: 0,
+          };
+          setStagedRecipes((prev) => [...prev, newStaged]);
+          toast.success(`Added ${dragItem.recipe.name} to canvas`);
+        }
       }
     },
     [activeDragItem, stagedIngredients, stagedRecipes]
@@ -1608,8 +1625,8 @@ export function CanvasTab() {
 
       toast.success(`Recipe forked successfully! Version ${version} created.`);
 
-      // Redirect to the new recipe in canvas
-      router.push(`/?recipe=${newRecipe.id}`);
+      // Redirect to the new recipe
+      router.push(`/recipes/${newRecipe.id}`);
     } catch {
       toast.error('Failed to fork recipe');
     } finally {
@@ -1812,7 +1829,7 @@ export function CanvasTab() {
         toast.success('Recipe created successfully!');
 
         // Redirect to the new recipe
-        router.push(`/?recipe=${newRecipe.id}`);
+        router.push(`/recipes/${newRecipe.id}`);
       }
     } catch {
       toast.error(selectedRecipeId ? 'Failed to update recipe' : 'Failed to create recipe');
