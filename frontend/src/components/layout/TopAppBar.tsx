@@ -11,6 +11,7 @@ const CANVAS_TABS: { id: CanvasTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'costs', label: 'Costs' },
+  { id: 'outlets', label: 'Outlets' },
   { id: 'instructions', label: 'Instructions' },
   { id: 'tasting', label: 'Tasting' },
   { id: 'versions', label: 'Iterations' },

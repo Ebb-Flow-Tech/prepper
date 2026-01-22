@@ -8,4 +8,5 @@ export * from './useSubRecipes';
 export * from './useTastings';
 export * from './useCategories';
 export * from './useOutlets';
+export * from './useRecipeOutlets';
 export * from './useAgents';

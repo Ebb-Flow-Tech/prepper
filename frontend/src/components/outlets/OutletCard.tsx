@@ -1,18 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Edit2, Archive, ArchiveRestore, Store } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import type { Outlet } from '@/types';
 
 interface OutletCardProps {
   outlet: Outlet;
-  onEdit?: (outlet: Outlet) => void;
   onArchive?: (outlet: Outlet) => void;
   onUnarchive?: (outlet: Outlet) => void;
 }
 
-export function OutletCard({ outlet, onEdit, onArchive, onUnarchive }: OutletCardProps) {
+export function OutletCard({ outlet, onArchive, onUnarchive }: OutletCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   const typeLabel = outlet.outlet_type === 'brand' ? 'Brand' : 'Location';
@@ -57,17 +57,13 @@ export function OutletCard({ outlet, onEdit, onArchive, onUnarchive }: OutletCar
       {/* Quick Actions */}
       {showActions && (
         <div className="absolute top-2 right-2 flex items-center gap-1 bg-white dark:bg-zinc-950 rounded-md shadow-sm border border-zinc-200 dark:border-zinc-800 p-1">
-          {onEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onEdit(outlet)}
-              title="Edit"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <Link
+            href={`/outlets/${outlet.id}`}
+            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
+            title="Edit"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </Link>
           {onArchive && outlet.is_active && (
             <Button
               variant="ghost"

@@ -498,3 +498,25 @@ export interface UpdateOutletRequest {
   parent_outlet_id?: number | null;
   is_active?: boolean;
 }
+
+// ============ Recipe-Outlet Types ============
+
+export interface RecipeOutlet {
+  recipe_id: number;
+  outlet_id: number;
+  is_active: boolean;
+  price_override: number | null;
+  created_at: string;
+}
+
+export interface CreateRecipeOutletRequest {
+  recipe_id: number;
+  outlet_id: number;
+  is_active?: boolean;
+  price_override?: number | null;
+}
+
+export interface UpdateRecipeOutletRequest {
+  is_active?: boolean;
+  price_override?: number | null;
+}

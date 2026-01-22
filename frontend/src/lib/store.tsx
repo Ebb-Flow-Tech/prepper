@@ -34,7 +34,7 @@ function setStoredAuth(auth: StoredAuth) {
   }
 }
 
-export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'instructions' | 'tasting' | 'versions';
+export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'outlets' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'categories';
 export type RecipeTab = 'management' | 'outlets';
 export type CanvasViewMode = 'grid' | 'list';

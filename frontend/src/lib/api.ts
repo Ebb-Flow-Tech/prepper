@@ -44,6 +44,9 @@ import type {
   Outlet,
   CreateOutletRequest,
   UpdateOutletRequest,
+  RecipeOutlet,
+  CreateRecipeOutletRequest,
+  UpdateRecipeOutletRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -672,6 +675,48 @@ export async function updateOutlet(
 
 export async function deactivateOutlet(id: number): Promise<Outlet> {
   return fetchApi<Outlet>(`/outlets/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getOutletRecipes(outletId: number, isActive: boolean | null = null): Promise<RecipeOutlet[]> {
+  const params = new URLSearchParams();
+  if (isActive !== null) {
+    params.append('is_active', String(isActive));
+  }
+  return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/recipes?${params}`);
+}
+
+export async function getRecipeOutlets(recipeId: number): Promise<RecipeOutlet[]> {
+  return fetchApi<RecipeOutlet[]>(`/recipes/${recipeId}/outlets`);
+}
+
+export async function addRecipeToOutlet(
+  recipeId: number,
+  data: { outlet_id: number; is_active?: boolean; price_override?: number | null }
+): Promise<RecipeOutlet> {
+  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeOutlet(
+  recipeId: number,
+  outletId: number,
+  data: UpdateRecipeOutletRequest
+): Promise<RecipeOutlet> {
+  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets/${outletId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeRecipeFromOutlet(
+  recipeId: number,
+  outletId: number
+): Promise<void> {
+  return fetchApi<void>(`/recipes/${recipeId}/outlets/${outletId}`, {
     method: 'DELETE',
   });
 }

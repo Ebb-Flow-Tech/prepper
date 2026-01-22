@@ -8,6 +8,7 @@ import {
   OverviewTab,
   IngredientsTab,
   CostsTab,
+  OutletsTab,
   InstructionsTab,
   TastingTab,
   VersionsTab,
@@ -26,6 +27,8 @@ function TabContent() {
       return <IngredientsTab />;
     case 'costs':
       return <CostsTab />;
+    case 'outlets':
+      return <OutletsTab />;
     case 'instructions':
       return <InstructionsTab />;
     case 'tasting':
