@@ -92,8 +92,7 @@ export function RecipeManagementTab() {
   const handleCreate = () => {
     // Clear selected recipe and navigate to canvas for new recipe creation
     selectRecipe(null);
-    setCanvasTab('canvas');
-    router.push('/canvas');
+    router.push('/recipes/new');
   };
 
   const groupedRecipes = useMemo(() => {

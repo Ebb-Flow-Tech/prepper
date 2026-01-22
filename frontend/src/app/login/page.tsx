@@ -32,7 +32,7 @@ export default function LoginPage() {
     if (user) {
       toast.success('Login successful');
       login(user.userId, user.jwt, user.userType as 'normal' | 'admin');
-      router.push('/canvas');
+      router.push('/recipes');
     } else {
       toast.error('Incorrect email/password');
     }

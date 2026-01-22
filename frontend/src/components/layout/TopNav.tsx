@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { href: '/suppliers', label: 'Suppliers', icon: Truck },
   { href: '/recipes', label: 'Recipes', icon: BookOpen },
   { href: '/tastings', label: 'Tastings', icon: Wine },
-  { href: '/canvas', label: 'Canvas', icon: LayoutGrid },
+  { href: '/recipes/new', label: 'Canvas', icon: LayoutGrid },
   { href: '/rnd', label: 'R&D', icon: FlaskConical },
   { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/design-system', label: 'Design', icon: Palette },
