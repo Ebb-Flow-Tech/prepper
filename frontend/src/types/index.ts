@@ -109,6 +109,7 @@ export interface CreateRecipeRequest {
   name: string;
   yield_quantity?: number;
   yield_unit?: string;
+  cost_price?: number | null;
   status?: RecipeStatus;
   created_by?: string;
   is_public?: boolean;
@@ -122,6 +123,7 @@ export interface UpdateRecipeRequest {
   name?: string;
   yield_quantity?: number;
   yield_unit?: string;
+  cost_price?: number | null;
   selling_price_est?: number | null;
   instructions_raw?: string | null;
   instructions_structured?: InstructionsStructured | null;

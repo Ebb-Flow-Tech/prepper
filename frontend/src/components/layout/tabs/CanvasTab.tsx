@@ -32,6 +32,7 @@ import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus } from '@/types';
 import { RightPanel } from '../RightPanel';
+import { formatCurrency } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
 
 // Staged item with position on canvas
@@ -906,6 +907,8 @@ function CanvasContent({
   viewMode,
   onViewModeChange,
   categoryMap,
+  selectedRecipe,
+  canvasCost,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -935,6 +938,8 @@ function CanvasContent({
   viewMode: 'grid' | 'list';
   onViewModeChange: (mode: 'grid' | 'list') => void;
   categoryMap: Record<number, string>;
+  selectedRecipe?: Recipe | null;
+  canvasCost: number;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -976,6 +981,22 @@ function CanvasContent({
                 placeholder="unit"
                 className="w-24"
               />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm">
+                <span className="text-zinc-500">Batch: </span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {canvasCost > 0 ? formatCurrency(canvasCost) : '—'}
+                </span>
+              </div>
+              {metadata.yield_quantity > 0 && (
+                <div className="text-sm">
+                  <span className="text-zinc-500">Per {metadata.yield_unit}: </span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    {canvasCost > 0 ? formatCurrency(canvasCost / metadata.yield_quantity) : '—'}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-zinc-500">Status:</label>
@@ -1101,6 +1122,41 @@ function CanvasContent({
   );
 }
 
+// Calculate total cost from staged ingredients and recipes
+function calculateCanvasCost(
+  stagedIngredients: StagedIngredient[],
+  stagedRecipes: StagedRecipe[],
+  allRecipes?: Recipe[]
+) {
+  let totalCost = 0;
+
+  // Calculate cost from ingredients
+  for (const staged of stagedIngredients) {
+    const suppliers = staged.ingredient.suppliers || [];
+    const preferredSupplier = suppliers.find((s) => s.is_preferred);
+    const unitCost = preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit;
+
+    if (unitCost != null) {
+      // Apply wastage adjustment: actual_cost = cost * (1 / (1 - wastage%))
+      const wastageMultiplier = staged.wastage_percentage > 0
+        ? 1 / (1 - staged.wastage_percentage / 100)
+        : 1;
+      const adjustedCost = unitCost * wastageMultiplier;
+      totalCost += staged.quantity * adjustedCost;
+    }
+  }
+
+  // Calculate cost from sub-recipes
+  for (const staged of stagedRecipes) {
+    const recipe = allRecipes?.find((r) => r.id === staged.recipe.id);
+    if (recipe?.cost_price != null) {
+      totalCost += staged.quantity * recipe.cost_price;
+    }
+  }
+
+  return totalCost;
+}
+
 export function CanvasTab() {
   const router = useRouter();
   const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
@@ -1152,6 +1208,11 @@ export function CanvasTab() {
     const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
     return getGridConfig(screenWidth).columns;
   });
+
+  // Calculate total cost from staged items
+  const canvasCost = useMemo(() => {
+    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes);
+  }, [stagedIngredients, stagedRecipes, recipes]);
 
   // Update grid columns on resize
   useEffect(() => {
@@ -1731,6 +1792,7 @@ export function CanvasTab() {
             yield_unit: metadata.yield_unit,
             status: metadata.status,
             is_public: metadata.is_public,
+            cost_price: canvasCost,
           },
         });
 
@@ -1848,6 +1910,7 @@ export function CanvasTab() {
           name: metadata.name,
           yield_quantity: metadata.yield_quantity,
           yield_unit: metadata.yield_unit,
+          cost_price: canvasCost,
           status: metadata.status,
           created_by: userId || undefined,
           is_public: metadata.is_public,
@@ -2042,6 +2105,8 @@ export function CanvasTab() {
       viewMode={canvasViewMode}
       onViewModeChange={setCanvasViewMode}
       categoryMap={categoryMap}
+      selectedRecipe={selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null}
+      canvasCost={canvasCost}
     />
   );
 

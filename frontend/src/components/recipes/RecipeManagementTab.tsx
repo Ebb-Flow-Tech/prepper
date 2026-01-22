@@ -13,6 +13,7 @@ import type { Recipe, RecipeStatus } from '@/types';
 type GroupByOption = 'none' | 'status';
 type StatusFilter = 'all' | RecipeStatus;
 type ViewType = 'grid' | 'list';
+type SortByOption = 'price_asc' | 'price_desc';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
@@ -25,6 +26,32 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'archived', label: 'Archived' },
 ];
+
+const SORT_BY_OPTIONS = [
+  { value: 'price_asc', label: 'Price: Low to High' },
+  { value: 'price_desc', label: 'Price: High to Low' },
+];
+
+function sortRecipes(recipes: Recipe[], sortBy: SortByOption): Recipe[] {
+  const withCost: Recipe[] = [];
+  const noCost: Recipe[] = [];
+
+  recipes.forEach((recipe) => {
+    if (recipe.cost_price !== null && recipe.cost_price !== undefined) {
+      withCost.push(recipe);
+    } else {
+      noCost.push(recipe);
+    }
+  });
+
+  if (sortBy === 'price_asc') {
+    withCost.sort((a, b) => (a.cost_price ?? 0) - (b.cost_price ?? 0));
+  } else if (sortBy === 'price_desc') {
+    withCost.sort((a, b) => (b.cost_price ?? 0) - (a.cost_price ?? 0));
+  }
+
+  return [...withCost, ...noCost];
+}
 
 function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string, Recipe[]> {
   if (groupBy === 'none') {
@@ -63,12 +90,13 @@ export function RecipeManagementTab() {
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [view, setView] = useState<ViewType>('grid');
+  const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
 
   // Filter and group recipes
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
 
-    return recipes.filter((recipe) => {
+    const filtered = recipes.filter((recipe) => {
       // Filter by search
       if (search && !recipe.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
@@ -90,7 +118,9 @@ export function RecipeManagementTab() {
       }
       return true;
     });
-  }, [recipes, search, statusFilter, userId, userType]);
+
+    return sortRecipes(filtered, sortBy);
+  }, [recipes, search, statusFilter, userId, userType, sortBy]);
 
   const handleCreate = () => {
     // Clear selected recipe and navigate to canvas for new recipe creation
@@ -137,6 +167,13 @@ export function RecipeManagementTab() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortByOption)}
+              options={SORT_BY_OPTIONS}
+              className="w-44"
+            />
+
             <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}

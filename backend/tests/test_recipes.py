@@ -26,6 +26,46 @@ def test_create_recipe(client: TestClient):
     assert data["review_ready"] is False
 
 
+def test_create_recipe_with_cost_price(client: TestClient):
+    """Test creating a recipe with cost_price."""
+    response = client.post(
+        "/api/v1/recipes",
+        json={
+            "name": "Expensive Cake",
+            "yield_quantity": 10,
+            "yield_unit": "portion",
+            "cost_price": 25.50,
+            "created_by": "234",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Expensive Cake"
+    assert data["cost_price"] == 25.50
+
+
+def test_update_recipe_cost_price(client: TestClient):
+    """Test updating recipe cost_price."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Update cost_price
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={"cost_price": 15.75},
+    )
+    assert response.status_code == 200
+    assert response.json()["cost_price"] == 15.75
+
+    # Verify it persists
+    get_response = client.get(f"/api/v1/recipes/{recipe_id}")
+    assert get_response.json()["cost_price"] == 15.75
+
+
 def test_update_recipe_status(client: TestClient):
     """Test updating recipe status."""
     # Create recipe
@@ -196,6 +236,31 @@ def test_update_recipe_multiple_fields_including_review_ready(client: TestClient
     assert data["name"] == "Updated Name"
     assert data["selling_price_est"] == 15.99
     assert data["review_ready"] is True
+
+
+def test_update_recipe_multiple_fields_including_cost_price(client: TestClient):
+    """Test updating multiple fields including cost_price."""
+    # Create recipe
+    create_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Original Name", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = create_response.json()["id"]
+
+    # Update multiple fields
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={
+            "name": "Updated Name",
+            "cost_price": 25.50,
+            "selling_price_est": 49.99,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["cost_price"] == 25.50
+    assert data["selling_price_est"] == 49.99
 
 
 def test_soft_delete_recipe(client: TestClient):
