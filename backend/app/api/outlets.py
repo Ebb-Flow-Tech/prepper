@@ -27,6 +27,16 @@ def create_outlet(
 ):
     """Create a new outlet (brand or location)."""
     service = OutletService(session)
+
+    # Validate parent outlet exists if provided
+    if data.parent_outlet_id is not None:
+        parent = service.get_outlet(data.parent_outlet_id)
+        if not parent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Parent outlet not found",
+            )
+
     return service.create_outlet(data)
 
 
@@ -64,6 +74,14 @@ def update_outlet(
 ):
     """Update outlet details."""
     service = OutletService(session)
+
+    # Check for cycle before updating
+    if data.parent_outlet_id is not None and service._would_create_cycle(outlet_id, data.parent_outlet_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create circular parent-child relationship. This would form a cycle in the outlet hierarchy.",
+        )
+
     outlet = service.update_outlet(outlet_id, data)
     if not outlet:
         raise HTTPException(

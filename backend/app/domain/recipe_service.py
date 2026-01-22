@@ -134,6 +134,7 @@ class RecipeService:
                 unit_price=ri.unit_price,
                 base_unit=ri.base_unit,
                 supplier_id=ri.supplier_id,
+                wastage_percentage=ri.wastage_percentage,
             )
             self.session.add(new_ri)
 
@@ -207,7 +208,8 @@ class RecipeService:
             sort_order=next_order,
             base_unit=data.base_unit,
             unit_price=data.unit_price,
-            supplier_id=data.supplier_id
+            supplier_id=data.supplier_id,
+            wastage_percentage=data.wastage_percentage,
         )
         self.session.add(recipe_ingredient)
         self.session.commit()

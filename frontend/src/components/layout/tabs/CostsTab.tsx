@@ -50,6 +50,9 @@ function IngredientCostTable({ recipeId }: { recipeId: number }) {
             <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
               Unit Cost
             </th>
+            <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
+              Wastage %
+            </th>
             <th className="py-3 pl-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
               Line Cost
             </th>
@@ -72,6 +75,9 @@ function IngredientCostTable({ recipeId }: { recipeId: number }) {
                   ? `${formatCurrency(item.cost_per_base_unit)}/${item.base_unit}`
                   : '—'}
               </td>
+              <td className={`px-4 py-3 text-right ${item.wastage_percentage > 0 ? 'font-medium text-orange-600 dark:text-orange-400' : 'text-zinc-600 dark:text-zinc-300'}`}>
+                {item.wastage_percentage > 0 ? `${item.wastage_percentage.toFixed(1)}%` : '—'}
+              </td>
               <td className="py-3 pl-4 text-right font-medium text-zinc-900 dark:text-zinc-100">
                 {item.line_cost != null ? formatCurrency(item.line_cost) : '—'}
               </td>
@@ -82,7 +88,7 @@ function IngredientCostTable({ recipeId }: { recipeId: number }) {
           <tfoot>
             <tr className="border-t border-zinc-200 dark:border-zinc-700">
               <td
-                colSpan={3}
+                colSpan={4}
                 className="py-3 pr-4 text-right font-medium text-zinc-500 dark:text-zinc-400"
               >
                 Subtotal

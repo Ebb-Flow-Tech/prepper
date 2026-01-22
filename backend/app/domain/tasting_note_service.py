@@ -126,7 +126,8 @@ class TastingNoteService:
     def get_recipes_with_feedback(self, user_id: Optional[str] = None) -> list[Recipe]:
         """Get all unique recipes that have at least one tasting note.
 
-        Only returns recipes that are public or owned by the user.
+        Only returns recipes that are public or owned by the user, and have not been started in R&D.
+        Filters by rnd_started = False or rnd_started = None (for backward compatibility with old data).
         """
         from sqlalchemy import or_
 
@@ -144,6 +145,12 @@ class TastingNoteService:
                 or_(
                     Recipe.owner_id == user_id,
                     Recipe.is_public == True
+                )
+            )
+            .where(
+                or_(
+                    Recipe.rnd_started == False,
+                    Recipe.rnd_started == None
                 )
             )
             .order_by(Recipe.name)

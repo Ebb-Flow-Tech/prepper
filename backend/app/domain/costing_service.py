@@ -120,11 +120,18 @@ class CostingService:
                     ri.quantity, ri.unit, ri.base_unit
                 )
 
-                # Calculate line cost
-                # TO DO: should use the ingredient unit
+                # Calculate line cost with wastage adjustment
+                # Formula: line_cost = (unit_cost / (100 - wastage_percentage)) × quantity
+                # This accounts for waste: if wastage is 10%, we need 10% more material
                 line_cost = None
+                adjusted_cost_per_unit = None
+                wastage_percentage = ri.wastage_percentage or 0.0
+
                 if ri.unit_price is not None and quantity_in_base is not None:
-                    line_cost = quantity_in_base * ri.unit_price
+                    # Adjust unit price for wastage percentage
+                    wastage_factor = 1.0 / (1.0 - wastage_percentage / 100.0) if wastage_percentage < 100 else 1.0
+                    adjusted_cost_per_unit = ri.unit_price * wastage_factor
+                    line_cost = quantity_in_base * adjusted_cost_per_unit
                     ingredient_cost += line_cost
                 else:
                     missing_costs.append(ingredient.name)
@@ -138,6 +145,8 @@ class CostingService:
                         quantity_in_base_unit=quantity_in_base or ri.quantity,
                         base_unit=ri.base_unit,
                         cost_per_base_unit=ri.unit_price,
+                        wastage_percentage=wastage_percentage,
+                        adjusted_cost_per_unit=adjusted_cost_per_unit,
                         line_cost=line_cost,
                     )
                 )

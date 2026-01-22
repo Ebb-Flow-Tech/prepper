@@ -13,6 +13,8 @@ class CostBreakdownItem(SQLModel):
     quantity_in_base_unit: float
     base_unit: str
     cost_per_base_unit: float | None
+    wastage_percentage: float = 0.0
+    adjusted_cost_per_unit: float | None = None  # Cost per unit after wastage adjustment
     line_cost: float | None
 
 

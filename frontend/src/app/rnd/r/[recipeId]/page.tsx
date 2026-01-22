@@ -37,12 +37,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
+import { useRecipeOutlets } from '@/lib/hooks/useRecipeOutlets';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
-import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary } from '@/types';
+import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet } from '@/types';
 
 interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
@@ -403,6 +404,8 @@ function OverviewTab({
   tastingNotes,
   tastingSummary,
   userId,
+  outlets,
+  outletMap,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[] | undefined;
@@ -412,6 +415,8 @@ function OverviewTab({
   tastingNotes: TastingNoteWithRecipe[] | undefined;
   tastingSummary: RecipeTastingSummary | undefined;
   userId: string | null;
+  outlets: RecipeOutlet[] | undefined;
+  outletMap: Map<number, Outlet>;
 }) {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
   const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
@@ -465,34 +470,45 @@ function OverviewTab({
             )}
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                    {recipe.name}
-                  </h1>
-                  <p className="text-zinc-500 dark:text-zinc-400 mt-1">
-                    Yield: {recipe.yield_quantity} {recipe.yield_unit}
-                  </p>
-                </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                  {recipe.name}
+                </h1>
+                <p className="text-zinc-500 dark:text-zinc-400 mt-1">
+                  Yield: {recipe.yield_quantity} {recipe.yield_unit}
+                </p>
 
-                <div className="flex items-center gap-2">
-                  {userId !== null && recipe.owner_id === userId && (
-                    <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
-                  )}
-                  <Badge variant={STATUS_VARIANTS[recipe.status]}>
-                    {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
-                  </Badge>
-                  <Link href={`/canvas?recipe=${recipe.id}`}>
-                    <Button variant="outline" size="sm">
-                      {userId !== null && recipe.owner_id === userId ? (
-                        <Edit2 className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                      {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
-                    </Button>
-                  </Link>
-                </div>
+                {outlets && outlets.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {outlets.map((recipeOutlet) => {
+                      const outlet = outletMap.get(recipeOutlet.outlet_id);
+                      return (
+                        <Badge key={recipeOutlet.outlet_id} variant="secondary" className="text-xs">
+                          {outlet?.code || `Outlet #${recipeOutlet.outlet_id}`}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {userId !== null && recipe.owner_id === userId && (
+                  <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                )}
+                <Badge variant={STATUS_VARIANTS[recipe.status]}>
+                  {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+                </Badge>
+                <Link href={`/canvas?recipe=${recipe.id}`}>
+                  <Button variant="outline" size="sm">
+                    {userId !== null && recipe.owner_id === userId ? (
+                      <Edit2 className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                    {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
+                  </Button>
+                </Link>
               </div>
 
               <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -890,7 +906,7 @@ function VersionsTab({
         <div className="flex items-center gap-2 p-4 border-b border-zinc-200 dark:border-zinc-800">
           <History className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Version History
+            Iteration History
           </h2>
           <Badge variant="secondary" className="ml-auto">
             {versions.length} version{versions.length !== 1 ? 's' : ''}
@@ -955,6 +971,8 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
   const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
+  const { data: recipeOutlets } = useRecipeOutlets(recipeId);
+  const { data: allOutlets } = useOutlets();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -962,9 +980,13 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const recipeMap = new Map<number, string>();
   allRecipes?.forEach((r) => recipeMap.set(r.id, r.name));
 
+  // Create a map of outlet IDs to outlets for recipe outlet display
+  const outletMap = new Map<number, Outlet>();
+  allOutlets?.forEach((outlet) => outletMap.set(outlet.id, outlet));
+
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
-    { id: 'versions' as const, label: 'Version History', icon: History },
+    { id: 'versions' as const, label: 'Iteration History', icon: History },
   ];
 
   if (recipeError) {
@@ -1041,6 +1063,8 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 tastingNotes={tastingNotes}
                 tastingSummary={tastingSummary}
                 userId={userId}
+                outlets={recipeOutlets}
+                outletMap={outletMap}
               />
             )}
 

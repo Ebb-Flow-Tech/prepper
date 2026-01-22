@@ -54,6 +54,14 @@ class OutletService:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+
+        # Check for circular parent reference if parent_outlet_id is being updated
+        if "parent_outlet_id" in update_data and update_data["parent_outlet_id"] is not None:
+            new_parent_id = update_data["parent_outlet_id"]
+            # Check if setting this parent would create a cycle
+            if self._would_create_cycle(outlet_id, new_parent_id):
+                return None  # Will be handled as error in the API layer
+
         for key, value in update_data.items():
             setattr(outlet, key, value)
 
@@ -171,6 +179,45 @@ class OutletService:
         self.session.delete(recipe_outlet)
         self.session.commit()
         return True
+
+    # --- Helper Methods for Validation ---
+
+    def _would_create_cycle(self, outlet_id: int, potential_parent_id: int) -> bool:
+        """Check if setting potential_parent_id as parent of outlet_id would create a cycle.
+
+        When we set X as parent of Y, a cycle would be created if:
+        1. X == Y (self-reference)
+        2. Y is an ancestor of X (because then X would become ancestor of itself)
+
+        Example: If A -> B (B's parent is A), then A cannot have B as parent,
+        because that would make: A -> B -> A (cycle).
+        """
+        # Check for self-reference
+        if outlet_id == potential_parent_id:
+            return True
+
+        # Check if outlet_id is an ancestor of potential_parent_id
+        # by walking UP the parent chain from potential_parent_id
+        visited = set()
+        current = potential_parent_id
+
+        while current is not None:
+            if current in visited:
+                # Cycle already exists, shouldn't happen but catch it
+                return True
+            visited.add(current)
+
+            current_outlet = self.get_outlet(current)
+            if not current_outlet:
+                break
+
+            # If we reach outlet_id while walking up, it means outlet_id is an ancestor
+            if current_outlet.parent_outlet_id == outlet_id:
+                return True
+
+            current = current_outlet.parent_outlet_id
+
+        return False
 
     # --- Hierarchical Outlet Methods ---
 

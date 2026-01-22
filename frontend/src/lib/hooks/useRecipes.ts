@@ -72,10 +72,19 @@ export function useForkRecipe() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, newOwnerId }: { id: number; newOwnerId?: string }) =>
-      api.forkRecipe(id, newOwnerId),
+    mutationFn: async ({ id, newOwnerId }: { id: number; newOwnerId?: string }) => {
+      // Fork the recipe
+      const forkedRecipe = await api.forkRecipe(id, newOwnerId);
+
+      // Update the original recipe to set rnd_started = true
+      // Forked recipe keeps rnd_started = false by default
+      await api.updateRecipe(id, { rnd_started: true });
+
+      return forkedRecipe;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['recipes-with-feedback'] });
     },
   });
 }
@@ -126,9 +135,49 @@ export function useGenerateRecipeImage() {
     onSuccess: (data, variables) => {
       // Invalidate recipe queries if image was stored
       if (data.stored && variables.recipeId) {
-        queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
-        queryClient.invalidateQueries({ queryKey: ['recipes'] });
+        queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
       }
+    },
+  });
+}
+
+export function useRecipeImages(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-images', recipeId],
+    queryFn: () => api.getRecipeImages(recipeId!),
+    enabled: recipeId !== null,
+  });
+}
+
+export function useUploadRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ recipeId, imageBase64 }: { recipeId: number; imageBase64: string }) =>
+      api.uploadRecipeImage(recipeId, imageBase64),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
+    },
+  });
+}
+
+export function useMainRecipeImage(recipeId: number | null) {
+  return useQuery({
+    queryKey: ['recipe-main-image', recipeId],
+    queryFn: () => api.getMainRecipeImage(recipeId!),
+    enabled: recipeId !== null,
+  });
+}
+
+export function useSetMainRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (imageId: number) => api.setMainRecipeImage(imageId),
+    onSuccess: (data) => {
+      // Invalidate queries related to this recipe's images and main image
+      queryClient.invalidateQueries({ queryKey: ['recipe-images', data.recipe_id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe-main-image', data.recipe_id] });
     },
   });
 }

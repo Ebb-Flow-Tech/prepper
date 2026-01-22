@@ -18,6 +18,8 @@ const VALID_ROUTE_PATTERNS = [
   /^\/ingredients\/[^/]+$/,                  // Ingredient detail
   /^\/suppliers$/,                           // Suppliers list
   /^\/suppliers\/[^/]+$/,                    // Supplier detail
+  // /^\/outlets$/,                             // Outlets list
+  /^\/outlets\/[^/]+$/,                      // Outlet detail
   /^\/tastings$/,                            // Tastings list
   /^\/tastings\/new$/,                       // New tasting
   /^\/tastings\/[^/]+$/,                     // Tasting detail

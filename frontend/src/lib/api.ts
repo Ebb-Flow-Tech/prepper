@@ -2,6 +2,7 @@ import type {
   Recipe,
   Ingredient,
   RecipeIngredient,
+  RecipeImage,
   CostingResult,
   CreateRecipeRequest,
   UpdateRecipeRequest,
@@ -40,6 +41,12 @@ import type {
   Category,
   CreateCategoryRequest,
   UpdateCategoryRequest,
+  Outlet,
+  CreateOutletRequest,
+  UpdateOutletRequest,
+  RecipeOutlet,
+  CreateRecipeOutletRequest,
+  UpdateRecipeOutletRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -144,6 +151,36 @@ export async function updateRecipeImage(
   return fetchApi<Recipe>(`/recipes/${id}/image`, {
     method: 'PATCH',
     body: JSON.stringify(data),
+  });
+}
+
+export async function uploadRecipeImage(
+  recipeId: number,
+  imageBase64: string
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/${recipeId}`, {
+    method: 'POST',
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  });
+}
+
+export async function getRecipeImages(
+  recipeId: number
+): Promise<RecipeImage[]> {
+  return fetchApi<RecipeImage[]>(`/recipe-images/${recipeId}`);
+}
+
+export async function getMainRecipeImage(
+  recipeId: number
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/main/${recipeId}`);
+}
+
+export async function setMainRecipeImage(
+  imageId: number
+): Promise<RecipeImage> {
+  return fetchApi<RecipeImage>(`/recipe-images/main/${imageId}`, {
+    method: 'PATCH',
   });
 }
 
@@ -601,6 +638,85 @@ export async function updateCategory(
 
 export async function deactivateCategory(id: number): Promise<Category> {
   return fetchApi<Category>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Outlets ============
+
+export async function getOutlets(isActive: boolean | null = null): Promise<Outlet[]> {
+  const params = new URLSearchParams();
+  if (isActive !== null) {
+    params.append('is_active', String(isActive));
+  }
+  return fetchApi<Outlet[]>(`/outlets?${params}`);
+}
+
+export async function getOutlet(id: number): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`);
+}
+
+export async function createOutlet(data: CreateOutletRequest): Promise<Outlet> {
+  return fetchApi<Outlet>('/outlets', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateOutlet(
+  id: number,
+  data: UpdateOutletRequest
+): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateOutlet(id: number): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getOutletRecipes(outletId: number, isActive: boolean | null = null): Promise<RecipeOutlet[]> {
+  const params = new URLSearchParams();
+  if (isActive !== null) {
+    params.append('is_active', String(isActive));
+  }
+  return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/recipes?${params}`);
+}
+
+export async function getRecipeOutlets(recipeId: number): Promise<RecipeOutlet[]> {
+  return fetchApi<RecipeOutlet[]>(`/recipes/${recipeId}/outlets`);
+}
+
+export async function addRecipeToOutlet(
+  recipeId: number,
+  data: { outlet_id: number; is_active?: boolean; price_override?: number | null }
+): Promise<RecipeOutlet> {
+  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeOutlet(
+  recipeId: number,
+  outletId: number,
+  data: UpdateRecipeOutletRequest
+): Promise<RecipeOutlet> {
+  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets/${outletId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeRecipeFromOutlet(
+  recipeId: number,
+  outletId: number
+): Promise<void> {
+  return fetchApi<void>(`/recipes/${recipeId}/outlets/${outletId}`, {
     method: 'DELETE',
   });
 }

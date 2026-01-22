@@ -12,3 +12,4 @@ export { SearchInput } from './SearchInput';
 export { EditableCell } from './EditableCell';
 export { ConfirmModal } from './ConfirmModal';
 export { Modal } from './Modal';
+export { Switch } from './Switch';

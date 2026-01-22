@@ -30,7 +30,10 @@ export interface Recipe {
   version: number;
   root_id: number | null;
   image_url: string | null;
+  description: string | null;
   summary_feedback?: string | null;
+  rnd_started: boolean;
+  review_ready: boolean;
   created_at: string;
   updated_at: string;
   ingredients?: RecipeIngredient[];
@@ -48,6 +51,7 @@ export interface RecipeIngredient {
   base_unit: string | null;
   unit_price: number | null;
   supplier_id: number | null;
+  wastage_percentage: number;
   ingredient?: Ingredient;
 }
 
@@ -70,6 +74,8 @@ export interface CostingBreakdown {
   quantity_in_base_unit: number;
   base_unit: string;
   cost_per_base_unit: number | null;
+  wastage_percentage: number;
+  adjusted_cost_per_unit: number | null;
   line_cost: number | null;
 }
 
@@ -122,7 +128,20 @@ export interface UpdateRecipeRequest {
   status?: RecipeStatus;
   is_public?: boolean;
   image_url?: string | null;
+  description?: string | null;
   summary_feedback?: string | null;
+  rnd_started?: boolean;
+  review_ready?: boolean;
+}
+
+export interface RecipeImage {
+  id: number;
+  recipe_id: number;
+  image_url: string;
+  is_main: boolean;
+  order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UpdateRecipeImageRequest {
@@ -165,6 +184,7 @@ export interface AddRecipeIngredientRequest {
   base_unit: string;
   unit_price: number;
   supplier_id: number | null;
+  wastage_percentage?: number;
 }
 
 export interface UpdateRecipeIngredientRequest {
@@ -173,6 +193,7 @@ export interface UpdateRecipeIngredientRequest {
   base_unit?: string;
   unit_price?: number;
   supplier_id?: number | null;
+  wastage_percentage?: number;
 }
 
 export interface ReorderIngredientsRequest {
@@ -446,4 +467,56 @@ export interface UpdateCategoryRequest {
   name?: string;
   description?: string | null;
   is_active?: boolean;
+}
+
+// ============ Outlet Types ============
+
+export type OutletType = 'brand' | 'location';
+
+export interface Outlet {
+  id: number;
+  name: string;
+  code: string;
+  outlet_type: OutletType;
+  parent_outlet_id: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOutletRequest {
+  name: string;
+  code: string;
+  outlet_type?: OutletType;
+  parent_outlet_id?: number | null;
+}
+
+export interface UpdateOutletRequest {
+  name?: string;
+  code?: string;
+  outlet_type?: OutletType;
+  parent_outlet_id?: number | null;
+  is_active?: boolean;
+}
+
+// ============ Recipe-Outlet Types ============
+
+export interface RecipeOutlet {
+  recipe_id: number;
+  outlet_id: number;
+  is_active: boolean;
+  price_override: number | null;
+  created_at: string;
+}
+
+export interface CreateRecipeOutletRequest {
+  recipe_id: number;
+  outlet_id: number;
+  is_active?: boolean;
+  price_override?: number | null;
+}
+
+export interface UpdateRecipeOutletRequest {
+  is_active?: boolean;
+  price_override?: number | null;
 }

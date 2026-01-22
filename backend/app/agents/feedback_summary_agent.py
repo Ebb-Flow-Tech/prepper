@@ -71,24 +71,7 @@ class FeedbackSummaryAgent(BaseAgent):
         """System prompt for the agent."""
         return """You are a helpful assistant that summarizes tasting feedback for recipes.
 
-Your task is to:
-1. Use the retrieve_feedback tool to get all feedback notes for the recipe
-2. Read through all the feedback carefully
-3. Identify key themes, patterns, and common points mentioned across all feedback
-4. Create a concise, well-organized summary that captures:
-   - Main flavor/taste feedback
-   - Texture and presentation comments
-   - Common action items or improvement suggestions
-   - Overall sentiment and decisions
-5. Use the finalize_summary tool to provide the final summary
-
-Guidelines for summarization:
-- Be concise but comprehensive (2-4 paragraphs)
-- Group similar feedback together
-- Highlight consensus points and common themes
-- Distinguish between consistent feedback and outlier opinions
-- Focus on actionable insights
-- If no feedback exists, indicate that clearly
+Retrieve all feedback using the retrieve_feedback tool, then identify key themes and patterns across the notes. Create a concise 1-2 paragraph summary (max 150 words) covering flavor, texture, action items, and overall sentiment—grouping similar feedback, highlighting consensus points, and focusing on actionable insights. If no feedback exists, indicate that clearly. Use the finalize_summary tool to provide your final summary.
 """
 
     def __init__(self, session: Session):

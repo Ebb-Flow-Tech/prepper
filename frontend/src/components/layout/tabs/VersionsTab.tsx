@@ -362,7 +362,7 @@ export function VersionsTab() {
       <div className="flex items-center gap-2 p-4 border-b border-zinc-200 dark:border-zinc-800">
         <History className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Version History
+          Iteration History
         </h2>
         <Badge variant="secondary" className="ml-auto">
           {versions.length} version{versions.length !== 1 ? 's' : ''}

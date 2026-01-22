@@ -9,8 +9,8 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus } from 'lucide-react';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Grid3x3, List } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 import {
@@ -25,8 +25,10 @@ import {
   useRemoveSubRecipe,
   useRecipeIngredients,
   useSubRecipes,
+  useCategories,
 } from '@/lib/hooks';
-import { Button, Input, Select, ConfirmModal } from '@/components/ui';
+import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
+import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus } from '@/types';
 import { RightPanel } from '../RightPanel';
@@ -37,6 +39,7 @@ interface StagedIngredient {
   id: string; // unique id for this staged item
   ingredient: Ingredient;
   quantity: number;
+  wastage_percentage: number;
   x: number;
   y: number;
 }
@@ -69,6 +72,28 @@ const DEFAULT_METADATA: RecipeMetadata = {
   yield_unit: 'portion',
   status: 'draft',
   is_public: false,
+};
+
+// Grid configuration for auto-flow layout - responsive based on screen width
+const getGridConfig = (screenWidth: number) => {
+  // Adjust columns based on available width
+  // Each card is 224px + 16px gap, plus padding
+  const availableWidth = screenWidth - 40; // 40px for padding (20px each side)
+  const itemWidth = 224 + 16; // card width + gap
+
+  // Calculate how many columns fit
+  let columns = Math.floor(availableWidth / itemWidth);
+
+  // Clamp between 1 and 4 columns
+  columns = Math.max(1, Math.min(4, columns));
+
+  return {
+    columns,
+    cardWidth: 224, // w-56
+    cardGap: 16,    // gap-4
+    rowHeight: 400, // Increased to prevent overlaps (accounts for collapsed + some expanded cards)
+    padding: 20,
+  };
 };
 
 function DragOverlayContent({
@@ -179,10 +204,14 @@ function StagedIngredientCard({
   staged,
   onRemove,
   onQuantityChange,
+  onWastageChange,
+  categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
+  onWastageChange: (wastage: number) => void;
+  categoryMap: Record<number, string>;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -190,10 +219,13 @@ function StagedIngredientCard({
     data: { type: 'staged-ingredient', stagedId: staged.id },
   });
 
+  const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
+
   const style = {
     position: 'absolute' as const,
     left: staged.x,
     top: staged.y,
+    transition: isDragging ? 'none' : 'left 0.3s ease-out, top 0.3s ease-out',
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isExpanded ? 10 : 1,
@@ -240,9 +272,28 @@ function StagedIngredientCard({
 
       {/* Card Body */}
       <div className="game-card-body">
+        {/* Category Badge */}
+        {categoryName && (
+          <div className="mb-3 pb-3 border-b border-blue-400/20">
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 inline-block">
+              {categoryName}
+            </span>
+          </div>
+        )}
+
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
             <input
               type="number"
               value={staged.quantity}
@@ -286,6 +337,25 @@ function StagedIngredientCard({
               </span>
             </div>
             <div>
+              <label className="text-blue-300/60 flex items-center justify-between">
+                <span>Wastage %</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={staged.wastage_percentage}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    const value = parseFloat(e.target.value) || 0;
+                    onWastageChange(Math.min(100, Math.max(0, value)));
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+                />
+              </label>
+            </div>
+            <div>
               <span className="text-blue-300/60">Suppliers</span>
               {suppliers.length > 0 ? (
                 <ul className="mt-1 space-y-1.5">
@@ -319,6 +389,199 @@ function StagedIngredientCard({
   );
 }
 
+function StagedIngredientListItem({
+  staged,
+  onRemove,
+  onQuantityChange,
+  onWastageChange,
+  categoryMap,
+}: {
+  staged: StagedIngredient;
+  onRemove: () => void;
+  onQuantityChange: (quantity: number) => void;
+  onWastageChange: (wastage: number) => void;
+  categoryMap: Record<number, string>;
+}) {
+  const suppliers = staged.ingredient.suppliers || [];
+  const preferredSupplier = suppliers.find((s) => s.is_preferred);
+  const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
+
+  return (
+    <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 flex items-center justify-between gap-4 hover:shadow-sm transition-shadow">
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-zinc-900 dark:text-white truncate">{staged.ingredient.name}</h4>
+        <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span>Base Unit: {staged.ingredient.base_unit}</span>
+            {categoryName && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 truncate">
+                {categoryName}
+              </span>
+            )}
+          </div>
+          {preferredSupplier ? (
+            <div>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit.toFixed(2)}/{preferredSupplier.pack_unit}</div>
+          ) : suppliers.length > 0 ? (
+            <div>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit.toFixed(2)}/{suppliers[0].pack_unit}</div>
+          ) : (
+            <div className="text-zinc-400">No supplier</div>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              const newQty = Math.max(1, staged.quantity - 1);
+              onQuantityChange(parseFloat(newQty.toFixed(1)));
+            }}
+            className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+            title="Decrease quantity"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            type="number"
+            value={staged.quantity}
+            onChange={(e) => {
+              e.stopPropagation();
+              onQuantityChange(parseFloat(e.target.value) || 0);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-base text-white text-center focus:border-blue-400 focus:outline-none"
+            min="0"
+            step="0.1"
+          />
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">{staged.ingredient.base_unit}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-zinc-500 dark:text-zinc-400">Wastage:</label>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={staged.wastage_percentage}
+            onChange={(e) => {
+              e.stopPropagation();
+              const value = parseFloat(e.target.value) || 0;
+              onWastageChange(Math.min(100, Math.max(0, value)));
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+          />
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">%</span>
+        </div>
+        <button
+          onClick={onRemove}
+          className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StagedRecipeListItem({
+  staged,
+  onRemove,
+  onQuantityChange,
+  allRecipes,
+}: {
+  staged: StagedRecipe;
+  onRemove: () => void;
+  onQuantityChange: (quantity: number) => void;
+  allRecipes?: Recipe[];
+}) {
+  const { data: recipeIngredients } = useRecipeIngredients(staged.recipe.id);
+  const { data: subRecipes } = useSubRecipes(staged.recipe.id);
+
+  return (
+    <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-zinc-900 dark:text-white truncate">{staged.recipe.name}</h4>
+          <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+            Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <input
+              type="number"
+              value={staged.quantity}
+              onChange={(e) => {
+                e.stopPropagation();
+                onQuantityChange(parseFloat(e.target.value) || 0);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-16 rounded bg-black/30 border border-green-400/30 px-2 py-1 text-base text-white text-center focus:border-green-400 focus:outline-none"
+              min="0"
+              step="0.1"
+            />
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">portion</span>
+          </div>
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Ingredients Section */}
+      {recipeIngredients && recipeIngredients.length > 0 && (
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+          <h5 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Ingredients:</h5>
+          <ul className="space-y-1.5 text-sm">
+            {recipeIngredients.map((ri) => {
+              const ingredient = ri.ingredient;
+              const suppliers = ingredient?.suppliers || [];
+              const preferredSupplier = suppliers.find((s) => s.is_preferred);
+              return (
+                <li key={ri.id} className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                  <span>{ingredient?.name || `Ingredient #${ri.ingredient_id}`} ({ri.quantity} {ri.base_unit || ri.unit})</span>
+                  <span className="text-zinc-500">@ ${ri.unit_price?.toFixed(2) ?? 'N/A'}/{ri.base_unit || ri.unit}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Sub-Recipes Section */}
+      {subRecipes && subRecipes.length > 0 && (
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+          <h5 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Sub-Recipes:</h5>
+          <ul className="space-y-1.5 text-sm">
+            {subRecipes.map((sr) => {
+              const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
+              return (
+                <li key={sr.id} className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                  <span>{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</span>
+                  <span className="text-zinc-500">{sr.quantity} {sr.unit}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StagedRecipeCard({
   staged,
   onRemove,
@@ -344,6 +607,7 @@ function StagedRecipeCard({
     position: 'absolute' as const,
     left: staged.x,
     top: staged.y,
+    transition: isDragging ? 'none' : 'left 0.3s ease-out, top 0.3s ease-out',
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isExpanded ? 10 : 1,
@@ -398,7 +662,17 @@ function StagedRecipeCard({
       <div className="game-card-body">
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const newQty = Math.max(1, staged.quantity - 1);
+                onQuantityChange(parseFloat(newQty.toFixed(1)));
+              }}
+              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              title="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
             <input
               type="number"
               value={staged.quantity}
@@ -492,18 +766,26 @@ function CanvasDropZone({
   onRemoveIngredient,
   onRemoveRecipe,
   onIngredientQuantityChange,
+  onIngredientWastageChange,
   onRecipeQuantityChange,
   canvasRef,
   allRecipes,
+  gridConfig,
+  viewMode = 'grid',
+  categoryMap,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
   onRemoveIngredient: (id: string) => void;
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
+  onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   canvasRef: React.RefObject<HTMLDivElement | null>;
   allRecipes?: Recipe[];
+  gridConfig: ReturnType<typeof getGridConfig>;
+  viewMode?: 'grid' | 'list';
+  categoryMap: Record<number, string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-drop-zone',
@@ -522,7 +804,16 @@ function CanvasDropZone({
       className={`relative flex-1 min-h-[500px] overflow-auto rounded-lg border-2 border-dashed transition-colors mb-4 ${isOver
           ? 'border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-950/30'
           : 'border-zinc-300 dark:border-zinc-700'
-        }`}
+        } ${viewMode === 'list' ? 'flex flex-col' : ''}`}
+      style={viewMode === 'grid' ? {
+        position: 'relative',
+        padding: '20px',
+      } : {
+        position: 'relative',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
       {!hasItems && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -531,23 +822,51 @@ function CanvasDropZone({
           </p>
         </div>
       )}
-      {stagedIngredients.map((staged) => (
-        <StagedIngredientCard
-          key={staged.id}
-          staged={staged}
-          onRemove={() => onRemoveIngredient(staged.id)}
-          onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
-        />
-      ))}
-      {stagedRecipes.map((staged) => (
-        <StagedRecipeCard
-          key={staged.id}
-          staged={staged}
-          onRemove={() => onRemoveRecipe(staged.id)}
-          onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
-          allRecipes={allRecipes}
-        />
-      ))}
+      {viewMode === 'grid' ? (
+        <>
+          {stagedIngredients.map((staged) => (
+            <StagedIngredientCard
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveIngredient(staged.id)}
+              onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              categoryMap={categoryMap}
+            />
+          ))}
+          {stagedRecipes.map((staged) => (
+            <StagedRecipeCard
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveRecipe(staged.id)}
+              onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
+              allRecipes={allRecipes}
+            />
+          ))}
+        </>
+      ) : (
+        <div className="space-y-3">
+          {stagedIngredients.map((staged) => (
+            <StagedIngredientListItem
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveIngredient(staged.id)}
+              onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
+              onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              categoryMap={categoryMap}
+            />
+          ))}
+          {stagedRecipes.map((staged) => (
+            <StagedRecipeListItem
+              key={staged.id}
+              staged={staged}
+              onRemove={() => onRemoveRecipe(staged.id)}
+              onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
+              allRecipes={allRecipes}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -566,6 +885,7 @@ function CanvasContent({
   onRemoveIngredient,
   onRemoveRecipe,
   onIngredientQuantityChange,
+  onIngredientWastageChange,
   onRecipeQuantityChange,
   onSubmit,
   onFork,
@@ -580,6 +900,12 @@ function CanvasContent({
   hasUnsavedChanges,
   hasSelectedRecipe,
   isOwner,
+  gridConfig,
+  isDragDropEnabled,
+  onDragDropEnabledChange,
+  viewMode,
+  onViewModeChange,
+  categoryMap,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -588,6 +914,7 @@ function CanvasContent({
   onRemoveIngredient: (id: string) => void;
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
+  onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onSubmit: () => void;
   onFork: () => void;
@@ -602,6 +929,12 @@ function CanvasContent({
   hasUnsavedChanges: boolean;
   hasSelectedRecipe: boolean;
   isOwner: boolean;
+  gridConfig: ReturnType<typeof getGridConfig>;
+  isDragDropEnabled: boolean;
+  onDragDropEnabledChange: (enabled: boolean) => void;
+  viewMode: 'grid' | 'list';
+  onViewModeChange: (mode: 'grid' | 'list') => void;
+  categoryMap: Record<number, string>;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -662,6 +995,38 @@ function CanvasContent({
               />
               <span className="text-sm text-zinc-500">Public</span>
             </label>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={isDragDropEnabled}
+                onChange={(e) => onDragDropEnabledChange(e.currentTarget.checked)}
+              />
+              <span className="text-sm text-zinc-500">Drag & Drop</span>
+            </div>
+            <div className="flex items-center gap-2 border-l border-zinc-300 dark:border-zinc-700 pl-4">
+              <label className="text-sm text-zinc-500">View:</label>
+              <button
+                onClick={() => onViewModeChange('grid')}
+                className={`p-1.5 rounded ${
+                  viewMode === 'grid'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onViewModeChange('list')}
+                className={`p-1.5 rounded ${
+                  viewMode === 'list'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                }`}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -674,9 +1039,13 @@ function CanvasContent({
           onRemoveIngredient={onRemoveIngredient}
           onRemoveRecipe={onRemoveRecipe}
           onIngredientQuantityChange={onIngredientQuantityChange}
+          onIngredientWastageChange={onIngredientWastageChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
           canvasRef={canvasRef}
           allRecipes={allRecipes}
+          gridConfig={gridConfig}
+          viewMode={viewMode}
+          categoryMap={categoryMap}
         />
       </div>
 
@@ -734,10 +1103,20 @@ function CanvasContent({
 
 export function CanvasTab() {
   const router = useRouter();
-  const { userId, selectedRecipeId, userType } = useAppState();
+  const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipes } = useRecipes();
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
+  const { data: categories } = useCategories();
+
+  // Create a mapping of category ID to name for efficient lookups
+  const categoryMap = useMemo(() => {
+    if (!categories) return {} as Record<number, string>;
+    return categories.reduce<Record<number, string>>((acc, cat) => {
+      acc[cat.id] = cat.name;
+      return acc;
+    }, {});
+  }, [categories]);
 
   const createRecipe = useCreateRecipe();
   const updateRecipe = useUpdateRecipe();
@@ -767,6 +1146,115 @@ export function CanvasTab() {
     recipeQuantities: Record<string, number>;
     metadata: RecipeMetadata;
   } | null>(null);
+
+  // Track grid columns (only the count, not full width to avoid unnecessary recalculations)
+  const [gridColumns, setGridColumns] = useState(() => {
+    const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    return getGridConfig(screenWidth).columns;
+  });
+
+  // Update grid columns on resize
+  useEffect(() => {
+    const handleResize = () => {
+      const newColumns = getGridConfig(window.innerWidth).columns;
+      setGridColumns(newColumns);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle custom events from RightPanel "Add" buttons
+  useEffect(() => {
+    const handleAddIngredient = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { ingredient } = customEvent.detail;
+
+      // Check if ingredient already exists on canvas
+      const existingIndex = stagedIngredients.findIndex(
+        (s) => s.ingredient.id === ingredient.id
+      );
+
+      if (existingIndex >= 0) {
+        // Increment quantity of existing ingredient
+        setStagedIngredients((prev) =>
+          prev.map((item, idx) =>
+            idx === existingIndex
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        );
+        toast.success(`Increased ${ingredient.name} quantity`);
+      } else {
+        // Add new ingredient
+        const newStaged: StagedIngredient = {
+          id: `ing-${Date.now()}-${Math.random()}`,
+          ingredient,
+          quantity: 1,
+          wastage_percentage: 0,
+          x: 0,
+          y: 0,
+        };
+        setStagedIngredients((prev) => [...prev, newStaged]);
+        toast.success(`Added ${ingredient.name} to canvas`);
+      }
+    };
+
+    const handleAddRecipe = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { recipe } = customEvent.detail;
+
+      // Check if recipe already exists on canvas
+      const existingIndex = stagedRecipes.findIndex(
+        (s) => s.recipe.id === recipe.id
+      );
+
+      if (existingIndex >= 0) {
+        // Increment quantity of existing recipe
+        setStagedRecipes((prev) =>
+          prev.map((item, idx) =>
+            idx === existingIndex
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        );
+        toast.success(`Increased ${recipe.name} quantity`);
+      } else {
+        // Add new recipe
+        const newStaged: StagedRecipe = {
+          id: `rec-${Date.now()}-${Math.random()}`,
+          recipe,
+          quantity: 1,
+          x: 0,
+          y: 0,
+        };
+        setStagedRecipes((prev) => [...prev, newStaged]);
+        toast.success(`Added ${recipe.name} to canvas`);
+      }
+    };
+
+    window.addEventListener('canvas-add-ingredient', handleAddIngredient);
+    window.addEventListener('canvas-add-recipe', handleAddRecipe);
+
+    return () => {
+      window.removeEventListener('canvas-add-ingredient', handleAddIngredient);
+      window.removeEventListener('canvas-add-recipe', handleAddRecipe);
+    };
+  }, [stagedIngredients, stagedRecipes]);
+
+  // Initialize auto-flow layout hook with responsive config
+  const totalItems = stagedIngredients.length + stagedRecipes.length;
+  const gridConfig = useMemo(
+    () => ({
+      columns: gridColumns,
+      cardWidth: 224,
+      cardGap: 16,
+      rowHeight: 400,
+      padding: 20,
+    }),
+    [gridColumns]
+  );
+  const { calculatePosition } = useAutoFlowLayout(totalItems, gridConfig);
 
   const handleMetadataChange = useCallback((updates: Partial<RecipeMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...updates }));
@@ -809,7 +1297,7 @@ export function CanvasTab() {
     setMetadata(loadedMetadata);
 
     // Load ingredients onto canvas
-    const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri, index) => ({
+    const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri) => ({
       id: `existing-ing-${ri.id}`,
       ingredient: ri.ingredient || {
         id: ri.ingredient_id,
@@ -822,16 +1310,17 @@ export function CanvasTab() {
         updated_at: '',
       },
       quantity: ri.quantity,
-      x: 20 + (index % 3) * 220,
-      y: 20 + Math.floor(index / 3) * 100,
+      wastage_percentage: ri.wastage_percentage,
+      x: 0, // Placeholder - will be set by position recalculation effect
+      y: 0,
     }));
 
     // Load sub-recipes onto canvas
-    const loadedSubRecipes: StagedRecipe[] = subRecipes.map((sr, index) => {
-      const childRecipe = recipes?.find((r) => r.id === sr.child_recipe_id);
+    const loadedSubRecipes: StagedRecipe[] = subRecipes.map((sr) => {
+      const childRecipe = recipes!.find((r) => r.id === sr.child_recipe_id);
       return {
         id: `existing-rec-${sr.id}`,
-        recipe: childRecipe || {
+        recipe: childRecipe || ({
           id: sr.child_recipe_id,
           name: `Recipe #${sr.child_recipe_id}`,
           instructions_raw: null,
@@ -847,14 +1336,17 @@ export function CanvasTab() {
           version: 1,
           root_id: null,
           image_url: null,
+          description: null,
           summary_feedback: null,
+          rnd_started: false,
+          review_ready: false,
           created_at: '',
           updated_at: '',
           created_by: '',
-        },
+        } as Recipe),
         quantity: sr.quantity,
-        x: 20 + (index % 3) * 220,
-        y: 20 + Math.floor(index / 3) * 100,
+        x: 0, // Placeholder - will be set by position recalculation effect
+        y: 0,
       };
     });
 
@@ -882,6 +1374,29 @@ export function CanvasTab() {
     });
   }, [selectedRecipeId, recipeIngredients, subRecipes, recipes, loadedRecipeId]);
 
+  // Recalculate ingredient positions when items change or grid columns change
+  useEffect(() => {
+    if (stagedIngredients.length === 0) return;
+    setStagedIngredients((prev) =>
+      prev.map((item, index) => ({
+        ...item,
+        ...calculatePosition(index),
+      }))
+    );
+  }, [stagedIngredients.length, gridColumns, loadedRecipeId]); // Also depend on loadedRecipeId to trigger recalc after recipe reload
+
+  // Recalculate recipe positions when items change or grid columns change (offset by ingredient count)
+  useEffect(() => {
+    if (stagedRecipes.length === 0) return;
+    const offset = stagedIngredients.length;
+    setStagedRecipes((prev) =>
+      prev.map((item, index) => ({
+        ...item,
+        ...calculatePosition(offset + index),
+      }))
+    );
+  }, [stagedRecipes.length, stagedIngredients.length, gridColumns, loadedRecipeId]); // Also depend on loadedRecipeId to trigger recalc after recipe reload
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as {
       type?: string;
@@ -908,48 +1423,12 @@ export function CanvasTab() {
       const dragItem = activeDragItem;
       setActiveDragItem(null);
 
-      const { over, delta } = event;
+      const { over } = event;
 
       if (!dragItem) return;
 
-      // Handle moving existing staged items
-      if (dragItem.type === 'staged-ingredient') {
-        setStagedIngredients((prev) =>
-          prev.map((item) =>
-            item.id === dragItem.stagedId
-              ? { ...item, x: item.x + delta.x, y: item.y + delta.y }
-              : item
-          )
-        );
-        return;
-      }
-
-      if (dragItem.type === 'staged-recipe') {
-        setStagedRecipes((prev) =>
-          prev.map((item) =>
-            item.id === dragItem.stagedId
-              ? { ...item, x: item.x + delta.x, y: item.y + delta.y }
-              : item
-          )
-        );
-        return;
-      }
-
       // Handle dropping new items from panel onto canvas
       if (!over || over.id !== 'canvas-drop-zone') return;
-
-      // Get the actual drop point using pointer coordinates
-      const canvasRect = canvasRef.current?.getBoundingClientRect();
-      const pointerEvent = event.activatorEvent as PointerEvent;
-
-      let dropX = 20;
-      let dropY = 20;
-
-      if (canvasRect && pointerEvent) {
-        // Calculate final pointer position (initial + delta) relative to canvas
-        dropX = Math.max(0, pointerEvent.clientX + delta.x - canvasRect.left);
-        dropY = Math.max(0, pointerEvent.clientY + delta.y - canvasRect.top);
-      }
 
       if (dragItem.type === 'panel-ingredient') {
         // Check if ingredient already exists on canvas
@@ -968,13 +1447,14 @@ export function CanvasTab() {
           );
           toast.success(`Increased ${dragItem.ingredient.name} quantity`);
         } else {
-          // Add new ingredient
+          // Add new ingredient - position will be calculated by effect
           const newStaged: StagedIngredient = {
             id: `ing-${Date.now()}-${Math.random()}`,
             ingredient: dragItem.ingredient,
             quantity: 1,
-            x: dropX,
-            y: dropY,
+            wastage_percentage: 0,
+            x: 0, // Placeholder - will be set by position recalculation effect
+            y: 0,
           };
           setStagedIngredients((prev) => [...prev, newStaged]);
           toast.success(`Added ${dragItem.ingredient.name} to canvas`);
@@ -982,27 +1462,36 @@ export function CanvasTab() {
       }
 
       if (dragItem.type === 'panel-recipe') {
-        // Check if trying to add a recipe that's already staged
-        const alreadyStaged = stagedRecipes.some(
+        // Check if recipe already exists on canvas
+        const existingIndex = stagedRecipes.findIndex(
           (s) => s.recipe.id === dragItem.recipe.id
         );
-        if (alreadyStaged) {
-          toast.error(`${dragItem.recipe.name} is already on the canvas`);
-          return;
-        }
 
-        const newStaged: StagedRecipe = {
-          id: `rec-${Date.now()}-${Math.random()}`,
-          recipe: dragItem.recipe,
-          quantity: 1,
-          x: dropX,
-          y: dropY,
-        };
-        setStagedRecipes((prev) => [...prev, newStaged]);
-        toast.success(`Added ${dragItem.recipe.name} to canvas`);
+        if (existingIndex >= 0) {
+          // Increment quantity of existing recipe
+          setStagedRecipes((prev) =>
+            prev.map((item, idx) =>
+              idx === existingIndex
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            )
+          );
+          toast.success(`Increased ${dragItem.recipe.name} quantity`);
+        } else {
+          // Add new recipe - position will be calculated by effect
+          const newStaged: StagedRecipe = {
+            id: `rec-${Date.now()}-${Math.random()}`,
+            recipe: dragItem.recipe,
+            quantity: 1,
+            x: 0, // Placeholder - will be set by position recalculation effect
+            y: 0,
+          };
+          setStagedRecipes((prev) => [...prev, newStaged]);
+          toast.success(`Added ${dragItem.recipe.name} to canvas`);
+        }
       }
     },
-    [activeDragItem, canvasRef, stagedIngredients, stagedRecipes]
+    [activeDragItem, stagedIngredients, stagedRecipes]
   );
 
   const handleRemoveIngredient = useCallback((id: string) => {
@@ -1016,6 +1505,12 @@ export function CanvasTab() {
   const handleIngredientQuantityChange = useCallback((id: string, quantity: number) => {
     setStagedIngredients((prev) =>
       prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+    );
+  }, []);
+
+  const handleIngredientWastageChange = useCallback((id: string, wastage_percentage: number) => {
+    setStagedIngredients((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, wastage_percentage } : item))
     );
   }, []);
 
@@ -1053,6 +1548,7 @@ export function CanvasTab() {
           updated_at: '',
         },
         quantity: ri.quantity,
+        wastage_percentage: ri.wastage_percentage,
         x: 20 + (index % 3) * 220,
         y: 20 + Math.floor(index / 3) * 100,
       }));
@@ -1067,7 +1563,7 @@ export function CanvasTab() {
         const childRecipe = recipes?.find((r) => r.id === sr.child_recipe_id);
         return {
           id: `existing-rec-${sr.id}`,
-          recipe: childRecipe || {
+          recipe: childRecipe || ({
             id: sr.child_recipe_id,
             name: `Recipe #${sr.child_recipe_id}`,
             instructions_raw: null,
@@ -1083,10 +1579,14 @@ export function CanvasTab() {
             version: 1,
             root_id: null,
             image_url: null,
+            description: null,
+            summary_feedback: null,
+            rnd_started: false,
+            review_ready: false,
             created_at: '',
             updated_at: '',
             created_by: '',
-          },
+          } as Recipe),
           quantity: sr.quantity,
           x: 20 + (index % 3) * 220,
           y: 20 + Math.floor(index / 3) * 100,
@@ -1169,6 +1669,7 @@ export function CanvasTab() {
             base_unit,
             unit_price,
             supplier_id,
+            wastage_percentage: staged.wastage_percentage,
           },
         });
       }
@@ -1191,8 +1692,8 @@ export function CanvasTab() {
 
       toast.success(`Recipe forked successfully! Version ${version} created.`);
 
-      // Redirect to the new recipe in canvas
-      router.push(`/?recipe=${newRecipe.id}`);
+      // Redirect to the new recipe
+      router.push(`/recipes/${newRecipe.id}`);
     } catch {
       toast.error('Failed to fork recipe');
     } finally {
@@ -1293,6 +1794,7 @@ export function CanvasTab() {
                 base_unit,
                 unit_price,
                 supplier_id,
+                wastage_percentage: staged.wastage_percentage,
               },
             });
           } else {
@@ -1306,6 +1808,7 @@ export function CanvasTab() {
                 base_unit,
                 unit_price,
                 supplier_id,
+                wastage_percentage: staged.wastage_percentage,
               },
             });
           }
@@ -1372,6 +1875,7 @@ export function CanvasTab() {
               base_unit,
               unit_price,
               supplier_id,
+              wastage_percentage: staged.wastage_percentage,
             },
           });
         }
@@ -1395,7 +1899,7 @@ export function CanvasTab() {
         toast.success('Recipe created successfully!');
 
         // Redirect to the new recipe
-        router.push(`/?recipe=${newRecipe.id}`);
+        router.push(`/recipes/${newRecipe.id}`);
       }
     } catch {
       toast.error(selectedRecipeId ? 'Failed to update recipe' : 'Failed to create recipe');
@@ -1496,59 +2000,77 @@ export function CanvasTab() {
     setCanvasHasUnsavedChanges(hasUnsavedChanges);
   }, [hasUnsavedChanges, setCanvasHasUnsavedChanges]);
 
+  const canvasContent = (
+    <CanvasContent
+      stagedIngredients={stagedIngredients}
+      stagedRecipes={stagedRecipes}
+      metadata={metadata}
+      onMetadataChange={handleMetadataChange}
+      onRemoveIngredient={handleRemoveIngredient}
+      onRemoveRecipe={handleRemoveRecipe}
+      onIngredientQuantityChange={handleIngredientQuantityChange}
+      onIngredientWastageChange={handleIngredientWastageChange}
+      onRecipeQuantityChange={handleRecipeQuantityChange}
+      onSubmit={handleSubmitClick}
+      onFork={handleForkClick}
+      onReset={handleReset}
+      onClearAll={handleClearAll}
+      isSubmitting={isSubmitting}
+      isForking={isForking}
+      canvasRef={canvasRef}
+      rootRecipeName={(() => {
+        const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
+        if (!selectedRecipe?.root_id) return null;
+        return recipes?.find((r) => r.id === selectedRecipe.root_id)?.name ?? null;
+      })()}
+      currentVersion={(() => {
+        const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
+        return selectedRecipe?.version ?? null;
+      })()}
+      allRecipes={recipes}
+      hasUnsavedChanges={hasUnsavedChanges}
+      hasSelectedRecipe={selectedRecipeId !== null}
+      isOwner={(() => {
+        if (userType === 'admin') return true; // Admins bypass ownership restrictions
+        if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
+        const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
+        return selectedRecipe?.owner_id === userId;
+      })()}
+      gridConfig={gridConfig}
+      isDragDropEnabled={isDragDropEnabled}
+      onDragDropEnabledChange={setIsDragDropEnabled}
+      viewMode={canvasViewMode}
+      onViewModeChange={setCanvasViewMode}
+      categoryMap={categoryMap}
+    />
+  );
+
   return (
     <>
-      <DndContext
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <CanvasContent
-          stagedIngredients={stagedIngredients}
-          stagedRecipes={stagedRecipes}
-          metadata={metadata}
-          onMetadataChange={handleMetadataChange}
-          onRemoveIngredient={handleRemoveIngredient}
-          onRemoveRecipe={handleRemoveRecipe}
-          onIngredientQuantityChange={handleIngredientQuantityChange}
-          onRecipeQuantityChange={handleRecipeQuantityChange}
-          onSubmit={handleSubmitClick}
-          onFork={handleForkClick}
-          onReset={handleReset}
-          onClearAll={handleClearAll}
-          isSubmitting={isSubmitting}
-          isForking={isForking}
-          canvasRef={canvasRef}
-          rootRecipeName={(() => {
-            const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
-            if (!selectedRecipe?.root_id) return null;
-            return recipes?.find((r) => r.id === selectedRecipe.root_id)?.name ?? null;
-          })()}
-          currentVersion={(() => {
-            const selectedRecipe = selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null;
-            return selectedRecipe?.version ?? null;
-          })()}
-          allRecipes={recipes}
-          hasUnsavedChanges={hasUnsavedChanges}
-          hasSelectedRecipe={selectedRecipeId !== null}
-          isOwner={(() => {
-            if (userType === 'admin') return true; // Admins bypass ownership restrictions
-            if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
-            const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
-            return selectedRecipe?.owner_id === userId;
-          })()}
-        />
-        <RightPanel />
-        <DragOverlay>
-          {activeDragItem && (
-            <DragOverlayContent
-              item={activeDragItem}
-              stagedIngredients={stagedIngredients}
-              stagedRecipes={stagedRecipes}
-            />
-          )}
-        </DragOverlay>
-      </DndContext>
+      {isDragDropEnabled ? (
+        <DndContext
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {canvasContent}
+          <RightPanel />
+          <DragOverlay>
+            {activeDragItem && (
+              <DragOverlayContent
+                item={activeDragItem}
+                stagedIngredients={stagedIngredients}
+                stagedRecipes={stagedRecipes}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <>
+          {canvasContent}
+          <RightPanel />
+        </>
+      )}
 
       <ConfirmModal
         isOpen={showSubmitModal}

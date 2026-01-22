@@ -34,15 +34,20 @@ function setStoredAuth(auth: StoredAuth) {
   }
 }
 
-export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'instructions' | 'tasting' | 'versions';
+export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'outlets' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'categories';
+export type RecipeTab = 'management' | 'outlets';
+export type CanvasViewMode = 'grid' | 'list';
 
 interface AppState {
   selectedRecipeId: number | null;
   instructionsTab: 'freeform' | 'steps';
   canvasTab: CanvasTab;
   ingredientTab: IngredientTab;
+  recipeTab: RecipeTab;
   canvasHasUnsavedChanges: boolean;
+  isDragDropEnabled: boolean;
+  canvasViewMode: CanvasViewMode;
   userId: string | null;
   jwt: string | null;
   userType: 'normal' | 'admin' | null;
@@ -53,7 +58,10 @@ interface AppContextValue extends AppState {
   setInstructionsTab: (tab: 'freeform' | 'steps') => void;
   setCanvasTab: (tab: CanvasTab) => void;
   setIngredientTab: (tab: IngredientTab) => void;
+  setRecipeTab: (tab: RecipeTab) => void;
   setCanvasHasUnsavedChanges: (hasChanges: boolean) => void;
+  setIsDragDropEnabled: (enabled: boolean) => void;
+  setCanvasViewMode: (mode: CanvasViewMode) => void;
   setUserId: (id: string | null) => void;
   setJwt: (jwt: string | null) => void;
   setUserType: (userType: 'normal' | 'admin' | null) => void;
@@ -70,7 +78,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     instructionsTab: 'freeform',
     canvasTab: 'canvas',
     ingredientTab: 'ingredients',
+    recipeTab: 'management',
     canvasHasUnsavedChanges: false,
+    isDragDropEnabled: true,
+    canvasViewMode: 'grid',
     userId: null,
     jwt: null,
     userType: null
@@ -115,8 +126,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, ingredientTab: tab }));
   }, []);
 
+  const setRecipeTab = useCallback((tab: RecipeTab) => {
+    setState((prev) => ({ ...prev, recipeTab: tab }));
+  }, []);
+
   const setCanvasHasUnsavedChanges = useCallback((hasChanges: boolean) => {
     setState((prev) => ({ ...prev, canvasHasUnsavedChanges: hasChanges }));
+  }, []);
+
+  const setIsDragDropEnabled = useCallback((enabled: boolean) => {
+    setState((prev) => ({ ...prev, isDragDropEnabled: enabled }));
+  }, []);
+
+  const setCanvasViewMode = useCallback((mode: CanvasViewMode) => {
+    setState((prev) => ({ ...prev, canvasViewMode: mode }));
   }, []);
 
   const setUserId = useCallback((id: string | null) => {
@@ -147,7 +170,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setInstructionsTab,
         setCanvasTab,
         setIngredientTab,
+        setRecipeTab,
         setCanvasHasUnsavedChanges,
+        setIsDragDropEnabled,
+        setCanvasViewMode,
         setUserId,
         setJwt,
         setUserType,
