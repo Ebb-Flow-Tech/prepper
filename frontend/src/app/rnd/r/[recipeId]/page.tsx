@@ -37,13 +37,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
 import { useRecipeOutlets } from '@/lib/hooks/useRecipeOutlets';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
-import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary } from '@/types';
+import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet } from '@/types';
 
 interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
@@ -405,6 +405,7 @@ function OverviewTab({
   tastingSummary,
   userId,
   outlets,
+  outletMap,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[] | undefined;
@@ -414,7 +415,8 @@ function OverviewTab({
   tastingNotes: TastingNoteWithRecipe[] | undefined;
   tastingSummary: RecipeTastingSummary | undefined;
   userId: string | null;
-  outlets: any[] | undefined;
+  outlets: RecipeOutlet[] | undefined;
+  outletMap: Map<number, Outlet>;
 }) {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
   const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
@@ -478,11 +480,14 @@ function OverviewTab({
 
                 {outlets && outlets.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {outlets.map((outlet) => (
-                      <Badge key={outlet.id} variant="secondary" className="text-xs">
-                        {outlet.code}
-                      </Badge>
-                    ))}
+                    {outlets.map((recipeOutlet) => {
+                      const outlet = outletMap.get(recipeOutlet.outlet_id);
+                      return (
+                        <Badge key={recipeOutlet.outlet_id} variant="secondary" className="text-xs">
+                          {outlet?.code || `Outlet #${recipeOutlet.outlet_id}`}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -966,13 +971,18 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
   const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
-  const { data: outlets } = useRecipeOutlets(recipeId);
+  const { data: recipeOutlets } = useRecipeOutlets(recipeId);
+  const { data: allOutlets } = useOutlets();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
   // Create a map of recipe IDs to names for sub-recipe display
   const recipeMap = new Map<number, string>();
   allRecipes?.forEach((r) => recipeMap.set(r.id, r.name));
+
+  // Create a map of outlet IDs to outlets for recipe outlet display
+  const outletMap = new Map<number, Outlet>();
+  allOutlets?.forEach((outlet) => outletMap.set(outlet.id, outlet));
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
@@ -1053,7 +1063,8 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 tastingNotes={tastingNotes}
                 tastingSummary={tastingSummary}
                 userId={userId}
-                outlets={outlets}
+                outlets={recipeOutlets}
+                outletMap={outletMap}
               />
             )}
 
