@@ -468,3 +468,33 @@ export interface UpdateCategoryRequest {
   description?: string | null;
   is_active?: boolean;
 }
+
+// ============ Outlet Types ============
+
+export type OutletType = 'brand' | 'location';
+
+export interface Outlet {
+  id: number;
+  name: string;
+  code: string;
+  outlet_type: OutletType;
+  parent_outlet_id: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOutletRequest {
+  name: string;
+  code: string;
+  outlet_type?: OutletType;
+  parent_outlet_id?: number | null;
+}
+
+export interface UpdateOutletRequest {
+  name?: string;
+  code?: string;
+  outlet_type?: OutletType;
+  parent_outlet_id?: number | null;
+  is_active?: boolean;
+}

@@ -41,6 +41,9 @@ import type {
   Category,
   CreateCategoryRequest,
   UpdateCategoryRequest,
+  Outlet,
+  CreateOutletRequest,
+  UpdateOutletRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -632,6 +635,43 @@ export async function updateCategory(
 
 export async function deactivateCategory(id: number): Promise<Category> {
   return fetchApi<Category>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Outlets ============
+
+export async function getOutlets(isActive: boolean | null = null): Promise<Outlet[]> {
+  const params = new URLSearchParams();
+  if (isActive !== null) {
+    params.append('is_active', String(isActive));
+  }
+  return fetchApi<Outlet[]>(`/outlets?${params}`);
+}
+
+export async function getOutlet(id: number): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`);
+}
+
+export async function createOutlet(data: CreateOutletRequest): Promise<Outlet> {
+  return fetchApi<Outlet>('/outlets', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateOutlet(
+  id: number,
+  data: UpdateOutletRequest
+): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateOutlet(id: number): Promise<Outlet> {
+  return fetchApi<Outlet>(`/outlets/${id}`, {
     method: 'DELETE',
   });
 }

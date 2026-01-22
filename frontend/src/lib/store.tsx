@@ -36,6 +36,7 @@ function setStoredAuth(auth: StoredAuth) {
 
 export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'categories';
+export type RecipeTab = 'management' | 'outlets';
 export type CanvasViewMode = 'grid' | 'list';
 
 interface AppState {
@@ -43,6 +44,7 @@ interface AppState {
   instructionsTab: 'freeform' | 'steps';
   canvasTab: CanvasTab;
   ingredientTab: IngredientTab;
+  recipeTab: RecipeTab;
   canvasHasUnsavedChanges: boolean;
   isDragDropEnabled: boolean;
   canvasViewMode: CanvasViewMode;
@@ -56,6 +58,7 @@ interface AppContextValue extends AppState {
   setInstructionsTab: (tab: 'freeform' | 'steps') => void;
   setCanvasTab: (tab: CanvasTab) => void;
   setIngredientTab: (tab: IngredientTab) => void;
+  setRecipeTab: (tab: RecipeTab) => void;
   setCanvasHasUnsavedChanges: (hasChanges: boolean) => void;
   setIsDragDropEnabled: (enabled: boolean) => void;
   setCanvasViewMode: (mode: CanvasViewMode) => void;
@@ -75,6 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     instructionsTab: 'freeform',
     canvasTab: 'canvas',
     ingredientTab: 'ingredients',
+    recipeTab: 'management',
     canvasHasUnsavedChanges: false,
     isDragDropEnabled: true,
     canvasViewMode: 'grid',
@@ -122,6 +126,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, ingredientTab: tab }));
   }, []);
 
+  const setRecipeTab = useCallback((tab: RecipeTab) => {
+    setState((prev) => ({ ...prev, recipeTab: tab }));
+  }, []);
+
   const setCanvasHasUnsavedChanges = useCallback((hasChanges: boolean) => {
     setState((prev) => ({ ...prev, canvasHasUnsavedChanges: hasChanges }));
   }, []);
@@ -162,6 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setInstructionsTab,
         setCanvasTab,
         setIngredientTab,
+        setRecipeTab,
         setCanvasHasUnsavedChanges,
         setIsDragDropEnabled,
         setCanvasViewMode,
