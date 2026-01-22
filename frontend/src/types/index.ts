@@ -238,6 +238,14 @@ export interface TastingNote {
   updated_at: string;
 }
 
+export interface TastingNoteImage {
+  id: number;
+  tasting_note_id: number;
+  image_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TastingNoteWithRecipe extends TastingNote {
   recipe_name: string | null;
   session_name: string | null;

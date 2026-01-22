@@ -23,8 +23,11 @@ import {
   useAddNoteToSession,
   useUpdateTastingNote,
   useDeleteTastingNote,
+  useTastingNoteImages,
+  useSyncTastingNoteImages,
 } from '@/lib/hooks/useTastings';
 import { useRecipe } from '@/lib/hooks';
+import { ImageUploadPreview, type ImageWithId } from '@/components/tasting/ImageUploadPreview';
 import {
   Button,
   Skeleton,
@@ -117,12 +120,27 @@ interface FeedbackFormData {
 
 interface FeedbackFormProps {
   initialData?: Partial<FeedbackFormData>;
-  onSubmit: (data: FeedbackFormData) => Promise<void>;
+  onSubmit: (data: FeedbackFormData, images?: ImageWithId[]) => Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
+  noteId?: number;
+  showImages?: boolean;
+  existingImages?: any[];
+  onDeleteImage?: (imageId: number) => Promise<void>;
+  isRemovingImage?: boolean;
 }
 
-function FeedbackForm({ initialData, onSubmit, onCancel, submitLabel = 'Save' }: FeedbackFormProps) {
+function FeedbackForm({
+  initialData,
+  onSubmit,
+  onCancel,
+  submitLabel = 'Save',
+  noteId,
+  showImages = false,
+  existingImages = [],
+  onDeleteImage,
+  isRemovingImage = false,
+}: FeedbackFormProps) {
   const [tasterName, setTasterName] = useState(initialData?.taster_name || '');
   const [decision, setDecision] = useState<TastingDecision | ''>(initialData?.decision || '');
   const [feedback, setFeedback] = useState(initialData?.feedback || '');
@@ -132,21 +150,38 @@ function FeedbackForm({ initialData, onSubmit, onCancel, submitLabel = 'Save' }:
   const [textureRating, setTextureRating] = useState<number | null>(initialData?.texture_rating ?? null);
   const [overallRating, setOverallRating] = useState<number | null>(initialData?.overall_rating ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<ImageWithId[]>([]);
+  const [removingImageId, setRemovingImageId] = useState<number | null>(null);
+
+  const handleRemoveImage = async (imageId: number) => {
+    if (!onDeleteImage) return;
+    setRemovingImageId(imageId);
+    try {
+      await onDeleteImage(imageId);
+    } finally {
+      setRemovingImageId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await onSubmit({
-        taster_name: tasterName.trim(),
-        decision,
-        feedback: feedback.trim(),
-        action_items: actionItems.trim(),
-        taste_rating: tasteRating,
-        presentation_rating: presentationRating,
-        texture_rating: textureRating,
-        overall_rating: overallRating,
-      });
+      // Pass ALL images to parent (new, existing, and marked for deletion)
+      // The backend sync endpoint will handle: delete marked, upload new, keep existing
+      await onSubmit(
+        {
+          taster_name: tasterName.trim(),
+          decision,
+          feedback: feedback.trim(),
+          action_items: actionItems.trim(),
+          taste_rating: tasteRating,
+          presentation_rating: presentationRating,
+          texture_rating: textureRating,
+          overall_rating: overallRating,
+        },
+        selectedImages
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -225,6 +260,15 @@ function FeedbackForm({ initialData, onSubmit, onCancel, submitLabel = 'Save' }:
         />
       </div>
 
+      {showImages && (
+        <ImageUploadPreview
+          onImagesSelected={setSelectedImages}
+          uploadedImages={existingImages}
+          onRemoveImage={onDeleteImage}
+          isRemoving={removingImageId !== null}
+        />
+      )}
+
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={isSubmitting}>
           {submitLabel}
@@ -242,15 +286,21 @@ interface FeedbackNoteCardProps {
   isExpired: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
+  images?: any[];
+  onImagesRefresh?: (noteId: number) => void;
 }
 
 function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isImagesExpanded, setIsImagesExpanded] = useState(false);
+  const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
+  const { data: editFormImages = [] } = useTastingNoteImages(isEditing ? note.id : null);
+  const syncImages = useSyncTastingNoteImages();
 
   const decisionConfig = note.decision ? DECISION_CONFIG[note.decision] : null;
   const DecisionIcon = decisionConfig?.icon;
 
-  const handleSave = async (data: FeedbackFormData) => {
+  const handleSave = async (data: FeedbackFormData, imagesWithId: ImageWithId[] = []) => {
     await onUpdate(note.id, {
       taster_name: data.taster_name || null,
       decision: data.decision || null,
@@ -261,6 +311,20 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
       texture_rating: data.texture_rating,
       overall_rating: data.overall_rating,
     });
+
+    // Sync images (delete marked ones, upload new ones, keep existing ones)
+    if (imagesWithId.length > 0) {
+      try {
+        await syncImages.mutateAsync({
+          tastingNoteId: note.id,
+          images: imagesWithId,
+        });
+      } catch (imageError) {
+        console.error('Failed to sync images:', imageError);
+        // Don't fail the note update if image sync fails
+      }
+    }
+
     setIsEditing(false);
   };
 
@@ -316,6 +380,9 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
             onSubmit={handleSave}
             onCancel={() => setIsEditing(false)}
             submitLabel="Save Changes"
+            noteId={note.id}
+            showImages={true}
+            existingImages={editFormImages}
           />
         ) : (
           <>
@@ -344,11 +411,53 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
               </div>
             )}
             {note.action_items && (
-              <div className="text-sm">
+              <div className="mb-3 text-sm">
                 <p className="text-zinc-500 dark:text-zinc-400 font-medium mb-1">Action Items:</p>
                 <p className="text-zinc-600 dark:text-zinc-300">{note.action_items}</p>
               </div>
             )}
+
+            {/* Collapsible Images Section */}
+            <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
+              <button
+                type="button"
+                onClick={() => setIsImagesExpanded(!isImagesExpanded)}
+                className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              >
+                <span className={`transform transition-transform ${isImagesExpanded ? 'rotate-90' : ''}`}>
+                  ▶
+                </span>
+                Images
+              </button>
+
+              {isImagesExpanded && (
+                <div className="mt-3">
+                  {isLoadingImages ? (
+                    <div className="text-sm text-zinc-500 dark:text-zinc-400">Loading images...</div>
+                  ) : noteImages && noteImages.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {noteImages.map((image: any) => (
+                        <a
+                          key={image.id}
+                          href={image.image_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 aspect-square hover:ring-2 ring-purple-500 transition-all"
+                        >
+                          <img
+                            src={image.image_url}
+                            alt="Tasting note"
+                            className="w-full h-full object-cover hover:scale-105 transition-transform"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">No images available</p>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
       </CardContent>
@@ -368,6 +477,7 @@ export default function RecipeTastingPage() {
   const addNote = useAddNoteToSession();
   const updateNote = useUpdateTastingNote();
   const deleteNote = useDeleteTastingNote();
+  const syncImages = useSyncTastingNoteImages();
 
   // Filter notes for this specific recipe
   const recipeNotes = allNotes?.filter((n) => n.recipe_id === recipeId) || [];
@@ -375,23 +485,41 @@ export default function RecipeTastingPage() {
   // For new notes
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const handleAddNote = async (data: FeedbackFormData) => {
+  const handleAddNote = async (data: FeedbackFormData, imagesWithId: ImageWithId[] = []) => {
     if (!sessionId || !recipeId) return;
-    await addNote.mutateAsync({
-      sessionId,
-      data: {
-        recipe_id: recipeId,
-        taster_name: data.taster_name || null,
-        decision: data.decision || null,
-        feedback: data.feedback || null,
-        action_items: data.action_items || null,
-        taste_rating: data.taste_rating,
-        presentation_rating: data.presentation_rating,
-        texture_rating: data.texture_rating,
-        overall_rating: data.overall_rating,
-      },
-    });
-    setShowAddForm(false);
+    try {
+      const result = await addNote.mutateAsync({
+        sessionId,
+        data: {
+          recipe_id: recipeId,
+          taster_name: data.taster_name || null,
+          decision: data.decision || null,
+          feedback: data.feedback || null,
+          action_items: data.action_items || null,
+          taste_rating: data.taste_rating,
+          presentation_rating: data.presentation_rating,
+          texture_rating: data.texture_rating,
+          overall_rating: data.overall_rating,
+        },
+      });
+
+      // If there are images to sync, sync them after note creation
+      if (imagesWithId.length > 0 && result?.id) {
+        try {
+          await syncImages.mutateAsync({
+            tastingNoteId: result.id,
+            images: imagesWithId,
+          });
+        } catch (imageError) {
+          console.error('Failed to sync images:', imageError);
+          // Don't fail the note creation if images fail to sync
+        }
+      }
+
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Failed to add note:', error);
+    }
   };
 
   const handleUpdateNote = async (noteId: number, data: Partial<TastingNote>) => {
@@ -508,6 +636,7 @@ export default function RecipeTastingPage() {
                 onSubmit={handleAddNote}
                 onCancel={() => setShowAddForm(false)}
                 submitLabel="Add Feedback"
+                showImages={true}
               />
             </CardContent>
           </Card>
