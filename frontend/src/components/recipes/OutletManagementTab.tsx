@@ -3,10 +3,12 @@
 import { useState, useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useOutlets, useUpdateOutlet, useDeactivateOutlet } from '@/lib/hooks';
-import { OutletCard, AddOutletModal } from '@/components/outlets';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Select } from '@/components/ui';
+import { OutletCard, OutletListRow, AddOutletModal } from '@/components/outlets';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Select, ViewToggle } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Outlet, UpdateOutletRequest, OutletType } from '@/types';
+
+type ViewType = 'grid' | 'list';
 
 interface OutletFormData {
   name: string;
@@ -150,6 +152,7 @@ export function OutletManagementTab() {
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
+  const [view, setView] = useState<ViewType>('grid');
   const { data: outlets, isLoading, error } = useOutlets(showArchived);
 
   const filteredOutlets = useMemo(() => {
@@ -226,16 +229,26 @@ export function OutletManagementTab() {
               />
               Show archived
             </label>
+
+            <ViewToggle view={view} onViewChange={setView} />
           </div>
         </div>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          )
         )}
 
         {/* Empty State */}
@@ -249,16 +262,27 @@ export function OutletManagementTab() {
 
         {/* Outlets Grid */}
         {!isLoading && filteredOutlets.length > 0 && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredOutlets.map((outlet) => (
-              <OutletCard
-                key={outlet.id}
-                outlet={outlet}
-                onArchive={handleArchive}
-                onUnarchive={handleUnarchive}
-              />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredOutlets.map((outlet) => (
+                <OutletCard
+                  key={outlet.id}
+                  outlet={outlet}
+                  onArchive={handleArchive}
+                  onUnarchive={handleUnarchive}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {filteredOutlets.map((outlet) => (
+                <OutletListRow
+                  key={outlet.id}
+                  outlet={outlet}
+                />
+              ))}
+            </div>
+          )
         )}
       </div>
 

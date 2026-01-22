@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { useRecipes } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
-import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
+import { RecipeListRow } from './RecipeListRow';
+import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { useAppState } from '@/lib/store';
 import type { Recipe, RecipeStatus } from '@/types';
 
 type GroupByOption = 'none' | 'status';
 type StatusFilter = 'all' | RecipeStatus;
+type ViewType = 'grid' | 'list';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
@@ -60,6 +62,7 @@ export function RecipeManagementTab() {
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [view, setView] = useState<ViewType>('grid');
 
   // Filter and group recipes
   const filteredRecipes = useMemo(() => {
@@ -147,16 +150,26 @@ export function RecipeManagementTab() {
               options={GROUP_BY_OPTIONS}
               className="w-36"
             />
+
+            <ViewToggle view={view} onViewChange={setView} />
           </div>
         </div>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-48 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          )
         )}
 
         {/* Empty State */}
@@ -174,17 +187,29 @@ export function RecipeManagementTab() {
         {/* Grouped Recipes */}
         {!isLoading && filteredRecipes.length > 0 && (
           <div>
-            {Object.entries(groupedRecipes).map(([group, items]) => (
-              <GroupSection key={group} title={group} count={items.length}>
-                {items.map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    isOwned={userId !== null && recipe.owner_id === userId}
-                  />
-                ))}
-              </GroupSection>
-            ))}
+            {Object.entries(groupedRecipes).map(([group, items]) =>
+              view === 'grid' ? (
+                <GroupSection key={group} title={group} count={items.length}>
+                  {items.map((recipe) => (
+                    <RecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      isOwned={userId !== null && recipe.owner_id === userId}
+                    />
+                  ))}
+                </GroupSection>
+              ) : (
+                <ListSection key={group} title={group} count={items.length}>
+                  {items.map((recipe) => (
+                    <RecipeListRow
+                      key={recipe.id}
+                      recipe={recipe}
+                      isOwned={userId !== null && recipe.owner_id === userId}
+                    />
+                  ))}
+                </ListSection>
+              )
+            )}
           </div>
         )}
       </div>

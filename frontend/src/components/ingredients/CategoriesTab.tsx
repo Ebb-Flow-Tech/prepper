@@ -3,10 +3,12 @@
 import { useState, useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useCategories, useUpdateCategory, useDeactivateCategory } from '@/lib/hooks';
-import { CategoryCard, AddCategoryModal } from '@/components/categories';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea } from '@/components/ui';
+import { CategoryCard, CategoryListRow, AddCategoryModal } from '@/components/categories';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Category } from '@/types';
+
+type ViewType = 'grid' | 'list';
 
 interface CategoryFormData {
   name: string;
@@ -109,6 +111,7 @@ export function CategoriesTab() {
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [view, setView] = useState<ViewType>('grid');
   const { data: categories, isLoading, error } = useCategories(showArchived);
 
   const filteredCategories = useMemo(() => {
@@ -185,16 +188,26 @@ export function CategoriesTab() {
               />
               Show archived
             </label>
+
+            <ViewToggle view={view} onViewChange={setView} />
           </div>
         </div>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          )
         )}
 
         {/* Empty State */}
@@ -208,17 +221,31 @@ export function CategoriesTab() {
 
         {/* Categories Grid */}
         {!isLoading && filteredCategories.length > 0 && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredCategories.map((category) => (
-              <CategoryCard
-                key={category.id}
-                category={category}
-                onEdit={setEditingCategory}
-                onArchive={handleArchive}
-                onUnarchive={handleUnarchive}
-              />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredCategories.map((category) => (
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  onEdit={setEditingCategory}
+                  onArchive={handleArchive}
+                  onUnarchive={handleUnarchive}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {filteredCategories.map((category) => (
+                <CategoryListRow
+                  key={category.id}
+                  category={category}
+                  onEdit={setEditingCategory}
+                  onArchive={handleArchive}
+                  onUnarchive={handleUnarchive}
+                />
+              ))}
+            </div>
+          )
         )}
       </div>
 

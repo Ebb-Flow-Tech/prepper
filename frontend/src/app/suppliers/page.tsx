@@ -4,10 +4,12 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
 import { useSuppliers, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ConfirmModal } from '@/components/ui';
-import { AddSupplierModal } from '@/components/suppliers';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ConfirmModal, ViewToggle } from '@/components/ui';
+import { AddSupplierModal, SupplierListRow } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
+
+type ViewType = 'grid' | 'list';
 
 function SupplierCard({ supplier }: { supplier: Supplier }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -194,6 +196,7 @@ export default function SuppliersPage() {
   const { data: suppliers, isLoading, error } = useSuppliers();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [view, setView] = useState<ViewType>('grid');
 
   const filteredSuppliers = useMemo(() => {
     if (!suppliers) return [];
@@ -239,15 +242,24 @@ export default function SuppliersPage() {
               onClear={() => setSearch('')}
             />
           </div>
+          <ViewToggle view={view} onViewChange={setView} />
         </div>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          )
         )}
 
         {/* Empty State */}
@@ -261,11 +273,19 @@ export default function SuppliersPage() {
 
         {/* Suppliers List */}
         {!isLoading && filteredSuppliers.length > 0 && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredSuppliers.map((supplier) => (
-              <SupplierCard key={supplier.id} supplier={supplier} />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredSuppliers.map((supplier) => (
+                <SupplierCard key={supplier.id} supplier={supplier} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {filteredSuppliers.map((supplier) => (
+                <SupplierListRow key={supplier.id} supplier={supplier} />
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>
