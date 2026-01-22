@@ -39,6 +39,7 @@ import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
 import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
+import { useRecipeOutlets } from '@/lib/hooks/useRecipeOutlets';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
@@ -403,6 +404,7 @@ function OverviewTab({
   tastingNotes,
   tastingSummary,
   userId,
+  outlets,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[] | undefined;
@@ -412,6 +414,7 @@ function OverviewTab({
   tastingNotes: TastingNoteWithRecipe[] | undefined;
   tastingSummary: RecipeTastingSummary | undefined;
   userId: string | null;
+  outlets: any[] | undefined;
 }) {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
   const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
@@ -465,34 +468,42 @@ function OverviewTab({
             )}
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                    {recipe.name}
-                  </h1>
-                  <p className="text-zinc-500 dark:text-zinc-400 mt-1">
-                    Yield: {recipe.yield_quantity} {recipe.yield_unit}
-                  </p>
-                </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                  {recipe.name}
+                </h1>
+                <p className="text-zinc-500 dark:text-zinc-400 mt-1">
+                  Yield: {recipe.yield_quantity} {recipe.yield_unit}
+                </p>
 
-                <div className="flex items-center gap-2">
-                  {userId !== null && recipe.owner_id === userId && (
-                    <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
-                  )}
-                  <Badge variant={STATUS_VARIANTS[recipe.status]}>
-                    {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
-                  </Badge>
-                  <Link href={`/canvas?recipe=${recipe.id}`}>
-                    <Button variant="outline" size="sm">
-                      {userId !== null && recipe.owner_id === userId ? (
-                        <Edit2 className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                      {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
-                    </Button>
-                  </Link>
-                </div>
+                {outlets && outlets.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {outlets.map((outlet) => (
+                      <Badge key={outlet.id} variant="secondary" className="text-xs">
+                        {outlet.code}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {userId !== null && recipe.owner_id === userId && (
+                  <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                )}
+                <Badge variant={STATUS_VARIANTS[recipe.status]}>
+                  {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+                </Badge>
+                <Link href={`/canvas?recipe=${recipe.id}`}>
+                  <Button variant="outline" size="sm">
+                    {userId !== null && recipe.owner_id === userId ? (
+                      <Edit2 className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                    {userId !== null && recipe.owner_id === userId ? 'Edit in Canvas' : 'View in Canvas'}
+                  </Button>
+                </Link>
               </div>
 
               <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -955,6 +966,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
   const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
+  const { data: outlets } = useRecipeOutlets(recipeId);
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -1041,6 +1053,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 tastingNotes={tastingNotes}
                 tastingSummary={tastingSummary}
                 userId={userId}
+                outlets={outlets}
               />
             )}
 

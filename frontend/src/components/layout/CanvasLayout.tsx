@@ -54,7 +54,7 @@ export function CanvasLayout({ showBackLink = false }: CanvasLayoutProps) {
             className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Recipes
+            Back
           </Link>
         </div>
       )}

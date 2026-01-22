@@ -254,7 +254,6 @@ export function OutletManagementTab() {
               <OutletCard
                 key={outlet.id}
                 outlet={outlet}
-                onEdit={setEditingOutlet}
                 onArchive={handleArchive}
                 onUnarchive={handleUnarchive}
               />

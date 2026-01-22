@@ -205,11 +205,11 @@ export default function OutletPage({ params }: OutletPageProps) {
     return (
       <div className="p-6">
         <Link
-          href="/outlets"
+          href="/recipes"
           className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Outlets
+          Back to Recipes
         </Link>
         <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
           Outlet not found or failed to load.
@@ -223,11 +223,11 @@ export default function OutletPage({ params }: OutletPageProps) {
       <div className="p-6 max-w-5xl mx-auto">
         {/* Back Link */}
         <Link
-          href="/outlets"
+          href="/recipes"
           className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Outlets
+          Back
         </Link>
 
         {isLoading ? (
