@@ -755,7 +755,7 @@ export default function RndPage() {
                   <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                     <FlaskConical className="h-10 w-10 text-zinc-300 dark:text-zinc-700 mb-3" />
                     <p className="text-sm text-muted-foreground">No tasting sessions</p>
-                    <p className="text-xs text-muted-foreground mt-1">Create a session from a 'In Progress' recipe</p>
+                    <p className="text-xs text-muted-foreground mt-1">Create a session from a &apos;In Progress&apos; recipe</p>
                   </div>
                 ) : (
                   filteredSessions.map((session) => (
