@@ -34,8 +34,27 @@ def client_fixture(session: Session):
 
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[db_get_session] = get_session_override
-    client = TestClient(app)
-    yield client
+
+    # Mock storage service to avoid needing Supabase credentials
+    storage_patches = [
+        patch("app.api.recipe_images.is_storage_configured", return_value=True),
+        patch("app.api.recipe_images.StorageService"),
+    ]
+
+    with storage_patches[0]:
+        with storage_patches[1] as mock_storage_class:
+            mock_storage = MagicMock()
+
+            # Make the mock's async method work with await
+            async def async_upload(*args, **kwargs):
+                return "https://example.com/storage/recipe_images/test.png"
+
+            mock_storage.upload_image_from_base64 = MagicMock(side_effect=async_upload)
+            mock_storage_class.return_value = mock_storage
+
+            client = TestClient(app)
+            yield client
+
     app.dependency_overrides.clear()
 
 
