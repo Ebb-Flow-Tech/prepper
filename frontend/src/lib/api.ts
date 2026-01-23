@@ -48,6 +48,9 @@ import type {
   RecipeOutlet,
   CreateRecipeOutletRequest,
   UpdateRecipeOutletRequest,
+  RecipeCategory,
+  CreateRecipeCategoryRequest,
+  UpdateRecipeCategoryRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -718,6 +721,41 @@ export async function removeRecipeFromOutlet(
   outletId: number
 ): Promise<void> {
   return fetchApi<void>(`/recipes/${recipeId}/outlets/${outletId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Recipe Categories ============
+
+export async function getRecipeCategories(): Promise<RecipeCategory[]> {
+  return fetchApi<RecipeCategory[]>('/recipe-categories');
+}
+
+export async function getRecipeCategory(id: number): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>(`/recipe-categories/${id}`);
+}
+
+export async function createRecipeCategory(
+  data: CreateRecipeCategoryRequest
+): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>('/recipe-categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeCategory(
+  id: number,
+  data: UpdateRecipeCategoryRequest
+): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>(`/recipe-categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecipeCategory(id: number): Promise<void> {
+  return fetchApi<void>(`/recipe-categories/${id}`, {
     method: 'DELETE',
   });
 }

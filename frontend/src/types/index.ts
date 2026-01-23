@@ -530,3 +530,23 @@ export interface UpdateRecipeOutletRequest {
   is_active?: boolean;
   price_override?: number | null;
 }
+
+// ============ Recipe Category Types ============
+
+export interface RecipeCategory {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRecipeCategoryRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateRecipeCategoryRequest {
+  name?: string;
+  description?: string | null;
+}
