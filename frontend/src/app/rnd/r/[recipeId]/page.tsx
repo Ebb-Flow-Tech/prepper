@@ -519,6 +519,14 @@ function OverviewTab({
                   </span>
                 )}
               </div>
+
+              {recipe.description && (
+                <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap">
+                    {recipe.description}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
