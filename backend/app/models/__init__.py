@@ -89,6 +89,11 @@ from app.models.recipe_category import (
     RecipeCategoryCreate,
     RecipeCategoryUpdate,
 )
+from app.models.recipe_recipe_category import (
+    RecipeRecipeCategory,
+    RecipeRecipeCategoryCreate,
+    RecipeRecipeCategoryUpdate,
+)
 
 __all__ = [
     # Ingredient
@@ -167,4 +172,8 @@ __all__ = [
     "RecipeCategory",
     "RecipeCategoryCreate",
     "RecipeCategoryUpdate",
+    # RecipeRecipeCategory
+    "RecipeRecipeCategory",
+    "RecipeRecipeCategoryCreate",
+    "RecipeRecipeCategoryUpdate",
 ]

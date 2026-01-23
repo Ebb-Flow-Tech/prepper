@@ -51,6 +51,9 @@ import type {
   RecipeCategory,
   CreateRecipeCategoryRequest,
   UpdateRecipeCategoryRequest,
+  RecipeRecipeCategory,
+  CreateRecipeRecipeCategoryRequest,
+  UpdateRecipeRecipeCategoryRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -758,6 +761,45 @@ export async function deleteRecipeCategory(id: number): Promise<void> {
   return fetchApi<void>(`/recipe-categories/${id}`, {
     method: 'DELETE',
   });
+}
+
+// ============ Recipe-Recipe Categories (Many-to-Many) ============
+
+export async function getCategoryRecipes(categoryId: number): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>(`/recipe-recipe-categories/category/${categoryId}`);
+}
+
+export async function getRecipeCategoryLinks(recipeId: number): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>(`/recipe-recipe-categories/recipe/${recipeId}`);
+}
+
+export async function addRecipeToCategory(
+  data: CreateRecipeRecipeCategoryRequest
+): Promise<RecipeRecipeCategory> {
+  return fetchApi<RecipeRecipeCategory>('/recipe-recipe-categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeCategoryLink(
+  linkId: number,
+  data: UpdateRecipeRecipeCategoryRequest
+): Promise<RecipeRecipeCategory> {
+  return fetchApi<RecipeRecipeCategory>(`/recipe-recipe-categories/${linkId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeRecipeFromCategory(linkId: number): Promise<void> {
+  return fetchApi<void>(`/recipe-recipe-categories/${linkId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getAllRecipeRecipeCategories(): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>('/recipe-recipe-categories');
 }
 
 // ============ Agents ============

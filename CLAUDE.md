@@ -70,6 +70,8 @@ app/
 │   ├── tasting_note_image.py    # TastingNoteImage (images for tasting notes with timestamps)
 │   ├── outlet.py                # Outlet (with parent_outlet_id hierarchy), RecipeOutlet (+ price_override)
 │   ├── category.py              # Category (ingredient categorization, soft-delete)
+│   ├── recipe_category.py       # RecipeCategory (recipe categorization)
+│   ├── recipe_recipe_category.py # RecipeRecipeCategory (recipe-category many-to-many)
 │   ├── tasting.py               # TastingSession, TastingNote
 │   ├── recipe_tasting.py        # RecipeTasting (session-recipe many-to-many)
 │   ├── supplier.py              # Supplier (name, address, phone, email)
@@ -88,7 +90,9 @@ app/
 │   ├── recipe_tasting_service.py    # Session-recipe relationships
 │   ├── supplier_service.py      # Supplier CRUD + supplier-ingredient links
 │   ├── storage_service.py       # Supabase Storage for recipe images
-│   └── category_service.py      # Category CRUD + soft-delete
+│   ├── category_service.py      # Category CRUD + soft-delete
+│   ├── recipe_category_service.py   # Recipe category CRUD
+│   └── recipe_recipe_category_service.py # Recipe-category link CRUD
 ├── api/                 # FastAPI routers (one per resource)
 │   ├── recipes.py               # Recipe CRUD + fork + versions + image management
 │   ├── recipe_ingredients.py    # Recipe ingredient links + wastage/pricing
@@ -105,7 +109,9 @@ app/
 │   ├── recipe_tastings.py       # Session-recipe relationships
 │   ├── suppliers.py             # Supplier CRUD + ingredient links
 │   ├── agents.py                # Agent endpoints (feedback summarization, etc.)
-│   └── categories.py            # Category CRUD
+│   ├── categories.py            # Category CRUD
+│   ├── recipe_categories.py     # Recipe category CRUD
+│   └── recipe_recipe_categories.py # Recipe-category link CRUD
 ├── agents/              # AI-powered features
 │   ├── base_agent.py            # Base agent framework
 │   ├── category_agent.py        # Ingredient categorization
@@ -122,7 +128,8 @@ app/
 
 ```
 app/                     # Next.js 15 App Router pages
-├── outlets/             # Outlet list and detail pages (NEW)
+├── outlets/             # Outlet list and detail pages
+├── recipe-categories/   # Recipe category detail page ([id])
 ├── recipes/             # Recipe list and detail pages
 ├── ingredients/         # Ingredient list and detail pages
 ├── suppliers/           # Supplier list and detail pages
@@ -148,16 +155,17 @@ lib/
     ├── useCosting.ts
     ├── useInstructions.ts
     ├── useSuppliers.ts
-    ├── useTastings.ts           # Tasting sessions + notes + useTastingNoteImages, useSyncTastingNoteImages (NEW)
+    ├── useTastings.ts           # Tasting sessions + notes + useTastingNoteImages, useSyncTastingNoteImages
     ├── useSubRecipes.ts
     ├── useOutlets.ts            # useOutlets, useOutlet, useCreateOutlet, useUpdateOutlet
-    └── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, etc.
+    ├── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, etc.
+    └── useRecipeRecipeCategories.ts # useCategoryRecipes, useRecipeCategoryLinks, useAddRecipeToCategory, etc.
 
 components/
 ├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
 │   └── tabs/            # 12+ canvas tabs including OutletsTab, OverviewTab, CanvasTab, VersionsTab, etc.
 ├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, SubRecipesList
-├── recipes/             # RecipeCard
+├── recipes/             # RecipeCard, RecipeCategoryCard, RecipeCategoryFilterButtons
 ├── outlets/             # OutletsTab, AddOutletModal, EditableSelect
 ├── tasting/             # ImageUploadPreview (upload, preview, delete UI for tasting note images)
 ├── ingredients/         # IngredientCard
@@ -233,6 +241,13 @@ All endpoints under `/api/v1`:
 - `/recipes/{id}/outlets/{outlet_id}` (PATCH) — update outlet link (price_override, activation)
 - `/recipes/{id}/outlets/{outlet_id}` (DELETE) — remove recipe from outlet
 
+**Recipe Categories:**
+- `/recipe-categories` — CRUD for recipe categories
+- `/recipe-categories/{id}` — get/update single recipe category
+- `/recipe-recipe-categories` — CRUD for recipe-category links
+- `/recipe-recipe-categories/recipe/{recipe_id}` — get categories assigned to recipe
+- `/recipe-recipe-categories/category/{category_id}` — get recipes in category
+
 **Agents:**
 - `/agents/summarize-feedback/{recipe_id}` — AI-powered tasting feedback summary
 
@@ -254,6 +269,14 @@ All endpoints under `/api/v1`:
 - `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
 
 ## Key Features (Recent Additions)
+
+**Recipe Category Management** (Jan 23)
+- `RecipeCategory` model for categorizing recipes
+- `RecipeRecipeCategory` model for many-to-many recipe-category relationships
+- Full CRUD operations for recipe categories and links
+- Category detail page with recipe management at `/recipe-categories/[id]`
+- `RecipeCategoryCard` and `RecipeCategoryFilterButtons` components for UI
+- Complete integration with recipe management workflows
 
 **Tasting Note Image Management** (Jan 23)
 - `TastingNoteImage` model for multiple images per tasting note

@@ -1,5 +1,7 @@
 ## Tasks:
--  Create 1 or more database table(s) with a given schema and description. - After which, create CRUD endpoints for it. 
+- Create 1 or more database table(s) with a given schema and description. 
+- Also ask if the delete is soft delete, hard delete or both, and this will affect the delete endpoint(s) creation
+- After which, create CRUD endpoints for it. 
 - Next, also create a set of unit tests. 
 - Last but not least, create 1 nigration file ONLY after all said tables and unit tests are created.
 

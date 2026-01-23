@@ -1,15 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage } from '@/lib/hooks';
+import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown, Plus } from 'lucide-react';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
+import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
 import { RecipeImageCarousel } from '@/components/recipe/RecipeImageCarousel';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { RecipeStatus, TastingDecision } from '@/types';
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -54,6 +55,9 @@ export function OverviewTab() {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
   const [isFeedbacksOpen, setIsFeedbacksOpen] = useState(false);
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const [tagSearchFilter, setTagSearchFilter] = useState('');
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
@@ -63,8 +67,12 @@ export function OverviewTab() {
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: mainImage } = useMainRecipeImage(selectedRecipeId);
+  const { data: categoryLinks = [] } = useRecipeCategoryLinks(selectedRecipeId);
+  const { data: allCategories = [] } = useRecipeCategories();
   const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
   const { mutate: summarizeFeedback, data: feedbackSummary, isPending: isSummarizingFeedback, error: feedbackSummaryError } = useSummarizeFeedback();
+  const { mutate: addRecipeToCategory, isPending: isAddingTag } = useAddRecipeToCategory();
+  const { mutate: removeRecipeFromCategory, isPending: isRemovingTag } = useRemoveRecipeFromCategory();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -105,6 +113,27 @@ export function OverviewTab() {
     // Only re-trigger when recipe changes, not on other rerenders
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRecipeId]);
+
+  // Close tag dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setIsTagDropdownOpen(false);
+      }
+    }
+
+    if (isTagDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isTagDropdownOpen]);
+
+  // Reset search filter when dropdown closes
+  useEffect(() => {
+    if (!isTagDropdownOpen) {
+      setTagSearchFilter('');
+    }
+  }, [isTagDropdownOpen]);
 
   const handleSaveDescription = () => {
     if (selectedRecipeId && descriptionValue !== recipe?.description) {
@@ -210,11 +239,19 @@ export function OverviewTab() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="secondary">v{recipe.version}</Badge>
                         {userId !== null && recipe.owner_id === userId && (
                           <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
                         )}
+                        {categoryLinks.map((link) => {
+                          const category = allCategories.find((c) => c.id === link.category_id);
+                          return category ? (
+                            <Badge key={link.id} variant="default">
+                              {category.name}
+                            </Badge>
+                          ) : null;
+                        })}
                         <Badge variant={STATUS_VARIANTS[recipe.status]}>
                           {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
                         </Badge>
@@ -242,6 +279,127 @@ export function OverviewTab() {
                       )}
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tags Section */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                  Tags
+                </h2>
+                <div className="space-y-4">
+                  {/* Current Tags */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {categoryLinks.length > 0 ? (
+                      categoryLinks.map((link) => {
+                        const category = allCategories.find((c) => c.id === link.category_id);
+                        return category ? (
+                          <div
+                            key={link.id}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.2)] border border-[hsl(var(--primary)/0.3)]"
+                          >
+                            <span className="text-sm font-medium text-[hsl(var(--primary))]">
+                              {category.name}
+                            </span>
+                            <button
+                              onClick={() => {
+                                if (canEditRecipe) {
+                                  removeRecipeFromCategory({
+                                    linkId: link.id,
+                                    categoryId: category.id,
+                                    recipeId: selectedRecipeId!,
+                                  });
+                                }
+                              }}
+                              disabled={!canEditRecipe || isRemovingTag}
+                              className="ml-1 text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.7)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              title="Remove tag"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null;
+                      })
+                    ) : (
+                      <p className="text-sm text-zinc-400 dark:text-zinc-500 italic">
+                        No tags added yet
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Add Tag Button */}
+                  {canEditRecipe && (
+                    <div className="relative" ref={tagDropdownRef}>
+                      <button
+                        onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
+                        disabled={isAddingTag}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.2)] hover:bg-[hsl(var(--primary)/0.15)] dark:hover:bg-[hsl(var(--primary)/0.25)] text-[hsl(var(--primary))] text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Tag
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {isTagDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-zinc-800 border border-[hsl(var(--border))] rounded-lg shadow-lg z-50 min-w-48">
+                          {allCategories.length > 0 ? (
+                            <>
+                              {/* Search Input */}
+                              <div className="p-2 border-b border-[hsl(var(--border))]">
+                                <input
+                                  type="text"
+                                  placeholder="Search tags..."
+                                  value={tagSearchFilter}
+                                  onChange={(e) => setTagSearchFilter(e.target.value)}
+                                  autoFocus
+                                  className="w-full px-3 py-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] placeholder-[hsl(var(--muted-foreground))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                />
+                              </div>
+
+                              {/* Category List */}
+                              <div className="max-h-48 overflow-y-auto">
+                                {allCategories
+                                  .filter(
+                                    (cat) =>
+                                      !categoryLinks.some(
+                                        (link) => link.category_id === cat.id
+                                      ) &&
+                                      cat.name.toLowerCase().includes(tagSearchFilter.toLowerCase())
+                                  )
+                                  .map((category) => (
+                                    <button
+                                      key={category.id}
+                                      onClick={() => {
+                                        addRecipeToCategory({
+                                          recipe_id: selectedRecipeId!,
+                                          category_id: category.id,
+                                        });
+                                        setIsTagDropdownOpen(false);
+                                      }}
+                                      disabled={isAddingTag}
+                                      className="w-full text-left px-4 py-2 hover:bg-[hsl(var(--primary)/0.1)] dark:hover:bg-[hsl(var(--primary)/0.15)] text-sm text-zinc-900 dark:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {category.name}
+                                    </button>
+                                  ))}
+                                {allCategories.filter((cat) => !categoryLinks.some((link) => link.category_id === cat.id) && cat.name.toLowerCase().includes(tagSearchFilter.toLowerCase())).length === 0 && (
+                                  <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                                    {tagSearchFilter ? 'No matching tags' : 'All tags added'}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                              No tags available
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Edit2, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import type { RecipeCategory } from '@/types';
 
 interface RecipeCategoryCardProps {
   category: RecipeCategory;
-  onEdit?: (category: RecipeCategory) => void;
   onDelete?: (category: RecipeCategory) => void;
 }
 
-export function RecipeCategoryCard({ category, onEdit, onDelete }: RecipeCategoryCardProps) {
+export function RecipeCategoryCard({ category, onDelete }: RecipeCategoryCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const router = useRouter();
 
   return (
     <Card
@@ -42,17 +43,15 @@ export function RecipeCategoryCard({ category, onEdit, onDelete }: RecipeCategor
       {/* Quick Actions */}
       {showActions && (
         <div className="absolute top-2 right-2 flex items-center gap-1 bg-white dark:bg-zinc-950 rounded-md shadow-sm border border-zinc-200 dark:border-zinc-800 p-1">
-          {onEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onEdit(category)}
-              title="Edit"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => router.push(`/recipe-categories/${category.id}`)}
+            title="View Details"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
           {onDelete && (
             <Button
               variant="ghost"

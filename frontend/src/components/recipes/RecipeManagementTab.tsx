@@ -3,14 +3,15 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes } from '@/lib/hooks';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
+import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { useAppState } from '@/lib/store';
 import type { Recipe, RecipeStatus } from '@/types';
 
-type GroupByOption = 'none' | 'status';
+type GroupByOption = 'none' | 'status' | 'category';
 type StatusFilter = 'all' | RecipeStatus;
 type ViewType = 'grid' | 'list';
 type SortByOption = 'price_asc' | 'price_desc';
@@ -18,6 +19,7 @@ type SortByOption = 'price_asc' | 'price_desc';
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
   { value: 'status', label: 'By Status' },
+  { value: 'category', label: 'By Category' },
 ];
 
 const STATUS_FILTER_OPTIONS = [
@@ -53,7 +55,12 @@ function sortRecipes(recipes: Recipe[], sortBy: SortByOption): Recipe[] {
   return [...withCost, ...noCost];
 }
 
-function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string, Recipe[]> {
+function groupRecipes(
+  recipes: Recipe[],
+  groupBy: GroupByOption,
+  recipeCategoryMap: Map<number, number[]>,
+  categoryNameMap: Map<number, string>
+): Record<string, Recipe[]> {
   if (groupBy === 'none') {
     return { 'All Recipes': recipes };
   }
@@ -78,19 +85,71 @@ function groupRecipes(recipes: Recipe[], groupBy: GroupByOption): Record<string,
     );
   }
 
+  if (groupBy === 'category') {
+    const grouped: Record<string, Recipe[]> = {};
+
+    recipes.forEach((recipe) => {
+      const categoryIds = recipeCategoryMap.get(recipe.id) || [];
+
+      if (categoryIds.length === 0) {
+        // Recipe has no categories
+        if (!grouped['Uncategorized']) {
+          grouped['Uncategorized'] = [];
+        }
+        grouped['Uncategorized'].push(recipe);
+      } else {
+        // Add recipe to each of its category groups
+        categoryIds.forEach((categoryId) => {
+          const categoryName = categoryNameMap.get(categoryId) || 'Unknown';
+          if (!grouped[categoryName]) {
+            grouped[categoryName] = [];
+          }
+          grouped[categoryName].push(recipe);
+        });
+      }
+    });
+
+    return grouped;
+  }
+
   return { 'All Recipes': recipes };
 }
 
 export function RecipeManagementTab() {
   const router = useRouter();
-  const { userId, userType, selectRecipe, setCanvasTab } = useAppState();
+  const { userId, userType, selectRecipe } = useAppState();
   const { data: recipes, isLoading, error } = useRecipes();
+  const { data: recipeCategories } = useRecipeCategories();
+  const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
 
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
+  const [selectedRecipeCategories, setSelectedRecipeCategories] = useState<number[]>([]);
+
+  // Build a map of recipe_id -> category_ids[] for efficient filtering
+  const recipeCategoryMap = useMemo(() => {
+    const map = new Map<number, number[]>();
+
+    if (!recipeCategoryLinks) return map;
+
+    recipeCategoryLinks.forEach((link) => {
+      if (link.is_active) {
+        const existing = map.get(link.recipe_id) || [];
+        map.set(link.recipe_id, [...existing, link.category_id]);
+      }
+    });
+
+    return map;
+  }, [recipeCategoryLinks]);
+
+  // Map category_id -> name (for grouping)
+  const categoryNameMap = useMemo(() => {
+    if (!recipeCategories) return new Map<number, string>();
+    return new Map(recipeCategories.map((c) => [c.id, c.name]));
+  }, [recipeCategories]);
 
   // Filter and group recipes
   const filteredRecipes = useMemo(() => {
@@ -104,6 +163,17 @@ export function RecipeManagementTab() {
       // Filter by status
       if (statusFilter !== 'all' && recipe.status !== statusFilter) {
         return false;
+      }
+
+      // Filter by category (if any selected)
+      if (selectedRecipeCategories.length > 0) {
+        const recipeCategories = recipeCategoryMap.get(recipe.id) || [];
+        const hasSelectedCategory = selectedRecipeCategories.some((catId) =>
+          recipeCategories.includes(catId)
+        );
+        if (!hasSelectedCategory) {
+          return false;
+        }
       }
 
       // Admin users can see all recipes
@@ -120,7 +190,7 @@ export function RecipeManagementTab() {
     });
 
     return sortRecipes(filtered, sortBy);
-  }, [recipes, search, statusFilter, userId, userType, sortBy]);
+  }, [recipes, search, statusFilter, selectedRecipeCategories, recipeCategoryMap, userId, userType, sortBy]);
 
   const handleCreate = () => {
     // Clear selected recipe and navigate to canvas for new recipe creation
@@ -129,8 +199,8 @@ export function RecipeManagementTab() {
   };
 
   const groupedRecipes = useMemo(() => {
-    return groupRecipes(filteredRecipes, groupBy);
-  }, [filteredRecipes, groupBy]);
+    return groupRecipes(filteredRecipes, groupBy, recipeCategoryMap, categoryNameMap);
+  }, [filteredRecipes, groupBy, recipeCategoryMap, categoryNameMap]);
 
   if (error) {
     return (
@@ -156,40 +226,50 @@ export function RecipeManagementTab() {
         </PageHeader>
 
         {/* Toolbar */}
-        <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center">
-          <div className="flex-1 max-w-md">
-            <SearchInput
-              placeholder="Search recipes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onClear={() => setSearch('')}
-            />
+        <div className="flex flex-col gap-4 mb-6">
+          {/* Search and Controls Row */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex-1 max-w-md">
+              <SearchInput
+                placeholder="Search recipes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onClear={() => setSearch('')}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortByOption)}
+                options={SORT_BY_OPTIONS}
+                className="w-44"
+              />
+
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                options={STATUS_FILTER_OPTIONS}
+                className="w-32"
+              />
+
+              <Select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
+                options={GROUP_BY_OPTIONS}
+                className="w-36"
+              />
+
+              <ViewToggle view={view} onViewChange={setView} />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortByOption)}
-              options={SORT_BY_OPTIONS}
-              className="w-44"
-            />
-
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              options={STATUS_FILTER_OPTIONS}
-              className="w-32"
-            />
-
-            <Select
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
-              options={GROUP_BY_OPTIONS}
-              className="w-36"
-            />
-
-            <ViewToggle view={view} onViewChange={setView} />
-          </div>
+          {/* Category Filter Pills Row */}
+          <RecipeCategoryFilterButtons
+            categories={recipeCategories}
+            selectedCategories={selectedRecipeCategories}
+            onCategoryChange={setSelectedRecipeCategories}
+          />
         </div>
 
         {/* Loading State */}

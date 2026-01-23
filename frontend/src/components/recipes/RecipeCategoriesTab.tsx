@@ -202,7 +202,6 @@ export function RecipeCategoriesTab() {
                 <RecipeCategoryCard
                   key={category.id}
                   category={category}
-                  onEdit={setEditingCategory}
                   onDelete={handleDeleteCategory}
                 />
               ))}
@@ -213,7 +212,6 @@ export function RecipeCategoriesTab() {
                 <RecipeCategoryListRow
                   key={category.id}
                   category={category}
-                  onEdit={setEditingCategory}
                   onDelete={handleDeleteCategory}
                 />
               ))}

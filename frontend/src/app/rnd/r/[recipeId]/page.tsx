@@ -37,13 +37,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
 import { useRecipeOutlets } from '@/lib/hooks/useRecipeOutlets';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
-import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet } from '@/types';
+import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet, RecipeRecipeCategory, RecipeCategory } from '@/types';
 
 interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
@@ -406,6 +406,8 @@ function OverviewTab({
   userId,
   outlets,
   outletMap,
+  categoryLinks,
+  allCategories,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[] | undefined;
@@ -417,6 +419,8 @@ function OverviewTab({
   userId: string | null;
   outlets: RecipeOutlet[] | undefined;
   outletMap: Map<number, Outlet>;
+  categoryLinks: RecipeRecipeCategory[] | undefined;
+  allCategories: RecipeCategory[] | undefined;
 }) {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
   const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
@@ -478,9 +482,9 @@ function OverviewTab({
                   Yield: {recipe.yield_quantity} {recipe.yield_unit}
                 </p>
 
-                {outlets && outlets.length > 0 && (
+                {(outlets && outlets.length > 0) || (categoryLinks && categoryLinks.length > 0) ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {outlets.map((recipeOutlet) => {
+                    {outlets && outlets.map((recipeOutlet) => {
                       const outlet = outletMap.get(recipeOutlet.outlet_id);
                       return (
                         <Badge key={recipeOutlet.outlet_id} variant="secondary" className="text-xs">
@@ -488,8 +492,16 @@ function OverviewTab({
                         </Badge>
                       );
                     })}
+                    {categoryLinks && categoryLinks.map((link) => {
+                      const category = allCategories?.find((c) => c.id === link.category_id);
+                      return category ? (
+                        <Badge key={link.id} variant="default" className="text-xs">
+                          {category.name}
+                        </Badge>
+                      ) : null;
+                    })}
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -981,6 +993,8 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
   const { data: recipeOutlets } = useRecipeOutlets(recipeId);
   const { data: allOutlets } = useOutlets();
+  const { data: categoryLinks = [] } = useRecipeCategoryLinks(recipeId);
+  const { data: allCategories = [] } = useRecipeCategories();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -1073,6 +1087,8 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 userId={userId}
                 outlets={recipeOutlets}
                 outletMap={outletMap}
+                categoryLinks={categoryLinks}
+                allCategories={allCategories}
               />
             )}
 

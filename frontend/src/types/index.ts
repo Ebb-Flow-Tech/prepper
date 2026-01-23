@@ -550,3 +550,24 @@ export interface UpdateRecipeCategoryRequest {
   name?: string;
   description?: string | null;
 }
+
+// ============ Recipe-Recipe Category Link Types ============
+
+export interface RecipeRecipeCategory {
+  id: number;
+  recipe_id: number;
+  category_id: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRecipeRecipeCategoryRequest {
+  recipe_id: number;
+  category_id: number;
+  is_active?: boolean;
+}
+
+export interface UpdateRecipeRecipeCategoryRequest {
+  is_active?: boolean;
+}
