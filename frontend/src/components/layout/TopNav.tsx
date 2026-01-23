@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChefHat, FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid } from 'lucide-react';
+import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { logoutUser } from '@/lib/api';
@@ -88,14 +88,28 @@ export function TopNav() {
 
   return (
     <>
-      <nav className="flex h-12 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <nav className="flex h-16 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         {/* Logo */}
         <Link
           href="/recipes"
-          className="flex items-center gap-2 font-semibold text-lg mr-8"
+          className="flex items-center mr-8"
         >
-          <ChefHat className="h-5 w-5" />
-          <span className="hidden sm:inline">Prepper</span>
+          <Image
+            src="/logo/Reciperep logo inline 840x180.png"
+            alt="Reciperep"
+            width={140}
+            height={30}
+            className="h-7 w-auto dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo/Reciperep logo inline light 840x180.png"
+            alt="Reciperep"
+            width={140}
+            height={30}
+            className="h-7 w-auto hidden dark:block"
+            priority
+          />
         </Link>
 
         {/* Navigation Links */}

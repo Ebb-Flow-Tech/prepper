@@ -16,11 +16,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Prepper - Recipe Builder',
+  title: 'Reciperep - Recipe Management',
   description: 'Kitchen-first recipe workspace for chefs and operators',
   icons: {
-    icon: '/icon.png',
-    apple: '/apple-icon.png',
+    icon: '/logo/reciperep-favicon-512x512.png',
+    apple: '/logo/reciperep-favicon-512x512.png',
   },
 };
 

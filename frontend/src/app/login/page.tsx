@@ -49,7 +49,7 @@ export default function LoginPage() {
     <div className="flex min-h-full items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-center text-xl">Log in to Prepper</CardTitle>
+          <CardTitle className="text-center text-xl">Log in to Reciperep</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

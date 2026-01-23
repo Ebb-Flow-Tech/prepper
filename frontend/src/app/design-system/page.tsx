@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import {
-  ChefHat,
   Package,
   BookOpen,
   Plus,
@@ -73,7 +73,7 @@ export default function DesignSystemPage() {
       <div className="mx-auto max-w-6xl p-6 md:p-8 lg:p-12">
         {/* Header */}
         <div className="mb-12">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Prepper Design System</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Reciperep Design System</h1>
           <p className="text-muted-foreground">
             A kitchen-first design system with warm, terracotta-inspired colors and three-font typography.
           </p>
@@ -113,6 +113,99 @@ export default function DesignSystemPage() {
               (Resolved: {resolvedTheme})
             </span>
           </div>
+        </Section>
+
+        {/* Branding */}
+        <Section title="Branding">
+          <Subsection title="Logo Inline">
+            <div className="flex flex-col gap-6">
+              <div className="p-6 rounded-lg bg-white border border-border">
+                <Image
+                  src="/logo/Reciperep logo inline 840x180.png"
+                  alt="Reciperep Logo Inline"
+                  width={280}
+                  height={60}
+                  className="h-12 w-auto"
+                />
+              </div>
+              <div className="p-6 rounded-lg bg-zinc-900 border border-border">
+                <Image
+                  src="/logo/Reciperep logo inline 840x180.png"
+                  alt="Reciperep Logo Inline"
+                  width={280}
+                  height={60}
+                  className="h-12 w-auto"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground font-mono">/logo/Reciperep logo inline 840x180.png</p>
+            </div>
+          </Subsection>
+
+          <Subsection title="Logo Icon">
+            <div className="flex gap-6">
+              <div className="p-4 rounded-lg bg-white border border-border">
+                <Image
+                  src="/logo/Reciperep logoicon 260x260.png"
+                  alt="Reciperep Logo Icon"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16"
+                />
+              </div>
+              <div className="p-4 rounded-lg bg-zinc-900 border border-border">
+                <Image
+                  src="/logo/Reciperep logoicon 260x260.png"
+                  alt="Reciperep Logo Icon"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono mt-4">/logo/Reciperep logoicon 260x260.png</p>
+          </Subsection>
+
+          <Subsection title="Favicon">
+            <div className="flex gap-6 items-end">
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 rounded-lg bg-white border border-border">
+                  <Image
+                    src="/logo/reciperep-favicon-512x512.png"
+                    alt="Reciperep Favicon"
+                    width={32}
+                    height={32}
+                    className="h-8 w-8"
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">32px</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 rounded-lg bg-white border border-border">
+                  <Image
+                    src="/logo/reciperep-favicon-512x512.png"
+                    alt="Reciperep Favicon"
+                    width={48}
+                    height={48}
+                    className="h-12 w-12"
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">48px</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-2 rounded-lg bg-white border border-border">
+                  <Image
+                    src="/logo/reciperep-favicon-512x512.png"
+                    alt="Reciperep Favicon"
+                    width={64}
+                    height={64}
+                    className="h-16 w-16"
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">64px</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono mt-4">/logo/reciperep-favicon-512x512.png</p>
+          </Subsection>
         </Section>
 
         {/* Colors */}
@@ -369,7 +462,13 @@ export default function DesignSystemPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <ChefHat className="h-5 w-5 text-primary" />
+                  <Image
+                    src="/logo/Reciperep logoicon 260x260.png"
+                    alt="Reciperep"
+                    width={20}
+                    height={20}
+                    className="h-5 w-5"
+                  />
                   <CardTitle>Recipe Card</CardTitle>
                 </div>
                 <Badge variant="success">approved</Badge>
@@ -482,10 +581,6 @@ export default function DesignSystemPage() {
             Icons are from Lucide React. Use consistent sizing: h-4 w-4 (16px), h-5 w-5 (20px), h-6 w-6 (24px).
           </p>
           <div className="flex flex-wrap gap-6">
-            <div className="flex flex-col items-center gap-2">
-              <ChefHat className="h-6 w-6 text-foreground" />
-              <span className="text-xs text-muted-foreground">ChefHat</span>
-            </div>
             <div className="flex flex-col items-center gap-2">
               <Package className="h-6 w-6 text-foreground" />
               <span className="text-xs text-muted-foreground">Package</span>
