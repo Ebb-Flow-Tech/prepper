@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import create_db_and_tables
-from app.api import ingredients, recipes, recipe_ingredients, instructions, costing, sub_recipes, outlets, tastings, suppliers, recipe_tastings, tasting_history, categories, category_agent, feedback_summary_agent, recipe_images
+from app.api import ingredients, recipes, recipe_ingredients, instructions, costing, sub_recipes, outlets, tastings, suppliers, recipe_tastings, tasting_history, categories, category_agent, feedback_summary_agent, recipe_images, tasting_note_images, recipe_categories, recipe_recipe_categories
 
 settings = get_settings()
 
@@ -105,6 +105,16 @@ def create_app() -> FastAPI:
         tags=["categories"],
     )
     app.include_router(
+        recipe_categories.router,
+        prefix=f"{settings.api_v1_prefix}/recipe-categories",
+        tags=["recipe-categories"],
+    )
+    app.include_router(
+        recipe_recipe_categories.router,
+        prefix=f"{settings.api_v1_prefix}/recipe-recipe-categories",
+        tags=["recipe-recipe-categories"],
+    )
+    app.include_router(
         category_agent.router,
         prefix=f"{settings.api_v1_prefix}/agents",
         tags=["agents"],
@@ -118,6 +128,11 @@ def create_app() -> FastAPI:
         recipe_images.router,
         prefix=f"{settings.api_v1_prefix}/recipe-images",
         tags=["recipe-images"],
+    )
+    app.include_router(
+        tasting_note_images.router,
+        prefix=f"{settings.api_v1_prefix}/tasting-note-images",
+        tags=["tasting-note-images"],
     )
 
     @app.get("/health")

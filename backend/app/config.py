@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Supabase Storage
     supabase_url: str | None = None
     supabase_key: str | None = None
-    supabase_bucket: str = "recipe-images"
+    supabase_bucket: str = ""
 
     # Anthropic API
     anthropic_api_key: str | None = None

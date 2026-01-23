@@ -12,8 +12,6 @@ const SendTastingInvitationSchema = z.object({
   message: z.string().optional(),
 });
 
-type SendTastingInvitationRequest = z.infer<typeof SendTastingInvitationSchema>;
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();

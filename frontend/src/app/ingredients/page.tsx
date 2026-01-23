@@ -3,14 +3,16 @@
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories } from '@/lib/hooks';
-import { IngredientCard, CategoriesTab, FilterButtons, AddIngredientModal } from '@/components/ingredients';
-import { PageHeader, SearchInput, Select, GroupSection, Button, Skeleton } from '@/components/ui';
+import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal } from '@/components/ingredients';
+import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
 import { useAppState, type IngredientTab } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 type GroupByOption = 'none' | 'unit' | 'status' | 'category';
+type ViewType = 'grid' | 'list';
+type SortByOption = 'price_asc' | 'price_desc';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
@@ -19,10 +21,36 @@ const GROUP_BY_OPTIONS = [
   { value: 'category', label: 'By Category' },
 ];
 
+const SORT_BY_OPTIONS = [
+  { value: 'price_asc', label: 'Price: Low to High' },
+  { value: 'price_desc', label: 'Price: High to Low' },
+];
+
 const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'categories', label: 'Categories' },
 ];
+
+function sortIngredients(ingredients: Ingredient[], sortBy: SortByOption): Ingredient[] {
+  const withCost: Ingredient[] = [];
+  const noCost: Ingredient[] = [];
+
+  ingredients.forEach((ing) => {
+    if (ing.cost_per_base_unit !== null && ing.cost_per_base_unit !== undefined) {
+      withCost.push(ing);
+    } else {
+      noCost.push(ing);
+    }
+  });
+
+  if (sortBy === 'price_asc') {
+    withCost.sort((a, b) => (a.cost_per_base_unit ?? 0) - (b.cost_per_base_unit ?? 0));
+  } else if (sortBy === 'price_desc') {
+    withCost.sort((a, b) => (b.cost_per_base_unit ?? 0) - (a.cost_per_base_unit ?? 0));
+  }
+
+  return [...withCost, ...noCost];
+}
 
 function groupIngredients(
   ingredients: Ingredient[],
@@ -75,13 +103,15 @@ function IngredientsListTab() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+  const [view, setView] = useState<ViewType>('grid');
+  const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
   const { data: categories } = useCategories();
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
 
-    return ingredients.filter((ing) => {
+    const filtered = ingredients.filter((ing) => {
       // Search filter
       if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
@@ -96,7 +126,9 @@ function IngredientsListTab() {
       }
       return true;
     });
-  }, [ingredients, search, selectedCategories, selectedUnits]);
+
+    return sortIngredients(filtered, sortBy);
+  }, [ingredients, search, selectedCategories, selectedUnits, sortBy]);
 
   const categoryMap = useMemo(() => {
     if (!categories) return new Map<number, string>();
@@ -160,6 +192,13 @@ function IngredientsListTab() {
 
           <div className="flex items-center gap-2">
             <Select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortByOption)}
+              options={SORT_BY_OPTIONS}
+              className="w-44"
+            />
+
+            <Select
               value={groupBy}
               onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
               options={GROUP_BY_OPTIONS}
@@ -175,6 +214,8 @@ function IngredientsListTab() {
               />
               Show archived
             </label>
+
+            <ViewToggle view={view} onViewChange={setView} />
           </div>
         </div>
 
@@ -191,11 +232,19 @@ function IngredientsListTab() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
-            ))}
-          </div>
+          view === 'grid' ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 w-full">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-lg" />
+              ))}
+            </div>
+          )
         )}
 
         {/* Empty State */}
@@ -212,19 +261,33 @@ function IngredientsListTab() {
         {/* Grouped Ingredients */}
         {!isLoading && filteredIngredients.length > 0 && (
           <div>
-            {Object.entries(groupedIngredients).map(([group, items]) => (
-              <GroupSection key={group} title={group} count={items.length}>
-                {items.map((ingredient) => (
-                  <IngredientCard
-                    key={ingredient.id}
-                    ingredient={ingredient}
-                    categories={categories}
-                    onArchive={handleArchive}
-                    onUnarchive={handleUnarchive}
-                  />
-                ))}
-              </GroupSection>
-            ))}
+            {Object.entries(groupedIngredients).map(([group, items]) =>
+              view === 'grid' ? (
+                <GroupSection key={group} title={group} count={items.length}>
+                  {items.map((ingredient) => (
+                    <IngredientCard
+                      key={ingredient.id}
+                      ingredient={ingredient}
+                      categories={categories}
+                      onArchive={handleArchive}
+                      onUnarchive={handleUnarchive}
+                    />
+                  ))}
+                </GroupSection>
+              ) : (
+                <ListSection key={group} title={group} count={items.length}>
+                  {items.map((ingredient) => (
+                    <IngredientListRow
+                      key={ingredient.id}
+                      ingredient={ingredient}
+                      categories={categories}
+                      onArchive={handleArchive}
+                      onUnarchive={handleUnarchive}
+                    />
+                  ))}
+                </ListSection>
+              )
+            )}
           </div>
         )}
       </div>

@@ -132,6 +132,16 @@ All endpoints under `/api/v1`:
 
 ## Development
 
+### Claude Code Commands
+
+These custom commands are available via Claude Code slash commands (e.g., `/get_started`):
+
+- **`/get_started`** — Review project overview by reading CLAUDE.md, docs/intro.md, and docs/changelog.md
+- **`/commit`** — Analyze latest changes and generate a commit message
+- **`/update-context`** — Update CLAUDE.md based on current codebase contents
+- **`/fe-build-check`** — Run frontend linter and build (`npm run lint && npm run build`)
+- **`/schema-assembly`** — Create database tables with schema, CRUD endpoints, and unit tests (migration created last)
+
 ### Running Tests
 
 ```bash

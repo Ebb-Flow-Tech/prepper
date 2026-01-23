@@ -109,6 +109,7 @@ export interface CreateRecipeRequest {
   name: string;
   yield_quantity?: number;
   yield_unit?: string;
+  cost_price?: number | null;
   status?: RecipeStatus;
   created_by?: string;
   is_public?: boolean;
@@ -122,6 +123,7 @@ export interface UpdateRecipeRequest {
   name?: string;
   yield_quantity?: number;
   yield_unit?: string;
+  cost_price?: number | null;
   selling_price_est?: number | null;
   instructions_raw?: string | null;
   instructions_structured?: InstructionsStructured | null;
@@ -232,6 +234,14 @@ export interface TastingNote {
   action_items_done: boolean;
   decision: TastingDecision | null;
   taster_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TastingNoteImage {
+  id: number;
+  tasting_note_id: number;
+  image_url: string;
   created_at: string;
   updated_at: string;
 }
@@ -519,4 +529,45 @@ export interface CreateRecipeOutletRequest {
 export interface UpdateRecipeOutletRequest {
   is_active?: boolean;
   price_override?: number | null;
+}
+
+// ============ Recipe Category Types ============
+
+export interface RecipeCategory {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRecipeCategoryRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateRecipeCategoryRequest {
+  name?: string;
+  description?: string | null;
+}
+
+// ============ Recipe-Recipe Category Link Types ============
+
+export interface RecipeRecipeCategory {
+  id: number;
+  recipe_id: number;
+  category_id: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRecipeRecipeCategoryRequest {
+  recipe_id: number;
+  category_id: number;
+  is_active?: boolean;
+}
+
+export interface UpdateRecipeRecipeCategoryRequest {
+  is_active?: boolean;
 }

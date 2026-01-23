@@ -80,6 +80,20 @@ from app.models.recipe_image import (
     RecipeImageUpdate,
     RecipeImageReorder,
 )
+from app.models.tasting_note_image import (
+    TastingNoteImage,
+    TastingNoteImageCreate,
+)
+from app.models.recipe_category import (
+    RecipeCategory,
+    RecipeCategoryCreate,
+    RecipeCategoryUpdate,
+)
+from app.models.recipe_recipe_category import (
+    RecipeRecipeCategory,
+    RecipeRecipeCategoryCreate,
+    RecipeRecipeCategoryUpdate,
+)
 
 __all__ = [
     # Ingredient
@@ -151,4 +165,15 @@ __all__ = [
     "RecipeImageCreate",
     "RecipeImageUpdate",
     "RecipeImageReorder",
+    # TastingNoteImage
+    "TastingNoteImage",
+    "TastingNoteImageCreate",
+    # RecipeCategory
+    "RecipeCategory",
+    "RecipeCategoryCreate",
+    "RecipeCategoryUpdate",
+    # RecipeRecipeCategory
+    "RecipeRecipeCategory",
+    "RecipeRecipeCategoryCreate",
+    "RecipeRecipeCategoryUpdate",
 ]

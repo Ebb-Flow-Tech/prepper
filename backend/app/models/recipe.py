@@ -77,6 +77,7 @@ class Recipe(RecipeBase, table=True):
 class RecipeCreate(RecipeBase):
     """Schema for creating a new recipe."""
 
+    cost_price: float | None = None
     status: RecipeStatus = RecipeStatus.DRAFT
     is_public: bool = False
     created_by: str | None = None
@@ -94,6 +95,7 @@ class RecipeUpdate(SQLModel):
     name: str | None = None
     yield_quantity: float | None = None
     yield_unit: str | None = None
+    cost_price: float | None = None
     selling_price_est: float | None = None
     is_prep_recipe: bool | None = None
     is_public: bool | None = None

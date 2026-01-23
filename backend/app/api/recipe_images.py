@@ -56,7 +56,7 @@ async def add_recipe_image(
     try:
         storage_service = StorageService()
         image_url = await storage_service.upload_image_from_base64(
-            data.image_base64, recipe_id
+            data.image_base64, recipe_id, folder="recipe-images"
         )
     except StorageError as e:
         raise HTTPException(

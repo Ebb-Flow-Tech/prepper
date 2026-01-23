@@ -16,6 +16,7 @@ import type {
   InstructionsStructured,
   TastingSession,
   TastingNote,
+  TastingNoteImage,
   TastingNoteWithRecipe,
   RecipeTastingSummary,
   TastingSessionStats,
@@ -47,6 +48,12 @@ import type {
   RecipeOutlet,
   CreateRecipeOutletRequest,
   UpdateRecipeOutletRequest,
+  RecipeCategory,
+  CreateRecipeCategoryRequest,
+  UpdateRecipeCategoryRequest,
+  RecipeRecipeCategory,
+  CreateRecipeRecipeCategoryRequest,
+  UpdateRecipeRecipeCategoryRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -721,6 +728,80 @@ export async function removeRecipeFromOutlet(
   });
 }
 
+// ============ Recipe Categories ============
+
+export async function getRecipeCategories(): Promise<RecipeCategory[]> {
+  return fetchApi<RecipeCategory[]>('/recipe-categories');
+}
+
+export async function getRecipeCategory(id: number): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>(`/recipe-categories/${id}`);
+}
+
+export async function createRecipeCategory(
+  data: CreateRecipeCategoryRequest
+): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>('/recipe-categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeCategory(
+  id: number,
+  data: UpdateRecipeCategoryRequest
+): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>(`/recipe-categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecipeCategory(id: number): Promise<void> {
+  return fetchApi<void>(`/recipe-categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Recipe-Recipe Categories (Many-to-Many) ============
+
+export async function getCategoryRecipes(categoryId: number): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>(`/recipe-recipe-categories/category/${categoryId}`);
+}
+
+export async function getRecipeCategoryLinks(recipeId: number): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>(`/recipe-recipe-categories/recipe/${recipeId}`);
+}
+
+export async function addRecipeToCategory(
+  data: CreateRecipeRecipeCategoryRequest
+): Promise<RecipeRecipeCategory> {
+  return fetchApi<RecipeRecipeCategory>('/recipe-recipe-categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipeCategoryLink(
+  linkId: number,
+  data: UpdateRecipeRecipeCategoryRequest
+): Promise<RecipeRecipeCategory> {
+  return fetchApi<RecipeRecipeCategory>(`/recipe-recipe-categories/${linkId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeRecipeFromCategory(linkId: number): Promise<void> {
+  return fetchApi<void>(`/recipe-recipe-categories/${linkId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getAllRecipeRecipeCategories(): Promise<RecipeRecipeCategory[]> {
+  return fetchApi<RecipeRecipeCategory[]>('/recipe-recipe-categories');
+}
+
 // ============ Agents ============
 
 interface CategorizeIngredientRequest {
@@ -750,5 +831,58 @@ export async function summarizeFeedback(
 ): Promise<FeedbackSummaryResponse> {
   return fetchApi<FeedbackSummaryResponse>(`/agents/summarize-feedback/${recipeId}`, {
     method: 'POST',
+  });
+}
+
+// Tasting Note Images
+
+export async function uploadTastingNoteImage(
+  tastingNoteId: number,
+  imageBase64: string
+): Promise<TastingNoteImage> {
+  return fetchApi<TastingNoteImage>(`/tasting-note-images/${tastingNoteId}`, {
+    method: 'POST',
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  });
+}
+
+export async function uploadMultipleTastingNoteImages(
+  tastingNoteId: number,
+  imageBase64Array: string[]
+): Promise<TastingNoteImage[]> {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/batch/${tastingNoteId}`, {
+    method: 'POST',
+    body: JSON.stringify({ images: imageBase64Array }),
+  });
+}
+
+export async function getTastingNoteImages(
+  tastingNoteId: number
+): Promise<TastingNoteImage[]> {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/${tastingNoteId}`);
+}
+
+export async function deleteTastingNoteImage(
+  imageId: number
+): Promise<void> {
+  return fetchApi<void>(`/tasting-note-images/${imageId}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface ImageWithIdRequest {
+  id: number | null;
+  data: string;
+  image_url?: string;
+  removed?: boolean;
+}
+
+export async function syncTastingNoteImages(
+  tastingNoteId: number,
+  images: ImageWithIdRequest[]
+): Promise<TastingNoteImage[]> {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/sync/${tastingNoteId}`, {
+    method: 'POST',
+    body: JSON.stringify({ images }),
   });
 }

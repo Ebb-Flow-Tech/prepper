@@ -35,14 +35,15 @@ class StorageService:
         }
 
     async def upload_image_from_base64(
-        self, base64_data: str, recipe_id: int
+        self, base64_data: str, item_id: int, folder: str = ""
     ) -> str:
         """
         Upload a base64-encoded image to Supabase Storage.
 
         Args:
             base64_data: The base64-encoded image data (without data URL prefix)
-            recipe_id: The recipe ID to use in the filename
+            item_id: The item ID to use in the filename (recipe ID, tasting note ID, etc.)
+            folder: Optional folder path for storage organization (e.g., 'tasting-note-images')
 
         Returns:
             The public URL of the uploaded image in Supabase Storage
@@ -50,7 +51,11 @@ class StorageService:
         # Generate unique filename
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
-        filename = f"recipe_{recipe_id}_{timestamp}_{unique_id}.png"
+        filename = f"item_{item_id}_{timestamp}_{unique_id}.png"
+
+        # Add folder prefix if provided
+        if folder:
+            filename = f"{folder}/{filename}"
 
         # Decode base64 to bytes
         try:

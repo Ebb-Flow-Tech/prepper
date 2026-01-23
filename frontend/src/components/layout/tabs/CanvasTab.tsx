@@ -32,6 +32,7 @@ import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus } from '@/types';
 import { RightPanel } from '../RightPanel';
+import { formatCurrency } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
 
 // Staged item with position on canvas
@@ -64,6 +65,7 @@ interface RecipeMetadata {
   yield_unit: string;
   status: RecipeStatus;
   is_public: boolean;
+  profit_margin: number;
 }
 
 const DEFAULT_METADATA: RecipeMetadata = {
@@ -72,6 +74,7 @@ const DEFAULT_METADATA: RecipeMetadata = {
   yield_unit: 'portion',
   status: 'draft',
   is_public: false,
+  profit_margin: 0,
 };
 
 // Grid configuration for auto-flow layout - responsive based on screen width
@@ -906,6 +909,8 @@ function CanvasContent({
   viewMode,
   onViewModeChange,
   categoryMap,
+  selectedRecipe,
+  canvasCost,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -935,6 +940,8 @@ function CanvasContent({
   viewMode: 'grid' | 'list';
   onViewModeChange: (mode: 'grid' | 'list') => void;
   categoryMap: Record<number, string>;
+  selectedRecipe?: Recipe | null;
+  canvasCost: number;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -957,7 +964,10 @@ function CanvasContent({
               </p>
             )}
           </div>
+
+          {/* First Row: Yield | Qty | Portion | Batch | Per Portion | Profit Margin % | Recommended Price */}
           <div className="flex flex-wrap items-center gap-4">
+            {/* Yield */}
             <div className="flex items-center gap-2">
               <label className="text-sm text-zinc-500">Yield:</label>
               <Input
@@ -966,7 +976,7 @@ function CanvasContent({
                 onChange={(e) =>
                   onMetadataChange({ yield_quantity: parseFloat(e.target.value) || 0 })
                 }
-                className="w-20"
+                className="w-16"
                 min="0"
                 step="1"
               />
@@ -974,9 +984,60 @@ function CanvasContent({
                 value={metadata.yield_unit}
                 onChange={(e) => onMetadataChange({ yield_unit: e.target.value })}
                 placeholder="unit"
-                className="w-24"
+                className="w-20"
               />
             </div>
+
+            {/* Batch Cost */}
+            <div className="text-sm">
+              <span className="text-zinc-500">Batch: </span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {canvasCost > 0 ? formatCurrency(canvasCost) : '—'}
+              </span>
+            </div>
+
+            {/* Per Portion Cost */}
+            {metadata.yield_quantity > 0 && (
+              <div className="text-sm">
+                <span className="text-zinc-500">Per {metadata.yield_unit}: </span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {canvasCost > 0 ? formatCurrency(canvasCost / metadata.yield_quantity) : '—'}
+                </span>
+              </div>
+            )}
+
+            {/* Profit Margin */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-500">Profit Margin:</label>
+              <Input
+                type="number"
+                value={metadata.profit_margin}
+                onChange={(e) =>
+                  onMetadataChange({ profit_margin: Math.max(0, parseFloat(e.target.value) || 0) })
+                }
+                className="w-16"
+                min="0"
+                step="0.1"
+              />
+              <span className="text-sm text-zinc-500">%</span>
+            </div>
+
+            {/* Recommended Price */}
+            {metadata.yield_quantity > 0 && canvasCost > 0 && (
+              <div className="text-sm">
+                <span className="text-zinc-500">Recommended: </span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {formatCurrency(
+                    (canvasCost / metadata.yield_quantity) * (100 + metadata.profit_margin) / 100
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Second Row: Status | Public | Drag & Drop | View */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Status */}
             <div className="flex items-center gap-2">
               <label className="text-sm text-zinc-500">Status:</label>
               <Select
@@ -986,6 +1047,8 @@ function CanvasContent({
                 className="w-28"
               />
             </div>
+
+            {/* Public */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -995,6 +1058,8 @@ function CanvasContent({
               />
               <span className="text-sm text-zinc-500">Public</span>
             </label>
+
+            {/* Drag & Drop */}
             <div className="flex items-center gap-2">
               <Switch
                 checked={isDragDropEnabled}
@@ -1002,6 +1067,8 @@ function CanvasContent({
               />
               <span className="text-sm text-zinc-500">Drag & Drop</span>
             </div>
+
+            {/* View Toggle */}
             <div className="flex items-center gap-2 border-l border-zinc-300 dark:border-zinc-700 pl-4">
               <label className="text-sm text-zinc-500">View:</label>
               <button
@@ -1101,6 +1168,41 @@ function CanvasContent({
   );
 }
 
+// Calculate total cost from staged ingredients and recipes
+function calculateCanvasCost(
+  stagedIngredients: StagedIngredient[],
+  stagedRecipes: StagedRecipe[],
+  allRecipes?: Recipe[]
+) {
+  let totalCost = 0;
+
+  // Calculate cost from ingredients
+  for (const staged of stagedIngredients) {
+    const suppliers = staged.ingredient.suppliers || [];
+    const preferredSupplier = suppliers.find((s) => s.is_preferred);
+    const unitCost = preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit;
+
+    if (unitCost != null) {
+      // Apply wastage adjustment: actual_cost = cost * (1 / (1 - wastage%))
+      const wastageMultiplier = staged.wastage_percentage > 0
+        ? 1 / (1 - staged.wastage_percentage / 100)
+        : 1;
+      const adjustedCost = unitCost * wastageMultiplier;
+      totalCost += staged.quantity * adjustedCost;
+    }
+  }
+
+  // Calculate cost from sub-recipes
+  for (const staged of stagedRecipes) {
+    const recipe = allRecipes?.find((r) => r.id === staged.recipe.id);
+    if (recipe?.cost_price != null) {
+      totalCost += staged.quantity * recipe.cost_price;
+    }
+  }
+
+  return totalCost;
+}
+
 export function CanvasTab() {
   const router = useRouter();
   const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
@@ -1152,6 +1254,11 @@ export function CanvasTab() {
     const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
     return getGridConfig(screenWidth).columns;
   });
+
+  // Calculate total cost from staged items
+  const canvasCost = useMemo(() => {
+    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes);
+  }, [stagedIngredients, stagedRecipes, recipes]);
 
   // Update grid columns on resize
   useEffect(() => {
@@ -1291,6 +1398,7 @@ export function CanvasTab() {
         yield_unit: selectedRecipe.yield_unit,
         status: selectedRecipe.status,
         is_public: selectedRecipe.is_public,
+        profit_margin: 0,
       }
       : DEFAULT_METADATA;
 
@@ -1731,6 +1839,7 @@ export function CanvasTab() {
             yield_unit: metadata.yield_unit,
             status: metadata.status,
             is_public: metadata.is_public,
+            cost_price: canvasCost,
           },
         });
 
@@ -1848,6 +1957,7 @@ export function CanvasTab() {
           name: metadata.name,
           yield_quantity: metadata.yield_quantity,
           yield_unit: metadata.yield_unit,
+          cost_price: canvasCost,
           status: metadata.status,
           created_by: userId || undefined,
           is_public: metadata.is_public,
@@ -2042,6 +2152,8 @@ export function CanvasTab() {
       viewMode={canvasViewMode}
       onViewModeChange={setCanvasViewMode}
       categoryMap={categoryMap}
+      selectedRecipe={selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null}
+      canvasCost={canvasCost}
     />
   );
 

@@ -233,3 +233,69 @@ export function useRemoveRecipeFromSession() {
     },
   });
 }
+
+// ============ Tasting Note Images ============
+
+export function useTastingNoteImages(tastingNoteId: number | null) {
+  return useQuery({
+    queryKey: ['tasting-note', tastingNoteId, 'images'],
+    queryFn: () => api.getTastingNoteImages(tastingNoteId!),
+    enabled: tastingNoteId !== null,
+  });
+}
+
+export function useUploadTastingNoteImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ tastingNoteId, imageBase64 }: { tastingNoteId: number; imageBase64: string }) =>
+      api.uploadTastingNoteImage(tastingNoteId, imageBase64),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-note', variables.tastingNoteId, 'images'],
+      });
+    },
+  });
+}
+
+export function useUploadMultipleTastingNoteImages() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ tastingNoteId, images }: { tastingNoteId: number; images: string[] }) =>
+      api.uploadMultipleTastingNoteImages(tastingNoteId, images),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-note', variables.tastingNoteId, 'images'],
+      });
+    },
+  });
+}
+
+export function useDeleteTastingNoteImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (imageId: number) => api.deleteTastingNoteImage(imageId),
+    onSuccess: () => {
+      // Invalidate all tasting note images queries since we don't know which note it belonged to
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-note'],
+      });
+    },
+  });
+}
+
+export function useSyncTastingNoteImages() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ tastingNoteId, images }: { tastingNoteId: number; images: api.ImageWithIdRequest[] }) =>
+      api.syncTastingNoteImages(tastingNoteId, images),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-note', variables.tastingNoteId, 'images'],
+      });
+    },
+  });
+}
