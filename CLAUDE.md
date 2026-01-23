@@ -67,6 +67,7 @@ app/
 │   ├── recipe_ingredient.py     # RecipeIngredient (+ wastage_percentage, unit_price, base_unit, supplier_id)
 │   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
 │   ├── recipe_image.py          # RecipeImage (multi-image support with is_main, order)
+│   ├── tasting_note_image.py    # TastingNoteImage (images for tasting notes with timestamps)
 │   ├── outlet.py                # Outlet (with parent_outlet_id hierarchy), RecipeOutlet (+ price_override)
 │   ├── category.py              # Category (ingredient categorization, soft-delete)
 │   ├── tasting.py               # TastingSession, TastingNote
@@ -83,6 +84,7 @@ app/
 │   ├── recipe_image_service.py  # Recipe image management + ordering
 │   ├── tasting_session_service.py   # Tasting session CRUD + stats
 │   ├── tasting_note_service.py      # Tasting notes + recipe history
+│   ├── tasting_note_image_service.py  # Tasting note image management (add/delete/batch)
 │   ├── recipe_tasting_service.py    # Session-recipe relationships
 │   ├── supplier_service.py      # Supplier CRUD + supplier-ingredient links
 │   ├── storage_service.py       # Supabase Storage for recipe images
@@ -98,6 +100,7 @@ app/
 │   ├── recipe_outlets.py        # Recipe-outlet links (per-recipe detail)
 │   ├── tastings.py              # Tasting sessions CRUD + stats
 │   ├── tasting_notes.py         # Tasting notes CRUD (nested under sessions)
+│   ├── tasting_note_images.py   # Tasting note image management (get, delete, sync)
 │   ├── tasting_history.py       # Recipe tasting history + summary
 │   ├── recipe_tastings.py       # Session-recipe relationships
 │   ├── suppliers.py             # Supplier CRUD + ingredient links
@@ -145,17 +148,18 @@ lib/
     ├── useCosting.ts
     ├── useInstructions.ts
     ├── useSuppliers.ts
-    ├── useTastings.ts
+    ├── useTastings.ts           # Tasting sessions + notes + useTastingNoteImages, useSyncTastingNoteImages (NEW)
     ├── useSubRecipes.ts
-    ├── useOutlets.ts            # useOutlets, useOutlet, useCreateOutlet, useUpdateOutlet (NEW)
-    └── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, etc. (NEW)
+    ├── useOutlets.ts            # useOutlets, useOutlet, useCreateOutlet, useUpdateOutlet
+    └── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, etc.
 
 components/
 ├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
 │   └── tabs/            # 12+ canvas tabs including OutletsTab, OverviewTab, CanvasTab, VersionsTab, etc.
 ├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, SubRecipesList
 ├── recipes/             # RecipeCard
-├── outlets/             # OutletsTab, AddOutletModal, EditableSelect (NEW)
+├── outlets/             # OutletsTab, AddOutletModal, EditableSelect
+├── tasting/             # ImageUploadPreview (upload, preview, delete UI for tasting note images)
 ├── ingredients/         # IngredientCard
 ├── AuthGuard.tsx        # Route protection for authenticated pages
 └── ui/                  # Button, Input, Textarea, Select, Badge, Card, Skeleton, SearchInput, PageHeader, EditableCell, EditableSelect
@@ -212,6 +216,11 @@ All endpoints under `/api/v1`:
 - `/tasting-sessions/{id}/notes` — full CRUD for tasting notes
 - `/tasting-sessions/{id}/recipes` — session-recipe relationships (add/remove)
 
+**Tasting Note Images:**
+- `GET /tasting-note-images/{tasting_note_id}` — get all images for note
+- `DELETE /tasting-note-images/{image_id}` — delete single image
+- `POST /tasting-note-images/sync/{tasting_note_id}` — sync add/update/delete in single call
+
 **Outlets:**
 - `/outlets` — CRUD for multi-brand/location support
 - `/outlets/{id}` — get/update single outlet
@@ -245,6 +254,14 @@ All endpoints under `/api/v1`:
 - `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
 
 ## Key Features (Recent Additions)
+
+**Tasting Note Image Management** (Jan 23)
+- `TastingNoteImage` model for multiple images per tasting note
+- `ImageUploadPreview` React component with drag-drop upload
+- Sync endpoint for atomic add/update/delete operations
+- Parallel async uploads/deletions via asyncio.gather()
+- Base64 encoding + Supabase Storage integration
+- Integrated with tasting session detail page (`/tastings/[id]/r/[recipeId]`)
 
 **Wastage Tracking** (Jan 20)
 - Recipe ingredients now track `wastage_percentage` (0-100)

@@ -12,6 +12,31 @@ class TastingNoteImageService:
         """Initialize service with database session."""
         self.session = session
 
+    def add_images(self, tasting_note_id: int, image_urls: list[str]) -> list[TastingNoteImage]:
+        """
+        Add multiple images to a tasting note in batch.
+
+        Args:
+            tasting_note_id: Tasting Note ID
+            image_urls: List of image URLs
+
+        Returns:
+            List of created TastingNoteImage instances
+        """
+        if not image_urls:
+            return []
+
+        images = [
+            TastingNoteImage(tasting_note_id=tasting_note_id, image_url=url)
+            for url in image_urls
+        ]
+        for image in images:
+            self.session.add(image)
+        self.session.commit()
+        for image in images:
+            self.session.refresh(image)
+        return images
+
     def add_image(self, tasting_note_id: int, image_url: str) -> TastingNoteImage:
         """
         Add an image to a tasting note.
@@ -77,3 +102,40 @@ class TastingNoteImageService:
         self.session.commit()
 
         return True
+
+    def get_images_by_ids(self, image_ids: list[int]) -> list[TastingNoteImage]:
+        """
+        Get multiple images by their IDs.
+
+        Args:
+            image_ids: List of image IDs
+
+        Returns:
+            List of TastingNoteImage instances
+        """
+        if not image_ids:
+            return []
+        statement = select(TastingNoteImage).where(TastingNoteImage.id.in_(image_ids))
+        return self.session.exec(statement).all()
+
+    def delete_images_by_ids(self, image_ids: list[int]) -> int:
+        """
+        Delete multiple images by their IDs.
+
+        Args:
+            image_ids: List of image IDs to delete
+
+        Returns:
+            Number of images deleted
+        """
+        if not image_ids:
+            return 0
+
+        statement = select(TastingNoteImage).where(TastingNoteImage.id.in_(image_ids))
+        images = self.session.exec(statement).all()
+
+        for image in images:
+            self.session.delete(image)
+
+        self.session.commit()
+        return len(images)

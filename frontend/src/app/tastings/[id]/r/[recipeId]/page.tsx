@@ -107,6 +107,14 @@ function StarRating({ rating, onChange }: { rating: number | null; onChange?: (v
   );
 }
 
+interface TastingNoteImageDisplay {
+  id: number;
+  image_url: string;
+  tasting_note_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
 interface FeedbackFormData {
   taster_name: string;
   decision: TastingDecision | '';
@@ -123,11 +131,8 @@ interface FeedbackFormProps {
   onSubmit: (data: FeedbackFormData, images?: ImageWithId[]) => Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
-  noteId?: number;
   showImages?: boolean;
-  existingImages?: any[];
-  onDeleteImage?: (imageId: number) => Promise<void>;
-  isRemovingImage?: boolean;
+  existingImages?: TastingNoteImageDisplay[];
 }
 
 function FeedbackForm({
@@ -135,11 +140,8 @@ function FeedbackForm({
   onSubmit,
   onCancel,
   submitLabel = 'Save',
-  noteId,
   showImages = false,
   existingImages = [],
-  onDeleteImage,
-  isRemovingImage = false,
 }: FeedbackFormProps) {
   const [tasterName, setTasterName] = useState(initialData?.taster_name || '');
   const [decision, setDecision] = useState<TastingDecision | ''>(initialData?.decision || '');
@@ -151,17 +153,6 @@ function FeedbackForm({
   const [overallRating, setOverallRating] = useState<number | null>(initialData?.overall_rating ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedImages, setSelectedImages] = useState<ImageWithId[]>([]);
-  const [removingImageId, setRemovingImageId] = useState<number | null>(null);
-
-  const handleRemoveImage = async (imageId: number) => {
-    if (!onDeleteImage) return;
-    setRemovingImageId(imageId);
-    try {
-      await onDeleteImage(imageId);
-    } finally {
-      setRemovingImageId(null);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,8 +255,6 @@ function FeedbackForm({
         <ImageUploadPreview
           onImagesSelected={setSelectedImages}
           uploadedImages={existingImages}
-          onRemoveImage={onDeleteImage}
-          isRemoving={removingImageId !== null}
         />
       )}
 
@@ -286,8 +275,6 @@ interface FeedbackNoteCardProps {
   isExpired: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
-  images?: any[];
-  onImagesRefresh?: (noteId: number) => void;
 }
 
 function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
@@ -380,7 +367,6 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
             onSubmit={handleSave}
             onCancel={() => setIsEditing(false)}
             submitLabel="Save Changes"
-            noteId={note.id}
             showImages={true}
             existingImages={editFormImages}
           />
@@ -436,7 +422,7 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
                     <div className="text-sm text-zinc-500 dark:text-zinc-400">Loading images...</div>
                   ) : noteImages && noteImages.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {noteImages.map((image: any) => (
+                      {noteImages.map((image: TastingNoteImageDisplay) => (
                         <a
                           key={image.id}
                           href={image.image_url}

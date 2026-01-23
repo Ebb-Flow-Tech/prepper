@@ -40,6 +40,51 @@ def client_fixture(session: Session):
 
 
 # ============================================================================
+# Storage Mocks
+# ============================================================================
+
+
+@pytest.fixture
+def mock_storage(monkeypatch):
+    """Mock Supabase storage for image upload testing.
+
+    Automatically applied to all tests to enable image upload endpoints.
+    """
+    # Mock is_storage_configured to return True
+    def mock_is_configured():
+        return True
+
+    # Mock StorageService to return fake URLs
+    class MockStorageService:
+        async def upload_image_from_base64(self, base64_data: str, item_id: int, folder: str = ""):
+            # Return a fake URL for testing
+            return f"https://fake-storage.supabase.co/storage/v1/object/public/bucket/{folder}/item_{item_id}.png"
+
+        async def delete_image(self, image_url: str):
+            # Always return True for deletion
+            return True
+
+    monkeypatch.setattr("app.api.tasting_note_images.is_storage_configured", mock_is_configured)
+    monkeypatch.setattr("app.api.tasting_note_images.StorageService", MockStorageService)
+
+    yield
+
+
+@pytest.fixture
+def client_with_storage(session: Session, mock_storage):
+    """Create a test client with storage mocking enabled."""
+
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[db_get_session] = get_session_override
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+# ============================================================================
 # Anthropic/Claude Agent Mocks
 # ============================================================================
 

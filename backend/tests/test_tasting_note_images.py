@@ -1,23 +1,21 @@
 """Tests for tasting note images endpoints."""
 
-from datetime import datetime
-
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def sample_tasting_note(client: TestClient):
+def sample_tasting_note(client_with_storage: TestClient):
     """Create a sample tasting note for testing."""
     # First create a recipe
-    recipe_response = client.post(
+    recipe_response = client_with_storage.post(
         "/api/v1/recipes",
         json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
     )
     recipe_id = recipe_response.json()["id"]
 
     # Create a tasting session
-    session_response = client.post(
+    session_response = client_with_storage.post(
         "/api/v1/tasting-sessions",
         json={
             "name": "Test Session",
@@ -27,7 +25,7 @@ def sample_tasting_note(client: TestClient):
     session_id = session_response.json()["id"]
 
     # Create a tasting note
-    note_response = client.post(
+    note_response = client_with_storage.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
         json={
             "recipe_id": recipe_id,
@@ -39,261 +37,236 @@ def sample_tasting_note(client: TestClient):
     return note_response.json()
 
 
-def test_add_image_to_tasting_note(client: TestClient, sample_tasting_note):
-    """Test adding an image to a tasting note."""
-    tasting_note_id = sample_tasting_note["id"]
-    image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": image_base64},
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["tasting_note_id"] == tasting_note_id
-    assert data["image_url"] is not None
-    assert data["id"] is not None
-
-
-def test_add_multiple_images_to_tasting_note(client: TestClient, sample_tasting_note):
-    """Test adding multiple images to a tasting note."""
+def test_sync_add_new_images(client_with_storage: TestClient, sample_tasting_note):
+    """Test syncing to add multiple new images."""
     tasting_note_id = sample_tasting_note["id"]
     base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
-    # Add first image
-    response1 = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": base64_image},
+    response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
     )
-    assert response1.status_code == 201
-    image1 = response1.json()
-    assert image1["id"] is not None
 
-    # Add second image
-    response2 = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": base64_image},
+    assert response.status_code == 200
+    images = response.json()
+    assert len(images) == 3
+    assert all(img["tasting_note_id"] == tasting_note_id for img in images)
+    assert all(img["image_url"] is not None for img in images)
+    assert all(img["id"] is not None for img in images)
+    assert all("created_at" in img for img in images)
+    assert all("updated_at" in img for img in images)
+
+
+def test_sync_delete_images(client_with_storage: TestClient, sample_tasting_note):
+    """Test syncing to delete multiple images."""
+    tasting_note_id = sample_tasting_note["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # First, add three images
+    add_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
     )
-    assert response2.status_code == 201
-    image2 = response2.json()
-    assert image2["id"] is not None
-    assert image1["id"] != image2["id"]
+    assert add_response.status_code == 200
+    images = add_response.json()
+    assert len(images) == 3
+    image_ids = [img["id"] for img in images]
 
-    # Add third image
-    response3 = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": base64_image},
+    # Now delete two images
+    delete_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": image_ids[0], "removed": True},
+                {"id": image_ids[1], "removed": True},
+                {"id": image_ids[2], "removed": False},
+            ]
+        },
     )
-    assert response3.status_code == 201
-    image3 = response3.json()
-    assert image3["id"] is not None
+    assert delete_response.status_code == 200
+    remaining_images = delete_response.json()
+    assert len(remaining_images) == 1
+    assert remaining_images[0]["id"] == image_ids[2]
 
 
-def test_get_tasting_note_images(client: TestClient, sample_tasting_note):
+def test_sync_add_and_delete(client_with_storage: TestClient, sample_tasting_note):
+    """Test syncing to add new images and delete existing ones in one call."""
+    tasting_note_id = sample_tasting_note["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add initial images
+    add_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+    images = add_response.json()
+    image_ids = [img["id"] for img in images]
+
+    # Now sync: delete one, keep one, add two new
+    sync_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": image_ids[0], "removed": True},
+                {"id": image_ids[1], "removed": False},
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+    assert sync_response.status_code == 200
+    result_images = sync_response.json()
+    assert len(result_images) == 3
+    # Should contain the kept image and two new ones
+    assert image_ids[1] in [img["id"] for img in result_images]
+
+
+def test_sync_keep_existing_images(client_with_storage: TestClient, sample_tasting_note):
+    """Test syncing with only existing images (no additions or deletions)."""
+    tasting_note_id = sample_tasting_note["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add initial images
+    add_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+    images = add_response.json()
+    image_ids = [img["id"] for img in images]
+
+    # Sync with same images, no changes
+    sync_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": image_ids[0], "removed": False},
+                {"id": image_ids[1], "removed": False},
+            ]
+        },
+    )
+    assert sync_response.status_code == 200
+    result_images = sync_response.json()
+    assert len(result_images) == 2
+    assert set(img["id"] for img in result_images) == set(image_ids)
+
+
+def test_sync_nonexistent_tasting_note(client_with_storage: TestClient):
+    """Test syncing images for a non-existent tasting note."""
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    response = client_with_storage.post(
+        "/api/v1/tasting-note-images/sync/99999",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Tasting note not found" in response.json()["detail"]
+
+
+def test_sync_empty_images(client_with_storage: TestClient, sample_tasting_note):
+    """Test syncing with no images."""
+    tasting_note_id = sample_tasting_note["id"]
+
+    response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={"images": []},
+    )
+
+    assert response.status_code == 200
+    images = response.json()
+    assert images == []
+
+
+def test_get_tasting_note_images(client_with_storage: TestClient, sample_tasting_note):
     """Test retrieving all images for a tasting note."""
     tasting_note_id = sample_tasting_note["id"]
     base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
-    # Add multiple images
-    for _ in range(3):
-        client.post(
-            f"/api/v1/tasting-note-images/{tasting_note_id}",
-            json={"image_base64": base64_image},
-        )
+    # Add multiple images using sync
+    client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
 
     # Get all images
-    response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
+    response = client_with_storage.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
     assert response.status_code == 200
     images = response.json()
     assert len(images) == 3
 
 
-def test_delete_tasting_note_image(client: TestClient, sample_tasting_note):
-    """Test deleting a tasting note image."""
+def test_delete_tasting_note_image(client_with_storage: TestClient, sample_tasting_note):
+    """Test deleting a single tasting note image."""
     tasting_note_id = sample_tasting_note["id"]
     base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
     # Add two images
-    response1 = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": base64_image},
+    add_response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
     )
-    image1_id = response1.json()["id"]
-
-    response2 = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": base64_image},
-    )
-    image2_id = response2.json()["id"]
+    images = add_response.json()
+    image1_id = images[0]["id"]
+    image2_id = images[1]["id"]
 
     # Delete first image
-    delete_response = client.delete(f"/api/v1/tasting-note-images/{image1_id}")
+    delete_response = client_with_storage.delete(f"/api/v1/tasting-note-images/{image1_id}")
     assert delete_response.status_code == 204
 
     # Verify image is deleted
-    images_response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
-    images = images_response.json()
-    assert len(images) == 1
-    assert images[0]["id"] == image2_id
+    images_response = client_with_storage.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
+    remaining_images = images_response.json()
+    assert len(remaining_images) == 1
+    assert remaining_images[0]["id"] == image2_id
 
 
-def test_delete_nonexistent_tasting_note_image(client: TestClient):
+def test_delete_nonexistent_tasting_note_image(client_with_storage: TestClient):
     """Test deleting a non-existent image."""
-    response = client.delete("/api/v1/tasting-note-images/99999")
+    response = client_with_storage.delete("/api/v1/tasting-note-images/99999")
     assert response.status_code == 404
     assert "Image not found" in response.json()["detail"]
 
 
-def test_add_image_to_nonexistent_tasting_note(client: TestClient):
-    """Test adding an image to a non-existent tasting note."""
-    image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        "/api/v1/tasting-note-images/99999",
-        json={"image_base64": image_base64},
-    )
-
-    assert response.status_code == 404
-    assert "Tasting note not found" in response.json()["detail"]
-
-
-def test_get_images_for_nonexistent_tasting_note(client: TestClient):
+def test_get_images_for_nonexistent_tasting_note(client_with_storage: TestClient):
     """Test getting images for a non-existent tasting note returns empty list."""
-    response = client.get("/api/v1/tasting-note-images/99999")
+    response = client_with_storage.get("/api/v1/tasting-note-images/99999")
     assert response.status_code == 200
     images = response.json()
     assert images == []
-
-
-def test_add_image_missing_base64(client: TestClient, sample_tasting_note):
-    """Test adding an image without image_base64 returns validation error."""
-    tasting_note_id = sample_tasting_note["id"]
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={},
-    )
-
-    assert response.status_code == 422  # Pydantic validation error
-
-
-def test_tasting_note_image_has_timestamps(client: TestClient, sample_tasting_note):
-    """Test that tasting note images have created_at and updated_at timestamps."""
-    tasting_note_id = sample_tasting_note["id"]
-    image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/{tasting_note_id}",
-        json={"image_base64": image_base64},
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert "created_at" in data
-    assert "updated_at" in data
-
-
-def test_delete_multiple_images(client: TestClient, sample_tasting_note):
-    """Test deleting multiple images from a tasting note."""
-    tasting_note_id = sample_tasting_note["id"]
-    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    # Add three images
-    image_ids = []
-    for i in range(3):
-        response = client.post(
-            f"/api/v1/tasting-note-images/{tasting_note_id}",
-            json={"image_base64": base64_image},
-        )
-        image_ids.append(response.json()["id"])
-
-    # Verify all three exist
-    get_response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
-    assert len(get_response.json()) == 3
-
-    # Delete first image
-    client.delete(f"/api/v1/tasting-note-images/{image_ids[0]}")
-    get_response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
-    assert len(get_response.json()) == 2
-
-    # Delete second image
-    client.delete(f"/api/v1/tasting-note-images/{image_ids[1]}")
-    get_response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
-    assert len(get_response.json()) == 1
-
-    # Delete third image
-    client.delete(f"/api/v1/tasting-note-images/{image_ids[2]}")
-    get_response = client.get(f"/api/v1/tasting-note-images/{tasting_note_id}")
-    assert len(get_response.json()) == 0
-
-
-def test_add_multiple_images_batch(client: TestClient, sample_tasting_note):
-    """Test adding multiple images in a single batch request."""
-    tasting_note_id = sample_tasting_note["id"]
-    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/batch/{tasting_note_id}",
-        json={
-            "images": [base64_image, base64_image, base64_image]
-        },
-    )
-
-    assert response.status_code == 201
-    images = response.json()
-    assert len(images) == 3
-    assert all("tasting_note_id" in img for img in images)
-    assert all("image_url" in img for img in images)
-    assert all("id" in img for img in images)
-
-
-def test_add_multiple_images_batch_nonexistent_note(client: TestClient):
-    """Test adding multiple images to a non-existent tasting note."""
-    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        "/api/v1/tasting-note-images/batch/99999",
-        json={
-            "images": [base64_image, base64_image]
-        },
-    )
-
-    assert response.status_code == 404
-    assert "Tasting note not found" in response.json()["detail"]
-
-
-def test_add_empty_batch(client: TestClient, sample_tasting_note):
-    """Test adding an empty batch of images."""
-    tasting_note_id = sample_tasting_note["id"]
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/batch/{tasting_note_id}",
-        json={"images": []},
-    )
-
-    assert response.status_code == 201
-    images = response.json()
-    assert images == []
-
-
-def test_batch_upload_different_images(client: TestClient, sample_tasting_note):
-    """Test batch upload with different base64 images."""
-    tasting_note_id = sample_tasting_note["id"]
-    # Two different valid base64 PNG images
-    image1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-    image2 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
-    response = client.post(
-        f"/api/v1/tasting-note-images/batch/{tasting_note_id}",
-        json={"images": [image1, image2]},
-    )
-
-    assert response.status_code == 201
-    images = response.json()
-    assert len(images) == 2
-    # Each image should have a unique ID
-    assert images[0]["id"] != images[1]["id"]
-    # Both should belong to the same tasting note
-    assert images[0]["tasting_note_id"] == tasting_note_id
-    assert images[1]["tasting_note_id"] == tasting_note_id

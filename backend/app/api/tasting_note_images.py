@@ -1,5 +1,7 @@
 """Tasting note images API routes."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -13,23 +15,11 @@ from app.domain.storage_service import StorageService, StorageError, is_storage_
 router = APIRouter()
 
 
-class AddTastingNoteImageRequest(BaseModel):
-    """Request body for adding an image to a tasting note."""
-
-    image_base64: str
-
-
-class AddMultipleTastingNoteImagesRequest(BaseModel):
-    """Request body for adding multiple images to a tasting note."""
-
-    images: list[str]  # Array of base64-encoded images
-
-
 class ImageWithIdRequest(BaseModel):
     """Image with ID for update operations."""
 
     id: int | None  # null for new images, number for existing
-    data: str  # base64 string
+    data: str | None = None  # base64 string (only for new images)
     image_url: str | None = None  # for existing images
     removed: bool = False  # marked for deletion
 
@@ -38,101 +28,6 @@ class UpdateTastingNoteImagesRequest(BaseModel):
     """Request body for updating tasting note images (add/remove in one call)."""
 
     images: list[ImageWithIdRequest]
-
-
-@router.post("/{tasting_note_id}", response_model=TastingNoteImage, status_code=status.HTTP_201_CREATED)
-async def add_tasting_note_image(
-    tasting_note_id: int,
-    data: AddTastingNoteImageRequest,
-    session: Session = Depends(get_session),
-):
-    """
-    Upload a base64-encoded image for a tasting note.
-
-    1. Uploads the image to Supabase Storage
-    2. Creates a TastingNoteImage database record with the URL
-    """
-    # Verify tasting note exists
-    tasting_note_service = TastingNoteService(session)
-    tasting_note = tasting_note_service.get(tasting_note_id)
-    if not tasting_note:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tasting note not found",
-        )
-
-    # Check if storage is configured
-    if not is_storage_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Image storage is not configured",
-        )
-
-    # Upload to Supabase
-    try:
-        storage_service = StorageService()
-        image_url = await storage_service.upload_image_from_base64(
-            data.image_base64, tasting_note_id, folder="tasting-note-images"
-        )
-    except StorageError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload image: {str(e)}",
-        )
-
-    # Create database record
-    image_service = TastingNoteImageService(session)
-    image = image_service.add_image(tasting_note_id, image_url)
-    return image
-
-
-@router.post("/batch/{tasting_note_id}", response_model=list[TastingNoteImage], status_code=status.HTTP_201_CREATED)
-async def add_multiple_tasting_note_images(
-    tasting_note_id: int,
-    data: AddMultipleTastingNoteImagesRequest,
-    session: Session = Depends(get_session),
-):
-    """
-    Upload multiple base64-encoded images for a tasting note.
-
-    1. Uploads each image to Supabase Storage
-    2. Creates TastingNoteImage database records with the URLs
-    """
-    # Verify tasting note exists
-    tasting_note_service = TastingNoteService(session)
-    tasting_note = tasting_note_service.get(tasting_note_id)
-    if not tasting_note:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tasting note not found",
-        )
-
-    # Check if storage is configured
-    if not is_storage_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Image storage is not configured",
-        )
-
-    # Upload all images and create database records
-    storage_service = StorageService()
-    image_service = TastingNoteImageService(session)
-
-    for image_base64 in data.images:
-        try:
-            image_url = await storage_service.upload_image_from_base64(
-                image_base64, tasting_note_id, folder="tasting-note-images"
-            )
-            image_service.add_image(tasting_note_id, image_url)
-        except StorageError as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload image: {str(e)}",
-            )
-
-    # Fetch all images for this note to return fully populated objects
-    created_images = image_service.get_tasting_note_images(tasting_note_id)
-    return created_images
 
 
 @router.get("/{tasting_note_id}", response_model=list[TastingNoteImage])
@@ -147,18 +42,32 @@ def get_tasting_note_images(
 
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tasting_note_image(
+async def delete_tasting_note_image(
     image_id: int,
     session: Session = Depends(get_session),
 ):
-    """Delete a tasting note image."""
+    """Delete a tasting note image from both storage and database."""
     service = TastingNoteImageService(session)
-    success = service.delete_image(image_id)
-    if not success:
+    image = service.get_image(image_id)
+    if not image:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Image not found",
         )
+
+    # Delete from storage first (if configured)
+    if is_storage_configured():
+        try:
+            storage_service = StorageService()
+            await storage_service.delete_image(image.image_url)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete image from storage: {str(e)}",
+            )
+
+    # Then delete from database
+    service.delete_image(image_id)
 
 
 @router.post("/sync/{tasting_note_id}", response_model=list[TastingNoteImage], status_code=status.HTTP_200_OK)
@@ -171,7 +80,7 @@ async def sync_tasting_note_images(
     Sync tasting note images: add new images, keep existing, delete marked ones.
 
     - Images with id: null are treated as new and uploaded
-    - Images with id: number and removed: true are deleted
+    - Images with id: number and removed: true are deleted (from both storage and database)
     - Images with id: number and removed: false are kept (no action)
     - Existing images are never re-uploaded
     """
@@ -186,37 +95,72 @@ async def sync_tasting_note_images(
 
     image_service = TastingNoteImageService(session)
 
-    # Delete marked images (id is not null and removed is true)
-    for img in data.images:
-        if img.id is not None and img.removed:
-            try:
-                image_service.delete_image(img.id)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to delete image {img.id}: {str(e)}",
-                )
+    # Collect image IDs marked for deletion
+    image_ids_to_delete = [img.id for img in data.images if img.id is not None and img.removed]
 
-    # Upload new images (id is null)
-    if not is_storage_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Image storage is not configured",
-        )
+    if image_ids_to_delete:
+        try:
+            # Fetch all images in batch
+            images_to_delete = image_service.get_images_by_ids(image_ids_to_delete)
 
-    storage_service = StorageService()
-    for img in data.images:
-        if img.id is None:  # New image
-            try:
-                image_url = await storage_service.upload_image_from_base64(
+            # Delete from storage in parallel (if configured)
+            if is_storage_configured():
+                storage_service = StorageService()
+                delete_tasks = [
+                    storage_service.delete_image(img.image_url) for img in images_to_delete
+                ]
+                await asyncio.gather(*delete_tasks, return_exceptions=True)
+
+            # Delete from database in batch
+            image_service.delete_images_by_ids(image_ids_to_delete)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete images: {str(e)}",
+            )
+
+    # Collect new images (id is null)
+    new_images = [img for img in data.images if img.id is None]
+
+    # Validate that new images have data
+    for img in new_images:
+        if not img.data:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="New images (id: null) must include base64 data",
+            )
+
+    if new_images:
+        # Check if storage is configured
+        if not is_storage_configured():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Image storage is not configured",
+            )
+
+        try:
+            storage_service = StorageService()
+            # Upload all images in parallel
+            upload_tasks = [
+                storage_service.upload_image_from_base64(
                     img.data, tasting_note_id, folder="tasting-note-images"
                 )
-                image_service.add_image(tasting_note_id, image_url)
-            except StorageError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to upload image: {str(e)}",
-                )
+                for img in new_images
+            ]
+            image_urls = await asyncio.gather(*upload_tasks, return_exceptions=True)
+
+            # Check for errors in uploads
+            failed_uploads = [url for url in image_urls if isinstance(url, Exception)]
+            if failed_uploads:
+                raise StorageError(f"Failed to upload {len(failed_uploads)} image(s)")
+
+            # Add all uploaded images to database in batch
+            image_service.add_images(tasting_note_id, image_urls)
+        except (StorageError, Exception) as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload images: {str(e)}",
+            )
 
     # Return all current images for this note
     all_images = image_service.get_tasting_note_images(tasting_note_id)

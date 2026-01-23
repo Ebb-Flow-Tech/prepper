@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import type { TastingNoteImage } from '@/types';
@@ -37,6 +37,23 @@ export function ImageUploadPreview({
     }))
   );
   const [removingImageId, setRemovingImageId] = useState<number | null>(null);
+
+  // Update selectedImages when uploadedImages prop changes (e.g., after query loads)
+  useEffect(() => {
+    setSelectedImages((prevImages) => {
+      const newUploadedImages = uploadedImages.map((img) => ({
+        id: img.id,
+        data: '',
+        image_url: img.image_url,
+        removed: false,
+      }));
+
+      // Keep any new images (id: null) that were added
+      const newImagesFromUser = prevImages.filter((img) => img.id === null);
+
+      return [...newUploadedImages, ...newImagesFromUser];
+    });
+  }, [uploadedImages]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
