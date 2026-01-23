@@ -6,7 +6,7 @@ import { useRecipeCategories, useUpdateRecipeCategory, useDeleteRecipeCategory }
 import { RecipeCategoryCard } from './RecipeCategoryCard';
 import { RecipeCategoryListRow } from './RecipeCategoryListRow';
 import { AddRecipeCategoryModal } from './AddRecipeCategoryModal';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle, ConfirmModal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeCategory, UpdateRecipeCategoryRequest } from '@/types';
 
@@ -102,6 +102,7 @@ export function RecipeCategoriesTab() {
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<RecipeCategory | null>(null);
   const [view, setView] = useState<ViewType>('grid');
+  const [deleteConfirm, setDeleteConfirm] = useState<RecipeCategory | null>(null);
   const { data: categories = [], isLoading, error } = useRecipeCategories();
   const deleteRecipeCategory = useDeleteRecipeCategory();
 
@@ -117,13 +118,21 @@ export function RecipeCategoriesTab() {
   }, [categories, search]);
 
   const handleDeleteCategory = (category: RecipeCategory) => {
-    if (!window.confirm(`Are you sure you want to delete "${category.name}"?`)) {
-      return;
-    }
+    setDeleteConfirm(category);
+  };
 
-    deleteRecipeCategory.mutate(category.id, {
-      onSuccess: () => toast.success('Category deleted'),
-      onError: () => toast.error('Failed to delete category'),
+  const handleConfirmDelete = () => {
+    if (!deleteConfirm) return;
+
+    deleteRecipeCategory.mutate(deleteConfirm.id, {
+      onSuccess: () => {
+        toast.success('Category deleted');
+        setDeleteConfirm(null);
+      },
+      onError: () => {
+        toast.error('Failed to delete category');
+        setDeleteConfirm(null);
+      },
     });
   };
 
@@ -227,6 +236,18 @@ export function RecipeCategoriesTab() {
           onClose={() => setEditingCategory(null)}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Category"
+        message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 }

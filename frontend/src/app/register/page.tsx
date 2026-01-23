@@ -3,27 +3,86 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useAppState } from '@/lib/store';
+import { registerUser } from '@/lib/api';
+
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useAppState();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    // Validate email
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    // Validate name
+    if (!name.trim()) {
+      setError('Please enter your name');
+      toast.error('Please enter your name');
+      return;
+    }
+
     setIsLoading(true);
 
-    // Simulate registration delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const response = await registerUser({
+        email,
+        password,
+        username: name,
+      });
 
-    // Redirect to home page
-    router.push('/');
+      toast.success('Registration successful!');
+      login(
+        response.user.id,
+        response.access_token,
+        response.user.user_type,
+        response.refresh_token,
+        response.user.username
+      );
+      router.push('/recipes');
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      const errorMessage = err.message || 'Registration failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -86,6 +145,11 @@ export default function RegisterPage() {
                 required
               />
             </div>
+            {error && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>

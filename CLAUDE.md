@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Prepper is a **kitchen-first recipe workspace** for chefs and operators. It treats recipes as living objects on a single "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing with wastage tracking. Key principles: clarity, immediacy, reversibility—no save buttons, just autosave. Features mock authentication (frontend-only) with user roles (normal/admin) for recipe ownership and permissions.
+Prepper is a **kitchen-first recipe workspace** for chefs and operators. It treats recipes as living objects on a single "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing with wastage tracking. Key principles: clarity, immediacy, reversibility—no save buttons, just autosave. Features Supabase authentication with user roles (normal/admin) for recipe ownership and permissions.
 
 **Recipe Versioning**: Recipes support forking with full version history tracking. Each recipe has a `version` number and `root_id` pointing to its parent, enabling tree-based version lineage visualization.
 
@@ -75,6 +75,8 @@ app/
 │   ├── tasting.py               # TastingSession, TastingNote
 │   ├── recipe_tasting.py        # RecipeTasting (session-recipe many-to-many)
 │   ├── supplier.py              # Supplier (name, address, phone, email)
+│   ├── user.py                  # User (email, username, user_type, outlet_id, Supabase auth)
+│   ├── auth.py                  # Auth DTOs: LoginRequest, RegisterRequest, LoginResponse
 │   └── costing.py               # CostingResult (+ adjusted_cost_per_unit), CostBreakdownItem
 ├── domain/              # Business logic services
 │   ├── ingredient_service.py    # Ingredient CRUD + variants + categorization
@@ -92,7 +94,9 @@ app/
 │   ├── storage_service.py       # Supabase Storage for recipe images
 │   ├── category_service.py      # Category CRUD + soft-delete
 │   ├── recipe_category_service.py   # Recipe category CRUD
-│   └── recipe_recipe_category_service.py # Recipe-category link CRUD
+│   ├── recipe_recipe_category_service.py # Recipe-category link CRUD
+│   ├── user_service.py          # User CRUD and management
+│   └── supabase_auth_service.py # Supabase authentication integration
 ├── api/                 # FastAPI routers (one per resource)
 │   ├── recipes.py               # Recipe CRUD + fork + versions + image management
 │   ├── recipe_ingredients.py    # Recipe ingredient links + wastage/pricing
@@ -111,7 +115,9 @@ app/
 │   ├── agents.py                # Agent endpoints (feedback summarization, etc.)
 │   ├── categories.py            # Category CRUD
 │   ├── recipe_categories.py     # Recipe category CRUD
-│   └── recipe_recipe_categories.py # Recipe-category link CRUD
+│   ├── recipe_recipe_categories.py # Recipe-category link CRUD
+│   ├── auth.py                  # Login, register, token refresh endpoints
+│   └── deps.py                  # Dependency injection (get_session)
 ├── agents/              # AI-powered features
 │   ├── base_agent.py            # Base agent framework
 │   ├── category_agent.py        # Ingredient categorization
@@ -127,17 +133,33 @@ app/
 ### Frontend (`frontend/src/`)
 
 ```
-app/                     # Next.js 15 App Router pages
-├── outlets/             # Outlet list and detail pages
-├── recipe-categories/   # Recipe category detail page ([id])
-├── recipes/             # Recipe list and detail pages
-├── ingredients/         # Ingredient list and detail pages
-├── suppliers/           # Supplier list and detail pages
-├── tastings/            # Tasting sessions (list, detail, new, per-recipe notes)
-├── finance/             # Finance/analytics
-├── rnd/                 # R&D workspace
-├── login/               # Login page (mock auth)
-├── register/            # Registration page (mock auth)
+app/
+├── page.tsx             # Home page (redirects to /recipes if authenticated, else /login)
+├── layout.tsx           # Root layout with providers and top nav
+├── outlets/[id]/page.tsx        # Outlet detail page
+├── recipe-categories/[id]/page.tsx # Recipe category detail with recipe management
+├── recipes/
+│   ├── page.tsx         # Recipe list/management with tabs (Recipe, Outlet, Category Management)
+│   ├── new/page.tsx     # Create new recipe page
+│   └── [id]/page.tsx    # Individual recipe detail page
+├── ingredients/
+│   ├── page.tsx         # Ingredient list
+│   └── [id]/page.tsx    # Ingredient detail page
+├── suppliers/
+│   ├── page.tsx         # Supplier list
+│   └── [id]/page.tsx    # Supplier detail page
+├── tastings/
+│   ├── page.tsx         # Tasting session list
+│   ├── new/page.tsx     # Create new tasting session
+│   ├── [id]/page.tsx    # Tasting session detail
+│   └── [id]/r/[recipeId]/page.tsx # Tasting notes for recipe in session
+├── finance/page.tsx     # Finance/analytics dashboard
+├── rnd/
+│   ├── page.tsx         # R&D workspace list
+│   └── r/[recipeId]/page.tsx # Individual R&D recipe detail
+├── design-system/page.tsx # Design system reference
+├── login/page.tsx       # Login page (mock auth)
+├── register/page.tsx    # Registration page (mock auth)
 └── api/                 # Route handlers
     └── generate-image/  # DALL-E 3 image generation API route
 
@@ -149,28 +171,36 @@ lib/
 ├── utils.ts             # Utility functions (cn for classnames)
 ├── mock-users.json      # Mock user data for frontend-only auth
 └── hooks/               # TanStack Query hooks with cache invalidation
-    ├── useRecipes.ts            # useRecipeVersions, useGenerateRecipeImage, etc.
-    ├── useIngredients.ts
-    ├── useRecipeIngredients.ts
-    ├── useCosting.ts
-    ├── useInstructions.ts
-    ├── useSuppliers.ts
-    ├── useTastings.ts           # Tasting sessions + notes + useTastingNoteImages, useSyncTastingNoteImages
-    ├── useSubRecipes.ts
-    ├── useOutlets.ts            # useOutlets, useOutlet, useCreateOutlet, useUpdateOutlet
-    ├── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, etc.
-    └── useRecipeRecipeCategories.ts # useCategoryRecipes, useRecipeCategoryLinks, useAddRecipeToCategory, etc.
+    ├── useRecipes.ts            # useRecipes, useRecipe, useCreateRecipe, useUpdateRecipe, useDeleteRecipe, useForkRecipe, useRecipeVersions, useGenerateRecipeImage
+    ├── useIngredients.ts        # useIngredients, useIngredient, useCreateIngredient, useUpdateIngredient, useDeactivateIngredient, useIngredientVariants, useIngredientSuppliers, useAddSupplier, useUpdateSupplier, useRemoveSupplier, usePreferredSupplier
+    ├── useRecipeIngredients.ts  # useRecipeIngredients, useAddIngredient, useUpdateRecipeIngredient, useRemoveIngredient, useReorderIngredients
+    ├── useCosting.ts            # useRecipeCost, useRecomputeCost
+    ├── useInstructions.ts       # useInstructions, useSaveRawInstructions, useParseInstructions, useUpdateStructuredInstructions
+    ├── useSuppliers.ts          # useSuppliers, useSupplier, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, useSupplierIngredients
+    ├── useSubRecipes.ts         # useSubRecipes, useAddSubRecipe, useUpdateSubRecipe, useRemoveSubRecipe, useReorderSubRecipes, useBOMTree
+    ├── useOutlets.ts            # useOutlets, useOutlet, useCreateOutlet, useUpdateOutlet, useDeactivateOutlet
+    ├── useRecipeOutlets.ts      # useRecipeOutlets, useOutletRecipes, useAddRecipeToOutlet, useUpdateRecipeOutlet, useRemoveRecipeFromOutlet
+    ├── useTastings.ts           # useTastingSessions, useTastingSession, useTastingSessionStats, useCreateTastingSession, useUpdateTastingSession, useDeleteTastingSession, useSessionNotes, useCreateTastingNote, useUpdateTastingNote, useDeleteTastingNote, useTastingNoteImages, useSyncTastingNoteImages, useAddRecipeToSession, useRemoveRecipeFromSession
+    ├── useCategories.ts         # useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useCategoryIngredients
+    ├── useRecipeCategories.ts   # useRecipeCategories, useRecipeCategory, useCreateRecipeCategory, useUpdateRecipeCategory, useDeleteRecipeCategory
+    ├── useRecipeRecipeCategories.ts # useRecipeCategoryLinks, useCategoryRecipes, useAddRecipeToCategory, useRemoveRecipeFromCategory
+    ├── useAgents.ts             # useCategorizeIngredient, useSummarizeFeedback
+    ├── useAutoFlowLayout.ts     # Automatic layout arrangement using ReactFlow
+    ├── useSendTastingInvitation.ts # Email invitation functionality
+    └── index.ts                 # Export barrel for all hooks
 
 components/
-├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas
-│   └── tabs/            # 12+ canvas tabs including OutletsTab, OverviewTab, CanvasTab, VersionsTab, etc.
-├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, Instructions, SubRecipesList
-├── recipes/             # RecipeCard, RecipeCategoryCard, RecipeCategoryFilterButtons
-├── outlets/             # OutletsTab, AddOutletModal, EditableSelect
-├── tasting/             # ImageUploadPreview (upload, preview, delete UI for tasting note images)
-├── ingredients/         # IngredientCard
+├── layout/              # AppShell, TopAppBar, TopNav, LeftPanel, RightPanel, RecipeCanvas, CanvasLayout
+│   └── tabs/            # CanvasTab, OverviewTab, IngredientsTab, InstructionsTab, CostsTab, OutletsTab, TastingTab, VersionsTab, AddOutletModal
+├── recipe/              # RecipeIngredientsList, RecipeIngredientRow, SubRecipesList, Instructions, InstructionsSteps, InstructionStepCard, RecipeImageCarousel
+├── recipes/             # RecipeManagementTab, RecipeCard, RecipeListRow, OutletManagementTab, RecipeCategoriesTab, AddRecipeCategoryModal, RecipeCategoryCard, RecipeCategoryFilterButtons, RecipeCategoryListRow
+├── outlets/             # OutletCard, OutletListRow, AddOutletModal
+├── ingredients/         # IngredientCard, IngredientListRow, AddIngredientModal, FilterButtons, CategoriesTab
+├── categories/          # CategoryCard, CategoryListRow, AddCategoryModal
+├── suppliers/           # SupplierListRow, AddSupplierModal
+├── tasting/             # ImageUploadPreview (drag-drop upload with preview, Base64 + Supabase integration)
 ├── AuthGuard.tsx        # Route protection for authenticated pages
-└── ui/                  # Button, Input, Textarea, Select, Badge, Card, Skeleton, SearchInput, PageHeader, EditableCell, EditableSelect
+└── ui/                  # Button, Input, Textarea, Select, Badge, Card, Modal, ConfirmModal, Skeleton, PageHeader, SearchInput, EditableCell, Switch, ListSection, GroupSection, ViewToggle, MasonryGrid
 ```
 
 **Key patterns:**
@@ -187,10 +217,16 @@ components/
 
 All endpoints under `/api/v1`:
 
+**Authentication:**
+- `/auth/login` — Login with email/password (returns JWT tokens)
+- `/auth/register` — Register new user (email, username, password)
+- `/auth/refresh` — Refresh JWT token
+
 **Core Resources:**
 - `/recipes` — CRUD + status + soft-delete + fork
 - `/ingredients` — CRUD + deactivate + categories + variants
 - `/suppliers` — CRUD + contact info (address, phone, email)
+- `/outlets` — CRUD + hierarchy + cycle detection
 
 **Recipe Sub-resources:**
 - `/recipes/{id}/fork` — create editable copy with ingredients & instructions (sets version + root_id, excludes image)
@@ -269,6 +305,15 @@ All endpoints under `/api/v1`:
 - `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
 
 ## Key Features (Recent Additions)
+
+**User Authentication System** (Jan 23)
+- `User` model with email, username, user_type (normal/admin), outlet_id reference
+- `supabase_auth_service.py` for Supabase authentication integration
+- `user_service.py` for user CRUD and management
+- Login/register endpoints at `/auth/login`, `/auth/register`, `/auth/refresh`
+- Frontend auth pages at `/login` and `/register` with JWT token storage
+- `AuthGuard` component for route protection
+- Mock user data for frontend-only auth fallback
 
 **Recipe Category Management** (Jan 23)
 - `RecipeCategory` model for categorizing recipes

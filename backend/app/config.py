@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     supabase_key: str | None = None
     supabase_bucket: str = ""
 
+    # Supabase Auth
+    # supabase_service_role_key: str | None = None
+
     # Anthropic API
     anthropic_api_key: str | None = None
 

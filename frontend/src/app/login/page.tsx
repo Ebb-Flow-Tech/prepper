@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { useAppState } from '@/lib/store';
-import mockUsersData from '@/lib/mock-users.json';
+import { loginUser } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,28 +16,33 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
-    // Simulate login delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const response = await loginUser(email, password);
 
-    // Check credentials against mock users
-    const user = mockUsersData.users.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (user) {
       toast.success('Login successful');
-      login(user.userId, user.jwt, user.userType as 'normal' | 'admin');
+      login(
+        response.user.id,
+        response.access_token,
+        response.user.user_type,
+        response.refresh_token,
+        response.user.username
+      );
       router.push('/recipes');
-    } else {
-      toast.error('Incorrect email/password');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      const errorMessage = err.message || 'Invalid email or password';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -74,6 +79,11 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {error && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                {error}
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Logging in...' : 'Log in'}
             </Button>

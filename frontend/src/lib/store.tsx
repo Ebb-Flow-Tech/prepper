@@ -8,11 +8,13 @@ interface StoredAuth {
   userId: string | null;
   jwt: string | null;
   userType: 'normal' | 'admin' | null;
+  refreshToken: string | null;
+  username: string | null;
 }
 
 function getStoredAuth(): StoredAuth {
   if (typeof window === 'undefined') {
-    return { userId: null, jwt: null, userType: null };
+    return { userId: null, jwt: null, userType: null, refreshToken: null, username: null };
   }
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -22,12 +24,12 @@ function getStoredAuth(): StoredAuth {
   } catch {
     // Ignore parse errors
   }
-  return { userId: null, jwt: null, userType: null };
+  return { userId: null, jwt: null, userType: null, refreshToken: null, username: null };
 }
 
 function setStoredAuth(auth: StoredAuth) {
   if (typeof window === 'undefined') return;
-  if (auth.userId && auth.jwt && auth.userType) {
+  if (auth.userId && auth.jwt && auth.userType && auth.username) {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
   } else {
     localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -51,6 +53,8 @@ interface AppState {
   userId: string | null;
   jwt: string | null;
   userType: 'normal' | 'admin' | null;
+  refreshToken: string | null;
+  username: string | null;
 }
 
 interface AppContextValue extends AppState {
@@ -65,7 +69,9 @@ interface AppContextValue extends AppState {
   setUserId: (id: string | null) => void;
   setJwt: (jwt: string | null) => void;
   setUserType: (userType: 'normal' | 'admin' | null) => void;
-  login: (userId: string, jwt: string, userType: 'normal' | 'admin') => void;
+  setRefreshToken: (token: string | null) => void;
+  setUsername: (username: string | null) => void;
+  login: (userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string) => void;
   logout: () => void;
 }
 
@@ -84,7 +90,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     canvasViewMode: 'grid',
     userId: null,
     jwt: null,
-    userType: null
+    userType: null,
+    refreshToken: null,
+    username: null
   });
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -95,7 +103,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       userId: storedAuth.userId,
       jwt: storedAuth.jwt,
-      userType: storedAuth.userType
+      userType: storedAuth.userType,
+      refreshToken: storedAuth.refreshToken,
+      username: storedAuth.username
     }));
     setIsHydrated(true);
   }, []);
@@ -106,9 +116,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStoredAuth({
       userId: state.userId,
       jwt: state.jwt,
-      userType: state.userType
+      userType: state.userType,
+      refreshToken: state.refreshToken,
+      username: state.username
     });
-  }, [state.userId, state.jwt, state.userType, isHydrated]);
+  }, [state.userId, state.jwt, state.userType, state.refreshToken, state.username, isHydrated]);
 
   const selectRecipe = useCallback((id: number | null) => {
     setState((prev) => ({ ...prev, selectedRecipeId: id }));
@@ -154,12 +166,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, userType }));
   }, []);
 
-  const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin') => {
-    setState((prev) => ({ ...prev, userId, jwt, userType }));
+  const setRefreshToken = useCallback((token: string | null) => {
+    setState((prev) => ({ ...prev, refreshToken: token }));
+  }, []);
+
+  const setUsername = useCallback((username: string | null) => {
+    setState((prev) => ({ ...prev, username }));
+  }, []);
+
+  const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string) => {
+    setState((prev) => ({ ...prev, userId, jwt, userType, refreshToken, username }));
   }, []);
 
   const logout = useCallback(() => {
-    setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null }));
+    setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null, refreshToken: null, username: null }));
   }, []);
 
   return (
@@ -177,6 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUserId,
         setJwt,
         setUserType,
+        setRefreshToken,
+        setUsername,
         login,
         logout
       }}

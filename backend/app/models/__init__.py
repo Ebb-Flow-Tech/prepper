@@ -94,6 +94,20 @@ from app.models.recipe_recipe_category import (
     RecipeRecipeCategoryCreate,
     RecipeRecipeCategoryUpdate,
 )
+from app.models.user import (
+    User,
+    UserCreate,
+    UserUpdate,
+    UserRead,
+    UserType,
+)
+from app.models.auth import (
+    LoginRequest,
+    RegisterRequest,
+    LoginResponse,
+    TokenRequest,
+    RefreshTokenResponse,
+)
 
 __all__ = [
     # Ingredient
@@ -176,4 +190,16 @@ __all__ = [
     "RecipeRecipeCategory",
     "RecipeRecipeCategoryCreate",
     "RecipeRecipeCategoryUpdate",
+    # User
+    "User",
+    "UserCreate",
+    "UserUpdate",
+    "UserRead",
+    "UserType",
+    # Auth
+    "LoginRequest",
+    "RegisterRequest",
+    "LoginResponse",
+    "TokenRequest",
+    "RefreshTokenResponse",
 ]

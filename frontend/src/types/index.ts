@@ -571,3 +571,41 @@ export interface CreateRecipeRecipeCategoryRequest {
 export interface UpdateRecipeRecipeCategoryRequest {
   is_active?: boolean;
 }
+
+// ============ Auth Types ============
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  username: string;
+  user_type?: string;
+  outlet_id?: number | null;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  user_type: 'normal' | 'admin';
+  outlet_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoginResponse {
+  user: User;
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}
+
+export interface RefreshTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}

@@ -54,6 +54,10 @@ import type {
   RecipeRecipeCategory,
   CreateRecipeRecipeCategoryRequest,
   UpdateRecipeRecipeCategoryRequest,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  User,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -70,10 +74,26 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+
+  // Read JWT from localStorage for Authorization header
+  let jwt: string | null = null;
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('prepper_auth');
+      if (stored) {
+        const auth = JSON.parse(stored);
+        jwt = auth.jwt;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
   const config: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(jwt ? { 'Authorization': `Bearer ${jwt}` } : {}),
       ...options.headers,
     },
   };
@@ -82,7 +102,22 @@ async function fetchApi<T>(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new ApiError(response.status, errorText || `HTTP ${response.status}`);
+    let errorMessage = `HTTP ${response.status}`;
+
+    // Try to parse JSON error response and extract detail field
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.detail) {
+        errorMessage = errorJson.detail;
+      }
+    } catch {
+      // If not JSON, use raw error text
+      if (errorText) {
+        errorMessage = errorText;
+      }
+    }
+
+    throw new ApiError(response.status, errorMessage);
   }
 
   // Handle 204 No Content
@@ -884,5 +919,27 @@ export async function syncTastingNoteImages(
   return fetchApi<TastingNoteImage[]>(`/tasting-note-images/sync/${tastingNoteId}`, {
     method: 'POST',
     body: JSON.stringify({ images }),
+  });
+}
+
+// ============ Auth ============
+
+export async function loginUser(email: string, password: string): Promise<LoginResponse> {
+  return fetchApi<LoginResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function registerUser(data: RegisterRequest): Promise<LoginResponse> {
+  return fetchApi<LoginResponse>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function logoutUser(): Promise<void> {
+  return fetchApi<void>('/auth/logout', {
+    method: 'POST',
   });
 }

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ChefHat, FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
+import { logoutUser } from '@/lib/api';
 import { ConfirmModal } from '@/components/ui';
 
 const NAV_ITEMS = [
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId, logout, canvasHasUnsavedChanges } = useAppState();
+  const { userId, username, logout, canvasHasUnsavedChanges } = useAppState();
 
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export function TopNav() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Check for unsaved changes before logout if on canvas page
     if (pathname === '/' && canvasHasUnsavedChanges) {
       setPendingNavHref(null);
@@ -47,13 +48,29 @@ export function TopNav() {
       setShowUnsavedModal(true);
       return;
     }
+
+    // Call backend logout endpoint
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Continue with local logout even if backend call fails
+    }
+
     logout();
     router.push('/login');
   };
 
-  const handleConfirmLeave = () => {
+  const handleConfirmLeave = async () => {
     setShowUnsavedModal(false);
     if (isLogoutPending) {
+      // Call backend logout endpoint
+      try {
+        await logoutUser();
+      } catch (error) {
+        console.error('Logout error:', error);
+        // Continue with local logout even if backend call fails
+      }
       logout();
       router.push('/login');
     } else if (pendingNavHref) {
@@ -104,15 +121,22 @@ export function TopNav() {
           })}
         </div>
 
-        {/* Logout Button */}
+        {/* User Info and Logout */}
         {userId && (
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden md:inline">Logout</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {username && (
+              <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                {username}
+              </span>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden md:inline">Logout</span>
+            </button>
+          </div>
         )}
       </nav>
 
