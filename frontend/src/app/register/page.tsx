@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { useAppState } from '@/lib/store';
 import { registerUser } from '@/lib/api';
+import type { AuthApiError } from '@/types';
 
 const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -75,9 +76,10 @@ export default function RegisterPage() {
         response.user.username
       );
       router.push('/recipes');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Registration error:', err);
-      const errorMessage = err.message || 'Registration failed. Please try again.';
+      const apiError = err as AuthApiError;
+      const errorMessage = apiError.message || 'Registration failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -89,7 +91,7 @@ export default function RegisterPage() {
     <div className="flex min-h-full items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-center text-xl">Join Prepper</CardTitle>
+          <CardTitle className="text-center text-xl">Join Reciperep</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">

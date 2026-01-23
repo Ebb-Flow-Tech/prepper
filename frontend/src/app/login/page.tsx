@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { useAppState } from '@/lib/store';
 import { loginUser } from '@/lib/api';
+import type { AuthApiError } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,9 +36,10 @@ export default function LoginPage() {
         response.user.username
       );
       router.push('/recipes');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err);
-      const errorMessage = err.message || 'Invalid email or password';
+      const apiError = err as AuthApiError;
+      const errorMessage = apiError.message || 'Invalid email or password';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

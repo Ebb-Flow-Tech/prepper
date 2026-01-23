@@ -1,5 +1,9 @@
 // Types matching backend SQLModel schemas
 
+export interface AuthApiError {
+  message?: string;
+}
+
 export type RecipeStatus = 'draft' | 'active' | 'archived';
 
 export interface Ingredient {
