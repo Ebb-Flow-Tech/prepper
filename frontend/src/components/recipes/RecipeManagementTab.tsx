@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories } from '@/lib/hooks';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets } from '@/lib/hooks';
+import { getRecipeOutletsBatch } from '@/lib/api';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
 import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { useAppState } from '@/lib/store';
-import type { Recipe, RecipeStatus } from '@/types';
+import type { Recipe, RecipeStatus, RecipeOutlet } from '@/types';
 
 type GroupByOption = 'none' | 'status' | 'category';
 type StatusFilter = 'all' | RecipeStatus;
@@ -121,6 +122,7 @@ export function RecipeManagementTab() {
   const { data: recipes, isLoading, error } = useRecipes();
   const { data: recipeCategories } = useRecipeCategories();
   const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
+  const { data: outlets } = useOutlets(false);
 
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
@@ -128,6 +130,14 @@ export function RecipeManagementTab() {
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const [selectedRecipeCategories, setSelectedRecipeCategories] = useState<number[]>([]);
+  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
+
+  // Fetch outlets for all recipes
+  useEffect(() => {
+    if (recipes && recipes.length > 0) {
+      getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
+    }
+  }, [recipes]);
 
   // Build a map of recipe_id -> category_ids[] for efficient filtering
   const recipeCategoryMap = useMemo(() => {
@@ -150,6 +160,29 @@ export function RecipeManagementTab() {
     if (!recipeCategories) return new Map<number, string>();
     return new Map(recipeCategories.map((c) => [c.id, c.name]));
   }, [recipeCategories]);
+
+  // Map outlet_id -> name
+  const outletNameMap = useMemo(() => {
+    if (!outlets) return new Map<number, string>();
+    return new Map(outlets.map((o) => [o.id, o.name]));
+  }, [outlets]);
+
+  // Get outlet names for a recipe
+  const getOutletNamesForRecipe = (recipeId: number): string[] => {
+    const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
+    return recipeOutletLinks
+      .filter((link) => link.is_active)
+      .map((link) => outletNameMap.get(link.outlet_id))
+      .filter((name): name is string => name !== undefined);
+  };
+
+  // Get category names for a recipe
+  const getCategoryNamesForRecipe = (recipeId: number): string[] => {
+    const categoryIds = recipeCategoryMap.get(recipeId) || [];
+    return categoryIds
+      .map((catId) => categoryNameMap.get(catId))
+      .filter((name): name is string => name !== undefined);
+  };
 
   // Filter and group recipes
   const filteredRecipes = useMemo(() => {
@@ -312,6 +345,8 @@ export function RecipeManagementTab() {
                       key={recipe.id}
                       recipe={recipe}
                       isOwned={userId !== null && recipe.owner_id === userId}
+                      outletNames={getOutletNamesForRecipe(recipe.id)}
+                      categoryNames={getCategoryNamesForRecipe(recipe.id)}
                     />
                   ))}
                 </GroupSection>

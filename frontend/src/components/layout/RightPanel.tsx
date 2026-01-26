@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, GripVertical, ImagePlus, ChevronDown } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useIngredients, useCreateIngredient, useRecipes, useCategories } from '@/lib/hooks';
+import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets } from '@/lib/hooks';
+import { getRecipeOutletsBatch } from '@/lib/api';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import type { Ingredient, Recipe } from '@/types';
+import type { Ingredient, Recipe, RecipeOutlet } from '@/types';
 
 type RightPanelTab = 'all' | 'ingredients' | 'items';
 
@@ -112,7 +113,15 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
   );
 }
 
-function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
+function DraggableRecipeCard({
+  recipe,
+  outletNames = [],
+  categoryNames = []
+}: {
+  recipe: Recipe;
+  outletNames?: string[];
+  categoryNames?: string[];
+}) {
   const { selectedRecipeId, isDragDropEnabled } = useAppState();
   const isCurrentRecipe = recipe.id === selectedRecipeId;
 
@@ -198,7 +207,7 @@ function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
 
       {/* Card Body */}
       <div className="game-card-body">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <span className="game-card-stat game-card-stat-recipe">
             {recipe.yield_quantity} {recipe.yield_unit}
           </span>
@@ -206,6 +215,22 @@ function DraggableRecipeCard({ recipe }: { recipe: Recipe }) {
             <span className="text-xs text-green-300/60 uppercase tracking-wide">Current</span>
           )}
         </div>
+
+        {/* Outlets and Categories */}
+        {(outletNames.length > 0 || categoryNames.length > 0) && (
+          <div className="flex flex-wrap gap-1">
+            {outletNames.map((name) => (
+              <span key={name} className="text-xs bg-green-500/30 text-green-200 px-1.5 py-0.5 rounded">
+                {name}
+              </span>
+            ))}
+            {categoryNames.map((name) => (
+              <span key={name} className="text-xs bg-green-400/20 text-green-300 px-1.5 py-0.5 rounded">
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -371,12 +396,25 @@ export function RightPanel() {
   const { data: ingredients, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients();
   const { data: recipes, isLoading: recipesLoading, error: recipesError } = useRecipes();
   const { data: categories } = useCategories();
+  const { data: outlets } = useOutlets();
+  const { data: recipeCategories } = useRecipeCategories();
+  const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
   const { userId, userType } = useAppState();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
+
+  // Fetch recipe outlets
+  useEffect(() => {
+    if (!recipes || recipes.length === 0) {
+      setRecipeOutlets(new Map());
+      return;
+    }
+    getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
+  }, [recipes]);
 
   // Create a mapping of category ID to name for efficient lookups
   const categoryMap = useMemo(() => {
@@ -386,6 +424,40 @@ export function RightPanel() {
       return acc;
     }, {} as Record<number, string>);
   }, [categories]);
+
+  // Create mapping for recipe categories
+  const recipeCategoryMap = useMemo(() => {
+    if (!recipeCategories) return {};
+    return recipeCategories.reduce((acc, cat) => {
+      acc[cat.id] = cat.name;
+      return acc;
+    }, {} as Record<number, string>);
+  }, [recipeCategories]);
+
+  // Create mapping for outlets
+  const outletNameMap = useMemo(() => {
+    if (!outlets) return {};
+    return outlets.reduce((acc, outlet) => {
+      acc[outlet.id] = outlet.name;
+      return acc;
+    }, {} as Record<number, string>);
+  }, [outlets]);
+
+  // Helper function to get outlet names for a recipe
+  const getOutletNamesForRecipe = (recipeId: number): string[] => {
+    const recipeOutletsList = recipeOutlets.get(recipeId) || [];
+    return recipeOutletsList.map((ro) => outletNameMap[ro.outlet_id]).filter(Boolean);
+  };
+
+  // Helper function to get category names for a recipe
+  const getCategoryNamesForRecipe = (recipeId: number): string[] => {
+    const categoryLinks = (allRecipeRecipeCategories || []).filter(
+      (link) => link.recipe_id === recipeId
+    );
+    return categoryLinks
+      .map((link) => recipeCategoryMap[link.category_id])
+      .filter(Boolean);
+  };
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
@@ -618,6 +690,8 @@ export function RightPanel() {
                       <DraggableRecipeCard
                         key={recipe.id}
                         recipe={recipe}
+                        outletNames={getOutletNamesForRecipe(recipe.id)}
+                        categoryNames={getCategoryNamesForRecipe(recipe.id)}
                       />
                     ))}
                   </div>

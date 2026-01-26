@@ -11,6 +11,8 @@ interface RecipeCardProps {
   costPerPortion?: number | null;
   isOwned?: boolean;
   href?: string;
+  outletNames?: string[];
+  categoryNames?: string[];
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -19,7 +21,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCardProps) {
+export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [] }: RecipeCardProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
@@ -46,15 +48,46 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href }: RecipeCard
         </CardHeader>
 
         <CardContent>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
-              {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
-            </Badge>
-            {recipe.is_prep_recipe && (
-              <Badge variant="default" className="text-sm">Prep</Badge>
+          <div className="flex flex-col gap-3">
+            {/* Status badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant={STATUS_VARIANTS[recipe.status]} className="text-sm">
+                {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
+              </Badge>
+              {recipe.is_prep_recipe && (
+                <Badge variant="default" className="text-sm">Prep</Badge>
+              )}
+              {isOwned && (
+                <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+              )}
+            </div>
+
+            {/* Outlets */}
+            {outletNames.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Outlets</p>
+                <div className="flex flex-wrap gap-1">
+                  {outletNames.map((name) => (
+                    <Badge key={name} variant="secondary" className="text-xs">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             )}
-            {isOwned && (
-              <Badge className="text-sm bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+
+            {/* Categories */}
+            {categoryNames.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Categories</p>
+                <div className="flex flex-wrap gap-1">
+                  {categoryNames.map((name) => (
+                    <Badge key={name} variant="secondary" className="text-xs">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </CardContent>

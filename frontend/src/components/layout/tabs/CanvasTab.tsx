@@ -26,11 +26,15 @@ import {
   useRecipeIngredients,
   useSubRecipes,
   useCategories,
+  useRecipeCategories,
+  useAllRecipeRecipeCategories,
+  useOutlets,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
+import { getRecipeOutletsBatch } from '@/lib/api';
 import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
-import type { RecipeStatus } from '@/types';
+import type { RecipeStatus, RecipeOutlet } from '@/types';
 import { RightPanel } from '../RightPanel';
 import { formatCurrency } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
@@ -491,11 +495,15 @@ function StagedRecipeListItem({
   onRemove,
   onQuantityChange,
   allRecipes,
+  outletNames = [],
+  categoryNames = [],
 }: {
   staged: StagedRecipe;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   allRecipes?: Recipe[];
+  outletNames?: string[];
+  categoryNames?: string[];
 }) {
   const { data: recipeIngredients } = useRecipeIngredients(staged.recipe.id);
   const { data: subRecipes } = useSubRecipes(staged.recipe.id);
@@ -544,6 +552,22 @@ function StagedRecipeListItem({
         </div>
       </div>
 
+      {/* Outlets and Categories */}
+      {(outletNames.length > 0 || categoryNames.length > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {outletNames.map((name) => (
+            <span key={name} className="inline-block text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded">
+              {name}
+            </span>
+          ))}
+          {categoryNames.map((name) => (
+            <span key={name} className="inline-block text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-1 rounded">
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Ingredients Section */}
       {recipeIngredients && recipeIngredients.length > 0 && (
         <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
@@ -590,11 +614,15 @@ function StagedRecipeCard({
   onRemove,
   onQuantityChange,
   allRecipes,
+  outletNames = [],
+  categoryNames = [],
 }: {
   staged: StagedRecipe;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   allRecipes?: Recipe[];
+  outletNames?: string[];
+  categoryNames?: string[];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -703,6 +731,22 @@ function StagedRecipeCard({
           Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
         </div>
 
+        {/* Outlets and Categories */}
+        {(outletNames.length > 0 || categoryNames.length > 0) && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {outletNames.map((name) => (
+              <span key={name} className="inline-block text-xs bg-green-500/30 text-green-200 px-2 py-0.5 rounded">
+                {name}
+              </span>
+            ))}
+            {categoryNames.map((name) => (
+              <span key={name} className="inline-block text-xs bg-green-400/20 text-green-300 px-2 py-0.5 rounded">
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Expanded details */}
         {isExpanded && (
           <div className="mt-3 pt-3 border-t border-green-400/20 text-sm space-y-3 max-h-48 overflow-y-auto">
@@ -776,6 +820,8 @@ function CanvasDropZone({
   gridConfig,
   viewMode = 'grid',
   categoryMap,
+  getOutletNamesForRecipe,
+  getCategoryNamesForRecipe,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -789,6 +835,8 @@ function CanvasDropZone({
   gridConfig: ReturnType<typeof getGridConfig>;
   viewMode?: 'grid' | 'list';
   categoryMap: Record<number, string>;
+  getOutletNamesForRecipe: (recipeId: number) => string[];
+  getCategoryNamesForRecipe: (recipeId: number) => string[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-drop-zone',
@@ -844,6 +892,8 @@ function CanvasDropZone({
               onRemove={() => onRemoveRecipe(staged.id)}
               onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
               allRecipes={allRecipes}
+              outletNames={getOutletNamesForRecipe(staged.recipe.id)}
+              categoryNames={getCategoryNamesForRecipe(staged.recipe.id)}
             />
           ))}
         </>
@@ -866,6 +916,8 @@ function CanvasDropZone({
               onRemove={() => onRemoveRecipe(staged.id)}
               onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
               allRecipes={allRecipes}
+              outletNames={getOutletNamesForRecipe(staged.recipe.id)}
+              categoryNames={getCategoryNamesForRecipe(staged.recipe.id)}
             />
           ))}
         </div>
@@ -911,6 +963,8 @@ function CanvasContent({
   categoryMap,
   selectedRecipe,
   canvasCost,
+  getOutletNamesForRecipe,
+  getCategoryNamesForRecipe,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -942,6 +996,8 @@ function CanvasContent({
   categoryMap: Record<number, string>;
   selectedRecipe?: Recipe | null;
   canvasCost: number;
+  getOutletNamesForRecipe: (recipeId: number) => string[];
+  getCategoryNamesForRecipe: (recipeId: number) => string[];
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -1113,6 +1169,8 @@ function CanvasContent({
           gridConfig={gridConfig}
           viewMode={viewMode}
           categoryMap={categoryMap}
+          getOutletNamesForRecipe={getOutletNamesForRecipe}
+          getCategoryNamesForRecipe={getCategoryNamesForRecipe}
         />
       </div>
 
@@ -1210,6 +1268,9 @@ export function CanvasTab() {
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
   const { data: categories } = useCategories();
+  const { data: recipeCategories } = useRecipeCategories();
+  const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
+  const { data: outlets } = useOutlets(false);
 
   // Create a mapping of category ID to name for efficient lookups
   const categoryMap = useMemo(() => {
@@ -1219,6 +1280,60 @@ export function CanvasTab() {
       return acc;
     }, {});
   }, [categories]);
+
+  // Fetch outlets for all recipes
+  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
+
+  useEffect(() => {
+    if (recipes && recipes.length > 0) {
+      getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
+    }
+  }, [recipes]);
+
+  // Map category_id -> name
+  const recipeCategoryNameMap = useMemo(() => {
+    if (!recipeCategories) return new Map<number, string>();
+    return new Map(recipeCategories.map((c) => [c.id, c.name]));
+  }, [recipeCategories]);
+
+  // Build a map of recipe_id -> category_ids[]
+  const recipeCategoryMap = useMemo(() => {
+    const map = new Map<number, number[]>();
+
+    if (!recipeCategoryLinks) return map;
+
+    recipeCategoryLinks.forEach((link) => {
+      if (link.is_active) {
+        const existing = map.get(link.recipe_id) || [];
+        map.set(link.recipe_id, [...existing, link.category_id]);
+      }
+    });
+
+    return map;
+  }, [recipeCategoryLinks]);
+
+  // Map outlet_id -> name
+  const outletNameMap = useMemo(() => {
+    if (!outlets) return new Map<number, string>();
+    return new Map(outlets.map((o) => [o.id, o.name]));
+  }, [outlets]);
+
+  // Get outlet names for a recipe
+  const getOutletNamesForRecipe = (recipeId: number): string[] => {
+    const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
+    return recipeOutletLinks
+      .filter((link) => link.is_active)
+      .map((link) => outletNameMap.get(link.outlet_id))
+      .filter((name): name is string => name !== undefined);
+  };
+
+  // Get category names for a recipe
+  const getCategoryNamesForRecipe = (recipeId: number): string[] => {
+    const categoryIds = recipeCategoryMap.get(recipeId) || [];
+    return categoryIds
+      .map((catId) => recipeCategoryNameMap.get(catId))
+      .filter((name): name is string => name !== undefined);
+  };
 
   const createRecipe = useCreateRecipe();
   const updateRecipe = useUpdateRecipe();
@@ -2154,6 +2269,8 @@ export function CanvasTab() {
       categoryMap={categoryMap}
       selectedRecipe={selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null}
       canvasCost={canvasCost}
+      getOutletNamesForRecipe={getOutletNamesForRecipe}
+      getCategoryNamesForRecipe={getCategoryNamesForRecipe}
     />
   );
 

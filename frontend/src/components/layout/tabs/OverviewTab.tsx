@@ -50,7 +50,7 @@ function formatTastingDate(dateString: string): string {
 }
 
 export function OverviewTab() {
-  const { selectedRecipeId, userId } = useAppState();
+  const { selectedRecipeId, userId, userType } = useAppState();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
@@ -99,20 +99,6 @@ export function OverviewTab() {
     }
   }, [recipe?.id]);
 
-  // Trigger feedback summary when user enters a recipe with tasting notes
-  useEffect(() => {
-    // Only trigger if: recipe has tasting notes AND not currently summarizing
-    if (
-      selectedRecipeId &&
-      tastingNotes &&
-      tastingNotes.length > 0 &&
-      !isSummarizingFeedback
-    ) {
-      summarizeFeedback(selectedRecipeId);
-    }
-    // Only re-trigger when recipe changes, not on other rerenders
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRecipeId]);
 
   // Close tag dropdown when clicking outside
   useEffect(() => {
@@ -643,8 +629,19 @@ export function OverviewTab() {
                   <div className="space-y-4">
                     {/* Summary Section - AI Generated */}
                     <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Feedback Summary</p>
-                      <br></br>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Feedback Summary</p>
+                        {(canEditRecipe || userType === 'admin') && (
+                          <button
+                            onClick={() => summarizeFeedback(selectedRecipeId!)}
+                            disabled={isSummarizingFeedback}
+                            className="flex items-center gap-2 px-2 py-1 rounded bg-[hsl(var(--primary))] hover:opacity-90 disabled:opacity-50 text-black text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                          >
+                            <Wand2 className="h-3 w-3" />
+                            {isSummarizingFeedback ? 'Generating...' : 'Generate'}
+                          </button>
+                        )}
+                      </div>
                       {isSummarizingFeedback ? (
                         <div className="space-y-2">
                           <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />

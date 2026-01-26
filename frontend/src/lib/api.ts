@@ -763,6 +763,22 @@ export async function removeRecipeFromOutlet(
   });
 }
 
+// Helper function to fetch outlets for multiple recipes in parallel
+export async function getRecipeOutletsBatch(
+  recipeIds: number[]
+): Promise<Map<number, RecipeOutlet[]>> {
+  const results = await Promise.all(
+    recipeIds.map((recipeId) => getRecipeOutlets(recipeId))
+  );
+
+  const outletMap = new Map<number, RecipeOutlet[]>();
+  recipeIds.forEach((recipeId, index) => {
+    outletMap.set(recipeId, results[index]);
+  });
+
+  return outletMap;
+}
+
 // ============ Recipe Categories ============
 
 export async function getRecipeCategories(): Promise<RecipeCategory[]> {
