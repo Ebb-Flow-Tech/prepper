@@ -2,7 +2,7 @@
 
 from sqlmodel import Session, select
 
-from app.models import RecipeImage, RecipeImageCreate, RecipeImageUpdate
+from app.models import Recipe, RecipeImage, RecipeImageCreate, RecipeImageUpdate
 
 
 class RecipeImageService:
@@ -38,6 +38,14 @@ class RecipeImageService:
             order=next_order,
         )
         self.session.add(image)
+
+        # If this is the first image, update recipe's image_url
+        if is_main:
+            recipe = self.session.get(Recipe, recipe_id)
+            if recipe:
+                recipe.image_url = image_url
+                self.session.add(recipe)
+
         self.session.commit()
         self.session.refresh(image)
         return image
@@ -86,11 +94,26 @@ class RecipeImageService:
             return False
 
         recipe_id = image.recipe_id
+        was_main = image.is_main
         self.session.delete(image)
         self.session.commit()
 
         # Reorder remaining images
         self._reorder_images(recipe_id)
+
+        # If we deleted the main image, update recipe's image_url
+        if was_main:
+            # Get the new main image (if any)
+            statement = select(RecipeImage).where(
+                RecipeImage.recipe_id == recipe_id,
+                RecipeImage.is_main == True,
+            )
+            new_main = self.session.exec(statement).first()
+            recipe = self.session.get(Recipe, recipe_id)
+            if recipe:
+                recipe.image_url = new_main.image_url if new_main else None
+                self.session.add(recipe)
+                self.session.commit()
 
         return True
 
@@ -143,6 +166,13 @@ class RecipeImageService:
         if image and image.recipe_id == recipe_id:
             image.is_main = True
             self.session.add(image)
+
+            # Update recipe's image_url to the main image URL
+            recipe = self.session.get(Recipe, recipe_id)
+            if recipe:
+                recipe.image_url = image.image_url
+                self.session.add(recipe)
+
             self.session.commit()
             self.session.refresh(image)
             return image

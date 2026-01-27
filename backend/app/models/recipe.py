@@ -58,6 +58,9 @@ class Recipe(RecipeBase, table=True):
     # Description
     description: str | None = Field(default=None, description="Recipe description")
 
+    # Image
+    image_url: str | None = Field(default=None, description="URL of the selected main image")
+
     # Feedback
     summary_feedback: str | None = Field(default=None, description="Summary feedback on the recipe")
 
@@ -105,6 +108,7 @@ class RecipeUpdate(SQLModel):
     summary_feedback: str | None = None
     rnd_started: bool | None = None
     review_ready: bool | None = None
+    image_url: str | None = None
 
 
 class RecipeStatusUpdate(SQLModel):

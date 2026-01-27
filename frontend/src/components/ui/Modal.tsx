@@ -11,6 +11,8 @@ interface ModalProps {
   children: React.ReactNode;
   /** Max width class for the modal. Defaults to 'max-w-md' */
   maxWidth?: string;
+  /** Max height class for the modal. Defaults to 'max-h-[90vh]' */
+  maxHeight?: string;
 }
 
 export function Modal({
@@ -19,6 +21,7 @@ export function Modal({
   title,
   children,
   maxWidth = 'max-w-md',
+  maxHeight = 'max-h-[90vh]',
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -71,10 +74,11 @@ export function Modal({
         ref={modalRef}
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl',
+          'relative z-10 w-full overflow-y-auto rounded-lg bg-white p-6 shadow-xl',
           'dark:bg-zinc-900 dark:border dark:border-zinc-800',
           'focus:outline-none',
-          maxWidth
+          maxWidth,
+          maxHeight
         )}
       >
         {/* Header */}

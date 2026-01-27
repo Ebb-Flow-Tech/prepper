@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Wand2, Trash2, Star } from 'lucide-react';
-import { useRecipeImages, useUploadRecipeImage, useGenerateRecipeImage, useSetMainRecipeImage } from '@/lib/hooks';
+import { useRecipeImages, useUploadRecipeImage, useGenerateRecipeImage, useSetMainRecipeImage, useDeleteRecipeImage } from '@/lib/hooks';
 import { Button } from '@/components/ui';
 
 interface RecipeImageCarouselProps {
@@ -20,6 +20,7 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
   const uploadMutation = useUploadRecipeImage();
   const generateMutation = useGenerateRecipeImage();
   const setMainImageMutation = useSetMainRecipeImage();
+  const deleteImageMutation = useDeleteRecipeImage();
 
   const handlePrevious = () => {
     setCurrentIndex((prev: number) => (prev === 0 ? images.length - 1 : prev - 1));
@@ -78,6 +79,17 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
     }
   };
 
+  const handleDeleteImage = async () => {
+    if (!currentImage) return;
+    try {
+      await deleteImageMutation.mutateAsync(currentImage.id);
+      // Move to previous image if available, otherwise move to first
+      setCurrentIndex((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Failed to delete image:', error);
+    }
+  };
+
   // Ensure currentIndex is within bounds (handles race conditions during image fetch)
   const validIndex = Math.min(currentIndex, images.length - 1);
   const currentImage = images[validIndex];
@@ -86,7 +98,7 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
   return (
     <div className="space-y-4">
       {/* Carousel */}
-      <div className="relative bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden">
+      <div className="relative bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden mx-auto max-w-sm max-h-96">
         {hasImages ? (
           <>
             <img
@@ -153,7 +165,9 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
               <Star className={`h-4 w-4 ${currentImage?.is_main ? 'fill-amber-600 dark:fill-amber-400' : ''}`} />
             </button>
             <button
-              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+              onClick={handleDeleteImage}
+              disabled={deleteImageMutation.isPending}
+              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Delete this image"
             >
               <Trash2 className="h-4 w-4" />

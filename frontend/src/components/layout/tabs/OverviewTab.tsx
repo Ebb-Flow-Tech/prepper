@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown, Plus } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useMainRecipeImage, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
 import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
@@ -66,7 +66,6 @@ export function OverviewTab() {
   const { data: allRecipes } = useRecipes();
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
-  const { data: mainImage } = useMainRecipeImage(selectedRecipeId);
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(selectedRecipeId);
   const { data: allCategories = [] } = useRecipeCategories();
   const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
@@ -184,9 +183,9 @@ export function OverviewTab() {
                 <div className="flex items-start gap-6">
                   {/* Recipe hero image with edit button */}
                   <div className="relative shrink-0 group">
-                    {mainImage?.image_url ? (
+                    {recipe.image_url ? (
                       <img
-                        src={mainImage.image_url}
+                        src={recipe.image_url}
                         alt={recipe.name}
                         className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover"
                       />
@@ -747,7 +746,8 @@ export function OverviewTab() {
           isOpen={isImageModalOpen}
           onClose={() => setIsImageModalOpen(false)}
           title="Recipe Images"
-          maxWidth="max-w-2xl"
+          maxWidth="max-w-lg"
+          maxHeight="max-h-[70vh]"
         >
           {recipe && (
             <RecipeImageCarousel

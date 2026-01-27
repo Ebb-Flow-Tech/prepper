@@ -157,6 +157,8 @@ export function useUploadRecipeImage() {
       api.uploadRecipeImage(recipeId, imageBase64),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
+      queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
   });
 }
@@ -178,6 +180,23 @@ export function useSetMainRecipeImage() {
       // Invalidate queries related to this recipe's images and main image
       queryClient.invalidateQueries({ queryKey: ['recipe-images', data.recipe_id] });
       queryClient.invalidateQueries({ queryKey: ['recipe-main-image', data.recipe_id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe', data.recipe_id] });
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+  });
+}
+
+export function useDeleteRecipeImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (imageId: number) => api.deleteRecipeImage(imageId),
+    onSuccess: () => {
+      // Invalidate all recipe image queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['recipe-images'] });
+      // Invalidate all recipe queries to refresh image_url if it was the main image
+      queryClient.invalidateQueries({ queryKey: ['recipe'] });
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
   });
 }

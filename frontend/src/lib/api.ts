@@ -226,6 +226,12 @@ export async function setMainRecipeImage(
   });
 }
 
+export async function deleteRecipeImage(imageId: number): Promise<void> {
+  return fetchApi<void>(`/recipe-images/${imageId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ============ Recipe Ingredients ============
 
 export async function getRecipeIngredients(
