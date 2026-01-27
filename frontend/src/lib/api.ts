@@ -971,3 +971,9 @@ export async function logoutUser(): Promise<void> {
     method: 'POST',
   });
 }
+
+// ============ Users ============
+
+export async function getUser(userId: string): Promise<User> {
+  return fetchApi<User>(`/users/${userId}`);
+}

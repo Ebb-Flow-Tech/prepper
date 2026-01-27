@@ -6,6 +6,7 @@ import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes,
 import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
+import { useUser } from '@/lib/hooks/useUsers';
 import { useAppState } from '@/lib/store';
 import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
@@ -68,6 +69,8 @@ export function OverviewTab() {
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(selectedRecipeId);
   const { data: allCategories = [] } = useRecipeCategories();
+  const { data: owner } = useUser(recipe?.owner_id);
+  const { data: creator } = useUser(recipe?.created_by);
   const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
   const { mutate: summarizeFeedback, data: feedbackSummary, isPending: isSummarizingFeedback, error: feedbackSummaryError } = useSummarizeFeedback();
   const { mutate: addRecipeToCategory, isPending: isAddingTag } = useAddRecipeToCategory();
@@ -254,12 +257,12 @@ export function OverviewTab() {
                       </div>
                       {recipe.created_by && (
                         <div>
-                          Created by: <span className="font-medium text-zinc-600 dark:text-zinc-300">{recipe.created_by}</span>
+                          Created by: <span className="font-medium text-zinc-600 dark:text-zinc-300">{creator?.username || '-'}</span>
                         </div>
                       )}
                       {recipe.owner_id && (
                         <div>
-                          Owner ID: <span className="font-medium text-zinc-600 dark:text-zinc-300">{recipe.owner_id}</span>
+                          Owner: <span className="font-medium text-zinc-600 dark:text-zinc-300">{owner?.username || '-'}</span>
                         </div>
                       )}
                     </div>
