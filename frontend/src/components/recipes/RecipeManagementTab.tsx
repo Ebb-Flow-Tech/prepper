@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets } from '@/lib/hooks';
-import { getRecipeOutletsBatch } from '@/lib/api';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
 import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { useAppState } from '@/lib/store';
-import type { Recipe, RecipeStatus, RecipeOutlet } from '@/types';
+import type { Recipe, RecipeStatus } from '@/types';
 
 type GroupByOption = 'none' | 'status' | 'category';
 type StatusFilter = 'all' | RecipeStatus;
@@ -130,14 +129,11 @@ export function RecipeManagementTab() {
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const [selectedRecipeCategories, setSelectedRecipeCategories] = useState<number[]>([]);
-  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
 
-  // Fetch outlets for all recipes
-  useEffect(() => {
-    if (recipes && recipes.length > 0) {
-      getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
-    }
-  }, [recipes]);
+  // Fetch outlets for all recipes (with TanStack Query caching)
+  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
+    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
+  );
 
   // Build a map of recipe_id -> category_ids[] for efficient filtering
   const recipeCategoryMap = useMemo(() => {
@@ -171,9 +167,9 @@ export function RecipeManagementTab() {
   const getOutletNamesForRecipe = (recipeId: number): string[] => {
     const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
     return recipeOutletLinks
-      .filter((link) => link.is_active)
-      .map((link) => outletNameMap.get(link.outlet_id))
-      .filter((name): name is string => name !== undefined);
+      .filter((link: { is_active: boolean; outlet_id: number }) => link.is_active)
+      .map((link: { is_active: boolean; outlet_id: number }) => outletNameMap.get(link.outlet_id))
+      .filter((name: string | undefined): name is string => name !== undefined);
   };
 
   // Get category names for a recipe

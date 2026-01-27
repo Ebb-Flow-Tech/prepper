@@ -14,13 +14,19 @@ import {
   VersionsTab,
 } from '@/components/layout/tabs';
 import { useAppState } from '@/lib/store';
+import { useOutlets } from '@/lib/hooks';
+import type { Outlet } from '@/types';
 
-function TabContent() {
+interface TabContentProps {
+  outlets: Outlet[] | undefined;
+}
+
+function TabContent({ outlets }: TabContentProps) {
   const { canvasTab } = useAppState();
 
   switch (canvasTab) {
     case 'canvas':
-      return <CanvasTab />;
+      return <CanvasTab outlets={outlets} />;
     case 'overview':
       return <OverviewTab />;
     case 'ingredients':
@@ -28,7 +34,7 @@ function TabContent() {
     case 'costs':
       return <CostsTab />;
     case 'outlets':
-      return <OutletsTab />;
+      return <OutletsTab outlets={outlets} />;
     case 'instructions':
       return <InstructionsTab />;
     case 'tasting':
@@ -36,7 +42,7 @@ function TabContent() {
     case 'versions':
       return <VersionsTab />;
     default:
-      return <CanvasTab />;
+      return <CanvasTab outlets={outlets} />;
   }
 }
 
@@ -45,6 +51,8 @@ interface CanvasLayoutProps {
 }
 
 export function CanvasLayout({ showBackLink = false }: CanvasLayoutProps) {
+  const { data: outlets } = useOutlets();
+
   return (
     <div className="flex h-full flex-col">
       {showBackLink && (
@@ -60,7 +68,7 @@ export function CanvasLayout({ showBackLink = false }: CanvasLayoutProps) {
       )}
       <TopAppBar />
       <div className="flex flex-1 overflow-hidden">
-        <TabContent />
+        <TabContent outlets={outlets} />
       </div>
     </div>
   );

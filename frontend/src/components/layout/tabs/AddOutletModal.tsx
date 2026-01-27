@@ -1,23 +1,24 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useOutlets, useAddRecipeToOutlet } from '@/lib/hooks';
+import { useAddRecipeToOutlet } from '@/lib/hooks';
 import { Input, Button } from '@/components/ui';
 import { X } from 'lucide-react';
+import type { Outlet } from '@/types';
 
 interface AddOutletModalProps {
   isOpen: boolean;
   onClose: () => void;
   recipeId: number;
+  outlets?: Outlet[];
 }
 
-export function AddOutletModal({ isOpen, onClose, recipeId }: AddOutletModalProps) {
+export function AddOutletModal({ isOpen, onClose, recipeId, outlets = [] }: AddOutletModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOutletId, setSelectedOutletId] = useState<number | null>(null);
   const [priceOverride, setPriceOverride] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: outlets = [], isLoading: outletLoading } = useOutlets();
   const addRecipeToOutlet = useAddRecipeToOutlet();
 
   // Filter outlets based on search query
@@ -88,9 +89,7 @@ export function AddOutletModal({ isOpen, onClose, recipeId }: AddOutletModalProp
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               Select Outlet
             </label>
-            {outletLoading ? (
-              <div className="text-sm text-zinc-500">Loading outlets...</div>
-            ) : filteredOutlets.length === 0 ? (
+            {filteredOutlets.length === 0 ? (
               <div className="text-sm text-zinc-500">
                 {searchQuery ? 'No outlets match your search' : 'No outlets available'}
               </div>

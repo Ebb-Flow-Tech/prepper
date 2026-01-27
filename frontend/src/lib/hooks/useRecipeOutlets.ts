@@ -75,3 +75,11 @@ export function useRemoveRecipeFromOutlet() {
     },
   });
 }
+
+export function useRecipeOutletsBatch(recipeIds: number[] | null) {
+  return useQuery({
+    queryKey: ['recipeOutletsBatch', recipeIds ? recipeIds.sort() : null],
+    queryFn: () => api.getRecipeOutletsBatch(recipeIds!),
+    enabled: recipeIds !== null && recipeIds.length > 0,
+  });
+}

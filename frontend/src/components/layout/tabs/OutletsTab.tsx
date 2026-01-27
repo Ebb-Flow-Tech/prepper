@@ -3,16 +3,22 @@
 import { useState } from 'react';
 import { Plus, Trash2, Check, X, Edit2 } from 'lucide-react';
 import { useAppState } from '@/lib/store';
-import { useRecipe, useRecipeOutlets, useRemoveRecipeFromOutlet, useUpdateRecipeOutlet, useOutlets } from '@/lib/hooks';
-import { Card, CardContent, Skeleton, Button, Input } from '@/components/ui';
+import { useRecipe, useRecipeOutlets, useRemoveRecipeFromOutlet, useUpdateRecipeOutlet } from '@/lib/hooks';
+import { Card, CardContent, Skeleton, Button } from '@/components/ui';
 import { AddOutletModal } from './AddOutletModal';
 import { formatCurrency } from '@/lib/utils';
+import type { Outlet } from '@/types';
 
-export function OutletsTab() {
+interface OutletsTabProps {
+  outlets?: Outlet[];
+}
+
+export function OutletsTab({ outlets = [] }: OutletsTabProps) {
   const { selectedRecipeId } = useAppState();
   const { data: recipe, isLoading: recipeLoading, error: recipeError } = useRecipe(selectedRecipeId);
   const { data: recipeOutlets = [], isLoading: outletsLoading, error: outletsError } = useRecipeOutlets(selectedRecipeId);
-  const { data: allOutlets = [], isLoading: allOutletsLoading } = useOutlets();
+  const allOutlets = outlets;
+  const allOutletsLoading = false;
   const removeRecipeFromOutlet = useRemoveRecipeFromOutlet();
   const updateRecipeOutlet = useUpdateRecipeOutlet();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -241,7 +247,7 @@ export function OutletsTab() {
         </Card>
       </div>
 
-      <AddOutletModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} recipeId={selectedRecipeId} />
+      <AddOutletModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} recipeId={selectedRecipeId} outlets={allOutlets} />
     </div>
   );
 }

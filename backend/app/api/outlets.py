@@ -1,6 +1,7 @@
 """Outlet API routes for multi-brand operations."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
@@ -13,6 +14,13 @@ from app.models import (
     RecipeOutletUpdate,
 )
 from app.domain import OutletService
+
+
+class RecipeOutletsBatchRequest(BaseModel):
+    """Request body for batch fetching recipe outlets."""
+
+    recipe_ids: list[int]
+
 
 router = APIRouter()
 
@@ -204,3 +212,19 @@ def remove_recipe_from_outlet(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe-outlet link not found",
         )
+
+
+@recipe_outlets_router.post(
+    "/outlets/batch",
+    response_model=dict[int, list[RecipeOutlet]],
+)
+def get_recipe_outlets_batch(
+    request: RecipeOutletsBatchRequest,
+    session: Session = Depends(get_session),
+):
+    """Get outlets for multiple recipes in a single batch request.
+
+    Returns a dictionary mapping recipe_id -> list of RecipeOutlet records.
+    """
+    service = OutletService(session)
+    return service.get_outlets_for_recipes_batch(request.recipe_ids)

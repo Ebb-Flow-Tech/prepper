@@ -769,18 +769,24 @@ export async function removeRecipeFromOutlet(
   });
 }
 
-// Helper function to fetch outlets for multiple recipes in parallel
+// Fetch outlets for multiple recipes in a single batch request
 export async function getRecipeOutletsBatch(
   recipeIds: number[]
 ): Promise<Map<number, RecipeOutlet[]>> {
-  const results = await Promise.all(
-    recipeIds.map((recipeId) => getRecipeOutlets(recipeId))
-  );
+  if (recipeIds.length === 0) {
+    return new Map();
+  }
 
-  const outletMap = new Map<number, RecipeOutlet[]>();
-  recipeIds.forEach((recipeId, index) => {
-    outletMap.set(recipeId, results[index]);
+  const data = await fetchApi<Record<string, RecipeOutlet[]>>('/recipes/outlets/batch', {
+    method: 'POST',
+    body: JSON.stringify({ recipe_ids: recipeIds }),
   });
+
+  // Convert the plain object to a Map
+  const outletMap = new Map<number, RecipeOutlet[]>();
+  for (const [recipeId, outlets] of Object.entries(data)) {
+    outletMap.set(parseInt(recipeId, 10), outlets);
+  }
 
   return outletMap;
 }

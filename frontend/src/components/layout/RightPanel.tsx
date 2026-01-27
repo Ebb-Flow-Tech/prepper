@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Search, GripVertical, ImagePlus, ChevronDown } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets } from '@/lib/hooks';
-import { getRecipeOutletsBatch } from '@/lib/api';
+import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import type { Ingredient, Recipe, RecipeOutlet } from '@/types';
+import type { Ingredient, Recipe, Outlet } from '@/types';
 
 type RightPanelTab = 'all' | 'ingredients' | 'items';
 
@@ -392,11 +391,14 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function RightPanel() {
+interface RightPanelProps {
+  outlets?: Outlet[];
+}
+
+export function RightPanel({ outlets }: RightPanelProps) {
   const { data: ingredients, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients();
   const { data: recipes, isLoading: recipesLoading, error: recipesError } = useRecipes();
   const { data: categories } = useCategories();
-  const { data: outlets } = useOutlets();
   const { data: recipeCategories } = useRecipeCategories();
   const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
   const { userId, userType } = useAppState();
@@ -405,16 +407,10 @@ export function RightPanel() {
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
-  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
-
-  // Fetch recipe outlets
-  useEffect(() => {
-    if (!recipes || recipes.length === 0) {
-      setRecipeOutlets(new Map());
-      return;
-    }
-    getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
-  }, [recipes]);
+  // Fetch recipe outlets (with TanStack Query caching)
+  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
+    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
+  );
 
   // Create a mapping of category ID to name for efficient lookups
   const categoryMap = useMemo(() => {
@@ -437,7 +433,7 @@ export function RightPanel() {
   // Create mapping for outlets
   const outletNameMap = useMemo(() => {
     if (!outlets) return {};
-    return outlets.reduce((acc, outlet) => {
+    return outlets.reduce((acc: Record<number, string>, outlet: Outlet) => {
       acc[outlet.id] = outlet.name;
       return acc;
     }, {} as Record<number, string>);
@@ -446,7 +442,7 @@ export function RightPanel() {
   // Helper function to get outlet names for a recipe
   const getOutletNamesForRecipe = (recipeId: number): string[] => {
     const recipeOutletsList = recipeOutlets.get(recipeId) || [];
-    return recipeOutletsList.map((ro) => outletNameMap[ro.outlet_id]).filter(Boolean);
+    return recipeOutletsList.map((ro: { outlet_id: number }) => outletNameMap[ro.outlet_id]).filter(Boolean);
   };
 
   // Helper function to get category names for a recipe

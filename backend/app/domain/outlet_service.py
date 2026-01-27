@@ -100,6 +100,34 @@ class OutletService:
         statement = select(RecipeOutlet).where(RecipeOutlet.recipe_id == recipe_id)
         return list(self.session.exec(statement).all())
 
+    def get_outlets_for_recipes_batch(
+        self, recipe_ids: list[int]
+    ) -> dict[int, list[RecipeOutlet]]:
+        """Get all outlets for multiple recipes in a single query.
+
+        Returns a dictionary mapping recipe_id -> list of RecipeOutlet records.
+        """
+        if not recipe_ids:
+            return {}
+
+        # Fetch all RecipeOutlet records for these recipe IDs in one query
+        statement = select(RecipeOutlet).where(RecipeOutlet.recipe_id.in_(recipe_ids))
+        recipe_outlets = list(self.session.exec(statement).all())
+
+        # Group by recipe_id
+        result: dict[int, list[RecipeOutlet]] = {}
+        for outlet in recipe_outlets:
+            if outlet.recipe_id not in result:
+                result[outlet.recipe_id] = []
+            result[outlet.recipe_id].append(outlet)
+
+        # Ensure all recipe_ids have an entry (even if empty list)
+        for recipe_id in recipe_ids:
+            if recipe_id not in result:
+                result[recipe_id] = []
+
+        return result
+
     def add_recipe_to_outlet(
         self, recipe_id: int, data: RecipeOutletCreate
     ) -> RecipeOutlet | None:

@@ -28,13 +28,12 @@ import {
   useCategories,
   useRecipeCategories,
   useAllRecipeRecipeCategories,
-  useOutlets,
+  useRecipeOutletsBatch,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
-import { getRecipeOutletsBatch } from '@/lib/api';
 import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
 import { toast } from 'sonner';
-import type { RecipeStatus, RecipeOutlet } from '@/types';
+import type { RecipeStatus, Outlet } from '@/types';
 import { RightPanel } from '../RightPanel';
 import { formatCurrency } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
@@ -1261,7 +1260,11 @@ function calculateCanvasCost(
   return totalCost;
 }
 
-export function CanvasTab() {
+interface CanvasTabProps {
+  outlets?: Outlet[];
+}
+
+export function CanvasTab({ outlets }: CanvasTabProps) {
   const router = useRouter();
   const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipes } = useRecipes();
@@ -1270,7 +1273,6 @@ export function CanvasTab() {
   const { data: categories } = useCategories();
   const { data: recipeCategories } = useRecipeCategories();
   const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
-  const { data: outlets } = useOutlets(false);
 
   // Create a mapping of category ID to name for efficient lookups
   const categoryMap = useMemo(() => {
@@ -1281,14 +1283,10 @@ export function CanvasTab() {
     }, {});
   }, [categories]);
 
-  // Fetch outlets for all recipes
-  const [recipeOutlets, setRecipeOutlets] = useState<Map<number, RecipeOutlet[]>>(new Map());
-
-  useEffect(() => {
-    if (recipes && recipes.length > 0) {
-      getRecipeOutletsBatch(recipes.map((r) => r.id)).then(setRecipeOutlets);
-    }
-  }, [recipes]);
+  // Fetch outlets for all recipes (with TanStack Query caching)
+  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
+    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
+  );
 
   // Map category_id -> name
   const recipeCategoryNameMap = useMemo(() => {
@@ -1322,9 +1320,9 @@ export function CanvasTab() {
   const getOutletNamesForRecipe = (recipeId: number): string[] => {
     const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
     return recipeOutletLinks
-      .filter((link) => link.is_active)
-      .map((link) => outletNameMap.get(link.outlet_id))
-      .filter((name): name is string => name !== undefined);
+      .filter((link: { is_active: boolean; outlet_id: number }) => link.is_active)
+      .map((link: { is_active: boolean; outlet_id: number }) => outletNameMap.get(link.outlet_id))
+      .filter((name: string | undefined): name is string => name !== undefined);
   };
 
   // Get category names for a recipe
@@ -2283,7 +2281,7 @@ export function CanvasTab() {
           onDragEnd={handleDragEnd}
         >
           {canvasContent}
-          <RightPanel />
+          <RightPanel outlets={outlets} />
           <DragOverlay>
             {activeDragItem && (
               <DragOverlayContent
@@ -2297,7 +2295,7 @@ export function CanvasTab() {
       ) : (
         <>
           {canvasContent}
-          <RightPanel />
+          <RightPanel outlets={outlets} />
         </>
       )}
 
