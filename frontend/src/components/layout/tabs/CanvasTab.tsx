@@ -2280,8 +2280,10 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {canvasContent}
-          <RightPanel outlets={outlets} />
+          <div className="flex h-full w-full">
+            {canvasContent}
+            <RightPanel outlets={outlets} />
+          </div>
           <DragOverlay>
             {activeDragItem && (
               <DragOverlayContent
@@ -2293,10 +2295,10 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           </DragOverlay>
         </DndContext>
       ) : (
-        <>
+        <div className="flex h-full w-full">
           {canvasContent}
           <RightPanel outlets={outlets} />
-        </>
+        </div>
       )}
 
       <ConfirmModal
