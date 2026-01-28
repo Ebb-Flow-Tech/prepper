@@ -43,7 +43,7 @@ def test_sync_add_new_images(client_with_storage: TestClient, sample_tasting_not
     base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
     response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -70,7 +70,7 @@ def test_sync_delete_images(client_with_storage: TestClient, sample_tasting_note
 
     # First, add three images
     add_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -86,7 +86,7 @@ def test_sync_delete_images(client_with_storage: TestClient, sample_tasting_note
 
     # Now delete two images
     delete_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": image_ids[0], "removed": True},
@@ -108,7 +108,7 @@ def test_sync_add_and_delete(client_with_storage: TestClient, sample_tasting_not
 
     # Add initial images
     add_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -121,7 +121,7 @@ def test_sync_add_and_delete(client_with_storage: TestClient, sample_tasting_not
 
     # Now sync: delete one, keep one, add two new
     sync_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": image_ids[0], "removed": True},
@@ -145,7 +145,7 @@ def test_sync_keep_existing_images(client_with_storage: TestClient, sample_tasti
 
     # Add initial images
     add_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -158,7 +158,7 @@ def test_sync_keep_existing_images(client_with_storage: TestClient, sample_tasti
 
     # Sync with same images, no changes
     sync_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": image_ids[0], "removed": False},
@@ -177,7 +177,7 @@ def test_sync_nonexistent_tasting_note(client_with_storage: TestClient):
     base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
     response = client_with_storage.post(
-        "/api/v1/tasting-note-images/sync/99999",
+        "/api/v1/tasting-note-images/sync/recipe/99999",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -194,7 +194,7 @@ def test_sync_empty_images(client_with_storage: TestClient, sample_tasting_note)
     tasting_note_id = sample_tasting_note["id"]
 
     response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={"images": []},
     )
 
@@ -210,7 +210,7 @@ def test_get_tasting_note_images(client_with_storage: TestClient, sample_tasting
 
     # Add multiple images using sync
     client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -234,7 +234,7 @@ def test_delete_tasting_note_image(client_with_storage: TestClient, sample_tasti
 
     # Add two images
     add_response = client_with_storage.post(
-        f"/api/v1/tasting-note-images/sync/{tasting_note_id}",
+        f"/api/v1/tasting-note-images/sync/recipe/{tasting_note_id}",
         json={
             "images": [
                 {"id": None, "data": base64_image},
@@ -270,3 +270,102 @@ def test_get_images_for_nonexistent_tasting_note(client_with_storage: TestClient
     assert response.status_code == 200
     images = response.json()
     assert images == []
+
+
+# ========== Ingredient Tasting Note Images Tests ==========
+
+
+@pytest.fixture
+def sample_ingredient_tasting_note(client_with_storage: TestClient):
+    """Create a sample ingredient tasting note for testing."""
+    # First create an ingredient
+    ingredient_response = client_with_storage.post(
+        "/api/v1/ingredients",
+        json={"name": "Test Ingredient", "base_unit": "kg"},
+    )
+    ingredient_id = ingredient_response.json()["id"]
+
+    # Create a tasting session
+    session_response = client_with_storage.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Test Session",
+            "date": "2024-12-15T10:00:00",
+        },
+    )
+    session_id = session_response.json()["id"]
+
+    # Create an ingredient tasting note
+    note_response = client_with_storage.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredient-notes",
+        json={
+            "ingredient_id": ingredient_id,
+            "taste_rating": 4,
+            "feedback": "Good flavor",
+        },
+    )
+    assert note_response.status_code == 201
+    return note_response.json()
+
+
+def test_sync_add_new_ingredient_images(client_with_storage: TestClient, sample_ingredient_tasting_note):
+    """Test syncing to add multiple new images for ingredient tasting note."""
+    ingredient_tasting_note_id = sample_ingredient_tasting_note["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    response = client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/ingredient/{ingredient_tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    images = response.json()
+    assert len(images) == 2
+    assert all(img["ingredient_tasting_note_id"] == ingredient_tasting_note_id for img in images)
+    assert all(img["image_url"] is not None for img in images)
+    assert all(img["id"] is not None for img in images)
+
+
+def test_get_ingredient_tasting_note_images(client_with_storage: TestClient, sample_ingredient_tasting_note):
+    """Test retrieving all images for an ingredient tasting note."""
+    ingredient_tasting_note_id = sample_ingredient_tasting_note["id"]
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    # Add multiple images using sync
+    client_with_storage.post(
+        f"/api/v1/tasting-note-images/sync/ingredient/{ingredient_tasting_note_id}",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+
+    # Get all images
+    response = client_with_storage.get(f"/api/v1/tasting-note-images/ingredient/{ingredient_tasting_note_id}")
+    assert response.status_code == 200
+    images = response.json()
+    assert len(images) == 2
+
+
+def test_sync_ingredient_images_nonexistent(client_with_storage: TestClient):
+    """Test syncing images for a non-existent ingredient tasting note."""
+    base64_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    response = client_with_storage.post(
+        "/api/v1/tasting-note-images/sync/ingredient/99999",
+        json={
+            "images": [
+                {"id": None, "data": base64_image},
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Ingredient tasting note not found" in response.json()["detail"]

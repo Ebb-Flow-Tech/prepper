@@ -12,12 +12,13 @@ class TastingNoteImageService:
         """Initialize service with database session."""
         self.session = session
 
-    def add_images(self, tasting_note_id: int, image_urls: list[str]) -> list[TastingNoteImage]:
+    def add_images(self, tasting_note_id: int | None = None, ingredient_tasting_note_id: int | None = None, image_urls: list[str] | None = None) -> list[TastingNoteImage]:
         """
-        Add multiple images to a tasting note in batch.
+        Add multiple images to a tasting note or ingredient tasting note in batch.
 
         Args:
-            tasting_note_id: Tasting Note ID
+            tasting_note_id: Tasting Note ID (optional if ingredient_tasting_note_id is provided)
+            ingredient_tasting_note_id: Ingredient Tasting Note ID (optional if tasting_note_id is provided)
             image_urls: List of image URLs
 
         Returns:
@@ -26,8 +27,15 @@ class TastingNoteImageService:
         if not image_urls:
             return []
 
+        if not tasting_note_id and not ingredient_tasting_note_id:
+            raise ValueError("Either tasting_note_id or ingredient_tasting_note_id must be provided")
+
         images = [
-            TastingNoteImage(tasting_note_id=tasting_note_id, image_url=url)
+            TastingNoteImage(
+                tasting_note_id=tasting_note_id,
+                ingredient_tasting_note_id=ingredient_tasting_note_id,
+                image_url=url
+            )
             for url in image_urls
         ]
         for image in images:
@@ -37,19 +45,24 @@ class TastingNoteImageService:
             self.session.refresh(image)
         return images
 
-    def add_image(self, tasting_note_id: int, image_url: str) -> TastingNoteImage:
+    def add_image(self, tasting_note_id: int | None = None, ingredient_tasting_note_id: int | None = None, image_url: str | None = None) -> TastingNoteImage:
         """
-        Add an image to a tasting note.
+        Add an image to a tasting note or ingredient tasting note.
 
         Args:
-            tasting_note_id: Tasting Note ID
+            tasting_note_id: Tasting Note ID (optional if ingredient_tasting_note_id is provided)
+            ingredient_tasting_note_id: Ingredient Tasting Note ID (optional if tasting_note_id is provided)
             image_url: URL of the image
 
         Returns:
             Created TastingNoteImage instance
         """
+        if not tasting_note_id and not ingredient_tasting_note_id:
+            raise ValueError("Either tasting_note_id or ingredient_tasting_note_id must be provided")
+
         image = TastingNoteImage(
             tasting_note_id=tasting_note_id,
+            ingredient_tasting_note_id=ingredient_tasting_note_id,
             image_url=image_url,
         )
         self.session.add(image)
@@ -69,6 +82,21 @@ class TastingNoteImageService:
         """
         statement = select(TastingNoteImage).where(
             TastingNoteImage.tasting_note_id == tasting_note_id
+        )
+        return self.session.exec(statement).all()
+
+    def get_ingredient_tasting_note_images(self, ingredient_tasting_note_id: int) -> list[TastingNoteImage]:
+        """
+        Get all images for an ingredient tasting note.
+
+        Args:
+            ingredient_tasting_note_id: Ingredient Tasting Note ID
+
+        Returns:
+            List of TastingNoteImage instances
+        """
+        statement = select(TastingNoteImage).where(
+            TastingNoteImage.ingredient_tasting_note_id == ingredient_tasting_note_id
         )
         return self.session.exec(statement).all()
 

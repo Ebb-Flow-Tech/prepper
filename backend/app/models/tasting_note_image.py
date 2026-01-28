@@ -8,7 +8,8 @@ from sqlmodel import Field, SQLModel
 class TastingNoteImageBase(SQLModel):
     """Shared fields for TastingNoteImage."""
 
-    tasting_note_id: int = Field(foreign_key="tasting_notes.id", index=True)
+    tasting_note_id: int | None = Field(default=None, foreign_key="tasting_notes.id", index=True)
+    ingredient_tasting_note_id: int | None = Field(default=None, foreign_key="ingredient_tasting_notes.id", index=True)
     image_url: str
 
 

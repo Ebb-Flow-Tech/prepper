@@ -1034,7 +1034,23 @@ export async function syncTastingNoteImages(
   tastingNoteId: number,
   images: ImageWithIdRequest[]
 ): Promise<TastingNoteImage[]> {
-  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/sync/${tastingNoteId}`, {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/sync/recipe/${tastingNoteId}`, {
+    method: 'POST',
+    body: JSON.stringify({ images }),
+  });
+}
+
+export async function getIngredientTastingNoteImages(
+  ingredientTastingNoteId: number
+): Promise<TastingNoteImage[]> {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/ingredient/${ingredientTastingNoteId}`);
+}
+
+export async function syncIngredientTastingNoteImages(
+  ingredientTastingNoteId: number,
+  images: ImageWithIdRequest[]
+): Promise<TastingNoteImage[]> {
+  return fetchApi<TastingNoteImage[]>(`/tasting-note-images/sync/ingredient/${ingredientTastingNoteId}`, {
     method: 'POST',
     body: JSON.stringify({ images }),
   });

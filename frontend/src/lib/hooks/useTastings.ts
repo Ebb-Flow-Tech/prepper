@@ -299,3 +299,28 @@ export function useSyncTastingNoteImages() {
     },
   });
 }
+
+export function useIngredientTastingNoteImages(ingredientTastingNoteId: number | null) {
+  return useQuery({
+    queryKey: ['ingredient-tasting-note', ingredientTastingNoteId, 'images'],
+    queryFn: () => {
+      if (!ingredientTastingNoteId) return [];
+      return api.getIngredientTastingNoteImages(ingredientTastingNoteId);
+    },
+    enabled: !!ingredientTastingNoteId,
+  });
+}
+
+export function useSyncIngredientTastingNoteImages() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ ingredientTastingNoteId, images }: { ingredientTastingNoteId: number; images: api.ImageWithIdRequest[] }) =>
+      api.syncIngredientTastingNoteImages(ingredientTastingNoteId, images),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['ingredient-tasting-note', variables.ingredientTastingNoteId, 'images'],
+      });
+    },
+  });
+}

@@ -23,8 +23,8 @@ import {
   useAddIngredientNote,
   useUpdateIngredientNote,
   useDeleteIngredientNote,
-  useTastingNoteImages,
-  useSyncTastingNoteImages,
+  useIngredientTastingNoteImages,
+  useSyncIngredientTastingNoteImages,
 } from '@/lib/hooks';
 import { useIngredient } from '@/lib/hooks/useIngredients';
 import { ImageUploadPreview, type ImageWithId } from '@/components/tasting/ImageUploadPreview';
@@ -278,9 +278,9 @@ interface FeedbackNoteCardProps {
 function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
-  const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
-  const { data: editFormImages = [] } = useTastingNoteImages(isEditing ? note.id : null);
-  const syncImages = useSyncTastingNoteImages();
+  const { data: noteImages = [], isLoading: isLoadingImages } = useIngredientTastingNoteImages(isImagesExpanded ? note.id : null);
+  const { data: editFormImages = [] } = useIngredientTastingNoteImages(isEditing ? note.id : null);
+  const syncImages = useSyncIngredientTastingNoteImages();
 
   const decisionConfig = note.decision ? DECISION_CONFIG[note.decision] : null;
   const DecisionIcon = decisionConfig?.icon;
@@ -300,7 +300,7 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
     if (imagesWithId.length > 0) {
       try {
         await syncImages.mutateAsync({
-          tastingNoteId: note.id,
+          ingredientTastingNoteId: note.id,
           images: imagesWithId,
         });
       } catch (imageError) {
@@ -459,7 +459,7 @@ export default function IngredientTastingPage() {
   const addNote = useAddIngredientNote();
   const updateNote = useUpdateIngredientNote();
   const deleteNote = useDeleteIngredientNote();
-  const syncImages = useSyncTastingNoteImages();
+  const syncImages = useSyncIngredientTastingNoteImages();
 
   // Filter notes for this specific ingredient
   const ingredientNotes = allNotes?.filter((n) => n.ingredient_id === ingredientId) || [];
@@ -488,7 +488,7 @@ export default function IngredientTastingPage() {
       if (imagesWithId.length > 0 && result?.id) {
         try {
           await syncImages.mutateAsync({
-            tastingNoteId: result.id,
+            ingredientTastingNoteId: result.id,
             images: imagesWithId,
           });
         } catch (imageError) {
