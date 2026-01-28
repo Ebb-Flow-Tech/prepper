@@ -25,6 +25,7 @@ const VALID_ROUTE_PATTERNS = [
   /^\/tastings\/new$/,                       // New tasting
   /^\/tastings\/[^/]+$/,                     // Tasting detail
   /^\/tastings\/[^/]+\/r\/[^/]+$/,           // Tasting recipe notes
+  /^\/tastings\/[^/]+\/i\/[^/]+$/,           // Tasting ingredient notes
   /^\/finance$/,                             // Finance
   /^\/rnd$/,                                 // R&D
   /^\/rnd\/r\/[^/]+$/,                       // R&D recipe detail

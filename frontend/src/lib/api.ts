@@ -26,6 +26,13 @@ import type {
   UpdateTastingNoteRequest,
   RecipeTasting,
   AddRecipeToSessionRequest,
+  IngredientTasting,
+  IngredientTastingNote,
+  IngredientTastingNoteWithDetails,
+  IngredientTastingSummary,
+  CreateIngredientTastingNoteRequest,
+  UpdateIngredientTastingNoteRequest,
+  AddIngredientToSessionRequest,
   Supplier,
   CreateSupplierRequest,
   UpdateSupplierRequest,
@@ -485,6 +492,89 @@ export async function removeRecipeFromSession(
   return fetchApi<void>(`/tasting-sessions/${sessionId}/recipes/${recipeId}`, {
     method: 'DELETE',
   });
+}
+
+// ============ Session Ingredients (Ingredient-Tasting) ============
+
+export async function getSessionIngredients(
+  sessionId: number
+): Promise<IngredientTasting[]> {
+  return fetchApi<IngredientTasting[]>(`/tasting-sessions/${sessionId}/ingredients`);
+}
+
+export async function addIngredientToSession(
+  sessionId: number,
+  data: AddIngredientToSessionRequest
+): Promise<IngredientTasting> {
+  return fetchApi<IngredientTasting>(`/tasting-sessions/${sessionId}/ingredients`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeIngredientFromSession(
+  sessionId: number,
+  ingredientId: number
+): Promise<void> {
+  return fetchApi<void>(`/tasting-sessions/${sessionId}/ingredients/${ingredientId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Ingredient Tasting Notes ============
+
+export async function getIngredientNotes(
+  sessionId: number
+): Promise<IngredientTastingNote[]> {
+  return fetchApi<IngredientTastingNote[]>(`/tasting-sessions/${sessionId}/ingredient-notes`);
+}
+
+export async function addIngredientNote(
+  sessionId: number,
+  data: CreateIngredientTastingNoteRequest
+): Promise<IngredientTastingNote> {
+  return fetchApi<IngredientTastingNote>(`/tasting-sessions/${sessionId}/ingredient-notes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateIngredientNote(
+  sessionId: number,
+  noteId: number,
+  data: UpdateIngredientTastingNoteRequest
+): Promise<IngredientTastingNote> {
+  return fetchApi<IngredientTastingNote>(`/tasting-sessions/${sessionId}/ingredient-notes/${noteId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteIngredientNote(
+  sessionId: number,
+  noteId: number
+): Promise<void> {
+  return fetchApi<void>(`/tasting-sessions/${sessionId}/ingredient-notes/${noteId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Ingredient Tasting History ============
+
+export async function getIngredientTastingNotes(
+  ingredientId: number
+): Promise<IngredientTastingNoteWithDetails[]> {
+  return fetchApi<IngredientTastingNoteWithDetails[]>(
+    `/ingredients/${ingredientId}/tasting-notes`
+  );
+}
+
+export async function getIngredientTastingSummary(
+  ingredientId: number
+): Promise<IngredientTastingSummary> {
+  return fetchApi<IngredientTastingSummary>(
+    `/ingredients/${ingredientId}/tasting-summary`
+  );
 }
 
 // ============ Suppliers ============

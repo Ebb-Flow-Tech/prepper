@@ -69,6 +69,16 @@ from app.models.recipe_tasting import (
     RecipeTasting,
     RecipeTastingCreate,
 )
+from app.models.ingredient_tasting import (
+    IngredientTasting,
+    IngredientTastingCreate,
+    IngredientTastingNote,
+    IngredientTastingNoteCreate,
+    IngredientTastingNoteUpdate,
+    IngredientTastingNoteRead,
+    IngredientTastingNoteWithDetails,
+    IngredientTastingSummary,
+)
 from app.models.category import (
     Category,
     CategoryCreate,
@@ -170,6 +180,15 @@ __all__ = [
     # RecipeTasting
     "RecipeTasting",
     "RecipeTastingCreate",
+    # IngredientTasting
+    "IngredientTasting",
+    "IngredientTastingCreate",
+    "IngredientTastingNote",
+    "IngredientTastingNoteCreate",
+    "IngredientTastingNoteUpdate",
+    "IngredientTastingNoteRead",
+    "IngredientTastingNoteWithDetails",
+    "IngredientTastingSummary",
     # Category
     "Category",
     "CategoryCreate",

@@ -6,6 +6,7 @@ export * from './useInstructions';
 export * from './useSuppliers';
 export * from './useSubRecipes';
 export * from './useTastings';
+export * from './useIngredientTastings';
 export * from './useCategories';
 export * from './useRecipeCategories';
 export * from './useRecipeRecipeCategories';

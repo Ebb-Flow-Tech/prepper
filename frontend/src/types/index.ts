@@ -328,6 +328,75 @@ export interface AddRecipeToSessionRequest {
   recipe_id: number;
 }
 
+// ============ Ingredient-Tasting Session Types ============
+
+export interface IngredientTasting {
+  id: number;
+  ingredient_id: number;
+  tasting_session_id: number;
+  created_at: string;
+}
+
+export interface IngredientTastingNote {
+  id: number;
+  session_id: number;
+  ingredient_id: number;
+  taste_rating: number | null;
+  aroma_rating: number | null;
+  texture_rating: number | null;
+  overall_rating: number | null;
+  feedback: string | null;
+  action_items: string | null;
+  action_items_done: boolean;
+  decision: TastingDecision | null;
+  taster_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngredientTastingNoteWithDetails extends IngredientTastingNote {
+  ingredient_name?: string | null;
+  session_name?: string | null;
+  session_date?: string | null;
+}
+
+export interface IngredientTastingSummary {
+  ingredient_id: number;
+  total_tastings: number;
+  average_overall_rating: number | null;
+  latest_decision: TastingDecision | null;
+  latest_feedback: string | null;
+  latest_tasting_date: string | null;
+}
+
+export interface CreateIngredientTastingNoteRequest {
+  ingredient_id: number;
+  taste_rating?: number | null;
+  aroma_rating?: number | null;
+  texture_rating?: number | null;
+  overall_rating?: number | null;
+  feedback?: string | null;
+  action_items?: string | null;
+  decision?: TastingDecision | null;
+  taster_name?: string | null;
+}
+
+export interface UpdateIngredientTastingNoteRequest {
+  taste_rating?: number | null;
+  aroma_rating?: number | null;
+  texture_rating?: number | null;
+  overall_rating?: number | null;
+  feedback?: string | null;
+  action_items?: string | null;
+  action_items_done?: boolean;
+  decision?: TastingDecision | null;
+  taster_name?: string | null;
+}
+
+export interface AddIngredientToSessionRequest {
+  ingredient_id: number;
+}
+
 // ============ Supplier Types ============
 
 export interface Supplier {
