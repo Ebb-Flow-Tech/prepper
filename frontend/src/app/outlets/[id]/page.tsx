@@ -28,9 +28,11 @@ interface EditableSelectProps {
   onSave: (value: string) => void;
   options: { value: string; label: string }[];
   className?: string;
+  onValidate?: (newValue: string) => boolean;
+  disabled?: boolean;
 }
 
-function EditableSelect({ value, onSave, options, className = '' }: EditableSelectProps) {
+function EditableSelect({ value, onSave, options, className = '', onValidate, disabled = false }: EditableSelectProps) {
   const [isEditing, setIsEditing] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
 
@@ -44,6 +46,9 @@ function EditableSelect({ value, onSave, options, className = '' }: EditableSele
     const newValue = e.target.value;
     setIsEditing(false);
     if (newValue !== value) {
+      if (onValidate && !onValidate(newValue)) {
+        return;
+      }
       onSave(newValue);
     }
   };
@@ -52,7 +57,7 @@ function EditableSelect({ value, onSave, options, className = '' }: EditableSele
     setIsEditing(false);
   };
 
-  if (isEditing) {
+  if (isEditing && !disabled) {
     return (
       <select
         ref={selectRef}
@@ -74,8 +79,11 @@ function EditableSelect({ value, onSave, options, className = '' }: EditableSele
 
   return (
     <span
-      onClick={() => setIsEditing(true)}
-      className={`cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded font-medium text-zinc-900 dark:text-zinc-100 ${className}`}
+      onClick={() => !disabled && setIsEditing(true)}
+      className={`px-1 py-0.5 rounded font-medium text-zinc-900 dark:text-zinc-100 ${disabled
+          ? 'cursor-not-allowed text-zinc-400 dark:text-zinc-500'
+          : 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700'
+        } ${className}`}
     >
       {displayLabel}
     </span>
@@ -109,6 +117,14 @@ export default function OutletPage({ params }: OutletPageProps) {
     price_override: '',
   });
 
+  // Get child outlets count for current outlet
+  const childOutletsCount = allOutlets.filter((o) => o.parent_outlet_id === outletId).length;
+  const hasChildren = childOutletsCount > 0;
+
+  // Disable outlet type if: brand with children OR location with parent outlet
+  const outletTypeDisabled = hasChildren || (outlet?.outlet_type === 'location' && outlet?.parent_outlet_id !== null);
+
+
   const handleUpdateOutlet = (data: UpdateOutletRequest) => {
     updateOutletMutation.mutate({ id: outletId, data });
   };
@@ -122,9 +138,9 @@ export default function OutletPage({ params }: OutletPageProps) {
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Get available parent outlets (exclude current outlet)
+  // Get available parent outlets (exclude current outlet, only brands)
   const parentOutletOptions = allOutlets
-    .filter((o) => o.id !== outletId && o.is_active)
+    .filter((o) => o.id !== outletId && o.is_active && o.outlet_type === 'brand')
     .map((o) => ({ value: o.id.toString(), label: o.name }));
 
   const handleAddRecipe = (e: React.FormEvent) => {
@@ -272,11 +288,15 @@ export default function OutletPage({ params }: OutletPageProps) {
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
                         Outlet Type
+                        {hasChildren && (
+                          <span className="ml-2 text-xs text-zinc-400">(Cannot change with child outlets)</span>
+                        )}
                       </label>
                       <EditableSelect
                         value={outlet.outlet_type}
                         onSave={(newType) => handleUpdateOutlet({ outlet_type: newType as 'brand' | 'location' })}
                         options={OUTLET_TYPE_OPTIONS}
+                        disabled={outletTypeDisabled}
                       />
                     </div>
 
@@ -284,8 +304,15 @@ export default function OutletPage({ params }: OutletPageProps) {
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
                         Parent Outlet
+                        {outlet.outlet_type === 'brand' && (
+                          <span className="ml-2 text-xs text-zinc-400">(Brands only)</span>
+                        )}
                       </label>
-                      {outlet.parent_outlet_id ? (
+                      {outlet.outlet_type === 'brand' ? (
+                        <span className="text-sm text-zinc-400 dark:text-zinc-500">
+                          Only locations can have parent outlets
+                        </span>
+                      ) : outlet.parent_outlet_id ? (
                         <div className="flex items-center gap-2">
                           <Badge variant="default">
                             {allOutlets.find((o) => o.id === outlet.parent_outlet_id)?.name || 'Unknown'}
@@ -300,19 +327,22 @@ export default function OutletPage({ params }: OutletPageProps) {
                           </Button>
                         </div>
                       ) : parentOutletOptions.length > 0 ? (
-                        <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                          <button
-                            onClick={() => {
-                              const newParentId = parentOutletOptions[0]?.value;
-                              if (newParentId) {
-                                handleUpdateOutlet({ parent_outlet_id: parseInt(newParentId, 10) });
-                              }
-                            }}
-                            className="hover:text-purple-600 dark:hover:text-purple-400"
-                          >
-                            Set parent outlet
-                          </button>
-                        </div>
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleUpdateOutlet({ parent_outlet_id: parseInt(e.target.value, 10) });
+                              e.target.value = '';
+                            }
+                          }}
+                          className="px-2 py-1 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 cursor-pointer"
+                        >
+                          <option value="">Select parent outlet...</option>
+                          {parentOutletOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
                         <span className="text-sm text-zinc-400 dark:text-zinc-500">None</span>
                       )}

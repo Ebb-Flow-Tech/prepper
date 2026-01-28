@@ -8,11 +8,12 @@ import type { Outlet } from '@/types';
 
 interface OutletCardProps {
   outlet: Outlet;
+  parentOutletName?: string;
   onArchive?: (outlet: Outlet) => void;
   onUnarchive?: (outlet: Outlet) => void;
 }
 
-export function OutletCard({ outlet, onArchive, onUnarchive }: OutletCardProps) {
+export function OutletCard({ outlet, parentOutletName, onArchive, onUnarchive }: OutletCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   const typeLabel = outlet.outlet_type === 'brand' ? 'Brand' : 'Location';
@@ -46,9 +47,9 @@ export function OutletCard({ outlet, onArchive, onUnarchive }: OutletCardProps) 
               <Badge variant="warning">Archived</Badge>
             )}
           </div>
-          {outlet.parent_outlet_id && (
+          {parentOutletName && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Parent outlet ID: {outlet.parent_outlet_id}
+              Brand: {parentOutletName}
             </p>
           )}
         </div>

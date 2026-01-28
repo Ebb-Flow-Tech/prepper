@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Check, X, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Check, X, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAppState } from '@/lib/store';
 import { useRecipe, useRecipeOutlets, useRemoveRecipeFromOutlet, useUpdateRecipeOutlet } from '@/lib/hooks';
 import { Card, CardContent, Skeleton, Button } from '@/components/ui';

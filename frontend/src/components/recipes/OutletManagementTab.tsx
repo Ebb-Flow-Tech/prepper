@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { useOutlets, useUpdateOutlet, useDeactivateOutlet } from '@/lib/hooks';
 import { OutletCard, OutletListRow, AddOutletModal } from '@/components/outlets';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Select, ViewToggle } from '@/components/ui';
@@ -153,7 +153,38 @@ export function OutletManagementTab() {
   const [showArchived, setShowArchived] = useState(false);
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
   const [view, setView] = useState<ViewType>('grid');
+  const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
+  const [groupByBrands, setGroupByBrands] = useState(false);
   const { data: outlets, isLoading, error } = useOutlets(showArchived);
+
+  const toggleParentExpanded = (parentId: number) => {
+    const newExpanded = new Set(expandedParents);
+    if (newExpanded.has(parentId)) {
+      newExpanded.delete(parentId);
+    } else {
+      newExpanded.add(parentId);
+    }
+    setExpandedParents(newExpanded);
+  };
+
+  // Group outlets by parent-child relationship
+  const groupedOutlets = useMemo(() => {
+    if (!outlets) return { parents: [], childrenByParent: new Map() };
+
+    const parents = outlets.filter((o) => o.parent_outlet_id === null);
+    const childrenByParent = new Map<number, Outlet[]>();
+
+    outlets.forEach((outlet) => {
+      if (outlet.parent_outlet_id !== null) {
+        if (!childrenByParent.has(outlet.parent_outlet_id)) {
+          childrenByParent.set(outlet.parent_outlet_id, []);
+        }
+        childrenByParent.get(outlet.parent_outlet_id)!.push(outlet);
+      }
+    });
+
+    return { parents, childrenByParent };
+  }, [outlets]);
 
   const filteredOutlets = useMemo(() => {
     if (!outlets) return [];
@@ -165,6 +196,22 @@ export function OutletManagementTab() {
       return true;
     });
   }, [outlets, search]);
+
+  const outletsByBrand = useMemo(() => {
+    if (!filteredOutlets) return new Map<number | null, Outlet[]>();
+
+    const grouped = new Map<number | null, Outlet[]>();
+
+    filteredOutlets.forEach((outlet) => {
+      const brandId = outlet.outlet_type === 'brand' ? outlet.id : outlet.parent_outlet_id;
+      if (!grouped.has(brandId)) {
+        grouped.set(brandId, []);
+      }
+      grouped.get(brandId)!.push(outlet);
+    });
+
+    return grouped;
+  }, [filteredOutlets]);
 
   const handleArchive = (outlet: Outlet) => {
     deactivateOutlet.mutate(outlet.id, {
@@ -219,7 +266,7 @@ export function OutletManagementTab() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
             <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <input
                 type="checkbox"
@@ -229,6 +276,18 @@ export function OutletManagementTab() {
               />
               Show archived
             </label>
+
+            {view === 'grid' && (
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={groupByBrands}
+                  onChange={(e) => setGroupByBrands(e.target.checked)}
+                  className="rounded border-zinc-300 dark:border-zinc-700"
+                />
+                Group by brands
+              </label>
+            )}
 
             <ViewToggle view={view} onViewChange={setView} />
           </div>
@@ -263,24 +322,111 @@ export function OutletManagementTab() {
         {/* Outlets Grid */}
         {!isLoading && filteredOutlets.length > 0 && (
           view === 'grid' ? (
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredOutlets.map((outlet) => (
-                <OutletCard
-                  key={outlet.id}
-                  outlet={outlet}
-                  onArchive={handleArchive}
-                  onUnarchive={handleUnarchive}
-                />
-              ))}
-            </div>
+            groupByBrands ? (
+              <div className="flex flex-col gap-8">
+                {Array.from(outletsByBrand.entries()).map(([brandId, outletGroup]) => {
+                  const brand = outletGroup.find((o) => o.outlet_type === 'brand' || o.id === brandId);
+                  const locations = outletGroup.filter((o) => o.outlet_type === 'location');
+                  const allOutletsInGroup = [brand, ...locations].filter(Boolean) as Outlet[];
+
+                  return (
+                    <div key={brandId || 'ungrouped'}>
+                      <h3 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+                        {brand?.name || 'Etc'}
+                      </h3>
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {allOutletsInGroup.map((outlet) => {
+                          const parentOutlet = outlet.parent_outlet_id ? outlets?.find((o) => o.id === outlet.parent_outlet_id) : undefined;
+                          return (
+                            <OutletCard
+                              key={outlet.id}
+                              outlet={outlet}
+                              parentOutletName={parentOutlet?.name}
+                              onArchive={handleArchive}
+                              onUnarchive={handleUnarchive}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredOutlets.map((outlet) => {
+                  const parentOutlet = outlet.parent_outlet_id ? outlets?.find((o) => o.id === outlet.parent_outlet_id) : undefined;
+                  return (
+                    <OutletCard
+                      key={outlet.id}
+                      outlet={outlet}
+                      parentOutletName={parentOutlet?.name}
+                      onArchive={handleArchive}
+                      onUnarchive={handleUnarchive}
+                    />
+                  );
+                })}
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-2 w-full">
-              {filteredOutlets.map((outlet) => (
-                <OutletListRow
-                  key={outlet.id}
-                  outlet={outlet}
-                />
-              ))}
+              {groupedOutlets.parents
+                .filter((parent) => {
+                  if (search && !parent.name.toLowerCase().includes(search.toLowerCase())) {
+                    return false;
+                  }
+                  return true;
+                })
+                .flatMap((parent: Outlet) => {
+                  const children = groupedOutlets.childrenByParent.get(parent.id) || [];
+                  const isExpanded = expandedParents.has(parent.id);
+
+                  const rows: React.ReactElement[] = [
+                    <div key={`parent-${parent.id}`} className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        {children.length > 0 ? (
+                          <button
+                            onClick={() => toggleParentExpanded(parent.id)}
+                            className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer"
+                            title={isExpanded ? 'Collapse' : 'Expand'}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <div className="w-6 h-6" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <OutletListRow key={`parent-row-${parent.id}`} outlet={parent} />
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="flex flex-col gap-2 pl-6 border-l-2 border-zinc-200 dark:border-zinc-700">
+                          {children
+                            .filter((child: Outlet) => {
+                              if (search && !child.name.toLowerCase().includes(search.toLowerCase())) {
+                                return false;
+                              }
+                              return true;
+                            })
+                            .map((child: Outlet) => {
+                              const parentOutlet = child.parent_outlet_id ? outlets?.find((o) => o.id === child.parent_outlet_id) : undefined;
+                              return (
+                                <div key={`child-${child.id}`} className="pl-4">
+                                  <OutletListRow outlet={child} parentOutletName={parentOutlet?.name} />
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>,
+                  ];
+
+                  return rows;
+                })}
             </div>
           )
         )}

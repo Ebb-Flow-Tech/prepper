@@ -6,10 +6,11 @@ import type { Outlet } from '@/types';
 
 interface OutletListRowProps {
   outlet: Outlet;
+  parentOutletName?: string;
   href?: string;
 }
 
-export function OutletListRow({ outlet, href }: OutletListRowProps) {
+export function OutletListRow({ outlet, parentOutletName, href }: OutletListRowProps) {
   const outletTypeVariants: Record<string, 'default' | 'secondary' | 'warning'> = {
     franchise: 'default',
     corporate: 'secondary',
@@ -41,9 +42,9 @@ export function OutletListRow({ outlet, href }: OutletListRowProps) {
                   {outlet.outlet_type.charAt(0).toUpperCase() + outlet.outlet_type.slice(1)}
                 </Badge>
               )}
-              {outlet.parent_outlet_id && (
+              {parentOutletName && (
                 <Badge variant="secondary" className="text-xs">
-                  Child outlet
+                  Brand: {parentOutletName}
                 </Badge>
               )}
             </div>
