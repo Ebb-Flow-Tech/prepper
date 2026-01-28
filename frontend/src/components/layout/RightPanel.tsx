@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical, ImagePlus, ChevronDown } from 'lucide-react';
+import { Plus, Search, GripVertical, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
@@ -339,6 +339,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   // Fetch recipe outlets (with TanStack Query caching)
   const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
     recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
@@ -454,106 +455,135 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const showRecipes = activeTab === 'all' || activeTab === 'items';
 
   return (
-    <aside className="flex h-full w-72 flex-col border-l border-border bg-secondary">
+    <aside className={cn("flex h-full flex-col border-l border-border bg-secondary transition-all duration-300 ease-in-out overflow-hidden", isCollapsed ? "w-12" : "w-72")}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h2 className="font-semibold">Library</h2>
-        <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
-          <Plus className="h-4 w-4" />
-          New
-        </Button>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-zinc-200 dark:border-zinc-800">
-        <nav className="flex" aria-label="Library tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'flex-1 px-3 py-2 text-sm font-medium transition-colors',
-                activeTab === tab.id
-                  ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
-              )}
+      {!isCollapsed && (
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="font-semibold">Library</h2>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
+              <Plus className="h-4 w-4" />
+              New
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsCollapsed(true)}
+              title="Collapse panel"
             >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Search */}
-      <div className="border-b border-border p-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={
-              activeTab === 'ingredients'
-                ? 'Search ingredients...'
-                : activeTab === 'items'
-                  ? 'Search recipes...'
-                  : 'Search all...'
-            }
-            className="pl-9"
-          />
-        </div>
-      </div>
-
-      {/* Category Filter - Only show for ingredients tab */}
-      {(activeTab === 'all' || activeTab === 'ingredients') && categories && categories.length > 0 && (
-        <div className="border-b border-border">
-          <button
-            onClick={() => setShowCategoryFilter(!showCategoryFilter)}
-            className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <span>Categories {selectedCategories.length > 0 && `(${selectedCategories.length})`}</span>
-            <ChevronDown className={cn("h-4 w-4 transition-transform", showCategoryFilter && "rotate-180")} />
-          </button>
-
-          {showCategoryFilter && (
-            <div className="p-3 border-t border-zinc-100 dark:border-zinc-800">
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {categories.filter(c => c.is_active).map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => toggleCategory(category.id)}
-                    className={cn(
-                      'px-2 py-1 text-xs font-medium rounded transition-colors',
-                      selectedCategories.includes(category.id)
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                    )}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-              {selectedCategories.length > 0 && (
-                <button
-                  onClick={clearCategoryFilters}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* List */}
-      <div
-        className="flex-1 overflow-y-auto p-3"
-        onDoubleClick={(e) => {
-          if (!(e.target as HTMLElement).closest('[data-ingredient-card]') && !(e.target as HTMLElement).closest('[data-recipe-card]')) {
-            setShowForm(true);
-          }
-        }}
-      >
+      {/* Collapsed Header */}
+      {isCollapsed && (
+        <div className="flex items-center justify-center border-b border-zinc-200 px-2 py-3 dark:border-zinc-800">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsCollapsed(false)}
+            title="Expand panel"
+            className="p-1"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {!isCollapsed && (
+        <>
+          {/* Tabs */}
+          <div className="border-b border-zinc-200 dark:border-zinc-800">
+            <nav className="flex" aria-label="Library tabs">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                    activeTab === tab.id
+                      ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Search */}
+          <div className="border-b border-border p-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={
+                  activeTab === 'ingredients'
+                    ? 'Search ingredients...'
+                    : activeTab === 'items'
+                      ? 'Search recipes...'
+                      : 'Search all...'
+                }
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {/* Category Filter - Only show for ingredients tab */}
+          {(activeTab === 'all' || activeTab === 'ingredients') && categories && categories.length > 0 && (
+            <div className="border-b border-border">
+              <button
+                onClick={() => setShowCategoryFilter(!showCategoryFilter)}
+                className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <span>Categories {selectedCategories.length > 0 && `(${selectedCategories.length})`}</span>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showCategoryFilter && "rotate-180")} />
+              </button>
+
+              {showCategoryFilter && (
+                <div className="p-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {categories.filter(c => c.is_active).map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => toggleCategory(category.id)}
+                        className={cn(
+                          'px-2 py-1 text-xs font-medium rounded transition-colors',
+                          selectedCategories.includes(category.id)
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                        )}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedCategories.length > 0 && (
+                    <button
+                      onClick={clearCategoryFilters}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* List */}
+          <div
+            className="flex-1 overflow-y-auto p-3"
+            onDoubleClick={(e) => {
+              if (!(e.target as HTMLElement).closest('[data-ingredient-card]') && !(e.target as HTMLElement).closest('[data-recipe-card]')) {
+                setShowForm(true);
+              }
+            }}
+          >
         {showForm && (
           <div className="mb-3">
             <NewIngredientForm onClose={() => setShowForm(false)} />
@@ -638,7 +668,9 @@ export function RightPanel({ outlets }: RightPanelProps) {
             )}
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
     </aside>
   );
 }

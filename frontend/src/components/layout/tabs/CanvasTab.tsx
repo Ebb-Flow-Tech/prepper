@@ -9,7 +9,7 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Grid3x3, List } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Grid3x3, List, Table2 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
@@ -806,6 +806,161 @@ function StagedRecipeCard({
   );
 }
 
+function CanvasTable({
+  stagedIngredients,
+  stagedRecipes,
+  onRemoveIngredient,
+  onRemoveRecipe,
+  onIngredientQuantityChange,
+  onIngredientWastageChange,
+  onRecipeQuantityChange,
+  allRecipes,
+  categoryMap,
+}: {
+  stagedIngredients: StagedIngredient[];
+  stagedRecipes: StagedRecipe[];
+  onRemoveIngredient: (id: string) => void;
+  onRemoveRecipe: (id: string) => void;
+  onIngredientQuantityChange: (id: string, quantity: number) => void;
+  onIngredientWastageChange: (id: string, wastage: number) => void;
+  onRecipeQuantityChange: (id: string, quantity: number) => void;
+  allRecipes?: Recipe[];
+  categoryMap: Record<number, string>;
+}) {
+  return (
+    <div className="w-full overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900">
+            <th className="text-left px-4 py-2 font-semibold text-zinc-700 dark:text-zinc-300 text-sm">Quantity</th>
+            <th className="text-left px-4 py-2 font-semibold text-zinc-700 dark:text-zinc-300 text-sm">Units</th>
+            <th className="text-left px-4 py-2 font-semibold text-zinc-700 dark:text-zinc-300 text-sm">Wastage</th>
+            <th className="text-left px-4 py-2 font-semibold text-zinc-700 dark:text-zinc-300 text-sm">Ingredient/Recipe</th>
+            <th className="text-left px-4 py-2 font-semibold text-zinc-700 dark:text-zinc-300 text-sm">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* Ingredients */}
+          {stagedIngredients.map((staged) => (
+            <tr key={staged.id} className="border-b border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const newQty = Math.max(1, staged.quantity - 1);
+                      onIngredientQuantityChange(staged.id, parseFloat(newQty.toFixed(1)));
+                    }}
+                    className="rounded p-0.5 text-blue-300 hover:text-white hover:bg-blue-500/20"
+                    title="Decrease quantity"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <input
+                    type="number"
+                    value={staged.quantity}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      onIngredientQuantityChange(staged.id, parseFloat(e.target.value) || 0);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-14 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+                    min="0"
+                    step="0.1"
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">{staged.ingredient.base_unit}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={staged.wastage_percentage}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const value = parseFloat(e.target.value) || 0;
+                      onIngredientWastageChange(staged.id, Math.min(100, Math.max(0, value)));
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-14 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+                  />
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">%</span>
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-zinc-900 dark:text-white text-sm">{staged.ingredient.name}</span>
+                  {staged.ingredient.category_id && categoryMap[staged.ingredient.category_id] && (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{categoryMap[staged.ingredient.category_id]}</span>
+                  )}
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <button
+                  onClick={() => onRemoveIngredient(staged.id)}
+                  className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </td>
+            </tr>
+          ))}
+
+          {/* Recipes */}
+          {stagedRecipes.map((staged) => (
+            <tr key={staged.id} className="border-b border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const newQty = Math.max(1, staged.quantity - 1);
+                      onRecipeQuantityChange(staged.id, parseFloat(newQty.toFixed(1)));
+                    }}
+                    className="rounded p-0.5 text-green-300 hover:text-white hover:bg-green-500/20"
+                    title="Decrease quantity"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <input
+                    type="number"
+                    value={staged.quantity}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      onRecipeQuantityChange(staged.id, parseFloat(e.target.value) || 0);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-14 rounded bg-black/30 border border-green-400/30 px-2 py-1 text-sm text-white text-center focus:border-green-400 focus:outline-none"
+                    min="0"
+                    step="0.1"
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">portion</td>
+              <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">—</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-zinc-900 dark:text-white text-sm">{staged.recipe.name}</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}</span>
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <button
+                  onClick={() => onRemoveRecipe(staged.id)}
+                  className="rounded p-1 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function CanvasDropZone({
   stagedIngredients,
   stagedRecipes,
@@ -832,7 +987,7 @@ function CanvasDropZone({
   canvasRef: React.RefObject<HTMLDivElement | null>;
   allRecipes?: Recipe[];
   gridConfig: ReturnType<typeof getGridConfig>;
-  viewMode?: 'grid' | 'list';
+  viewMode?: 'grid' | 'list' | 'table';
   categoryMap: Record<number, string>;
   getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
@@ -896,6 +1051,18 @@ function CanvasDropZone({
             />
           ))}
         </>
+      ) : viewMode === 'table' ? (
+        <CanvasTable
+          stagedIngredients={stagedIngredients}
+          stagedRecipes={stagedRecipes}
+          onRemoveIngredient={onRemoveIngredient}
+          onRemoveRecipe={onRemoveRecipe}
+          onIngredientQuantityChange={onIngredientQuantityChange}
+          onIngredientWastageChange={onIngredientWastageChange}
+          onRecipeQuantityChange={onRecipeQuantityChange}
+          allRecipes={allRecipes}
+          categoryMap={categoryMap}
+        />
       ) : (
         <div className="space-y-3">
           {stagedIngredients.map((staged) => (
@@ -990,8 +1157,8 @@ function CanvasContent({
   gridConfig: ReturnType<typeof getGridConfig>;
   isDragDropEnabled: boolean;
   onDragDropEnabledChange: (enabled: boolean) => void;
-  viewMode: 'grid' | 'list';
-  onViewModeChange: (mode: 'grid' | 'list') => void;
+  viewMode: 'grid' | 'list' | 'table';
+  onViewModeChange: (mode: 'grid' | 'list' | 'table') => void;
   categoryMap: Record<number, string>;
   selectedRecipe?: Recipe | null;
   canvasCost: number;
@@ -1147,6 +1314,17 @@ function CanvasContent({
                 title="List view"
               >
                 <List className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onViewModeChange('table')}
+                className={`p-1.5 rounded ${
+                  viewMode === 'table'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                }`}
+                title="Table view"
+              >
+                <Table2 className="h-4 w-4" />
               </button>
             </div>
           </div>
