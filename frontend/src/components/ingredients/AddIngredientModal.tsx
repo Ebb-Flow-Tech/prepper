@@ -40,6 +40,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');
   const [cost, setCost] = useState('');
+  const [isHalal, setIsHalal] = useState(false);
   const [supplierEntries, setSupplierEntries] = useState<SupplierEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,6 +55,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
     setName('');
     setBaseUnit('g');
     setCost('');
+    setIsHalal(false);
     setSupplierEntries([]);
     setIsSubmitting(false);
   }, []);
@@ -157,6 +159,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
         name: name.trim(),
         base_unit: baseUnit,
         cost_per_base_unit: cost ? parseFloat(cost) : null,
+        is_halal: isHalal,
         category_id: categoryId,
         suppliers: suppliersData.length > 0 ? suppliersData : undefined,
       });
@@ -220,6 +223,18 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
                 step={0.01}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={isHalal}
+                onChange={(e) => setIsHalal(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500"
+              />
+              Halal
+            </label>
           </div>
         </div>
 

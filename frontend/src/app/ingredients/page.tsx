@@ -103,6 +103,7 @@ function IngredientsListTab() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+  const [selectedHalal, setSelectedHalal] = useState<boolean[]>([]);
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
@@ -124,11 +125,15 @@ function IngredientsListTab() {
       if (selectedUnits.length > 0 && !selectedUnits.includes(ing.base_unit)) {
         return false;
       }
+      // Halal filter (if any selected, show matching ingredients)
+      if (selectedHalal.length > 0 && !selectedHalal.includes(ing.is_halal)) {
+        return false;
+      }
       return true;
     });
 
     return sortIngredients(filtered, sortBy);
-  }, [ingredients, search, selectedCategories, selectedUnits, sortBy]);
+  }, [ingredients, search, selectedCategories, selectedUnits, selectedHalal, sortBy]);
 
   const categoryMap = useMemo(() => {
     if (!categories) return new Map<number, string>();
@@ -227,6 +232,8 @@ function IngredientsListTab() {
             onCategoryChange={setSelectedCategories}
             selectedUnits={selectedUnits}
             onUnitChange={setSelectedUnits}
+            selectedHalal={selectedHalal}
+            onHalalChange={setSelectedHalal}
           />
         </div>
 
@@ -251,7 +258,7 @@ function IngredientsListTab() {
         {!isLoading && filteredIngredients.length === 0 && (
           <div className="text-center py-12">
             <p className="text-zinc-500 dark:text-zinc-400">
-              {search || selectedCategories.length > 0 || selectedUnits.length > 0
+              {search || selectedCategories.length > 0 || selectedUnits.length > 0 || selectedHalal.length > 0
                 ? 'No ingredients match your filters'
                 : 'No ingredients yet'}
             </p>

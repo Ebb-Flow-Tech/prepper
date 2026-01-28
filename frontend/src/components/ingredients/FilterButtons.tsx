@@ -17,6 +17,8 @@ interface FilterButtonsProps {
   onCategoryChange: (categoryIds: number[]) => void;
   selectedUnits: string[];
   onUnitChange: (units: string[]) => void;
+  selectedHalal: boolean[];
+  onHalalChange: (halal: boolean[]) => void;
 }
 
 export function FilterButtons({
@@ -25,6 +27,8 @@ export function FilterButtons({
   onCategoryChange,
   selectedUnits,
   onUnitChange,
+  selectedHalal,
+  onHalalChange,
 }: FilterButtonsProps) {
   const toggleCategory = (categoryId: number) => {
     if (selectedCategories.includes(categoryId)) {
@@ -39,6 +43,14 @@ export function FilterButtons({
       onUnitChange(selectedUnits.filter((u) => u !== unit));
     } else {
       onUnitChange([...selectedUnits, unit]);
+    }
+  };
+
+  const toggleHalal = (isHalal: boolean) => {
+    if (selectedHalal.includes(isHalal)) {
+      onHalalChange(selectedHalal.filter((h) => h !== isHalal));
+    } else {
+      onHalalChange([...selectedHalal, isHalal]);
     }
   };
 
@@ -88,6 +100,35 @@ export function FilterButtons({
             {unit.label}
           </button>
         ))}
+      </div>
+
+      {/* Halal Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">
+          Halal:
+        </span>
+        <button
+          onClick={() => toggleHalal(true)}
+          className={cn(
+            'px-3 py-1 text-xs font-medium rounded-full transition-colors',
+            selectedHalal.includes(true)
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+          )}
+        >
+          Halal
+        </button>
+        <button
+          onClick={() => toggleHalal(false)}
+          className={cn(
+            'px-3 py-1 text-xs font-medium rounded-full transition-colors',
+            selectedHalal.includes(false)
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+          )}
+        >
+          Non-Halal
+        </button>
       </div>
     </div>
   );

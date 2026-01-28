@@ -12,6 +12,7 @@ export interface Ingredient {
   base_unit: string;
   cost_per_base_unit: number | null;
   is_active: boolean;
+  is_halal: boolean;
   category_id: number | null;
   created_at: string;
   updated_at: string;
@@ -171,6 +172,7 @@ export interface CreateIngredientRequest {
   name: string;
   base_unit: string;
   cost_per_base_unit?: number | null;
+  is_halal?: boolean;
   category_id?: number | null;
   suppliers?: CreateIngredientSupplier[];
 }
@@ -179,6 +181,7 @@ export interface UpdateIngredientRequest {
   name?: string;
   base_unit?: string;
   cost_per_base_unit?: number | null;
+  is_halal?: boolean;
   is_active?: boolean;
   category_id?: number | null;
 }

@@ -51,6 +51,11 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
       <CardContent>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="unit" className="text-sm">{ingredient.base_unit}</Badge>
+          {ingredient.is_halal ? (
+            <Badge variant="success" className="text-sm">Halal</Badge>
+          ) : (
+            <Badge variant="secondary" className="text-sm">Non-Halal</Badge>
+          )}
           {!ingredient.is_active && (
             <Badge variant="warning" className="text-sm">Archived</Badge>
           )}

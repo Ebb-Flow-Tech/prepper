@@ -72,6 +72,7 @@ class IngredientBase(SQLModel):
     name: str = Field(index=True)
     base_unit: str = Field(description="e.g. g, kg, ml, l, pcs")
     cost_per_base_unit: float | None = Field(default=None)
+    is_halal: bool = Field(default=False)
 
     # NOTE: category and source are defined on Ingredient table class with sa_column
     # to force VARCHAR storage instead of native PostgreSQL ENUM
@@ -136,6 +137,7 @@ class IngredientCreate(SQLModel):
     name: str
     base_unit: str
     cost_per_base_unit: float | None = None
+    is_halal: bool = False
     category: str | None = None  # Use FoodCategory enum values: proteins, vegetables, etc.
     category_id: int | None = None  # Foreign key to categories table
     source: str = "manual"  # "fmh" or "manual"
@@ -149,6 +151,7 @@ class IngredientUpdate(SQLModel):
     name: str | None = None
     base_unit: str | None = None
     cost_per_base_unit: float | None = None
+    is_halal: bool | None = None
     category: str | None = None  # Use FoodCategory enum values
     category_id: int | None = None  # Foreign key to categories table
     source: str | None = None  # "fmh" or "manual"

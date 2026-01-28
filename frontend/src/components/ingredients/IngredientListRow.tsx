@@ -47,6 +47,11 @@ export function IngredientListRow({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <Badge variant="unit" className="text-xs">{ingredient.base_unit}</Badge>
+              {ingredient.is_halal ? (
+                <Badge variant="success" className="text-xs">Halal</Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">Non-Halal</Badge>
+              )}
               {!ingredient.is_active && (
                 <Badge variant="warning" className="text-xs">Archived</Badge>
               )}

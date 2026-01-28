@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Search, GripVertical, ImagePlus, ChevronDown } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch } from '@/lib/hooks';
+import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -248,97 +248,42 @@ function ListSkeleton() {
   );
 }
 
-// Auto-assign category based on ingredient name keywords
-function autoAssignCategory(name: string): string {
-  const lowerName = name.toLowerCase();
-
-  // Proteins
-  if (/\b(chicken|beef|pork|lamb|fish|salmon|tuna|shrimp|prawn|crab|lobster|egg|tofu|tempeh|seitan|turkey|duck|bacon|ham|sausage|meat|steak|fillet|mince|ground)\b/.test(lowerName)) {
-    return 'proteins';
-  }
-
-  // Vegetables
-  if (/\b(carrot|onion|garlic|tomato|potato|lettuce|spinach|broccoli|cauliflower|pepper|cucumber|celery|cabbage|mushroom|zucchini|eggplant|corn|pea|bean|asparagus|leek|kale|chard|arugula|radish|beet|turnip|squash|pumpkin)\b/.test(lowerName)) {
-    return 'vegetables';
-  }
-
-  // Fruits
-  if (/\b(apple|banana|orange|lemon|lime|grape|strawberry|blueberry|raspberry|mango|pineapple|peach|pear|plum|cherry|watermelon|melon|kiwi|papaya|coconut|avocado|fig|date|raisin|cranberry)\b/.test(lowerName)) {
-    return 'fruits';
-  }
-
-  // Dairy
-  if (/\b(milk|cheese|butter|cream|yogurt|yoghurt|curd|ghee|paneer|mozzarella|cheddar|parmesan|ricotta|feta|brie|mascarpone|sour cream|whey|casein)\b/.test(lowerName)) {
-    return 'dairy';
-  }
-
-  // Grains
-  if (/\b(rice|pasta|noodle|bread|flour|wheat|oat|barley|quinoa|couscous|bulgur|cornmeal|semolina|rye|millet|sorghum|cereal|cracker|tortilla|pita)\b/.test(lowerName)) {
-    return 'grains';
-  }
-
-  // Spices
-  if (/\b(salt|pepper|cumin|coriander|turmeric|paprika|cinnamon|nutmeg|clove|cardamom|ginger|oregano|basil|thyme|rosemary|parsley|cilantro|dill|mint|bay leaf|chili|cayenne|saffron|vanilla|fennel|anise|mustard seed)\b/.test(lowerName)) {
-    return 'spices';
-  }
-
-  // Oils & Fats
-  if (/\b(oil|olive oil|vegetable oil|coconut oil|sesame oil|sunflower oil|canola oil|lard|shortening|margarine|ghee|fat|dripping)\b/.test(lowerName)) {
-    return 'oils_fats';
-  }
-
-  // Sauces & Condiments
-  if (/\b(sauce|ketchup|mayonnaise|mayo|mustard|vinegar|soy sauce|fish sauce|oyster sauce|hoisin|sriracha|tabasco|worcestershire|dressing|marinade|relish|chutney|salsa|pesto|hummus)\b/.test(lowerName)) {
-    return 'sauces_condiments';
-  }
-
-  // Beverages
-  if (/\b(water|juice|wine|beer|coffee|tea|milk|soda|cola|broth|stock|coconut water|lemonade|smoothie)\b/.test(lowerName)) {
-    return 'beverages';
-  }
-
-  return 'other';
-}
-
 export function NewIngredientForm({ onClose }: { onClose: () => void }) {
   const createIngredient = useCreateIngredient();
-  const { data: categories = [] } = useCategories();
+  const categorizeIngredient = useCategorizeIngredient();
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');
   const [cost, setCost] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-assign category when name changes
-  const autoCategory = useMemo(() => autoAssignCategory(name), [name]);
-  const effectiveCategory = selectedCategory || autoCategory;
-
-  const categoryOptions = useMemo(() => {
-    return categories.map((cat) => ({
-      value: String(cat.id),
-      label: cat.name,
-    }));
-  }, [categories]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toast.error('Name is required');
       return;
     }
-    createIngredient.mutate(
-      {
+
+    setIsSubmitting(true);
+    try {
+      // Get the category ID from the agent
+      const categoryData = await categorizeIngredient.mutateAsync(name);
+      const categoryId = categoryData.category_id;
+
+      // Create the ingredient with the category from the agent
+      await createIngredient.mutateAsync({
         name: name.trim(),
         base_unit: baseUnit,
         cost_per_base_unit: cost ? parseFloat(cost) : null,
-      },
-      {
-        onSuccess: () => {
-          toast.success(`Ingredient created (Category: ${effectiveCategory})`);
-          onClose();
-        },
-        onError: () => toast.error('Failed to create ingredient'),
-      }
-    );
+        category_id: categoryId,
+      });
+
+      toast.success(`Ingredient created`);
+      onClose();
+    } catch {
+      toast.error('Failed to create ingredient');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -366,21 +311,8 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
           step={0.01}
         />
       </div>
-      {categoryOptions.length > 0 && (
-        <div>
-          <label className="mb-1 block text-xs text-zinc-500">
-            Category {!selectedCategory && name && `(auto: ${autoCategory})`}
-          </label>
-          <Select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            options={[{ value: '', label: 'Auto-assign' }, ...categoryOptions]}
-            className="w-full"
-          />
-        </div>
-      )}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={createIngredient.isPending}>
+        <Button type="submit" size="sm" disabled={isSubmitting || categorizeIngredient.isPending}>
           Add
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
