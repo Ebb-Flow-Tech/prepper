@@ -9,12 +9,13 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Grid3x3, List, Table2 } from 'lucide-react';
+import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Plus, Grid3x3, List, Table2 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 import {
   useRecipes,
+  useIngredients,
   useCreateRecipe,
   useUpdateRecipe,
   useAddRecipeIngredient,
@@ -806,6 +807,162 @@ function StagedRecipeCard({
   );
 }
 
+function TableItemDropdown({
+  staged,
+  isIngredient,
+  allIngredients,
+  allRecipes,
+  categoryMap,
+  dropdownId,
+  openDropdown,
+  setOpenDropdown,
+  onIngredientSelect,
+  onRecipeSelect,
+}: {
+  staged: StagedIngredient | StagedRecipe;
+  isIngredient: boolean;
+  allIngredients?: Ingredient[];
+  allRecipes?: Recipe[];
+  categoryMap: Record<number, string>;
+  dropdownId: string;
+  openDropdown: string | null;
+  setOpenDropdown: (id: string | null) => void;
+  onIngredientSelect?: (ingredient: Ingredient) => void;
+  onRecipeSelect?: (recipe: Recipe) => void;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const isOpen = openDropdown === dropdownId;
+  const displayName = isIngredient ? (staged as StagedIngredient).ingredient.name : (staged as StagedRecipe).recipe.name;
+
+  // Filter both ingredients and recipes based on search query
+  const filteredIngredients = allIngredients?.filter((ing) =>
+    ing.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) ?? [];
+
+  const filteredRecipes = allRecipes?.filter((recipe) =>
+    recipe.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) ?? [];
+
+  const selectedIngredientId = isIngredient ? (staged as StagedIngredient).ingredient.id : null;
+  const selectedRecipeId = !isIngredient ? (staged as StagedRecipe).recipe.id : null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpenDropdown(isOpen ? null : dropdownId)}
+        className="w-full text-left px-3 py-2 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-white hover:border-zinc-400 dark:hover:border-zinc-500 flex items-center justify-between"
+      >
+        <span className="truncate">{displayName}</span>
+        <ChevronDown className={`h-4 w-4 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-600 rounded shadow-lg z-50 flex flex-col max-h-72">
+          {/* Search Input */}
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none sticky top-0"
+          />
+
+          {/* Results List */}
+          <div className="overflow-y-auto flex-1">
+            {filteredIngredients.length === 0 && filteredRecipes.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">No results found</div>
+            ) : (
+              <>
+                {/* Ingredients Section */}
+                {filteredIngredients.length > 0 && (
+                  <>
+                    {filteredRecipes.length > 0 && (
+                      <div className="px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 sticky top-0">
+                        Ingredients
+                      </div>
+                    )}
+                    {filteredIngredients.map((ing) => (
+                      <button
+                        key={`ing-${ing.id}`}
+                        onClick={() => {
+                          onIngredientSelect?.(ing);
+                          setOpenDropdown(null);
+                          setSearchQuery('');
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{ing.name}</p>
+                            <div className="flex gap-1 flex-wrap mt-1">
+                              <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded flex-shrink-0">
+                                Ingredient
+                              </span>
+                              {categoryMap[ing.category_id || 0] && (
+                                <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded">
+                                  {categoryMap[ing.category_id || 0]}
+                                </span>
+                              )}
+                              <span className="text-xs text-zinc-500 dark:text-zinc-400">{ing.base_unit}</span>
+                            </div>
+                          </div>
+                          {ing.id === selectedIngredientId && (
+                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {/* Recipes Section */}
+                {filteredRecipes.length > 0 && (
+                  <>
+                    {filteredIngredients.length > 0 && (
+                      <div className="px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 sticky top-0">
+                        Recipes
+                      </div>
+                    )}
+                    {filteredRecipes.map((recipe) => (
+                      <button
+                        key={`recipe-${recipe.id}`}
+                        onClick={() => {
+                          onRecipeSelect?.(recipe);
+                          setOpenDropdown(null);
+                          setSearchQuery('');
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{recipe.name}</p>
+                            <div className="flex gap-1 flex-wrap mt-1">
+                              <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 rounded flex-shrink-0">
+                                Recipe
+                              </span>
+                              <span className="text-xs text-zinc-500 dark:text-zinc-400 flex-shrink-0">
+                                Yield: {recipe.yield_quantity} {recipe.yield_unit}
+                              </span>
+                            </div>
+                          </div>
+                          {recipe.id === selectedRecipeId && (
+                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CanvasTable({
   stagedIngredients,
   stagedRecipes,
@@ -814,7 +971,10 @@ function CanvasTable({
   onIngredientQuantityChange,
   onIngredientWastageChange,
   onRecipeQuantityChange,
+  onIngredientSelect,
+  onRecipeSelect,
   allRecipes,
+  allIngredients,
   categoryMap,
 }: {
   stagedIngredients: StagedIngredient[];
@@ -824,11 +984,15 @@ function CanvasTable({
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
+  onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
+  onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
   allRecipes?: Recipe[];
+  allIngredients?: Ingredient[];
   categoryMap: Record<number, string>;
 }) {
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full h-full overflow-auto flex flex-col">
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900">
@@ -867,6 +1031,16 @@ function CanvasTable({
                     min="0"
                     step="0.1"
                   />
+                  <button
+                    onClick={() => {
+                      const newQty = staged.quantity + 1;
+                      onIngredientQuantityChange(staged.id, parseFloat(newQty.toFixed(1)));
+                    }}
+                    className="rounded p-0.5 text-blue-300 hover:text-white hover:bg-blue-500/20"
+                    title="Increase quantity"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
                 </div>
               </td>
               <td className="px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">{staged.ingredient.base_unit}</td>
@@ -889,13 +1063,19 @@ function CanvasTable({
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">%</span>
                 </div>
               </td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium text-zinc-900 dark:text-white text-sm">{staged.ingredient.name}</span>
-                  {staged.ingredient.category_id && categoryMap[staged.ingredient.category_id] && (
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{categoryMap[staged.ingredient.category_id]}</span>
-                  )}
-                </div>
+              <td className="px-4 py-3 relative">
+                <TableItemDropdown
+                  staged={staged}
+                  isIngredient={true}
+                  allIngredients={allIngredients}
+                  allRecipes={allRecipes}
+                  categoryMap={categoryMap}
+                  dropdownId={`ing-${staged.id}`}
+                  openDropdown={openDropdown}
+                  setOpenDropdown={setOpenDropdown}
+                  onIngredientSelect={(ingredient) => onIngredientSelect(staged.id, ingredient)}
+                  onRecipeSelect={(recipe) => onIngredientSelect(staged.id, recipe)}
+                />
               </td>
               <td className="px-4 py-3">
                 <button
@@ -935,15 +1115,33 @@ function CanvasTable({
                     min="0"
                     step="0.1"
                   />
+                  <button
+                    onClick={() => {
+                      const newQty = staged.quantity + 1;
+                      onRecipeQuantityChange(staged.id, parseFloat(newQty.toFixed(1)));
+                    }}
+                    className="rounded p-0.5 text-green-300 hover:text-white hover:bg-green-500/20"
+                    title="Increase quantity"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
                 </div>
               </td>
               <td className="px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">portion</td>
               <td className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">—</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium text-zinc-900 dark:text-white text-sm">{staged.recipe.name}</span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}</span>
-                </div>
+              <td className="px-4 py-3 relative">
+                <TableItemDropdown
+                  staged={staged}
+                  isIngredient={false}
+                  allIngredients={allIngredients}
+                  allRecipes={allRecipes}
+                  categoryMap={categoryMap}
+                  dropdownId={`recipe-${staged.id}`}
+                  openDropdown={openDropdown}
+                  setOpenDropdown={setOpenDropdown}
+                  onRecipeSelect={(recipe) => onRecipeSelect(staged.id, recipe)}
+                  onIngredientSelect={(ingredient) => onRecipeSelect(staged.id, ingredient)}
+                />
               </td>
               <td className="px-4 py-3">
                 <button
@@ -969,8 +1167,11 @@ function CanvasDropZone({
   onIngredientQuantityChange,
   onIngredientWastageChange,
   onRecipeQuantityChange,
+  onIngredientSelect,
+  onRecipeSelect,
   canvasRef,
   allRecipes,
+  allIngredients,
   gridConfig,
   viewMode = 'grid',
   categoryMap,
@@ -984,8 +1185,11 @@ function CanvasDropZone({
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
+  onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
+  onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
   canvasRef: React.RefObject<HTMLDivElement | null>;
   allRecipes?: Recipe[];
+  allIngredients?: Ingredient[];
   gridConfig: ReturnType<typeof getGridConfig>;
   viewMode?: 'grid' | 'list' | 'table';
   categoryMap: Record<number, string>;
@@ -1010,7 +1214,12 @@ function CanvasDropZone({
           ? 'border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-950/30'
           : 'border-zinc-300 dark:border-zinc-700'
         } ${viewMode === 'list' ? 'flex flex-col' : ''}`}
-      style={viewMode === 'grid' ? {
+      style={viewMode === 'table' ? {
+        position: 'relative',
+        padding: '0px',
+        display: 'flex',
+        flexDirection: 'column',
+      } : viewMode === 'grid' ? {
         position: 'relative',
         padding: '20px',
       } : {
@@ -1060,7 +1269,10 @@ function CanvasDropZone({
           onIngredientQuantityChange={onIngredientQuantityChange}
           onIngredientWastageChange={onIngredientWastageChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
+          onIngredientSelect={onIngredientSelect}
+          onRecipeSelect={onRecipeSelect}
           allRecipes={allRecipes}
+          allIngredients={allIngredients}
           categoryMap={categoryMap}
         />
       ) : (
@@ -1108,6 +1320,8 @@ function CanvasContent({
   onIngredientQuantityChange,
   onIngredientWastageChange,
   onRecipeQuantityChange,
+  onIngredientSelect,
+  onRecipeSelect,
   onSubmit,
   onFork,
   onReset,
@@ -1118,6 +1332,7 @@ function CanvasContent({
   rootRecipeName,
   currentVersion,
   allRecipes,
+  allIngredients,
   hasUnsavedChanges,
   hasSelectedRecipe,
   isOwner,
@@ -1141,6 +1356,8 @@ function CanvasContent({
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
+  onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
+  onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
   onSubmit: () => void;
   onFork: () => void;
   onReset: () => void;
@@ -1151,6 +1368,7 @@ function CanvasContent({
   rootRecipeName: string | null;
   currentVersion: number | null;
   allRecipes?: Recipe[];
+  allIngredients?: Ingredient[];
   hasUnsavedChanges: boolean;
   hasSelectedRecipe: boolean;
   isOwner: boolean;
@@ -1341,8 +1559,11 @@ function CanvasContent({
           onIngredientQuantityChange={onIngredientQuantityChange}
           onIngredientWastageChange={onIngredientWastageChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
+          onIngredientSelect={onIngredientSelect}
+          onRecipeSelect={onRecipeSelect}
           canvasRef={canvasRef}
           allRecipes={allRecipes}
+          allIngredients={allIngredients}
           gridConfig={gridConfig}
           viewMode={viewMode}
           categoryMap={categoryMap}
@@ -1446,6 +1667,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const router = useRouter();
   const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipes } = useRecipes();
+  const { data: ingredients } = useIngredients();
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
   const { data: categories } = useCategories();
@@ -1918,6 +2140,139 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     setStagedRecipes((prev) =>
       prev.map((item) => (item.id === id ? { ...item, quantity } : item))
     );
+  }, []);
+
+  const handleIngredientSelect = useCallback((id: string, ingredientOrRecipe: Ingredient | Recipe): void => {
+    // Check if this is actually a recipe (has yield_quantity property)
+    const isRecipe = 'yield_quantity' in ingredientOrRecipe;
+
+    if (isRecipe) {
+      // Type switch: ingredient -> recipe (quantity set to 1)
+      const quantity = 1;
+
+      // Remove from ingredients
+      setStagedIngredients((prev) => prev.filter((item) => item.id !== id));
+
+      // Add to recipes
+      setStagedRecipes((prev) => {
+        const recipe = ingredientOrRecipe as Recipe;
+        const existingRecipe = prev.find((item) => item.recipe.id === recipe.id);
+
+        if (existingRecipe) {
+          // Merge with existing recipe
+          return prev.map((item) =>
+            item.id === existingRecipe.id
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        }
+
+        // Add as new recipe
+        return [
+          ...prev,
+          {
+            id,
+            recipe,
+            quantity,
+            x: 0,
+            y: 0,
+          },
+        ];
+      });
+    } else {
+      // Ingredient selected - check for duplicates in ingredients
+      setStagedIngredients((prev) => {
+        const currentItem = prev.find((item) => item.id === id);
+        if (!currentItem) return prev;
+
+        const ingredient = ingredientOrRecipe as Ingredient;
+        const existingIngredient = prev.find(
+          (item) => item.id !== id && item.ingredient.id === ingredient.id
+        );
+
+        if (existingIngredient) {
+          // Merge: increase quantity of existing item and remove current row
+          return prev
+            .map((item) =>
+              item.id === existingIngredient.id
+                ? { ...item, quantity: item.quantity + currentItem.quantity }
+                : item
+            )
+            .filter((item) => item.id !== id);
+        }
+
+        // No duplicate found, just update the ingredient
+        return prev.map((item) => (item.id === id ? { ...item, ingredient } : item));
+      });
+    }
+  }, []);
+
+  const handleRecipeSelect = useCallback((id: string, recipeOrIngredient: Recipe | Ingredient): void => {
+    // Check if this is actually an ingredient (no yield_quantity property)
+    const isIngredient = !('yield_quantity' in recipeOrIngredient);
+
+    if (isIngredient) {
+      // Type switch: recipe -> ingredient (quantity set to 1)
+      const quantity = 1;
+
+      // Remove from recipes
+      setStagedRecipes((prev) => prev.filter((item) => item.id !== id));
+
+      // Add to ingredients
+      setStagedIngredients((prev) => {
+        const ingredient = recipeOrIngredient as Ingredient;
+        const existingIngredient = prev.find(
+          (item) => item.ingredient.id === ingredient.id
+        );
+
+        if (existingIngredient) {
+          // Merge with existing ingredient
+          return prev.map((item) =>
+            item.id === existingIngredient.id
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        }
+
+        // Add as new ingredient
+        return [
+          ...prev,
+          {
+            id,
+            ingredient,
+            quantity,
+            wastage_percentage: 0,
+            x: 0,
+            y: 0,
+          },
+        ];
+      });
+    } else {
+      // Recipe selected - check for duplicates in recipes
+      setStagedRecipes((prev) => {
+        const currentItem = prev.find((item) => item.id === id);
+        if (!currentItem) return prev;
+
+        const recipe = recipeOrIngredient as Recipe;
+        const existingRecipe = prev.find(
+          (item) => item.id !== id && item.recipe.id === recipe.id
+        );
+
+        if (existingRecipe) {
+          // Merge: increase quantity of existing item and remove current row
+          return prev
+            .map((item) =>
+              item.id === existingRecipe.id
+                ? { ...item, quantity: item.quantity + currentItem.quantity }
+                : item
+            )
+            .filter((item) => item.id !== id);
+        }
+
+        // No duplicate found, just update the recipe
+        return prev.map((item) => (item.id === id ? { ...item, recipe } : item));
+      });
+    }
   }, []);
 
   // Reset to initial loaded state
@@ -2414,6 +2769,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       onIngredientQuantityChange={handleIngredientQuantityChange}
       onIngredientWastageChange={handleIngredientWastageChange}
       onRecipeQuantityChange={handleRecipeQuantityChange}
+      onIngredientSelect={handleIngredientSelect}
+      onRecipeSelect={handleRecipeSelect}
       onSubmit={handleSubmitClick}
       onFork={handleForkClick}
       onReset={handleReset}
@@ -2431,6 +2788,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         return selectedRecipe?.version ?? null;
       })()}
       allRecipes={recipes}
+      allIngredients={ingredients}
       hasUnsavedChanges={hasUnsavedChanges}
       hasSelectedRecipe={selectedRecipeId !== null}
       isOwner={(() => {
