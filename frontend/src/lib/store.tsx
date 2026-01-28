@@ -38,7 +38,7 @@ function setStoredAuth(auth: StoredAuth) {
 
 export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'outlets' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'categories';
-export type RecipeTab = 'management' | 'outlets' | 'categories';
+export type RecipeTab = 'management' | 'categories';
 export type CanvasViewMode = 'grid' | 'list';
 
 interface AppState {

@@ -1,12 +1,11 @@
 'use client';
 
-import { RecipeManagementTab, OutletManagementTab, RecipeCategoriesTab } from '@/components/recipes';
+import { RecipeManagementTab, RecipeCategoriesTab } from '@/components/recipes';
 import { useAppState, type RecipeTab as RecipeTabType } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 const RECIPE_TABS: { id: RecipeTabType; label: string }[] = [
   { id: 'management', label: 'Recipe Management' },
-  { id: 'outlets', label: 'Outlet Management' },
   { id: 'categories', label: 'Category Management' },
 ];
 
@@ -16,8 +15,6 @@ function TabContent() {
   switch (recipeTab) {
     case 'management':
       return <RecipeManagementTab />;
-    case 'outlets':
-      return <OutletManagementTab />;
     case 'categories':
       return <RecipeCategoriesTab />;
     default:

@@ -1020,7 +1020,7 @@ function CanvasContent({
             )}
           </div>
 
-          {/* First Row: Yield | Qty | Portion | Batch | Per Portion | Profit Margin % | Recommended Price */}
+          {/* First Row: Yield | Qty | Portion | Batch | Per Portion | Cost Margin % | Recommended Price */}
           <div className="flex flex-wrap items-center gap-4">
             {/* Yield */}
             <div className="flex items-center gap-2">
@@ -1061,9 +1061,9 @@ function CanvasContent({
               </div>
             )}
 
-            {/* Profit Margin */}
+            {/* Cost Margin */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-500">Profit Margin:</label>
+              <label className="text-sm text-zinc-500">Cost Margin:</label>
               <Input
                 type="number"
                 value={metadata.profit_margin}
@@ -1526,6 +1526,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         base_unit: ri.unit,
         cost_per_base_unit: ri.unit_price,
         is_active: true,
+        is_halal: false,
         category_id: null,
         created_at: '',
         updated_at: '',
@@ -1764,6 +1765,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           base_unit: ri.unit,
           cost_per_base_unit: ri.unit_price,
           is_active: true,
+          is_halal: false,
           category_id: null,
           created_at: '',
           updated_at: '',

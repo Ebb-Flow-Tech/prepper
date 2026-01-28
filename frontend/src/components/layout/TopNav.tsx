@@ -4,13 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid } from 'lucide-react';
+import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { logoutUser } from '@/lib/api';
 import { ConfirmModal } from '@/components/ui';
 
 const NAV_ITEMS = [
+  { href: '/outlets', label: 'Outlets', icon: Building2 },
   { href: '/ingredients', label: 'Ingredients', icon: Package },
   { href: '/suppliers', label: 'Suppliers', icon: Truck },
   { href: '/recipes', label: 'Recipes', icon: BookOpen },
