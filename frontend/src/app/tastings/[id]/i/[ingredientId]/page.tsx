@@ -505,7 +505,7 @@ export default function IngredientTastingPage() {
   const handleUpdateNote = async (noteId: number, data: Partial<IngredientTastingNote>) => {
     if (!sessionId) return;
     try {
-      await updateNote.mutateAsync({ sessionId, noteId, data, ingredientId });
+      await updateNote.mutateAsync({ sessionId, noteId, data, ingredientId: ingredientId?? undefined });
     } catch (error) {
       console.error('Failed to update note:', error);
     }

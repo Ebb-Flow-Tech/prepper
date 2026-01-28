@@ -2923,8 +2923,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                 for (const parsed of parsedLines) {
                   const matchedIngredient = fuzzyMatchIngredient(
                     parsed.ingredientText,
-                    ingredients || []
-                  );
+                    (ingredients || []) as unknown as Array<{ id: number; name: string; [key: string]: unknown }>
+                  ) as Ingredient | null;
 
                   if (!matchedIngredient) {
                     unmatchedIngredients.push(
@@ -2969,7 +2969,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                 // Show feedback
                 const totalAdded = newIngredientsToAdd.length +
                   parsedLines.filter(p =>
-                    stagedIngredients.some(s => s.ingredient.id === fuzzyMatchIngredient(p.ingredientText, ingredients || [])?.id)
+                    stagedIngredients.some(s => s.ingredient.id === (fuzzyMatchIngredient(p.ingredientText, (ingredients || []) as unknown as Array<{ id: number; name: string; [key: string]: unknown }>) as Ingredient | null)?.id)
                   ).length;
 
                 if (totalAdded > 0) {
