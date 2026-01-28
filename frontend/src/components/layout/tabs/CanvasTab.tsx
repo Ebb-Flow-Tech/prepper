@@ -32,11 +32,11 @@ import {
   useRecipeOutletsBatch,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
-import { Button, Input, Select, ConfirmModal, Switch } from '@/components/ui';
+import { Button, Input, Select, ConfirmModal, Switch, Modal } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus, Outlet } from '@/types';
 import { RightPanel } from '../RightPanel';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
 
 // Staged item with position on canvas
@@ -1351,6 +1351,7 @@ function CanvasContent({
   getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
   gridHeight,
+  onShowAddIngredientsModal,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -1388,6 +1389,7 @@ function CanvasContent({
   getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
   gridHeight: number;
+  onShowAddIngredientsModal: () => void;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -1615,6 +1617,13 @@ function CanvasContent({
                 {isForking ? 'Forking...' : 'Fork'}
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={onShowAddIngredientsModal}
+              className="border-blue-500 text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-blue-500 dark:text-blue-500 dark:hover:bg-blue-950 dark:hover:text-blue-400"
+            >
+              Add Ingredients
+            </Button>
             <Button onClick={onSubmit} disabled={!hasItems || isSubmitting || (hasSelectedRecipe && !isOwner)}>
               {isSubmitting
                 ? hasSelectedRecipe
@@ -1757,6 +1766,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const [isForking, setIsForking] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showForkModal, setShowForkModal] = useState(false);
+  const [showAddIngredientsModal, setShowAddIngredientsModal] = useState(false);
+  const [addIngredientsText, setAddIngredientsText] = useState('');
   const [loadedRecipeId, setLoadedRecipeId] = useState<number | null>(null);
   const [metadata, setMetadata] = useState<RecipeMetadata>(DEFAULT_METADATA);
 
@@ -2815,6 +2826,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       getOutletNamesForRecipe={getOutletNamesForRecipe}
       gridHeight={gridHeight}
       getCategoryNamesForRecipe={getCategoryNamesForRecipe}
+      onShowAddIngredientsModal={() => setShowAddIngredientsModal(true)}
     />
   );
 
@@ -2870,6 +2882,116 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         confirmLabel="Fork"
         cancelLabel="Cancel"
       />
+
+      <Modal
+        isOpen={showAddIngredientsModal}
+        onClose={() => setShowAddIngredientsModal(false)}
+        title="Add Ingredients"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <textarea
+            value={addIngredientsText}
+            onChange={(e) => setAddIngredientsText(e.target.value)}
+            placeholder="Enter ingredients (one per line or comma-separated)"
+            className="w-full h-48 p-3 border border-zinc-300 rounded-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddIngredientsModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!addIngredientsText.trim()) {
+                  toast.error('Please enter ingredients');
+                  return;
+                }
+
+                const parsedLines = parseIngredientsText(addIngredientsText);
+                if (parsedLines.length === 0) {
+                  toast.error('No valid ingredients found');
+                  return;
+                }
+
+                const unmatchedIngredients: string[] = [];
+                const newIngredientsToAdd: StagedIngredient[] = [];
+
+                // Process each parsed line
+                for (const parsed of parsedLines) {
+                  const matchedIngredient = fuzzyMatchIngredient(
+                    parsed.ingredientText,
+                    ingredients || []
+                  );
+
+                  if (!matchedIngredient) {
+                    unmatchedIngredients.push(
+                      `${parsed.ingredientText}${parsed.quantity ? ` (${parsed.quantity}${parsed.unit})` : ''}`
+                    );
+                    continue;
+                  }
+
+                  // Check if this ingredient already exists on canvas
+                  const existingIndex = stagedIngredients.findIndex(
+                    (s) => s.ingredient.id === matchedIngredient.id
+                  );
+
+                  if (existingIndex >= 0) {
+                    // Increment quantity if exists
+                    setStagedIngredients((prev) =>
+                      prev.map((item, idx) =>
+                        idx === existingIndex
+                          ? { ...item, quantity: item.quantity + parsed.quantity }
+                          : item
+                      )
+                    );
+                  } else {
+                    // Add new ingredient
+                    const newStaged: StagedIngredient = {
+                      id: `ing-${Date.now()}-${Math.random()}`,
+                      ingredient: matchedIngredient,
+                      quantity: parsed.quantity,
+                      wastage_percentage: 0,
+                      x: 0,
+                      y: 0,
+                    };
+                    newIngredientsToAdd.push(newStaged);
+                  }
+                }
+
+                // Add new ingredients to state
+                if (newIngredientsToAdd.length > 0) {
+                  setStagedIngredients((prev) => [...prev, ...newIngredientsToAdd]);
+                }
+
+                // Show feedback
+                const totalAdded = newIngredientsToAdd.length +
+                  parsedLines.filter(p =>
+                    stagedIngredients.some(s => s.ingredient.id === fuzzyMatchIngredient(p.ingredientText, ingredients || [])?.id)
+                  ).length;
+
+                if (totalAdded > 0) {
+                  toast.success(`Added ${totalAdded} ingredient${totalAdded !== 1 ? 's' : ''}`);
+                }
+
+                if (unmatchedIngredients.length > 0) {
+                  toast.warning(
+                    `${unmatchedIngredients.length} ingredient${unmatchedIngredients.length !== 1 ? 's' : ''} not found: ${unmatchedIngredients.join(', ')}`
+                  );
+                }
+
+                // Clear and close modal
+                setAddIngredientsText('');
+                setShowAddIngredientsModal(false);
+              }}
+            >
+              Add Ingredients
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
