@@ -1177,6 +1177,7 @@ function CanvasDropZone({
   categoryMap,
   getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
+  gridHeight,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -1195,6 +1196,7 @@ function CanvasDropZone({
   categoryMap: Record<number, string>;
   getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
+  gridHeight: number;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-drop-zone',
@@ -1222,6 +1224,8 @@ function CanvasDropZone({
       } : viewMode === 'grid' ? {
         position: 'relative',
         padding: '20px',
+        width: '100%',
+        minHeight: `${gridHeight}px`,
       } : {
         position: 'relative',
         padding: '20px',
@@ -1346,6 +1350,7 @@ function CanvasContent({
   canvasCost,
   getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
+  gridHeight,
 }: {
   stagedIngredients: StagedIngredient[];
   stagedRecipes: StagedRecipe[];
@@ -1382,6 +1387,7 @@ function CanvasContent({
   canvasCost: number;
   getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
+  gridHeight: number;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
 
@@ -1569,6 +1575,7 @@ function CanvasContent({
           categoryMap={categoryMap}
           getOutletNamesForRecipe={getOutletNamesForRecipe}
           getCategoryNamesForRecipe={getCategoryNamesForRecipe}
+          gridHeight={gridHeight}
         />
       </div>
 
@@ -1874,7 +1881,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     }),
     [gridColumns]
   );
-  const { calculatePosition } = useAutoFlowLayout(totalItems, gridConfig);
+  const { calculatePosition, gridHeight } = useAutoFlowLayout(totalItems, gridConfig);
 
   const handleMetadataChange = useCallback((updates: Partial<RecipeMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...updates }));
@@ -2806,6 +2813,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       selectedRecipe={selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null}
       canvasCost={canvasCost}
       getOutletNamesForRecipe={getOutletNamesForRecipe}
+      gridHeight={gridHeight}
       getCategoryNamesForRecipe={getCategoryNamesForRecipe}
     />
   );
