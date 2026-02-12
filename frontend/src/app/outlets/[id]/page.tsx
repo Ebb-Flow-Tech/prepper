@@ -8,6 +8,7 @@ import {
   useUpdateOutlet,
   useOutlets,
   useOutletRecipes,
+  useParentOutletRecipes,
   useAddRecipeToOutlet,
   useUpdateRecipeOutlet,
   useRemoveRecipeFromOutlet,
@@ -101,6 +102,7 @@ export default function OutletPage({ params }: OutletPageProps) {
   const { data: outlet, isLoading, error } = useOutlet(outletId);
   const { data: allOutlets = [] } = useOutlets(true);
   const { data: outletRecipes = [] } = useOutletRecipes(outletId);
+  const { data: parentOutletRecipes = [] } = useParentOutletRecipes(outletId);
   const { data: recipes = [] } = useRecipes();
 
   const updateOutletMutation = useUpdateOutlet();
@@ -377,7 +379,7 @@ export default function OutletPage({ params }: OutletPageProps) {
               <CardContent className="p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                    Recipes
+                    Outlet Recipe
                   </h2>
                 </div>
 
@@ -605,6 +607,61 @@ export default function OutletPage({ params }: OutletPageProps) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Parent Outlet Recipes Card (Read-Only) */}
+            {outlet?.parent_outlet_id && parentOutletRecipes.length > 0 && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h2 className="text-lg font-semibold text-zinc-500 dark:text-zinc-400">
+                      Recipes from Parent Outlet
+                    </h2>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                      (Inherited, read-only)
+                    </span>
+                  </div>
+
+                  {/* Parent Recipes Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-200 dark:border-zinc-700">
+                          <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
+                            Recipe Name
+                          </th>
+                          <th className="text-right py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
+                            Price Override
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parentOutletRecipes.map((recipeOutlet) => {
+                          const recipe = recipes.find((r) => r.id === recipeOutlet.recipe_id);
+                          return (
+                            <tr
+                              key={recipeOutlet.recipe_id}
+                              className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30"
+                            >
+                              <td className="py-3 px-2 text-zinc-500 dark:text-zinc-400 font-medium">
+                                <Link
+                                  href={`/recipes/${recipeOutlet.recipe_id}`}
+                                  className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                >
+                                  {recipe?.name || 'Unknown Recipe'}
+                                </Link>
+                              </td>
+                              <td className="py-3 px-2 text-right text-zinc-500 dark:text-zinc-400">
+                                {recipeOutlet.price_override !== null ? formatCurrency(recipeOutlet.price_override) : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : null}
       </div>

@@ -12,6 +12,14 @@ export function useOutletRecipes(outletId: number | null, isActive: boolean | nu
   });
 }
 
+export function useParentOutletRecipes(outletId: number | null, isActive: boolean | null = null) {
+  return useQuery({
+    queryKey: ['parentOutletRecipes', outletId, { isActive }],
+    queryFn: () => api.getParentOutletRecipes(outletId!, isActive),
+    enabled: outletId !== null,
+  });
+}
+
 export function useRecipeOutlets(recipeId: number | null) {
   return useQuery({
     queryKey: ['recipeOutlets', recipeId],

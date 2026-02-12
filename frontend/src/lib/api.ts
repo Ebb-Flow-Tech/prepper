@@ -825,6 +825,14 @@ export async function getOutletRecipes(outletId: number, isActive: boolean | nul
   return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/recipes?${params}`);
 }
 
+export async function getParentOutletRecipes(outletId: number, isActive: boolean | null = null): Promise<RecipeOutlet[]> {
+  const params = new URLSearchParams();
+  if (isActive !== null) {
+    params.append('is_active', String(isActive));
+  }
+  return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/parent-recipes?${params}`);
+}
+
 export async function getRecipeOutlets(recipeId: number): Promise<RecipeOutlet[]> {
   return fetchApi<RecipeOutlet[]>(`/recipes/${recipeId}/outlets`);
 }

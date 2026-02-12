@@ -126,6 +126,17 @@ def get_outlet_recipes(
     return service.get_recipes_for_outlet(outlet_id, is_active=is_active)
 
 
+@router.get("/{outlet_id}/parent-recipes", response_model=list[RecipeOutlet])
+def get_parent_outlet_recipes(
+    outlet_id: int,
+    is_active: bool | None = Query(default=None),
+    session: Session = Depends(get_session),
+):
+    """Get all recipes from the parent outlet (if exists)."""
+    service = OutletService(session)
+    return service.get_parent_outlet_recipes(outlet_id, is_active=is_active)
+
+
 @router.get("/{outlet_id}/hierarchy")
 def get_outlet_hierarchy(
     outlet_id: int,

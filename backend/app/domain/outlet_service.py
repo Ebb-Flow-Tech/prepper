@@ -95,6 +95,16 @@ class OutletService:
             statement = statement.where(RecipeOutlet.is_active == is_active)
         return list(self.session.exec(statement).all())
 
+    def get_parent_outlet_recipes(
+        self, outlet_id: int, is_active: bool | None = None
+    ) -> list[RecipeOutlet]:
+        """Get all recipe-outlet links from the parent outlet (if exists)."""
+        outlet = self.get_outlet(outlet_id)
+        if not outlet or not outlet.parent_outlet_id:
+            return []
+
+        return self.get_recipes_for_outlet(outlet.parent_outlet_id, is_active=is_active)
+
     def get_outlets_for_recipe(self, recipe_id: int) -> list[RecipeOutlet]:
         """Get all outlets a recipe is assigned to."""
         statement = select(RecipeOutlet).where(RecipeOutlet.recipe_id == recipe_id)

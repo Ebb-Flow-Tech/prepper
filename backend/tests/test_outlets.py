@@ -555,6 +555,134 @@ def test_get_outlet_recipes_empty(client: TestClient):
 
 
 # =============================================================================
+# Parent Outlet Recipes Tests
+# =============================================================================
+
+
+def test_get_parent_outlet_recipes(client: TestClient):
+    """Test getting recipes from a parent outlet."""
+    # Create parent outlet with recipes
+    parent_id = _create_outlet(client, "Parent Brand", "PB")
+    recipe1_id = _create_recipe(client, "Parent Recipe One")
+    recipe2_id = _create_recipe(client, "Parent Recipe Two")
+
+    # Add recipes to parent outlet
+    client.post(
+        f"/api/v1/recipes/{recipe1_id}/outlets",
+        json={"outlet_id": parent_id, "is_active": True},
+    )
+    client.post(
+        f"/api/v1/recipes/{recipe2_id}/outlets",
+        json={"outlet_id": parent_id, "is_active": False, "price_override": 35.0},
+    )
+
+    # Create child outlet
+    child_response = client.post(
+        "/api/v1/outlets",
+        json={
+            "name": "Child Location",
+            "code": "CL",
+            "outlet_type": "location",
+            "parent_outlet_id": parent_id,
+        },
+    )
+    child_id = child_response.json()["id"]
+
+    # Get parent recipes from child outlet
+    response = client.get(f"/api/v1/outlets/{child_id}/parent-recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["recipe_id"] == recipe1_id
+    assert data[0]["outlet_id"] == parent_id
+    assert data[0]["is_active"] is True
+    assert data[1]["recipe_id"] == recipe2_id
+    assert data[1]["outlet_id"] == parent_id
+    assert data[1]["is_active"] is False
+    assert data[1]["price_override"] == 35.0
+
+
+def test_get_parent_outlet_recipes_no_parent(client: TestClient):
+    """Test getting parent recipes for an outlet with no parent."""
+    outlet_id = _create_outlet(client, "Standalone Outlet", "SO")
+
+    response = client.get(f"/api/v1/outlets/{outlet_id}/parent-recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+
+
+def test_get_parent_outlet_recipes_parent_has_no_recipes(client: TestClient):
+    """Test getting parent recipes when parent has no recipes."""
+    # Create parent outlet without recipes
+    parent_id = _create_outlet(client, "Empty Parent", "EP")
+
+    # Create child outlet
+    child_response = client.post(
+        "/api/v1/outlets",
+        json={
+            "name": "Child Location",
+            "code": "CL",
+            "outlet_type": "location",
+            "parent_outlet_id": parent_id,
+        },
+    )
+    child_id = child_response.json()["id"]
+
+    # Get parent recipes - should be empty
+    response = client.get(f"/api/v1/outlets/{child_id}/parent-recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+
+
+def test_get_parent_outlet_recipes_filter_by_active(client: TestClient):
+    """Test getting parent recipes filtered by active status."""
+    # Create parent outlet with recipes
+    parent_id = _create_outlet(client, "Parent Brand", "PB")
+    recipe1_id = _create_recipe(client, "Recipe One")
+    recipe2_id = _create_recipe(client, "Recipe Two")
+
+    # Add recipes with different active states
+    client.post(
+        f"/api/v1/recipes/{recipe1_id}/outlets",
+        json={"outlet_id": parent_id, "is_active": True},
+    )
+    client.post(
+        f"/api/v1/recipes/{recipe2_id}/outlets",
+        json={"outlet_id": parent_id, "is_active": False},
+    )
+
+    # Create child outlet
+    child_response = client.post(
+        "/api/v1/outlets",
+        json={
+            "name": "Child Location",
+            "code": "CL",
+            "outlet_type": "location",
+            "parent_outlet_id": parent_id,
+        },
+    )
+    child_id = child_response.json()["id"]
+
+    # Get only active parent recipes
+    response = client.get(f"/api/v1/outlets/{child_id}/parent-recipes?is_active=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["recipe_id"] == recipe1_id
+    assert data[0]["is_active"] is True
+
+    # Get only inactive parent recipes
+    response = client.get(f"/api/v1/outlets/{child_id}/parent-recipes?is_active=false")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["recipe_id"] == recipe2_id
+    assert data[0]["is_active"] is False
+
+
+# =============================================================================
 # Hierarchy Tests
 # =============================================================================
 
