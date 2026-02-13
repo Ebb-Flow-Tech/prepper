@@ -1,0 +1,1 @@
+export { UserManagementTab } from './UserManagementTab';

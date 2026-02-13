@@ -30,6 +30,7 @@ const VALID_ROUTE_PATTERNS = [
   /^\/rnd$/,                                 // R&D
   /^\/rnd\/r\/[^/]+$/,                       // R&D recipe detail
   /^\/design-system$/,                       // Design system
+  /^\/admin\/users$/,                        // Admin users management
 ];
 
 function isValidRoute(pathname: string): boolean {
@@ -48,28 +49,33 @@ function setLastRoute(route: string) {
 }
 
 // Separate component for search params to isolate Suspense boundary
-function RouteTracker({ pathname, isPublicRoute }: { pathname: string; isPublicRoute: boolean }) {
+function RouteTracker({ pathname, isPublicRoute, isAdminRoute, userType }: { pathname: string; isPublicRoute: boolean; isAdminRoute: boolean; userType?: string | null }) {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (isValidRoute(pathname) && !isPublicRoute) {
+    // Only save the route if:
+    // 1. It's a valid route
+    // 2. It's not a public route
+    // 3. It's not an admin route for non-admin users
+    if (isValidRoute(pathname) && !isPublicRoute && !(isAdminRoute && userType !== 'admin')) {
       const queryString = searchParams.toString();
       const fullRoute = queryString ? `${pathname}?${queryString}` : pathname;
       setLastRoute(fullRoute);
     }
-  }, [pathname, searchParams, isPublicRoute]);
+  }, [pathname, searchParams, isPublicRoute, isAdminRoute, userType]);
 
   return null;
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { userId } = useAppState();
+  const { userId, userType } = useAppState();
   const pathname = usePathname();
   const router = useRouter();
 
   const isAuthenticated = !!userId;
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
   const isNotFound = !isValidRoute(pathname);
+  const isAdminRoute = pathname.startsWith('/admin');
 
   useEffect(() => {
     if (isAuthenticated && isPublicRoute) {
@@ -79,8 +85,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     } else if (!isAuthenticated && !isPublicRoute) {
       // Not logged in on protected page -> redirect to login
       router.replace('/login');
+    } else if (isAdminRoute && userType && userType !== 'admin') {
+      // Non-admin user on admin route -> redirect to home
+      router.replace('/');
     }
-  }, [isAuthenticated, isPublicRoute, isNotFound, router]);
+  }, [isAuthenticated, isPublicRoute, isNotFound, isAdminRoute, userType, router]);
 
   // Show nothing while redirecting
   if (isNotFound) {
@@ -96,7 +105,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Suspense fallback={null}>
-        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} />
+        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} isAdminRoute={isAdminRoute} userType={userType} />
       </Suspense>
       {children}
     </>

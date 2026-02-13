@@ -13,3 +13,4 @@ export * from './useRecipeRecipeCategories';
 export * from './useOutlets';
 export * from './useRecipeOutlets';
 export * from './useAgents';
+export * from './useUsers';

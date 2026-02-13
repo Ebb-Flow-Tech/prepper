@@ -95,3 +95,13 @@ class UserService:
         self.session.commit()
         self.session.refresh(user)
         return user
+
+    def get_all_users(self) -> list[User]:
+        """
+        Get all users, ordered by creation date (newest first).
+
+        Returns:
+            List of all User objects
+        """
+        statement = select(User).order_by(User.created_at.desc())
+        return list(self.session.exec(statement).all())

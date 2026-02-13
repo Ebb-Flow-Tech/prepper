@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.14** (2026-02-12) - Parent Outlet Recipes Display: Read-Only Table for Multi-Brand Recipe Management
+- **0.0.13** (2026-01-28) - Ingredient Tasting & Text-Based Features: Standalone Tasting Notes, Direct Ingredient Input, Collapsible UI & Image Support
+- **0.0.12** (2026-01-21) - Wastage, Outlets & Recipe Enhancements: Multi-Image Gallery, Outlet Hierarchy, Profit Margins, AI Feedback Summary & R&D Workflow
+- **0.0.11** (2026-01-23) - User Authentication & Recipe Categories: Supabase Auth Integration, Full CRUD Category Management, Tasting Note Images & Branding
 - **0.0.10** (2025-12-18) - Tasting Notes: R&D Feedback Tracking with Sessions, Ratings, Decisions & Recipe History Integration
 - **0.0.9** (2025-12-17) - Bugfix: Enum-to-VARCHAR Mismatch Fix for Ingredients API + CORS Update for Vercel
 - **0.0.8** (2025-12-17) - Frontend Multi-Page Expansion: Ingredients Library, Recipes Gallery, Recipe Detail, R&D Workspace, Finance Placeholder
@@ -16,6 +20,274 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.14] - 2026-02-12
+
+### Added
+
+#### Parent Outlet Recipes Display (Plan 06)
+
+Implemented read-only display of parent outlet recipes linked to child outlets within the outlet hierarchy.
+
+**Features**:
+- Parent outlet recipes displayed in dedicated table on outlet detail page
+- Read-only view showing all recipes from parent outlet(s)
+- Supports multi-level hierarchy visualization
+- Non-editable display to prevent accidental modifications
+
+**Files Modified**:
+- `frontend/src/components/outlets/OutletDetail.tsx`
+- `frontend/src/app/outlets/[id]/page.tsx`
+
+---
+
+## [0.0.13] - 2026-01-28
+
+### Added
+
+#### Ingredient Tasting Features
+
+Complete standalone tasting note system for individual ingredients, separate from recipe tasting sessions.
+
+**New Features**:
+- Standalone tasting notes for ingredients with ratings and feedback
+- Image support for ingredient tasting notes (upload, view, delete)
+- Auto-categorization via ingredient category agent
+- Display of tasting history on ingredient detail pages
+
+**UI Enhancements**:
+- Ingredient tasting notes panel in ingredient detail view
+- Image upload with preview and management
+- Integration with existing tasting note images infrastructure
+
+#### Canvas & Input Enhancements
+
+**Text-Based Ingredient Addition**:
+- Add ingredients directly by typing text in canvas ingredient panel
+- Alternative to drag-and-drop workflow for rapid entry
+- Automatic ingredient lookup and linking
+
+**Right Panel Collapsibility**:
+- Horizontal collapsible right panel (ingredient palette)
+- Improved canvas real estate for larger ingredient displays
+- Persistent collapse state
+
+**Display Improvements**:
+- Show usernames instead of user IDs in recipe overview
+- Display parent outlet names instead of IDs in outlet management
+- Image URL denormalization in Recipe model for optimized display
+- Add missing `is_halal` property to fallback Ingredient objects
+
+**Fixes**:
+- Fixed overlapping items in Canvas card view layout
+- Fixed ingredient/recipe dropdown table functionality
+- Fixed category cache invalidation on ingredient creation
+
+**Files Created/Modified**:
+- `frontend/src/components/ingredients/IngredientTastingPanel.tsx`
+- `frontend/src/hooks/useIngredientTasting.ts`
+- Updated CanvasTab, RightPanel, and ingredient detail components
+
+---
+
+## [0.0.12] - 2026-01-21
+
+### Added
+
+#### Wastage Tracking & Recipe Costing
+
+Integrated wastage percentage tracking into recipe ingredients with full cost impact calculations.
+
+**Features**:
+- Recipe ingredients track `wastage_percentage` (0-100) field
+- Wastage percentage displayed in ingredient table with inline editing
+- Cost calculations automatically factor in wastage
+- `adjusted_cost_per_unit` reflects final cost including wastage impact
+
+#### Multi-Image Recipe Gallery
+
+Complete multi-image support for recipes with main image selection and carousel display.
+
+**New Models/Features**:
+- `RecipeImage` model with `is_main` flag and `order` field
+- Multiple images per recipe with sequence ordering
+- Main image selection UI in recipe overview
+- Image carousel display on recipe cards and detail pages
+- Automatic main image fallback if not explicitly set
+
+**Migration**: Added RecipeImage table with indexes
+
+#### Recipe Enhancements
+
+**R&D Workflow Flags**:
+- `rnd_started` flag — Marks when R&D work begins on a recipe
+- `review_ready` flag — Indicates recipe is ready for review/approval
+- Toggle controls in recipe overview tab
+
+**Recipe Description Editing**:
+- In-line description editing in Overview tab
+- Markdown support in descriptions
+- Auto-save on blur
+
+**Profit Margin & Selling Price**:
+- Calculate and display profit margin in canvas tab
+- Recommended selling price based on cost + markup
+- Configurable profit margin inputs
+- Cost price denormalization on recipe save
+
+#### Outlet Management Enhancements
+
+**Outlet Hierarchy & Cycle Detection**:
+- Implement parent-child relationships between outlets
+- Cycle detection prevents circular hierarchies
+- Outlet hierarchy tree visualization
+- Deactivation of outlets with cascade considerations
+
+**Recipe-Outlet Management UI**:
+- Assign recipes to multiple outlets
+- Per-outlet activation status
+- Per-outlet price overrides
+- Outlet badges on recipe cards
+- Detail page outlet management tab
+
+#### UI/UX Improvements
+
+**Grid/List View Toggle**:
+- Implement across inventory pages (ingredients, recipes, suppliers)
+- Persistent view preference storage
+- Card view (grid) and list view options
+- Optimized layouts for each view type
+
+**AI Feedback Summary**:
+- AI-powered tasting feedback summarization endpoint
+- Integration in recipe overview tab
+- Manual trigger button for feedback generation
+- Summary display and editing
+
+**Files Created/Modified**:
+- `backend/app/models/recipe_image.py`
+- `backend/app/domain/recipe_image_service.py`
+- `backend/app/api/recipe_outlets.py`
+- Frontend components for outlet management and grid/list toggle
+- Canvas tab enhancements for profit margin and cost price
+
+#### Fixes
+
+- Fixed routing to new canvas page
+- Fixed Supabase storage mock in tests
+- Fixed type errors for recipe page in R&D
+- Fixed CanvasTab submit button display issues
+- Fixed RightPanel disappearance bugs
+- Resolve TypeScript and ESLint errors in frontend
+- Fixed recipe description display in individual recipe page
+
+---
+
+## [0.0.11] - 2026-01-23
+
+### Added
+
+#### User Authentication System (Complete Integration)
+
+Full Supabase authentication integration with user roles and session management.
+
+**Features**:
+- Supabase Auth login/logout functionality
+- JWT token management (access + refresh tokens)
+- User role support (normal/admin)
+- Outlet assignment per user
+- AuthGuard component for route protection
+- Session expiration handling with auto-refresh
+
+**New Frontend Pages**:
+- `/login` — Login page with Supabase integration
+- `/register` — Registration page
+- Home page redirect based on auth state
+
+**New Backend Endpoints**:
+- `POST /auth/login` — Login with email/password
+- `POST /auth/register` — Register new user
+- `POST /auth/refresh` — Refresh JWT token
+
+**New Models**:
+- `User` model with email, username, user_type, outlet_id reference
+
+**Files Created**:
+- `backend/app/domain/supabase_auth_service.py`
+- `backend/app/domain/user_service.py`
+- `frontend/src/app/login/page.tsx`
+- `frontend/src/app/register/page.tsx`
+
+#### Recipe Category Management
+
+Complete category system for organizing and filtering recipes.
+
+**New Models**:
+- `RecipeCategory` — Recipe category definition with name, description
+- `RecipeRecipeCategory` — Junction table for recipe-category many-to-many relationships
+
+**New API Endpoints** (7 total):
+- `/recipe-categories` — CRUD for recipe categories
+- `/recipe-recipe-categories` — CRUD for recipe-category links
+- `/recipe-recipe-categories/recipe/{recipe_id}` — Get categories for recipe
+- `/recipe-recipe-categories/category/{category_id}` — Get recipes in category
+
+**New Frontend Pages**:
+- `/recipe-categories` — Category list and management
+- `/recipe-categories/[id]` — Category detail with recipe management
+
+**UI Components**:
+- `RecipeCategoryCard` — Category display card
+- `RecipeCategoryFilterButtons` — Filter buttons for category selection
+- `AddRecipeCategoryModal` — Modal for creating/editing categories
+- Recipe category badges on recipe cards
+
+**Features**:
+- Assign multiple categories to recipes
+- Filter recipes by category
+- Add/edit/delete recipe categories
+- View recipes grouped by category
+
+#### Tasting Note Image Management
+
+Integrated image upload and management for tasting note entries.
+
+**Features**:
+- Multiple images per tasting note
+- Drag-and-drop image upload with preview
+- Base64 encoding for storage
+- Supabase Storage integration for persistent storage
+- Batch sync operations (add/update/delete)
+- Collapsible image gallery view on tasting pages
+
+**New Endpoint**:
+- `POST /tasting-note-images/sync/{tasting_note_id}` — Atomic sync operation
+
+**UI Component**:
+- `ImageUploadPreview` — Reusable image upload component
+
+#### Branding Updates
+
+Updated application branding and logo references throughout the codebase.
+
+**Changes**:
+- Updated logo assets and references
+- Consistent branding across pages
+- Updated documentation references
+
+**Files Modified**:
+- Navigation components
+- Layout files
+- Documentation (README, CLAUDE.md)
+
+#### Fixes
+
+- Removed `any` types from auth pages
+- Added `AuthApiError` interface for type safety
+- Show recipe description on individual recipe R&D page
+- Improved error handling in auth flows
 
 ---
 

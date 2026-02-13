@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
-import { useOutlets, useUpdateOutlet, useDeactivateOutlet } from '@/lib/hooks';
+import { useOutlets, useUpdateOutlet, useDeactivateOutlet, useUser } from '@/lib/hooks';
+import { useAppState } from '@/lib/store';
 import { OutletCard, OutletListRow, AddOutletModal } from '@/components/outlets';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Select, ViewToggle } from '@/components/ui';
 import { toast } from 'sonner';
@@ -144,9 +145,15 @@ function EditOutletModal({ outlet, allOutlets, onClose }: EditOutletModalProps) 
   );
 }
 
-export function OutletManagementTab() {
+interface OutletManagementTabProps {
+  userType?: 'normal' | 'admin' | null;
+}
+
+export function OutletManagementTab({ userType }: OutletManagementTabProps) {
   const deactivateOutlet = useDeactivateOutlet();
   const updateOutlet = useUpdateOutlet();
+  const { userId } = useAppState();
+  const { data: currentUser } = useUser(userId);
 
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -190,12 +197,23 @@ export function OutletManagementTab() {
     if (!outlets) return [];
 
     return outlets.filter((outlet) => {
+      // If non-admin user, only show their assigned outlet and child outlets
+      if (userType !== 'admin' && currentUser?.outlet_id) {
+        // Show the user's own outlet or any child outlets under their assigned outlet
+        const isUserOutlet = outlet.id === currentUser.outlet_id;
+        const isChildOfUserOutlet = outlet.parent_outlet_id === currentUser.outlet_id;
+
+        if (!isUserOutlet && !isChildOfUserOutlet) {
+          return false;
+        }
+      }
+
       if (search && !outlet.name.toLowerCase().includes(search.toLowerCase())) {
         return false;
       }
       return true;
     });
-  }, [outlets, search]);
+  }, [outlets, search, userType, currentUser?.outlet_id]);
 
   const outletsByBrand = useMemo(() => {
     if (!filteredOutlets) return new Map<number | null, Outlet[]>();
@@ -245,12 +263,14 @@ export function OutletManagementTab() {
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
           title="Outlets"
-          description="Manage brands and locations"
+          description={userType === 'admin' ? 'Manage brands and locations' : 'View your assigned outlets'}
         >
-          <Button onClick={() => setShowForm(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Outlet</span>
-          </Button>
+          {userType === 'admin' && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Outlet</span>
+            </Button>
+          )}
         </PageHeader>
 
         <AddOutletModal isOpen={showForm} onClose={() => setShowForm(false)} />

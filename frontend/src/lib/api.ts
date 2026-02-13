@@ -1091,3 +1091,14 @@ export async function logoutUser(): Promise<void> {
 export async function getUser(userId: string): Promise<User> {
   return fetchApi<User>(`/users/${userId}`);
 }
+
+export async function getUsers(): Promise<User[]> {
+  return fetchApi<User[]>('/users');
+}
+
+export async function updateUser(userId: string, data: Partial<User>): Promise<User> {
+  return fetchApi<User>(`/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}

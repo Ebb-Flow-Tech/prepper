@@ -1,7 +1,10 @@
 'use client';
 
+import { useAppState } from '@/lib/store';
 import { OutletManagementTab } from '@/components/recipes';
 
 export default function OutletsPage() {
-  return <OutletManagementTab />;
+  const { userType } = useAppState();
+
+  return <OutletManagementTab userType={userType} />;
 }

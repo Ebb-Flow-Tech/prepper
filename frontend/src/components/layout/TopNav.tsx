@@ -4,13 +4,20 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2 } from 'lucide-react';
+import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2, Users, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { logoutUser } from '@/lib/api';
 import { ConfirmModal } from '@/components/ui';
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: '/outlets', label: 'Outlets', icon: Building2 },
   { href: '/ingredients', label: 'Ingredients', icon: Package },
   { href: '/suppliers', label: 'Suppliers', icon: Truck },
@@ -20,12 +27,13 @@ const NAV_ITEMS = [
   { href: '/rnd', label: 'R&D', icon: FlaskConical },
   { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/design-system', label: 'Design', icon: Palette },
+  { href: '/admin/users', label: 'Admin', icon: Users, adminOnly: true },
 ];
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId, username, logout, canvasHasUnsavedChanges } = useAppState();
+  const { userId, username, userType, logout, canvasHasUnsavedChanges } = useAppState();
 
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
@@ -115,7 +123,10 @@ export function TopNav() {
 
         {/* Navigation Links */}
         <div className="flex flex-1 items-center gap-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {NAV_ITEMS.filter((item) => {
+            if (item.adminOnly && userType !== 'admin') return false;
+            return true;
+          }).map(({ href, label, icon: Icon }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link
