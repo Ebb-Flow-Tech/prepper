@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_current_user
 from app.models import (
     Outlet,
     OutletCreate,
@@ -12,6 +12,8 @@ from app.models import (
     RecipeOutlet,
     RecipeOutletCreate,
     RecipeOutletUpdate,
+    User,
+    UserType,
 )
 from app.domain import OutletService
 
@@ -25,6 +27,32 @@ class RecipeOutletsBatchRequest(BaseModel):
 router = APIRouter()
 
 
+# --- Helper Functions ---
+
+
+def _is_user_outlet_accessible(
+    service: OutletService, user_outlet_id: int, target_outlet_id: int
+) -> bool:
+    """Check if a user's outlet can access a target outlet.
+
+    A normal user can access their own outlet and all child outlets.
+    """
+    if user_outlet_id == target_outlet_id:
+        return True
+
+    # Check if target is a child of user's outlet
+    accessible_ids = {user_outlet_id}
+
+    def add_children(outlet_id: int):
+        children = service.get_child_outlets(outlet_id)
+        for child in children:
+            accessible_ids.add(child.id)
+            add_children(child.id)
+
+    add_children(user_outlet_id)
+    return target_outlet_id in accessible_ids
+
+
 # --- Outlet CRUD ---
 
 
@@ -32,8 +60,18 @@ router = APIRouter()
 def create_outlet(
     data: OutletCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create a new outlet (brand or location)."""
+    """Create a new outlet (brand or location).
+
+    Only admin users can create outlets.
+    """
+    if current_user.user_type != UserType.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can create outlets",
+        )
+
     service = OutletService(session)
 
     # Validate parent outlet exists if provided
@@ -52,18 +90,49 @@ def create_outlet(
 def list_outlets(
     is_active: bool | None = Query(default=None),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """List all outlets, optionally filtered by active status."""
+    """List outlets based on user permissions.
+
+    - Admin users: see all outlets
+    - Normal users: see only their assigned outlet and child outlets
+    """
     service = OutletService(session)
-    return service.list_outlets(is_active=is_active)
+    all_outlets = service.list_outlets(is_active=is_active)
+
+    # Admin users can see all outlets
+    if current_user.user_type == UserType.ADMIN:
+        return all_outlets
+
+    # Normal users can only see their own outlet and child outlets
+    if not current_user.outlet_id:
+        return []
+
+    accessible_outlet_ids = {current_user.outlet_id}
+
+    # Add child outlets to accessible set
+    def add_children(outlet_id: int):
+        children = service.get_child_outlets(outlet_id)
+        for child in children:
+            accessible_outlet_ids.add(child.id)
+            add_children(child.id)
+
+    add_children(current_user.outlet_id)
+
+    return [outlet for outlet in all_outlets if outlet.id in accessible_outlet_ids]
 
 
 @router.get("/{outlet_id}", response_model=Outlet)
 def get_outlet(
     outlet_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get an outlet by ID."""
+    """Get an outlet by ID.
+
+    - Admin users: can access any outlet
+    - Normal users: can only access their assigned outlet or child outlets
+    """
     service = OutletService(session)
     outlet = service.get_outlet(outlet_id)
     if not outlet:
@@ -71,6 +140,17 @@ def get_outlet(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Outlet not found",
         )
+
+    # Check permissions for normal users
+    if current_user.user_type != UserType.ADMIN:
+        if not current_user.outlet_id or not _is_user_outlet_accessible(
+            service, current_user.outlet_id, outlet_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this outlet",
+            )
+
     return outlet
 
 
@@ -79,8 +159,18 @@ def update_outlet(
     outlet_id: int,
     data: OutletUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update outlet details."""
+    """Update outlet details.
+
+    Only admin users can update outlets.
+    """
+    if current_user.user_type != UserType.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can update outlets",
+        )
+
     service = OutletService(session)
 
     # Check for cycle before updating
@@ -103,8 +193,18 @@ def update_outlet(
 def deactivate_outlet(
     outlet_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Soft-delete an outlet (sets is_active to False)."""
+    """Soft-delete an outlet (sets is_active to False).
+
+    Only admin users can deactivate outlets.
+    """
+    if current_user.user_type != UserType.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can deactivate outlets",
+        )
+
     service = OutletService(session)
     outlet = service.deactivate_outlet(outlet_id)
     if not outlet:
@@ -120,9 +220,25 @@ def get_outlet_recipes(
     outlet_id: int,
     is_active: bool | None = Query(default=None),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get all recipes assigned to an outlet."""
+    """Get all recipes assigned to an outlet.
+
+    - Admin users: can access recipes from any outlet
+    - Normal users: can only access recipes from their assigned outlet or child outlets
+    """
     service = OutletService(session)
+
+    # Check permissions for normal users
+    if current_user.user_type != UserType.ADMIN:
+        if not current_user.outlet_id or not _is_user_outlet_accessible(
+            service, current_user.outlet_id, outlet_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this outlet",
+            )
+
     return service.get_recipes_for_outlet(outlet_id, is_active=is_active)
 
 
@@ -131,9 +247,25 @@ def get_parent_outlet_recipes(
     outlet_id: int,
     is_active: bool | None = Query(default=None),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get all recipes from the parent outlet (if exists)."""
+    """Get all recipes from the parent outlet (if exists).
+
+    - Admin users: can access recipes from any outlet
+    - Normal users: can only access recipes from their assigned outlet or child outlets
+    """
     service = OutletService(session)
+
+    # Check permissions for normal users
+    if current_user.user_type != UserType.ADMIN:
+        if not current_user.outlet_id or not _is_user_outlet_accessible(
+            service, current_user.outlet_id, outlet_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this outlet",
+            )
+
     return service.get_parent_outlet_recipes(outlet_id, is_active=is_active)
 
 
@@ -141,9 +273,25 @@ def get_parent_outlet_recipes(
 def get_outlet_hierarchy(
     outlet_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get the full hierarchy tree for an outlet and its children."""
+    """Get the full hierarchy tree for an outlet and its children.
+
+    - Admin users: can view hierarchy for any outlet
+    - Normal users: can only view hierarchy for their assigned outlet or child outlets
+    """
     service = OutletService(session)
+
+    # Check permissions for normal users
+    if current_user.user_type != UserType.ADMIN:
+        if not current_user.outlet_id or not _is_user_outlet_accessible(
+            service, current_user.outlet_id, outlet_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this outlet",
+            )
+
     result = service.get_outlet_hierarchy(outlet_id)
     if "error" in result:
         raise HTTPException(

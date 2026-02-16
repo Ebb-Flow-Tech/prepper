@@ -8,8 +8,9 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.main import app
-from app.api.deps import get_session
+from app.api.deps import get_session, get_current_user
 from app.database import get_session as db_get_session
+from app.models import User, UserType
 
 
 @pytest.fixture(name="session")
@@ -32,8 +33,21 @@ def client_fixture(session: Session):
     def get_session_override():
         return session
 
+    # Create a mock admin user for testing
+    mock_admin_user = User(
+        id="test-admin-user",
+        email="admin@test.com",
+        username="admin",
+        user_type=UserType.ADMIN,
+        outlet_id=None,
+    )
+
+    def get_current_user_override():
+        return mock_admin_user
+
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[db_get_session] = get_session_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     # Mock storage service to avoid needing Supabase credentials
     storage_patches = [
@@ -96,8 +110,21 @@ def client_with_storage(session: Session, mock_storage):
     def get_session_override():
         return session
 
+    # Create a mock admin user for testing
+    mock_admin_user = User(
+        id="test-admin-user",
+        email="admin@test.com",
+        username="admin",
+        user_type=UserType.ADMIN,
+        outlet_id=None,
+    )
+
+    def get_current_user_override():
+        return mock_admin_user
+
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[db_get_session] = get_session_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()

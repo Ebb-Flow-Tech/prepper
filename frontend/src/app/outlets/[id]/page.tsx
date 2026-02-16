@@ -220,6 +220,9 @@ export default function OutletPage({ params }: OutletPageProps) {
   };
 
   if (error) {
+    const statusCode = (error as any)?.response?.status || (error as any)?.status;
+    const is403 = statusCode === 403;
+
     return (
       <div className="p-6">
         <Link
@@ -227,10 +230,12 @@ export default function OutletPage({ params }: OutletPageProps) {
           className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Recipes
+          Back
         </Link>
         <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
-          Outlet not found or failed to load.
+          {is403
+            ? "You do not have permission to access this outlet."
+            : "Outlet not found or failed to load."}
         </div>
       </div>
     );

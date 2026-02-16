@@ -886,3 +886,266 @@ def test_prevent_circular_parent_child_outlets(client: TestClient):
     )
     assert update_response.status_code == 400
     assert "cycle" in update_response.json()["detail"].lower()
+
+
+# =============================================================================
+# Access Control Tests (Non-Admin Users)
+# =============================================================================
+
+
+def test_non_admin_user_can_only_see_own_outlet(client: TestClient):
+    """Test that non-admin users can only see their assigned outlet."""
+    from app.models import User, UserType
+    from app.api.deps import get_current_user
+
+    # Create outlets
+    outlet1_response = client.post(
+        "/api/v1/outlets",
+        json={"name": "Outlet 1", "code": "O1", "outlet_type": "location"},
+    )
+    outlet1_id = outlet1_response.json()["id"]
+
+    outlet2_response = client.post(
+        "/api/v1/outlets",
+        json={"name": "Outlet 2", "code": "O2", "outlet_type": "location"},
+    )
+    outlet2_id = outlet2_response.json()["id"]
+
+    # Create a non-admin user assigned to outlet1
+    non_admin_user = User(
+        id="test-user",
+        email="user@test.com",
+        username="user",
+        user_type=UserType.NORMAL,
+        outlet_id=outlet1_id,
+    )
+
+    # Override get_current_user with the non-admin user
+    from app.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: non_admin_user
+
+    try:
+        # Non-admin should only see outlet1
+        response = client.get("/api/v1/outlets")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == outlet1_id
+
+        # Non-admin should be able to get outlet1
+        response = client.get(f"/api/v1/outlets/{outlet1_id}")
+        assert response.status_code == 200
+
+        # Non-admin should NOT be able to get outlet2
+        response = client.get(f"/api/v1/outlets/{outlet2_id}")
+        assert response.status_code == 403
+        assert "do not have access" in response.json()["detail"].lower()
+    finally:
+        # Reset to admin user
+        from app.models import UserType
+
+        admin_user = User(
+            id="test-admin-user",
+            email="admin@test.com",
+            username="admin",
+            user_type=UserType.ADMIN,
+            outlet_id=None,
+        )
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+
+def test_non_admin_user_can_see_child_outlets(client: TestClient):
+    """Test that non-admin users can see child outlets of their assigned outlet."""
+    from app.models import User, UserType
+    from app.api.deps import get_current_user
+
+    # Create parent outlet
+    parent_response = client.post(
+        "/api/v1/outlets",
+        json={"name": "Parent Outlet", "code": "P", "outlet_type": "brand"},
+    )
+    parent_id = parent_response.json()["id"]
+
+    # Create child outlet
+    child_response = client.post(
+        "/api/v1/outlets",
+        json={
+            "name": "Child Outlet",
+            "code": "C",
+            "outlet_type": "location",
+            "parent_outlet_id": parent_id,
+        },
+    )
+    child_id = child_response.json()["id"]
+
+    # Create a non-admin user assigned to parent outlet
+    non_admin_user = User(
+        id="test-user",
+        email="user@test.com",
+        username="user",
+        user_type=UserType.NORMAL,
+        outlet_id=parent_id,
+    )
+
+    # Override get_current_user with the non-admin user
+    from app.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: non_admin_user
+
+    try:
+        # Non-admin should see both parent and child outlets
+        response = client.get("/api/v1/outlets")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        outlet_ids = {o["id"] for o in data}
+        assert parent_id in outlet_ids
+        assert child_id in outlet_ids
+
+        # Non-admin should be able to get child outlet
+        response = client.get(f"/api/v1/outlets/{child_id}")
+        assert response.status_code == 200
+    finally:
+        # Reset to admin user
+        from app.models import UserType
+
+        admin_user = User(
+            id="test-admin-user",
+            email="admin@test.com",
+            username="admin",
+            user_type=UserType.ADMIN,
+            outlet_id=None,
+        )
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+
+def test_non_admin_user_cannot_create_outlet(client: TestClient):
+    """Test that non-admin users cannot create outlets."""
+    from app.models import User, UserType
+    from app.api.deps import get_current_user
+
+    # Create a non-admin user
+    non_admin_user = User(
+        id="test-user",
+        email="user@test.com",
+        username="user",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+
+    # Override get_current_user with the non-admin user
+    from app.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: non_admin_user
+
+    try:
+        response = client.post(
+            "/api/v1/outlets",
+            json={"name": "Outlet", "code": "O", "outlet_type": "location"},
+        )
+        assert response.status_code == 403
+        assert "administrator" in response.json()["detail"].lower()
+    finally:
+        # Reset to admin user
+        from app.models import UserType
+
+        admin_user = User(
+            id="test-admin-user",
+            email="admin@test.com",
+            username="admin",
+            user_type=UserType.ADMIN,
+            outlet_id=None,
+        )
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+
+def test_non_admin_user_cannot_update_outlet(client: TestClient):
+    """Test that non-admin users cannot update outlets."""
+    from app.models import User, UserType
+    from app.api.deps import get_current_user
+
+    # Create an outlet
+    outlet_response = client.post(
+        "/api/v1/outlets",
+        json={"name": "Outlet", "code": "O", "outlet_type": "location"},
+    )
+    outlet_id = outlet_response.json()["id"]
+
+    # Create a non-admin user
+    non_admin_user = User(
+        id="test-user",
+        email="user@test.com",
+        username="user",
+        user_type=UserType.NORMAL,
+        outlet_id=outlet_id,
+    )
+
+    # Override get_current_user with the non-admin user
+    from app.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: non_admin_user
+
+    try:
+        response = client.patch(
+            f"/api/v1/outlets/{outlet_id}",
+            json={"name": "Updated Outlet"},
+        )
+        assert response.status_code == 403
+        assert "administrator" in response.json()["detail"].lower()
+    finally:
+        # Reset to admin user
+        from app.models import UserType
+
+        admin_user = User(
+            id="test-admin-user",
+            email="admin@test.com",
+            username="admin",
+            user_type=UserType.ADMIN,
+            outlet_id=None,
+        )
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+
+def test_non_admin_user_cannot_delete_outlet(client: TestClient):
+    """Test that non-admin users cannot delete outlets."""
+    from app.models import User, UserType
+    from app.api.deps import get_current_user
+
+    # Create an outlet
+    outlet_response = client.post(
+        "/api/v1/outlets",
+        json={"name": "Outlet", "code": "O", "outlet_type": "location"},
+    )
+    outlet_id = outlet_response.json()["id"]
+
+    # Create a non-admin user
+    non_admin_user = User(
+        id="test-user",
+        email="user@test.com",
+        username="user",
+        user_type=UserType.NORMAL,
+        outlet_id=outlet_id,
+    )
+
+    # Override get_current_user with the non-admin user
+    from app.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: non_admin_user
+
+    try:
+        response = client.delete(f"/api/v1/outlets/{outlet_id}")
+        assert response.status_code == 403
+        assert "administrator" in response.json()["detail"].lower()
+    finally:
+        # Reset to admin user
+        from app.models import UserType
+
+        admin_user = User(
+            id="test-admin-user",
+            email="admin@test.com",
+            username="admin",
+            user_type=UserType.ADMIN,
+            outlet_id=None,
+        )
+        app.dependency_overrides[get_current_user] = lambda: admin_user
