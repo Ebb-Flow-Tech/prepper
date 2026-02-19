@@ -14,6 +14,9 @@ from app.models import (
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
     RecipeRecipe,
+    User,
+    UserType,
+    RecipeOutlet,
 )
 
 
@@ -33,12 +36,76 @@ class RecipeService:
         self.session.refresh(recipe)
         return recipe
 
-    def list_recipes(self, status: RecipeStatus | None = None) -> list[Recipe]:
-        """List all recipes, optionally filtering by status."""
+    def list_recipes(
+        self, status: RecipeStatus | None = None, current_user: User | None = None
+    ) -> list[Recipe]:
+        """List all recipes, optionally filtering by status and user permissions.
+
+        Access control for non-admin users:
+        - Can see recipes they created (owner_id)
+        - Can see public recipes (is_public)
+        - Can see recipes assigned to their outlet:
+          - If user is in parent outlet (brand): only their outlet's recipes
+          - If user is in child outlet (location): their outlet + parent outlet's recipes
+
+        Admin users see all recipes.
+        """
         statement = select(Recipe)
         if status:
             statement = statement.where(Recipe.status == status)
-        return list(self.session.exec(statement).all())
+
+        recipes = list(self.session.exec(statement).all())
+
+        # Admin users see all recipes
+        if current_user and current_user.user_type == UserType.ADMIN:
+            return recipes
+
+        # Normal users: filter by access control
+        if not current_user:
+            return []
+
+        accessible_recipe_ids = set()
+
+        # 1. Own recipes
+        accessible_recipe_ids.update(
+            r.id for r in recipes if r.owner_id == current_user.id and r.id is not None
+        )
+
+        # 2. Public recipes
+        accessible_recipe_ids.update(r.id for r in recipes if r.is_public and r.id is not None)
+
+        # 3. Recipes from outlets
+        if current_user.outlet_id:
+            from app.domain.outlet_service import OutletService
+
+            outlet_service = OutletService(self.session)
+
+            # Get the user's outlet
+            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
+            if user_outlet:
+                # Collect all accessible outlet IDs
+                accessible_outlet_ids = {current_user.outlet_id}
+
+                # If user is in a parent outlet (brand), they can only see that outlet's recipes
+                if user_outlet.outlet_type.value == "brand":
+                    # Only this parent outlet
+                    pass
+                else:
+                    # If user is in a child outlet (location), they can also see parent outlet recipes
+                    if user_outlet.parent_outlet_id:
+                        accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+
+                # Get all recipes assigned to accessible outlets
+                statement = select(RecipeOutlet).where(
+                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+                    RecipeOutlet.is_active == True,
+                )
+                recipe_outlets = self.session.exec(statement).all()
+                accessible_recipe_ids.update(
+                    ro.recipe_id for ro in recipe_outlets if ro.recipe_id is not None
+                )
+
+        return [r for r in recipes if r.id in accessible_recipe_ids]
 
     def get_recipe(self, recipe_id: int) -> Recipe | None:
         """Get a recipe by ID."""

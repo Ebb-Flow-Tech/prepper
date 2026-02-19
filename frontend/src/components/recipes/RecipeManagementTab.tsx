@@ -205,16 +205,8 @@ export function RecipeManagementTab() {
         }
       }
 
-      // Admin users can see all recipes
-      if (userType === 'admin') {
-        return true;
-      }
-
-      // Show recipe if user is the owner OR if recipe is public
-      const currUserId = userId ? userId : null;
-      if (recipe.owner_id !== currUserId && !recipe.is_public) {
-        return false;
-      }
+      // Backend handles access control (ownership, outlet assignment, public status)
+      // Frontend just displays what backend returns
       return true;
     });
 

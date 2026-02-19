@@ -42,6 +42,8 @@ export function useAddRecipeToOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.data.outlet_id] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
+      // Invalidate parent outlet recipe caches for all outlets
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
     },
   });
 }
@@ -62,6 +64,8 @@ export function useUpdateRecipeOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.outletId] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
+      // Invalidate parent outlet recipe caches for all outlets
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
     },
   });
 }
@@ -80,6 +84,8 @@ export function useRemoveRecipeFromOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.outletId] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
+      // Invalidate parent outlet recipe caches for all outlets
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
     },
   });
 }

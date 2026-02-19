@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.api.deps import get_session
-from app.models import Recipe, RecipeCreate, RecipeUpdate, RecipeStatus, RecipeStatusUpdate
+from app.api.deps import get_session, get_current_user
+from app.models import Recipe, RecipeCreate, RecipeUpdate, RecipeStatus, RecipeStatusUpdate, User, UserType
 from app.domain import RecipeService
 
 
@@ -32,18 +32,33 @@ def create_recipe(
 def list_recipes(
     status: RecipeStatus | None = Query(default=None),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """List all recipes, optionally filtered by status."""
+    """List all recipes, optionally filtered by status.
+
+    Access control:
+    - Admin users: see all recipes
+    - Normal users: see only recipes they created, public recipes, or recipes from their outlet
+    """
     service = RecipeService(session)
-    return service.list_recipes(status=status)
+    return service.list_recipes(status=status, current_user=current_user)
 
 
 @router.get("/{recipe_id}", response_model=Recipe)
 def get_recipe(
     recipe_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get a recipe by ID."""
+    """Get a recipe by ID.
+
+    Access control:
+    - Admin users: can access any recipe
+    - Normal users: can only access recipes they created, public recipes, or recipes from their outlet
+    """
+    from app.domain.outlet_service import OutletService
+    from sqlmodel import select
+
     service = RecipeService(session)
     recipe = service.get_recipe(recipe_id)
     if not recipe:
@@ -51,6 +66,43 @@ def get_recipe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe not found",
         )
+
+    # Check access control for normal users
+    if current_user.user_type != UserType.ADMIN:
+        can_access = False
+
+        # User's own recipe
+        if recipe.owner_id == current_user.id:
+            can_access = True
+        # Public recipe
+        elif recipe.is_public:
+            can_access = True
+        # Recipe from user's outlet
+        elif current_user.outlet_id:
+            outlet_service = OutletService(session)
+            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
+            if user_outlet:
+                accessible_outlet_ids = {current_user.outlet_id}
+                # Location users can also see recipes from their parent brand
+                if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
+                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+
+                # Check if recipe is assigned to any accessible outlet
+                from app.models import RecipeOutlet
+
+                statement = select(RecipeOutlet).where(
+                    RecipeOutlet.recipe_id == recipe.id,
+                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+                    RecipeOutlet.is_active == True,
+                )
+                can_access = bool(session.exec(statement).first())
+
+        if not can_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this recipe",
+            )
+
     return recipe
 
 
