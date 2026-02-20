@@ -61,6 +61,11 @@ import type {
   RecipeRecipeCategory,
   CreateRecipeRecipeCategoryRequest,
   UpdateRecipeRecipeCategoryRequest,
+  Allergen,
+  IngredientAllergen,
+  AllergenCreate,
+  AllergenUpdate,
+  IngredientAllergenCreate,
   LoginRequest,
   LoginResponse,
   RegisterRequest,
@@ -776,6 +781,67 @@ export async function updateCategory(
 
 export async function deactivateCategory(id: number): Promise<Category> {
   return fetchApi<Category>(`/categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Allergens ============
+
+export async function getAllergens(activeOnly: boolean = true): Promise<Allergen[]> {
+  const params = new URLSearchParams({ active_only: String(activeOnly) });
+  return fetchApi<Allergen[]>(`/allergens?${params}`);
+}
+
+export async function getAllergen(id: number): Promise<Allergen> {
+  return fetchApi<Allergen>(`/allergens/${id}`);
+}
+
+export async function createAllergen(data: AllergenCreate): Promise<Allergen> {
+  return fetchApi<Allergen>('/allergens', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAllergen(
+  id: number,
+  data: AllergenUpdate
+): Promise<Allergen> {
+  return fetchApi<Allergen>(`/allergens/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAllergen(id: number): Promise<Allergen> {
+  return fetchApi<Allergen>(`/allergens/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============ Ingredient-Allergen Links ============
+
+export async function getIngredientAllergenLinks(): Promise<IngredientAllergen[]> {
+  return fetchApi<IngredientAllergen[]>('/ingredient-allergens');
+}
+
+export async function getAllergensByIngredient(ingredientId: number): Promise<IngredientAllergen[]> {
+  return fetchApi<IngredientAllergen[]>(`/ingredient-allergens/ingredient/${ingredientId}`);
+}
+
+export async function getIngredientsByAllergen(allergenId: number): Promise<IngredientAllergen[]> {
+  return fetchApi<IngredientAllergen[]>(`/ingredient-allergens/allergen/${allergenId}`);
+}
+
+export async function addIngredientAllergen(data: IngredientAllergenCreate): Promise<IngredientAllergen> {
+  return fetchApi<IngredientAllergen>('/ingredient-allergens', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteIngredientAllergen(linkId: number): Promise<void> {
+  return fetchApi<void>(`/ingredient-allergens/${linkId}`, {
     method: 'DELETE',
   });
 }

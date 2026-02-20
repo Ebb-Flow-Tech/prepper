@@ -8,6 +8,7 @@ export * from './useSubRecipes';
 export * from './useTastings';
 export * from './useIngredientTastings';
 export * from './useCategories';
+export * from './useAllergens';
 export * from './useRecipeCategories';
 export * from './useRecipeRecipeCategories';
 export * from './useOutlets';

@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories } from '@/lib/hooks';
-import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal } from '@/components/ingredients';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useAllergens, useIngredientAllergenLinks } from '@/lib/hooks';
+import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal, AllergensTab } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
@@ -29,6 +29,7 @@ const SORT_BY_OPTIONS = [
 const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'categories', label: 'Categories' },
+  { id: 'allergens', label: 'Allergens' },
 ];
 
 function sortIngredients(ingredients: Ingredient[], sortBy: SortByOption): Ingredient[] {
@@ -104,10 +105,25 @@ function IngredientsListTab() {
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
   const [selectedHalal, setSelectedHalal] = useState<boolean[]>([]);
+  const [selectedAllergens, setSelectedAllergens] = useState<number[]>([]);
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const { data: ingredients, isLoading, error } = useIngredients(showArchived);
   const { data: categories } = useCategories();
+  const { data: allergens } = useAllergens();
+  const { data: ingredientAllergenLinks } = useIngredientAllergenLinks();
+
+  const ingredientAllergenMap = useMemo(() => {
+    if (!ingredientAllergenLinks) return new Map<number, number[]>();
+    const map = new Map<number, number[]>();
+    ingredientAllergenLinks.forEach((link) => {
+      if (!map.has(link.ingredient_id)) {
+        map.set(link.ingredient_id, []);
+      }
+      map.get(link.ingredient_id)!.push(link.allergen_id);
+    });
+    return map;
+  }, [ingredientAllergenLinks]);
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
@@ -129,11 +145,21 @@ function IngredientsListTab() {
       if (selectedHalal.length > 0 && !selectedHalal.includes(ing.is_halal)) {
         return false;
       }
+      // Allergen filter (if any selected, show ingredients that have any of them)
+      if (selectedAllergens.length > 0) {
+        const ingredientAllergens = ingredientAllergenMap.get(ing.id) ?? [];
+        const hasSelectedAllergen = ingredientAllergens.some((allergenId) =>
+          selectedAllergens.includes(allergenId)
+        );
+        if (!hasSelectedAllergen) {
+          return false;
+        }
+      }
       return true;
     });
 
     return sortIngredients(filtered, sortBy);
-  }, [ingredients, search, selectedCategories, selectedUnits, selectedHalal, sortBy]);
+  }, [ingredients, search, selectedCategories, selectedUnits, selectedHalal, selectedAllergens, sortBy, ingredientAllergenMap]);
 
   const categoryMap = useMemo(() => {
     if (!categories) return new Map<number, string>();
@@ -234,6 +260,9 @@ function IngredientsListTab() {
             onUnitChange={setSelectedUnits}
             selectedHalal={selectedHalal}
             onHalalChange={setSelectedHalal}
+            allergens={allergens}
+            selectedAllergens={selectedAllergens}
+            onAllergenChange={setSelectedAllergens}
           />
         </div>
 
@@ -258,7 +287,7 @@ function IngredientsListTab() {
         {!isLoading && filteredIngredients.length === 0 && (
           <div className="text-center py-12">
             <p className="text-zinc-500 dark:text-zinc-400">
-              {search || selectedCategories.length > 0 || selectedUnits.length > 0 || selectedHalal.length > 0
+              {search || selectedCategories.length > 0 || selectedUnits.length > 0 || selectedHalal.length > 0 || selectedAllergens.length > 0
                 ? 'No ingredients match your filters'
                 : 'No ingredients yet'}
             </p>
@@ -310,6 +339,8 @@ function TabContent() {
       return <IngredientsListTab />;
     case 'categories':
       return <CategoriesTab />;
+    case 'allergens':
+      return <AllergensTab />;
     default:
       return <IngredientsListTab />;
   }

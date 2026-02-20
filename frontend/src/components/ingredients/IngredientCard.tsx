@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Edit2, Archive, ArchiveRestore, ImagePlus } from 'lucide-react';
+import { Edit2, Archive, ArchiveRestore, ImagePlus, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
+import { useAllergensByIngredient, useAllergens } from '@/lib/hooks';
 import type { Ingredient, Category } from '@/types';
 
 interface IngredientCardProps {
@@ -17,8 +18,13 @@ interface IngredientCardProps {
 
 export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUnarchive }: IngredientCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const { data: allergenLinks } = useAllergensByIngredient(ingredient.id);
+  const { data: allergens } = useAllergens();
 
   const currentCategory = categories?.find((c) => c.id === ingredient.category_id);
+  const ingredientAllergens = allergenLinks?.length
+    ? allergens?.filter((a) => allergenLinks.some((link) => link.allergen_id === a.id))
+    : [];
 
   return (
     <Card
@@ -61,6 +67,16 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
           )}
           {currentCategory && (
             <Badge variant="info" className="text-sm">{currentCategory.name}</Badge>
+          )}
+          {ingredientAllergens && ingredientAllergens.length > 0 && (
+            <>
+              {ingredientAllergens.map((allergen) => (
+                <Badge key={allergen.id} variant="destructive" className="text-sm gap-1 flex items-center">
+                  <AlertCircle className="h-3 w-3" />
+                  {allergen.name}
+                </Badge>
+              ))}
+            </>
           )}
         </div>
       </CardContent>

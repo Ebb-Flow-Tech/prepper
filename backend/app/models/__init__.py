@@ -84,6 +84,15 @@ from app.models.category import (
     CategoryCreate,
     CategoryUpdate,
 )
+from app.models.allergen import (
+    Allergen,
+    AllergenCreate,
+    AllergenUpdate,
+)
+from app.models.ingredient_allergen import (
+    IngredientAllergen,
+    IngredientAllergenCreate,
+)
 from app.models.recipe_image import (
     RecipeImage,
     RecipeImageCreate,
@@ -193,6 +202,13 @@ __all__ = [
     "Category",
     "CategoryCreate",
     "CategoryUpdate",
+    # Allergen
+    "Allergen",
+    "AllergenCreate",
+    "AllergenUpdate",
+    # IngredientAllergen
+    "IngredientAllergen",
+    "IngredientAllergenCreate",
     # RecipeImage
     "RecipeImage",
     "RecipeImageCreate",

@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { Category } from '@/types';
+import type { Category, Allergen } from '@/types';
 
 const UNIT_OPTIONS = [
   { value: 'g', label: 'g' },
@@ -19,6 +19,9 @@ interface FilterButtonsProps {
   onUnitChange: (units: string[]) => void;
   selectedHalal: boolean[];
   onHalalChange: (halal: boolean[]) => void;
+  allergens: Allergen[] | undefined;
+  selectedAllergens: number[];
+  onAllergenChange: (allergenIds: number[]) => void;
 }
 
 export function FilterButtons({
@@ -29,6 +32,9 @@ export function FilterButtons({
   onUnitChange,
   selectedHalal,
   onHalalChange,
+  allergens,
+  selectedAllergens,
+  onAllergenChange,
 }: FilterButtonsProps) {
   const toggleCategory = (categoryId: number) => {
     if (selectedCategories.includes(categoryId)) {
@@ -54,7 +60,16 @@ export function FilterButtons({
     }
   };
 
+  const toggleAllergen = (allergenId: number) => {
+    if (selectedAllergens.includes(allergenId)) {
+      onAllergenChange(selectedAllergens.filter((id) => id !== allergenId));
+    } else {
+      onAllergenChange([...selectedAllergens, allergenId]);
+    }
+  };
+
   const activeCategories = categories?.filter((c) => c.is_active) ?? [];
+  const activeAllergens = allergens?.filter((a) => a.is_active) ?? [];
 
   return (
     <div className="flex flex-col gap-3">
@@ -130,6 +145,29 @@ export function FilterButtons({
           Non-Halal
         </button>
       </div>
+
+      {/* Allergen Filters */}
+      {activeAllergens.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">
+            Allergens:
+          </span>
+          {activeAllergens.map((allergen) => (
+            <button
+              key={allergen.id}
+              onClick={() => toggleAllergen(allergen.id)}
+              className={cn(
+                'px-3 py-1 text-xs font-medium rounded-full transition-colors',
+                selectedAllergens.includes(allergen.id)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              )}
+            >
+              {allergen.name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

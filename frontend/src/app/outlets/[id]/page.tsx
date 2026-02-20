@@ -220,7 +220,14 @@ export default function OutletPage({ params }: OutletPageProps) {
   };
 
   if (error) {
-    const statusCode = (error as any)?.response?.status || (error as any)?.status;
+    let statusCode: number | undefined;
+    if (typeof error === 'object' && error !== null) {
+      if ('response' in error && typeof error.response === 'object' && error.response !== null && 'status' in error.response) {
+        statusCode = (error.response as { status: number }).status;
+      } else if ('status' in error) {
+        statusCode = (error as { status: number }).status;
+      }
+    }
     const is403 = statusCode === 403;
 
     return (

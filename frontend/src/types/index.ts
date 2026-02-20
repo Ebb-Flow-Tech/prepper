@@ -648,6 +648,40 @@ export interface UpdateRecipeRecipeCategoryRequest {
   is_active?: boolean;
 }
 
+// ============ Allergen Types ============
+
+export interface Allergen {
+  id: number;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngredientAllergen {
+  id: number;
+  ingredient_id: number;
+  allergen_id: number;
+  created_at: string;
+}
+
+export interface AllergenCreate {
+  name: string;
+  description?: string | null;
+}
+
+export interface AllergenUpdate {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+}
+
+export interface IngredientAllergenCreate {
+  ingredient_id: number;
+  allergen_id: number;
+}
+
 // ============ Auth Types ============
 
 export interface LoginRequest {

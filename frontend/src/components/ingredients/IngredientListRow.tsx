@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Edit2, Archive, ArchiveRestore } from 'lucide-react';
+import { Edit2, Archive, ArchiveRestore, AlertCircle } from 'lucide-react';
 import { Card, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
+import { useAllergensByIngredient, useAllergens } from '@/lib/hooks';
 import type { Ingredient, Category } from '@/types';
 
 interface IngredientListRowProps {
@@ -23,7 +24,13 @@ export function IngredientListRow({
   onUnarchive,
 }: IngredientListRowProps) {
   const [showActions, setShowActions] = useState(false);
+  const { data: allergenLinks } = useAllergensByIngredient(ingredient.id);
+  const { data: allergens } = useAllergens();
+
   const currentCategory = categories?.find((c) => c.id === ingredient.category_id);
+  const ingredientAllergens = allergenLinks?.length
+    ? allergens?.filter((a) => allergenLinks.some((link) => link.allergen_id === a.id))
+    : [];
 
   return (
     <Card
@@ -57,6 +64,16 @@ export function IngredientListRow({
               )}
               {currentCategory && (
                 <Badge variant="info" className="text-xs">{currentCategory.name}</Badge>
+              )}
+              {ingredientAllergens && ingredientAllergens.length > 0 && (
+                <>
+                  {ingredientAllergens.map((allergen) => (
+                    <Badge key={allergen.id} variant="destructive" className="text-xs gap-1 flex items-center">
+                      <AlertCircle className="h-3 w-3" />
+                      {allergen.name}
+                    </Badge>
+                  ))}
+                </>
               )}
             </div>
 
