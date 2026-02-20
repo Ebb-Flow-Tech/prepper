@@ -81,13 +81,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (isAuthenticated && isPublicRoute) {
       // Logged in user on login/register page -> redirect to last route
       const lastRoute = getLastRoute();
-      router.replace(lastRoute);
+      // Check if lastRoute is an admin route and user is not admin
+      const lastRouteIsAdminRoute = lastRoute.startsWith('/admin');
+      if (lastRouteIsAdminRoute && userType !== 'admin') {
+        // Don't redirect to admin routes for non-admin users
+        router.replace('/outlets');
+      } else {
+        router.replace(lastRoute);
+      }
     } else if (!isAuthenticated && !isPublicRoute) {
       // Not logged in on protected page -> redirect to login
       router.replace('/login');
     } else if (isAdminRoute && userType && userType !== 'admin') {
-      // Non-admin user on admin route -> redirect to home
-      router.replace('/');
+      // Non-admin user on admin route -> redirect to outlets
+      router.replace('/outlets');
     }
   }, [isAuthenticated, isPublicRoute, isNotFound, isAdminRoute, userType, router]);
 
