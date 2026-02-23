@@ -195,6 +195,14 @@ export function useSessionRecipes(sessionId: number | null) {
   });
 }
 
+export function useSessionRecipesFull(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['tasting-session', sessionId, 'recipes-full'],
+    queryFn: () => api.getSessionRecipesFull(sessionId!),
+    enabled: sessionId !== null,
+  });
+}
+
 export function useAddRecipeToSession() {
   const queryClient = useQueryClient();
 

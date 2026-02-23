@@ -26,7 +26,7 @@ import {
   useTastingNoteImages,
   useSyncTastingNoteImages,
 } from '@/lib/hooks/useTastings';
-import { useRecipe } from '@/lib/hooks';
+import { useRecipeForTasting } from '@/lib/hooks/useRecipes';
 import { ImageUploadPreview, type ImageWithId } from '@/components/tasting/ImageUploadPreview';
 import {
   Button,
@@ -457,7 +457,7 @@ export default function RecipeTastingPage() {
   const recipeId = params.recipeId ? Number(params.recipeId) : null;
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
-  const { data: recipe, isLoading: recipeLoading } = useRecipe(recipeId);
+  const { data: recipe, isLoading: recipeLoading } = useRecipeForTasting(recipeId);
   const { data: allNotes } = useSessionNotes(sessionId);
 
   const addNote = useAddNoteToSession();

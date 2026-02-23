@@ -8,15 +8,15 @@ from sqlmodel import Session, select
 from app.models import (
     Recipe,
     RecipeCreate,
-    RecipeUpdate,
-    RecipeStatus,
     RecipeIngredient,
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
+    RecipeOutlet,
     RecipeRecipe,
+    RecipeStatus,
+    RecipeUpdate,
     User,
     UserType,
-    RecipeOutlet,
 )
 
 
@@ -98,7 +98,7 @@ class RecipeService:
                 # Get all recipes assigned to accessible outlets
                 statement = select(RecipeOutlet).where(
                     RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-                    RecipeOutlet.is_active == True,
+                    RecipeOutlet.is_active,
                 )
                 recipe_outlets = self.session.exec(statement).all()
                 accessible_recipe_ids.update(
@@ -325,11 +325,92 @@ class RecipeService:
 
     # --- Versioning Operations ---
 
-    def _is_recipe_authorized(self, recipe: Recipe, user_id: str | None) -> bool:
-        """Check if a recipe is authorized for the given user."""
+    def _get_outlet_accessible_recipe_ids(
+        self, user_id: str, tree_ids: set[int]
+    ) -> set[int]:
+        """
+        Get recipe IDs from the tree that are accessible to the user via outlet hierarchy.
+
+        Steps:
+        1. Look up the user by user_id to get their outlet_id
+        2. If user has outlet_id, query their outlet to determine type (brand/location)
+        3. Build accessible_outlet_ids:
+           - Always include user's own outlet
+           - If outlet is "location" and has parent_outlet_id, also include parent
+           - If outlet is "brand", only include own outlet (no children)
+        4. Batch-query RecipeOutlet for recipes in tree_ids assigned to accessible_outlet_ids
+        5. Return set of accessible recipe IDs
+
+        Args:
+            user_id: The user ID to check
+            tree_ids: The set of recipe IDs in the version tree
+
+        Returns:
+            Set of recipe IDs that are accessible via outlet
+        """
+        from app.domain.outlet_service import OutletService
+        from app.domain.user_service import UserService
+
+        # Look up user to get outlet assignment
+        user_service = UserService(self.session)
+        user = user_service.get_user(user_id)
+
+        # If user not found or has no outlet, return empty set
+        if not user or not user.outlet_id:
+            return set()
+
+        # Get user's outlet to determine type
+        outlet_service = OutletService(self.session)
+        user_outlet = outlet_service.get_outlet(user.outlet_id)
+
+        if not user_outlet:
+            return set()
+
+        # Build accessible outlet IDs based on hierarchy
+        accessible_outlet_ids = {user.outlet_id}
+
+        # Location users can also see recipes from their parent brand
+        if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
+            accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+        # Brand users can only see their own outlet (not children)
+
+        # Query RecipeOutlet for recipes in tree assigned to accessible outlets
+        statement = select(RecipeOutlet).where(
+            RecipeOutlet.recipe_id.in_(tree_ids),
+            RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+            RecipeOutlet.is_active,
+        )
+        recipe_outlets = self.session.exec(statement).all()
+
+        return {ro.recipe_id for ro in recipe_outlets if ro.recipe_id is not None}
+
+    def _is_recipe_authorized(
+        self,
+        recipe: Recipe,
+        user_id: str | None,
+        outlet_accessible_ids: set[int] | None = None,
+    ) -> bool:
+        """
+        Check if a recipe is authorized for the given user.
+
+        Authorization is granted if:
+        - Recipe is public, OR
+        - User owns the recipe, OR
+        - Recipe is accessible via user's outlet hierarchy
+
+        Args:
+            recipe: The recipe to check
+            user_id: The user ID (used for ownership check)
+            outlet_accessible_ids: Optional set of recipe IDs accessible via outlet
+
+        Returns:
+            True if user is authorized, False otherwise
+        """
         if recipe.is_public:
             return True
         if user_id is not None and recipe.owner_id == user_id:
+            return True
+        if outlet_accessible_ids and recipe.id in outlet_accessible_ids:
             return True
         return False
 
@@ -363,12 +444,14 @@ class RecipeService:
         This traverses both up (to find ancestors) and down (to find descendants)
         to return the complete version tree.
 
-        If user_id is provided, recipes are filtered based on ownership:
-        - If user_id matches owner_id OR recipe is public: full recipe data is returned
-        - Otherwise: a masked recipe with only id, root_id, version, and status is returned
+        If user_id is provided, recipes are filtered based on:
+        - Recipe ownership (owner_id matches user_id)
+        - Recipe is public (is_public == True)
+        - Recipe is accessible via user's outlet hierarchy (user's outlet or parent outlet if location)
 
-        If a recipe's parent is unauthorized, the masked recipe links to the last
-        authorized ancestor in the tree.
+        Full recipe data is returned for authorized recipes. Unauthorized recipes are returned
+        as masked recipes with only id, root_id, version, and status. If a recipe's parent is
+        unauthorized, the masked recipe links to the last authorized ancestor in the tree.
 
         Returns a list of recipes ordered by version number (ascending).
         """
@@ -417,12 +500,15 @@ class RecipeService:
         if user_id is None:
             return all_recipes
 
+        # Get recipes accessible via user's outlet hierarchy
+        outlet_accessible_ids = self._get_outlet_accessible_recipe_ids(user_id, tree_ids)
+
         # Build lookup structures in a single pass
         recipe_map: dict[int, Recipe] = {}
         authorized_ids: set[int] = set()
         for r in all_recipes:
             recipe_map[r.id] = r
-            if self._is_recipe_authorized(r, user_id):
+            if self._is_recipe_authorized(r, user_id, outlet_accessible_ids):
                 authorized_ids.add(r.id)
 
         # Memoized ancestor lookup to avoid redundant traversals

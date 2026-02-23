@@ -150,6 +150,10 @@ export async function getRecipe(id: number): Promise<Recipe> {
   return fetchApi<Recipe>(`/recipes/${id}`);
 }
 
+export async function getRecipeForTasting(id: number): Promise<Recipe> {
+  return fetchApi<Recipe>(`/recipes/tasting/${id}`);
+}
+
 export async function createRecipe(data: CreateRecipeRequest): Promise<Recipe> {
   return fetchApi<Recipe>('/recipes', {
     method: 'POST',
@@ -478,6 +482,12 @@ export async function getSessionRecipes(
   sessionId: number
 ): Promise<RecipeTasting[]> {
   return fetchApi<RecipeTasting[]>(`/tasting-sessions/${sessionId}/recipes`);
+}
+
+export async function getSessionRecipesFull(
+  sessionId: number
+): Promise<Recipe[]> {
+  return fetchApi<Recipe[]>(`/tasting-sessions/${sessionId}/recipes-full`);
 }
 
 export async function addRecipeToSession(

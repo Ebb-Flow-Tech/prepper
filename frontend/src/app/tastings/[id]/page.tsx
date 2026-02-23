@@ -22,13 +22,14 @@ import {
   useUpdateTastingSession,
   useDeleteTastingSession,
   useSessionRecipes,
+  useSessionRecipesFull,
   useAddRecipeToSession,
   useRemoveRecipeFromSession,
   useSessionIngredients,
   useAddIngredientToSession,
   useRemoveIngredientFromSession,
 } from '@/lib/hooks';
-import { useRecipes, useIngredients } from '@/lib/hooks';
+import { useIngredients } from '@/lib/hooks';
 import {
   Button,
   Skeleton,
@@ -647,7 +648,7 @@ export default function TastingSessionDetailPage() {
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
-  const { data: recipes } = useRecipes();
+  const { data: recipes } = useSessionRecipesFull(sessionId);
   const { data: sessionIngredients, isLoading: ingredientsLoading } = useSessionIngredients(sessionId);
   const { data: ingredients } = useIngredients();
 

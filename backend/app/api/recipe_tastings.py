@@ -1,10 +1,10 @@
 """Recipe-tasting session relationship API routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.api.deps import get_session
-from app.models import RecipeTasting, RecipeTastingCreate
+from app.models import Recipe, RecipeTasting, RecipeTastingCreate
 from app.domain import RecipeTastingService
 
 
@@ -22,6 +22,26 @@ def get_session_recipes(
     """Get all recipes associated with a tasting session."""
     service = RecipeTastingService(session)
     return service.get_recipes_for_session(session_id)
+
+
+@router.get(
+    "/{session_id}/recipes-full",
+    response_model=list[Recipe],
+)
+def get_session_recipes_full(
+    session_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get all recipes associated with a tasting session with full details.
+
+    No access control - returns all recipes in the session regardless of user permissions.
+    Used for displaying recipes in tasting session context.
+    """
+    # Join RecipeTasting with Recipe to get full recipe details
+    statement = select(Recipe).join(RecipeTasting).where(
+        RecipeTasting.tasting_session_id == session_id
+    )
+    return list(session.exec(statement).all())
 
 
 @router.post(

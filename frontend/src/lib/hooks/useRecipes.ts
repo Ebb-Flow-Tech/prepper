@@ -19,6 +19,14 @@ export function useRecipe(id: number | null) {
   });
 }
 
+export function useRecipeForTasting(id: number | null) {
+  return useQuery({
+    queryKey: ['recipe-for-tasting', id],
+    queryFn: () => api.getRecipeForTasting(id!),
+    enabled: id !== null,
+  });
+}
+
 export function useCreateRecipe() {
   const queryClient = useQueryClient();
 

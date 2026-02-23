@@ -1,15 +1,18 @@
 """Tasting notes API routes (nested under sessions)."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.api.deps import get_session
+from app.api.deps import get_current_user, get_session
+from app.domain import TastingNoteService, TastingSessionService
 from app.models import (
+    RecipeOutlet,
     TastingNoteCreate,
-    TastingNoteUpdate,
     TastingNoteRead,
+    TastingNoteUpdate,
+    User,
+    UserType,
 )
-from app.domain import TastingSessionService, TastingNoteService
 
 
 router = APIRouter()
@@ -19,8 +22,15 @@ router = APIRouter()
 def list_session_notes(
     session_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """List all notes for a tasting session."""
+    """List all notes for a tasting session.
+
+    Access control:
+    - Admin users: can access any tasting session notes
+    - Other users: can access notes if they have access to the recipes in the session
+      based on ownership, public status, or outlet hierarchy
+    """
     session_service = TastingSessionService(session)
     tasting_session = session_service.get(session_id)
     if not tasting_session:
@@ -28,8 +38,61 @@ def list_session_notes(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting session not found",
         )
+
     note_service = TastingNoteService(session)
-    return note_service.get_for_session(session_id)
+    notes = note_service.get_for_session(session_id)
+
+    # Non-admin users: filter notes based on recipe access
+    if current_user.user_type != UserType.ADMIN:
+        from app.domain.outlet_service import OutletService
+        from app.domain.recipe_service import RecipeService
+
+        recipe_service = RecipeService(session)
+        filtered_notes = []
+
+        for note in notes:
+            if not note.recipe_id:
+                # If note doesn't have recipe_id, include it
+                filtered_notes.append(note)
+                continue
+
+            recipe = recipe_service.get_recipe(note.recipe_id)
+            if not recipe:
+                continue
+
+            can_access = False
+
+            # User's own recipe
+            if recipe.owner_id == current_user.id:
+                can_access = True
+            # Public recipe
+            elif recipe.is_public:
+                can_access = True
+            # Recipe from user's outlet
+            elif current_user.outlet_id:
+                outlet_service = OutletService(session)
+                user_outlet = outlet_service.get_outlet(current_user.outlet_id)
+                if user_outlet:
+                    accessible_outlet_ids = {current_user.outlet_id}
+                    # Location users can also see recipes from their parent brand
+                    # Brand users can ONLY see their own outlet's recipes (not children)
+                    if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
+                        accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+
+                    # Check if recipe is assigned to any accessible outlet
+                    statement = select(RecipeOutlet).where(
+                        RecipeOutlet.recipe_id == recipe.id,
+                        RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+                        RecipeOutlet.is_active,
+                    )
+                    can_access = bool(session.exec(statement).first())
+
+            if can_access:
+                filtered_notes.append(note)
+
+        return filtered_notes
+
+    return notes
 
 
 @router.post(

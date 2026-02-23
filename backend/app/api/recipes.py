@@ -2,11 +2,21 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.api.deps import get_session, get_current_user
-from app.models import Recipe, RecipeCreate, RecipeUpdate, RecipeStatus, RecipeStatusUpdate, User, UserType
+from app.api.deps import get_current_user, get_session
 from app.domain import RecipeService
+from app.domain.outlet_service import OutletService
+from app.models import (
+    Recipe,
+    RecipeCreate,
+    RecipeOutlet,
+    RecipeStatus,
+    RecipeStatusUpdate,
+    RecipeUpdate,
+    User,
+    UserType,
+)
 
 
 class ForkRecipeRequest(BaseModel):
@@ -44,6 +54,26 @@ def list_recipes(
     return service.list_recipes(status=status, current_user=current_user)
 
 
+@router.get("/tasting/{recipe_id}", response_model=Recipe)
+def get_recipe_for_tasting(
+    recipe_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get a recipe for viewing in a tasting session.
+
+    No access control - users can view recipe details while in a tasting session
+    regardless of their normal recipe access level.
+    """
+    service = RecipeService(session)
+    recipe = service.get_recipe(recipe_id)
+    if not recipe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipe not found",
+        )
+    return recipe
+
+
 @router.get("/{recipe_id}", response_model=Recipe)
 def get_recipe(
     recipe_id: int,
@@ -54,11 +84,12 @@ def get_recipe(
 
     Access control:
     - Admin users: can access any recipe
-    - Normal users: can only access recipes they created, public recipes, or recipes from their outlet
+    - Recipe owner: can always access their own recipe
+    - Public recipes: accessible to all authenticated users
+    - Outlet-based access:
+      - Location users can access recipes from their own outlet AND their parent brand outlet
+      - Brand users can only access recipes from their own brand outlet (not from child locations)
     """
-    from app.domain.outlet_service import OutletService
-    from sqlmodel import select
-
     service = RecipeService(session)
     recipe = service.get_recipe(recipe_id)
     if not recipe:
@@ -69,33 +100,64 @@ def get_recipe(
 
     # Check access control for normal users
     if current_user.user_type != UserType.ADMIN:
+        print(f"\n=== ACCESS CONTROL DEBUG ===")
+        print(f"current_user.id: {current_user.id}")
+        print(f"current_user.user_type: {current_user.user_type}")
+        print(f"current_user.outlet_id: {current_user.outlet_id}")
+        print(f"recipe.id: {recipe.id}")
+        print(f"recipe.owner_id: {recipe.owner_id}")
+        print(f"recipe.is_public: {recipe.is_public}")
+
         can_access = False
 
         # User's own recipe
         if recipe.owner_id == current_user.id:
+            print(f"✓ User owns recipe")
             can_access = True
         # Public recipe
         elif recipe.is_public:
+            print(f"✓ Recipe is public")
             can_access = True
         # Recipe from user's outlet
         elif current_user.outlet_id:
+            print(f"\nChecking outlet access...")
             outlet_service = OutletService(session)
             user_outlet = outlet_service.get_outlet(current_user.outlet_id)
+            print(f"user_outlet: {user_outlet}")
+
             if user_outlet:
+                print(f"user_outlet.outlet_type: {user_outlet.outlet_type.value}")
+                print(f"user_outlet.parent_outlet_id: {user_outlet.parent_outlet_id}")
+
                 accessible_outlet_ids = {current_user.outlet_id}
                 # Location users can also see recipes from their parent brand
+                # Brand users can ONLY see their own outlet's recipes (not children)
                 if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
                     accessible_outlet_ids.add(user_outlet.parent_outlet_id)
 
-                # Check if recipe is assigned to any accessible outlet
-                from app.models import RecipeOutlet
+                print(f"accessible_outlet_ids: {accessible_outlet_ids}")
 
+                # Check if recipe is assigned to any accessible outlet
                 statement = select(RecipeOutlet).where(
                     RecipeOutlet.recipe_id == recipe.id,
                     RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-                    RecipeOutlet.is_active == True,
+                    RecipeOutlet.is_active,
                 )
-                can_access = bool(session.exec(statement).first())
+                recipe_outlet = session.exec(statement).first()
+                print(f"recipe_outlet found: {recipe_outlet}")
+                if recipe_outlet:
+                    print(f"  - recipe_outlet.recipe_id: {recipe_outlet.recipe_id}")
+                    print(f"  - recipe_outlet.outlet_id: {recipe_outlet.outlet_id}")
+                    print(f"  - recipe_outlet.is_active: {recipe_outlet.is_active}")
+
+                can_access = bool(recipe_outlet)
+            else:
+                print(f"✗ User outlet not found")
+        else:
+            print(f"✗ User has no outlet_id")
+
+        print(f"final can_access: {can_access}")
+        print(f"===========================\n")
 
         if not can_access:
             raise HTTPException(
