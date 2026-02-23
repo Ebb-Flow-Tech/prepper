@@ -126,10 +126,23 @@ class TastingNoteService:
     def get_recipes_with_feedback(self, user_id: Optional[str] = None) -> list[Recipe]:
         """Get all unique recipes that have at least one tasting note.
 
-        Only returns recipes that are public or owned by the user, and have not been started in R&D.
+        Only returns recipes that are accessible to the user:
+        - Public recipes
+        - Recipes owned by the user
+        - Recipes accessible via user's outlet hierarchy (location users can see parent brand recipes)
+
         Filters by rnd_started = False or rnd_started = None (for backward compatibility with old data).
+
+        Args:
+            user_id: The user ID to check access for
+
+        Returns:
+            List of recipes with tasting feedback that the user can access
         """
         from sqlalchemy import or_
+        from app.models import User, RecipeOutlet
+        from app.domain.outlet_service import OutletService
+        from app.domain.user_service import UserService
 
         # Get distinct recipe IDs from tasting notes using subquery
         recipe_ids_with_notes = (
@@ -138,24 +151,92 @@ class TastingNoteService:
             .scalar_subquery()
         )
 
+        # Start with base query: recipes with feedback that haven't started R&D
         statement = (
             select(Recipe)
             .where(Recipe.id.in_(recipe_ids_with_notes))
-            .where(
-                or_(
-                    Recipe.owner_id == user_id,
-                    Recipe.is_public == True
-                )
-            )
             .where(
                 or_(
                     Recipe.rnd_started == False,
                     Recipe.rnd_started == None
                 )
             )
-            .order_by(Recipe.name)
         )
-        return list(self.session.exec(statement).all())
+
+        # Get all recipes with feedback first
+        all_recipes = list(self.session.exec(statement).all())
+
+        # If no user_id, return only public recipes
+        if not user_id:
+            return [r for r in all_recipes if r.is_public]
+
+        # Get recipes accessible via user's outlet hierarchy
+        outlet_accessible_ids = self._get_outlet_accessible_recipe_ids(user_id, {r.id for r in all_recipes})
+
+        # Filter recipes: public OR owned by user OR accessible via outlet
+        filtered_recipes = [
+            r for r in all_recipes
+            if r.is_public or r.owner_id == user_id or r.id in outlet_accessible_ids
+        ]
+
+        return sorted(filtered_recipes, key=lambda r: r.name)
+
+    def _get_outlet_accessible_recipe_ids(self, user_id: str, recipe_ids: set[int]) -> set[int]:
+        """Get recipe IDs accessible to user via outlet hierarchy.
+
+        Steps:
+        1. Look up user to get their outlet_id
+        2. If user has outlet_id, determine outlet type (brand/location)
+        3. Build accessible_outlet_ids:
+           - Always include user's own outlet
+           - If outlet is "location" and has parent_outlet_id, also include parent
+           - If outlet is "brand", only include own outlet (no children)
+        4. Batch-query RecipeOutlet for recipes in recipe_ids assigned to accessible_outlet_ids
+        5. Return set of accessible recipe IDs
+
+        Args:
+            user_id: The user ID to check
+            recipe_ids: Set of recipe IDs to filter from
+
+        Returns:
+            Set of recipe IDs accessible via outlet
+        """
+        from app.models import User, RecipeOutlet
+        from app.domain.outlet_service import OutletService
+        from app.domain.user_service import UserService
+
+        # Look up user to get outlet assignment
+        user_service = UserService(self.session)
+        user = user_service.get_user(user_id)
+
+        # If user not found or has no outlet, return empty set
+        if not user or not user.outlet_id:
+            return set()
+
+        # Get user's outlet to determine type
+        outlet_service = OutletService(self.session)
+        user_outlet = outlet_service.get_outlet(user.outlet_id)
+
+        if not user_outlet:
+            return set()
+
+        # Build accessible outlet IDs based on hierarchy
+        accessible_outlet_ids = {user.outlet_id}
+
+        # Location users can also see recipes from their parent brand
+        if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
+            accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+        # Brand users can only see their own outlet (not children)
+
+        # Query RecipeOutlet for recipes in recipe_ids assigned to accessible outlets
+        statement = select(RecipeOutlet).where(
+            RecipeOutlet.recipe_id.in_(recipe_ids),
+            RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+            RecipeOutlet.is_active,
+        )
+        recipe_outlets = self.session.exec(statement).all()
+
+        return {ro.recipe_id for ro in recipe_outlets if ro.recipe_id is not None}
 
     def get_recipe_summary(self, recipe_id: int) -> RecipeTastingSummary:
         """Get aggregated tasting data for a recipe."""
