@@ -26,11 +26,16 @@ def create_supplier(
 
 @router.get("", response_model=list[Supplier])
 def list_suppliers(
+    active_only: bool = True,
     session: Session = Depends(get_session),
 ):
-    """List all suppliers."""
+    """List all suppliers.
+
+    Args:
+        active_only: If True, only return active suppliers (default: True)
+    """
     service = SupplierService(session)
-    return service.list_suppliers()
+    return service.list_suppliers(active_only=active_only)
 
 
 @router.get("/{supplier_id}", response_model=Supplier)
@@ -58,6 +63,22 @@ def update_supplier(
     """Update a supplier."""
     service = SupplierService(session)
     supplier = service.update_supplier(supplier_id, data)
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found",
+        )
+    return supplier
+
+
+@router.patch("/{supplier_id}/deactivate", response_model=Supplier)
+def deactivate_supplier(
+    supplier_id: int,
+    session: Session = Depends(get_session),
+):
+    """Soft-delete a supplier by deactivating it."""
+    service = SupplierService(session)
+    supplier = service.deactivate_supplier(supplier_id)
     if not supplier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

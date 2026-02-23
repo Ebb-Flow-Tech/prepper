@@ -26,9 +26,15 @@ class SupplierService:
         self.session.refresh(supplier)
         return supplier
 
-    def list_suppliers(self) -> list[Supplier]:
-        """List all suppliers."""
+    def list_suppliers(self, active_only: bool = True) -> list[Supplier]:
+        """List all suppliers.
+
+        Args:
+            active_only: If True, only return active suppliers (is_active=True)
+        """
         statement = select(Supplier)
+        if active_only:
+            statement = statement.where(Supplier.is_active == True)
         return list(self.session.exec(statement).all())
 
     def get_supplier(self, supplier_id: int) -> Supplier | None:
@@ -47,6 +53,19 @@ class SupplierService:
         for key, value in update_data.items():
             setattr(supplier, key, value)
 
+        supplier.updated_at = datetime.utcnow()
+        self.session.add(supplier)
+        self.session.commit()
+        self.session.refresh(supplier)
+        return supplier
+
+    def deactivate_supplier(self, supplier_id: int) -> Supplier | None:
+        """Soft-delete a supplier by setting is_active to False."""
+        supplier = self.get_supplier(supplier_id)
+        if not supplier:
+            return None
+
+        supplier.is_active = False
         supplier.updated_at = datetime.utcnow()
         self.session.add(supplier)
         self.session.commit()

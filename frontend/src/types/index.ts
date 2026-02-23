@@ -405,6 +405,7 @@ export interface Supplier {
   address: string | null;
   phone_number: string | null;
   email: string | null;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }

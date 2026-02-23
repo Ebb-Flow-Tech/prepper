@@ -6,7 +6,7 @@ import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus, MoreV
 import {
   useSupplier,
   useUpdateSupplier,
-  useDeleteSupplier,
+  useDeactivateSupplier,
   useSupplierIngredients,
   useIngredients,
   useAddSupplierIngredient,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/hooks';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, ConfirmModal, EditableCell, Input, Modal, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateSupplierIngredientRequest } from '@/types';
 
@@ -42,12 +42,11 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const { data: supplierIngredients = [] } = useSupplierIngredients(supplierId);
 
   const updateSupplierMutation = useUpdateSupplier();
-  const deleteSupplierMutation = useDeleteSupplier();
+  const deactivateSupplierMutation = useDeactivateSupplier();
   const addIngredientMutation = useAddSupplierIngredient();
   const updateIngredientMutation = useUpdateSupplierIngredient();
   const removeIngredientMutation = useRemoveSupplierIngredient();
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<number | null>(null);
   const [editData, setEditData] = useState<Record<number, UpdateSupplierIngredientRequest>>({});
@@ -71,18 +70,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     );
   };
 
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    deleteSupplierMutation.mutate(supplierId, {
+  const handleArchive = () => {
+    deactivateSupplierMutation.mutate(supplierId, {
       onSuccess: () => {
-        toast.success('Supplier deleted');
-        setShowDeleteModal(false);
+        toast.success('Supplier archived');
         router.push('/suppliers');
       },
-      onError: () => toast.error('Failed to delete supplier'),
+      onError: () => toast.error('Failed to archive supplier'),
     });
   };
 
@@ -226,23 +220,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleDeleteClick}
-                          disabled={deleteSupplierMutation.isPending}
+                          onClick={handleArchive}
+                          disabled={deactivateSupplierMutation.isPending}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
+                          Archive
                         </Button>
-                        <ConfirmModal
-                          isOpen={showDeleteModal}
-                          onClose={() => setShowDeleteModal(false)}
-                          onConfirm={handleDeleteConfirm}
-                          title="Delete Supplier"
-                          message={`Are you sure you want to delete "${supplier.name}"? This action cannot be undone.`}
-                          confirmLabel="Delete"
-                          cancelLabel="Cancel"
-                          variant="destructive"
-                        />
                       </div>
                     </div>
 

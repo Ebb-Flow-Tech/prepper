@@ -3,8 +3,8 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
-import { useSuppliers, useUpdateSupplier, useDeleteSupplier } from '@/lib/hooks';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ConfirmModal, ViewToggle } from '@/components/ui';
+import { useSuppliers, useUpdateSupplier, useDeactivateSupplier } from '@/lib/hooks';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle } from '@/components/ui';
 import { AddSupplierModal, SupplierListRow } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
@@ -13,13 +13,12 @@ type ViewType = 'grid' | 'list';
 
 function SupplierCard({ supplier }: { supplier: Supplier }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editName, setEditName] = useState(supplier.name);
   const [editAddress, setEditAddress] = useState(supplier.address || '');
   const [editPhone, setEditPhone] = useState(supplier.phone_number || '');
   const [editEmail, setEditEmail] = useState(supplier.email || '');
   const updateSupplier = useUpdateSupplier();
-  const deleteSupplier = useDeleteSupplier();
+  const deactivateSupplier = useDeactivateSupplier();
 
   const handleSave = () => {
     if (!editName.trim()) {
@@ -64,17 +63,12 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
     setIsEditing(false);
   };
 
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    deleteSupplier.mutate(supplier.id, {
+  const handleArchive = () => {
+    deactivateSupplier.mutate(supplier.id, {
       onSuccess: () => {
-        toast.success('Supplier deleted');
-        setShowDeleteModal(false);
+        toast.success('Supplier archived');
       },
-      onError: () => toast.error('Failed to delete supplier'),
+      onError: () => toast.error('Failed to archive supplier'),
     });
   };
 
@@ -112,21 +106,12 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleDeleteClick}
-              disabled={deleteSupplier.isPending}
+              onClick={handleArchive}
+              disabled={deactivateSupplier.isPending}
+              title="Archive supplier"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <ConfirmModal
-              isOpen={showDeleteModal}
-              onClose={() => setShowDeleteModal(false)}
-              onConfirm={handleDeleteConfirm}
-              title="Delete Supplier"
-              message={`Are you sure you want to delete "${supplier.name}"? This action cannot be undone.`}
-              confirmLabel="Delete"
-              cancelLabel="Cancel"
-              variant="destructive"
-            />
           </div>
         )}
       </CardHeader>
@@ -193,7 +178,8 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
 }
 
 export default function SuppliersPage() {
-  const { data: suppliers, isLoading, error } = useSuppliers();
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: suppliers, isLoading, error } = useSuppliers(showArchived);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<ViewType>('grid');
@@ -242,7 +228,20 @@ export default function SuppliersPage() {
               onClear={() => setSearch('')}
             />
           </div>
-          <ViewToggle view={view} onViewChange={setView} />
+
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="rounded border-zinc-300 dark:border-zinc-700"
+              />
+              Show archived
+            </label>
+
+            <ViewToggle view={view} onViewChange={setView} />
+          </div>
         </div>
 
         {/* Loading State */}

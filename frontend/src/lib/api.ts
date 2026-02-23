@@ -632,8 +632,9 @@ export async function getIngredientTastingSummary(
 
 // ============ Suppliers ============
 
-export async function getSuppliers(): Promise<Supplier[]> {
-  return fetchApi<Supplier[]>('/suppliers');
+export async function getSuppliers(activeOnly: boolean = true): Promise<Supplier[]> {
+  const query = activeOnly ? '' : '?active_only=false';
+  return fetchApi<Supplier[]>(`/suppliers${query}`);
 }
 
 export async function getSupplier(id: number): Promise<Supplier> {
@@ -659,9 +660,9 @@ export async function updateSupplier(
   });
 }
 
-export async function deleteSupplier(id: number): Promise<void> {
-  return fetchApi<void>(`/suppliers/${id}`, {
-    method: 'DELETE',
+export async function deactivateSupplier(id: number): Promise<Supplier> {
+  return fetchApi<Supplier>(`/suppliers/${id}/deactivate`, {
+    method: 'PATCH',
   });
 }
 

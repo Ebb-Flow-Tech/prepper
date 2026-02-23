@@ -4,10 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type { CreateSupplierRequest, UpdateSupplierRequest, UpdateSupplierIngredientRequest } from '@/types';
 
-export function useSuppliers() {
+export function useSuppliers(showArchived: boolean = false) {
+  const activeOnly = !showArchived;
   return useQuery({
-    queryKey: ['suppliers'],
-    queryFn: api.getSuppliers,
+    queryKey: ['suppliers', { activeOnly }],
+    queryFn: () => api.getSuppliers(activeOnly),
   });
 }
 
@@ -42,11 +43,11 @@ export function useUpdateSupplier() {
   });
 }
 
-export function useDeleteSupplier() {
+export function useDeactivateSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.deleteSupplier(id),
+    mutationFn: (id: number) => api.deactivateSupplier(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },

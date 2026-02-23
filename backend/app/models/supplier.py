@@ -22,6 +22,7 @@ class Supplier(SupplierBase, table=True):
     __tablename__ = "suppliers"
 
     id: int | None = Field(default=None, primary_key=True)
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -42,3 +43,4 @@ class SupplierUpdate(SQLModel):
     address: str | None = None
     phone_number: str | None = None
     email: str | None = None
+    is_active: bool | None = None
