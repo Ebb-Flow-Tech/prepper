@@ -856,6 +856,27 @@ export async function deleteIngredientAllergen(linkId: number): Promise<void> {
   });
 }
 
+// ============ Recipe Allergens ============
+
+export async function getRecipeAllergens(recipeId: number): Promise<Allergen[]> {
+  return fetchApi<Allergen[]>(`/recipes/${recipeId}/allergens`);
+}
+
+export async function getRecipeAllergensBatch(
+  recipeIds: number[]
+): Promise<Map<number, Allergen[]>> {
+  if (recipeIds.length === 0) return new Map();
+  const data = await fetchApi<Record<string, Allergen[]>>('/recipes/allergens/batch', {
+    method: 'POST',
+    body: JSON.stringify({ recipe_ids: recipeIds }),
+  });
+  const map = new Map<number, Allergen[]>();
+  for (const [id, allergens] of Object.entries(data)) {
+    map.set(parseInt(id, 10), allergens);
+  }
+  return map;
+}
+
 // ============ Outlets ============
 
 export async function getOutlets(isActive: boolean | null = null): Promise<Outlet[]> {

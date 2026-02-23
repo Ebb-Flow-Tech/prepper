@@ -3,13 +3,13 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch } from '@/lib/hooks';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch, useRecipeAllergensBatch } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
 import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
 import { useAppState } from '@/lib/store';
-import type { Recipe, RecipeStatus } from '@/types';
+import type { Recipe, RecipeStatus, Allergen } from '@/types';
 
 type GroupByOption = 'none' | 'status' | 'category';
 type StatusFilter = 'all' | RecipeStatus;
@@ -135,6 +135,11 @@ export function RecipeManagementTab() {
     recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
   );
 
+  // Fetch allergens for all recipes (with TanStack Query caching)
+  const { data: recipeAllergens = new Map() } = useRecipeAllergensBatch(
+    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
+  );
+
   // Build a map of recipe_id -> category_ids[] for efficient filtering
   const recipeCategoryMap = useMemo(() => {
     const map = new Map<number, number[]>();
@@ -178,6 +183,12 @@ export function RecipeManagementTab() {
     return categoryIds
       .map((catId) => categoryNameMap.get(catId))
       .filter((name): name is string => name !== undefined);
+  };
+
+  // Get allergen names for a recipe
+  const getAllergenNamesForRecipe = (recipeId: number): string[] => {
+    const allergens = recipeAllergens.get(recipeId) || [];
+    return allergens.map((allergen: Allergen) => allergen.name);
   };
 
   // Filter and group recipes
@@ -335,6 +346,7 @@ export function RecipeManagementTab() {
                       isOwned={userId !== null && recipe.owner_id === userId}
                       outletNames={getOutletNamesForRecipe(recipe.id)}
                       categoryNames={getCategoryNamesForRecipe(recipe.id)}
+                      allergenNames={getAllergenNamesForRecipe(recipe.id)}
                     />
                   ))}
                 </GroupSection>
@@ -345,6 +357,7 @@ export function RecipeManagementTab() {
                       key={recipe.id}
                       recipe={recipe}
                       isOwned={userId !== null && recipe.owner_id === userId}
+                      allergenNames={getAllergenNamesForRecipe(recipe.id)}
                     />
                   ))}
                 </ListSection>

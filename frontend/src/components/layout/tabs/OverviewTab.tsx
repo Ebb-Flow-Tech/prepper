@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown, Plus } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories, useRecipeAllergens } from '@/lib/hooks';
 import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
@@ -69,6 +69,7 @@ export function OverviewTab() {
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(selectedRecipeId);
   const { data: allCategories = [] } = useRecipeCategories();
+  const { data: allergens = [] } = useRecipeAllergens(selectedRecipeId);
   const { data: owner } = useUser(recipe?.owner_id);
   const { data: creator } = useUser(recipe?.created_by);
   const { mutate: updateRecipe, isPending: isUpdating } = useUpdateRecipe();
@@ -245,6 +246,16 @@ export function OverviewTab() {
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Allergens */}
+                    {allergens.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="text-xs font-medium text-zinc-500">Allergens:</span>
+                        {allergens.map((allergen) => (
+                          <Badge key={allergen.id} variant="warning">{allergen.name}</Badge>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="mt-4 space-y-1 text-sm text-zinc-500 dark:text-zinc-400">
                       <div>

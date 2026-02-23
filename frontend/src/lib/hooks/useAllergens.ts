@@ -12,6 +12,8 @@ import {
   getIngredientsByAllergen,
   addIngredientAllergen,
   deleteIngredientAllergen,
+  getRecipeAllergens,
+  getRecipeAllergensBatch,
 } from '../api';
 import { Allergen, IngredientAllergen, AllergenCreate, AllergenUpdate, IngredientAllergenCreate } from '@/types';
 
@@ -111,5 +113,23 @@ export function useDeleteIngredientAllergen() {
       queryClient.invalidateQueries({ queryKey: ['ingredient-allergens'] });
       queryClient.invalidateQueries({ queryKey: ['allergen-ingredients'] });
     },
+  });
+}
+
+// ============ Recipe-Allergen Hooks ============
+
+export function useRecipeAllergens(recipeId: number | null) {
+  return useQuery<Allergen[]>({
+    queryKey: ['recipe-allergens', recipeId],
+    queryFn: () => getRecipeAllergens(recipeId!),
+    enabled: recipeId !== null,
+  });
+}
+
+export function useRecipeAllergensBatch(recipeIds: number[] | null) {
+  return useQuery({
+    queryKey: ['recipe-allergens-batch', recipeIds ? [...recipeIds].sort() : null],
+    queryFn: () => getRecipeAllergensBatch(recipeIds!),
+    enabled: recipeIds !== null && recipeIds.length > 0,
   });
 }

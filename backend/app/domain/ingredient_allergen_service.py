@@ -7,6 +7,7 @@ from app.models import (
     Allergen,
     IngredientAllergen,
     IngredientAllergenCreate,
+    RecipeIngredient,
 )
 
 
@@ -80,3 +81,56 @@ class IngredientAllergenService:
         self.session.delete(link)
         self.session.commit()
         return True
+
+    def get_allergens_for_recipe(self, recipe_id: int) -> list[Allergen]:
+        """Get unique, consolidated allergens for all ingredients in a recipe.
+
+        Returns only active allergens, sorted by name, with no duplicates.
+        """
+        statement = (
+            select(Allergen)
+            .join(IngredientAllergen, IngredientAllergen.allergen_id == Allergen.id)
+            .join(RecipeIngredient, RecipeIngredient.ingredient_id == IngredientAllergen.ingredient_id)
+            .where(
+                RecipeIngredient.recipe_id == recipe_id,
+                Allergen.is_active == True,
+            )
+            .distinct()
+            .order_by(Allergen.name)
+        )
+        return list(self.session.exec(statement).all())
+
+    def get_allergens_for_recipes_batch(self, recipe_ids: list[int]) -> dict[int, list[Allergen]]:
+        """Batch version — returns map of recipe_id -> list[Allergen].
+
+        Each recipe maps to its unique, sorted allergens with no duplicates.
+        Recipes with no allergens map to empty list.
+        """
+        # Initialize all requested recipe_ids with empty list
+        result: dict[int, list[Allergen]] = {rid: [] for rid in recipe_ids}
+        if not recipe_ids:
+            return result
+
+        # Build tuples of (recipe_id, Allergen) via JOIN
+        statement = (
+            select(RecipeIngredient.recipe_id, Allergen)
+            .join(IngredientAllergen, IngredientAllergen.allergen_id == Allergen.id)
+            .join(RecipeIngredient, RecipeIngredient.ingredient_id == IngredientAllergen.ingredient_id)
+            .where(
+                RecipeIngredient.recipe_id.in_(recipe_ids),
+                Allergen.is_active == True,
+            )
+        )
+        rows = self.session.exec(statement).all()
+
+        # Deduplicate per recipe
+        seen: dict[int, set[int]] = {rid: set() for rid in recipe_ids}
+        for recipe_id, allergen in rows:
+            if allergen.id not in seen[recipe_id]:
+                seen[recipe_id].add(allergen.id)
+                result[recipe_id].append(allergen)
+
+        # Sort each recipe's list by name
+        for rid in result:
+            result[rid].sort(key=lambda a: a.name)
+        return result

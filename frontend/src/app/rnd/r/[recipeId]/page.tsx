@@ -37,13 +37,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo } from 'react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets, useRecipeCategoryLinks, useRecipeCategories } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useRecipeVersions, useOutlets, useRecipeCategoryLinks, useRecipeCategories, useRecipeAllergens } from '@/lib/hooks';
 import { useRecipeTastingNotes, useRecipeTastingSummary, useUpdateTastingNote } from '@/lib/hooks/useTastings';
 import { useRecipeOutlets } from '@/lib/hooks/useRecipeOutlets';
 import { useAppState } from '@/lib/store';
 import { Badge, Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { formatCurrency, formatTimer, cn } from '@/lib/utils';
-import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet, RecipeRecipeCategory, RecipeCategory } from '@/types';
+import type { Recipe, RecipeStatus, TastingDecision, TastingNoteWithRecipe, RecipeIngredient, CostingResult, SubRecipe, RecipeTastingSummary, RecipeOutlet, Outlet, RecipeRecipeCategory, RecipeCategory, Allergen } from '@/types';
 
 interface RndRecipePageProps {
   params: Promise<{ recipeId: string }>;
@@ -408,6 +408,7 @@ function OverviewTab({
   outletMap,
   categoryLinks,
   allCategories,
+  allergens,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[] | undefined;
@@ -421,6 +422,7 @@ function OverviewTab({
   outletMap: Map<number, Outlet>;
   categoryLinks: RecipeRecipeCategory[] | undefined;
   allCategories: RecipeCategory[] | undefined;
+  allergens: Allergen[] | undefined;
 }) {
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
   const [isTastingHistoryOpen, setIsTastingHistoryOpen] = useState(false);
@@ -482,7 +484,7 @@ function OverviewTab({
                   Yield: {recipe.yield_quantity} {recipe.yield_unit}
                 </p>
 
-                {(outlets && outlets.length > 0) || (categoryLinks && categoryLinks.length > 0) ? (
+                {(outlets && outlets.length > 0) || (categoryLinks && categoryLinks.length > 0) || (allergens && allergens.length > 0) ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {outlets && outlets.map((recipeOutlet) => {
                       const outlet = outletMap.get(recipeOutlet.outlet_id);
@@ -500,6 +502,11 @@ function OverviewTab({
                         </Badge>
                       ) : null;
                     })}
+                    {allergens && allergens.map((allergen) => (
+                      <Badge key={allergen.id} variant="warning" className="text-xs">
+                        {allergen.name}
+                      </Badge>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -995,6 +1002,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: allOutlets } = useOutlets();
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(recipeId);
   const { data: allCategories = [] } = useRecipeCategories();
+  const { data: allergens = [] } = useRecipeAllergens(recipeId);
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -1089,6 +1097,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                 outletMap={outletMap}
                 categoryLinks={categoryLinks}
                 allCategories={allCategories}
+                allergens={allergens}
               />
             )}
 

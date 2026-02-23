@@ -26,7 +26,7 @@ import {
   useTastingNoteImages,
   useSyncTastingNoteImages,
 } from '@/lib/hooks/useTastings';
-import { useRecipeForTasting } from '@/lib/hooks/useRecipes';
+import { useRecipeForTasting, useRecipeAllergens } from '@/lib/hooks';
 import { ImageUploadPreview, type ImageWithId } from '@/components/tasting/ImageUploadPreview';
 import {
   Button,
@@ -458,6 +458,7 @@ export default function RecipeTastingPage() {
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: recipe, isLoading: recipeLoading } = useRecipeForTasting(recipeId);
+  const { data: allergens = [] } = useRecipeAllergens(recipeId);
   const { data: allNotes } = useSessionNotes(sessionId);
 
   const addNote = useAddNoteToSession();
@@ -594,6 +595,16 @@ export default function RecipeTastingPage() {
               </div>
             )}
           </div>
+
+          {/* Allergens */}
+          {allergens.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Allergens:</span>
+              {allergens.map((allergen) => (
+                <Badge key={allergen.id} variant="warning" className="text-xs">{allergen.name}</Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Feedback Section */}

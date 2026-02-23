@@ -11,6 +11,7 @@ interface RecipeListRowProps {
   costPerPortion?: number | null;
   isOwned?: boolean;
   href?: string;
+  allergenNames?: string[];
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -19,7 +20,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeListRow({ recipe, costPerPortion, isOwned, href }: RecipeListRowProps) {
+export function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [] }: RecipeListRowProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-2">
@@ -45,6 +46,9 @@ export function RecipeListRow({ recipe, costPerPortion, isOwned, href }: RecipeL
                 {isOwned && (
                   <Badge className="text-xs bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
                 )}
+                {allergenNames.map((name) => (
+                  <Badge key={name} variant="warning" className="text-xs">{name}</Badge>
+                ))}
               </div>
 
               <div className="text-right">

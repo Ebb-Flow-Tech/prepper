@@ -13,6 +13,7 @@ interface RecipeCardProps {
   href?: string;
   outletNames?: string[];
   categoryNames?: string[];
+  allergenNames?: string[];
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -21,7 +22,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [] }: RecipeCardProps) {
+export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [], allergenNames = [] }: RecipeCardProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
@@ -83,6 +84,20 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames 
                 <div className="flex flex-wrap gap-1">
                   {categoryNames.map((name) => (
                     <Badge key={name} variant="secondary" className="text-xs">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Allergens */}
+            {allergenNames.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Allergens</p>
+                <div className="flex flex-wrap gap-1">
+                  {allergenNames.map((name) => (
+                    <Badge key={name} variant="warning" className="text-xs">
                       {name}
                     </Badge>
                   ))}
