@@ -91,12 +91,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     } else if (!isAuthenticated && !isPublicRoute) {
       // Not logged in on protected page -> redirect to login
+      // This includes session expiration (token refresh failed)
       router.replace('/login');
     } else if (isAdminRoute && userType && userType !== 'admin') {
       // Non-admin user on admin route -> redirect to outlets
       router.replace('/outlets');
     }
-  }, [isAuthenticated, isPublicRoute, isNotFound, isAdminRoute, userType, router]);
+  }, [isAuthenticated, isPublicRoute, isAdminRoute, userType, router]);
 
   // Show nothing while redirecting
   if (isNotFound) {

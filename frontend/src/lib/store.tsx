@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { registerLogoutCallback } from '@/lib/auth-interceptor';
 
 const AUTH_STORAGE_KEY = 'prepper_auth';
 
@@ -108,6 +109,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       username: storedAuth.username
     }));
     setIsHydrated(true);
+  }, []);
+
+  // Register logout callback for auth-interceptor
+  useEffect(() => {
+    registerLogoutCallback(() => {
+      setState((prev) => ({
+        ...prev,
+        userId: null,
+        jwt: null,
+        userType: null,
+        refreshToken: null,
+        username: null
+      }));
+    });
   }, []);
 
   // Sync auth state to localStorage whenever it changes

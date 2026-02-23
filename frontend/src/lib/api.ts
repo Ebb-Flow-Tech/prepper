@@ -71,6 +71,7 @@ import type {
   RegisterRequest,
   User,
 } from '@/types';
+import { refreshAccessToken, triggerLogout, type RefreshTokenResult } from '@/lib/auth-interceptor';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -81,25 +82,44 @@ class ApiError extends Error {
   }
 }
 
+function readAuthFromStorage() {
+  if (typeof window === 'undefined') {
+    return { jwt: null, refreshToken: null };
+  }
+  try {
+    const stored = localStorage.getItem('prepper_auth');
+    if (stored) {
+      const auth = JSON.parse(stored);
+      return { jwt: auth.jwt, refreshToken: auth.refreshToken };
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { jwt: null, refreshToken: null };
+}
+
+function updateTokensInStorage(newJwt: string, newRefreshToken: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = localStorage.getItem('prepper_auth');
+    if (stored) {
+      const auth = JSON.parse(stored);
+      auth.jwt = newJwt;
+      auth.refreshToken = newRefreshToken;
+      localStorage.setItem('prepper_auth', JSON.stringify(auth));
+    }
+  } catch {
+    // Ignore parse errors
+  }
+}
+
 async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-
-  // Read JWT from localStorage for Authorization header
-  let jwt: string | null = null;
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('prepper_auth');
-      if (stored) {
-        const auth = JSON.parse(stored);
-        jwt = auth.jwt;
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
+  const { jwt, refreshToken } = readAuthFromStorage();
 
   const config: RequestInit = {
     ...options,
@@ -113,6 +133,24 @@ async function fetchApi<T>(
   const response = await fetch(url, config);
 
   if (!response.ok) {
+    // Handle 401 Unauthorized - try to refresh token
+    if (response.status === 401 && retryCount === 0 && refreshToken) {
+      console.log('Received 401 response, attempting token refresh...');
+      const result = await refreshAccessToken(refreshToken);
+
+      if (result) {
+        // Token refresh successful, update storage and retry request
+        console.log('Token refresh successful, retrying request...');
+        updateTokensInStorage(result.accessToken, result.refreshToken);
+        return fetchApi<T>(endpoint, options, retryCount + 1);
+      } else {
+        // Token refresh failed, user needs to log in again
+        console.log('Token refresh failed, logging out user...');
+        triggerLogout();
+        throw new ApiError(401, 'Session expired. Please log in again.');
+      }
+    }
+
     const errorText = await response.text();
     let errorMessage = `HTTP ${response.status}`;
 
@@ -1178,9 +1216,11 @@ export async function registerUser(data: RegisterRequest): Promise<LoginResponse
 }
 
 export async function logoutUser(): Promise<void> {
-  return fetchApi<void>('/auth/logout', {
+  const res = fetchApi<void>('/auth/logout', {
     method: 'POST',
   });
+  console.log('Logout response:', JSON.stringify(res));
+  return res;
 }
 
 // ============ Users ============
