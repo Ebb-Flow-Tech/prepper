@@ -11,6 +11,7 @@ from app.models import TastingNoteImage
 from app.domain.tasting_note_image_service import TastingNoteImageService
 from app.domain.tasting_note_service import TastingNoteService
 from app.domain.ingredient_tasting_note_service import IngredientTastingNoteService
+from app.config import get_settings
 from app.domain.storage_service import StorageService, StorageError, is_storage_configured
 
 router = APIRouter()
@@ -155,7 +156,7 @@ async def sync_tasting_note_images(
             # Upload all images in parallel
             upload_tasks = [
                 storage_service.upload_image_from_base64(
-                    img.data, tasting_note_id, folder="tasting-note-images"
+                    img.data, tasting_note_id, folder=get_settings().supabase_tasting_note_images_folder
                 )
                 for img in new_images
             ]
@@ -252,7 +253,7 @@ async def sync_ingredient_tasting_note_images(
             # Upload all images in parallel
             upload_tasks = [
                 storage_service.upload_image_from_base64(
-                    img.data, ingredient_tasting_note_id, folder="ingredient-tasting-note-images"
+                    img.data, ingredient_tasting_note_id, folder=get_settings().supabase_ingredient_tasting_note_images_folder
                 )
                 for img in new_images
             ]
