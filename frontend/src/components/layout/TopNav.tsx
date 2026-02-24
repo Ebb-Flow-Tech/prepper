@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2, Users, LucideIcon } from 'lucide-react';
+import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2, Users, UtensilsCrossed, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { logoutUser } from '@/lib/api';
@@ -19,6 +19,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/outlets', label: 'Outlets', icon: Building2 },
+  { href: '/menu', label: 'Menu', icon: UtensilsCrossed },
   { href: '/ingredients', label: 'Ingredients', icon: Package },
   { href: '/suppliers', label: 'Suppliers', icon: Truck },
   { href: '/recipes', label: 'Recipes', icon: BookOpen },

@@ -33,7 +33,8 @@ export default function LoginPage() {
         response.access_token,
         response.user.user_type,
         response.refresh_token,
-        response.user.username
+        response.user.username,
+        response.user.is_manager
       );
       router.push('/recipes');
     } catch (err: unknown) {

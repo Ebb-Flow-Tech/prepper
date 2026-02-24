@@ -14,6 +14,7 @@ from app.domain.ingredient_tasting_service import IngredientTastingService
 from app.domain.ingredient_tasting_note_service import IngredientTastingNoteService
 from app.domain.storage_service import StorageService, StorageError, is_storage_configured
 from app.domain.recipe_image_service import RecipeImageService
+from app.domain.menu_service import MenuService
 
 __all__ = [
     "IngredientService",
@@ -33,4 +34,5 @@ __all__ = [
     "StorageError",
     "is_storage_configured",
     "RecipeImageService",
+    "MenuService",
 ]

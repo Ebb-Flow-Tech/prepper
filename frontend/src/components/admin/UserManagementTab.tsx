@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { SearchInput, Skeleton, PageHeader } from '@/components/ui';
+import { SearchInput, Skeleton, PageHeader, Button } from '@/components/ui';
 import { useUsers, useUpdateUser, useOutlets } from '@/lib/hooks';
+import { AddUserModal } from './AddUserModal';
 import { toast } from 'sonner';
 
 export function UserManagementTab() {
   const [search, setSearch] = useState('');
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const updateUser = useUpdateUser();
   const { data: users, isLoading, error } = useUsers();
   const { data: outlets } = useOutlets();
@@ -39,6 +41,20 @@ export function UserManagementTab() {
     );
   };
 
+  const handleManagerToggle = (userId: string, isManager: boolean) => {
+    updateUser.mutate(
+      { userId, data: { is_manager: !isManager } },
+      {
+        onSuccess: () => {
+          toast.success(!isManager ? 'Manager status granted' : 'Manager status revoked');
+        },
+        onError: () => {
+          toast.error('Failed to update user');
+        },
+      }
+    );
+  };
+
   if (error) {
     return (
       <div className="p-6">
@@ -58,13 +74,18 @@ export function UserManagementTab() {
         />
 
         {/* Toolbar */}
-        <div className="mb-6 max-w-md">
-          <SearchInput
-            placeholder="Search by username or email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onClear={() => setSearch('')}
-          />
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="max-w-md flex-1">
+            <SearchInput
+              placeholder="Search by username or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClear={() => setSearch('')}
+            />
+          </div>
+          <Button onClick={() => setIsAddUserModalOpen(true)}>
+            Add User
+          </Button>
         </div>
 
         {/* Loading State */}
@@ -101,6 +122,9 @@ export function UserManagementTab() {
                     Role
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Manager
+                  </th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Branch
                   </th>
                 </tr>
@@ -127,6 +151,23 @@ export function UserManagementTab() {
                       >
                         {user.user_type === 'admin' ? 'Admin' : 'Normal'}
                       </span>
+                    </td>
+                    <td className="px-6 py-3 text-sm">
+                      {user.user_type === 'admin' ? (
+                        <span className="text-zinc-500 dark:text-zinc-400">—</span>
+                      ) : (
+                        <button
+                          onClick={() => handleManagerToggle(user.id, user.is_manager)}
+                          disabled={updateUser.isPending}
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            user.is_manager
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          {user.is_manager ? 'Manager' : 'Not Manager'}
+                        </button>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-sm">
                       {user.user_type === 'admin' ? (
@@ -159,6 +200,12 @@ export function UserManagementTab() {
           </div>
         )}
       </div>
+
+      {/* Add User Modal */}
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+      />
     </div>
   );
 }

@@ -29,6 +29,10 @@ const VALID_ROUTE_PATTERNS = [
   /^\/finance$/,                             // Finance
   /^\/rnd$/,                                 // R&D
   /^\/rnd\/r\/[^/]+$/,                       // R&D recipe detail
+  /^\/menu$/,                                // Menu list
+  /^\/menu\/new$/,                           // New menu
+  /^\/menu\/edit\/[^/]+$/,                   // Edit menu
+  /^\/menu\/preview\/[^/]+$/,                // Preview menu
   /^\/design-system$/,                       // Design system
   /^\/admin\/users$/,                        // Admin users management
 ];

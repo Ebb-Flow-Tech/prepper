@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUser, getUsers, updateUser } from '@/lib/api';
-import type { User } from '@/types';
+import { getUser, getUsers, updateUser, registerUser } from '@/lib/api';
+import type { User, RegisterRequest } from '@/types';
 
 export function useUser(userId: string | null | undefined) {
   return useQuery<User | null>({
@@ -25,6 +25,17 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: Partial<User> }) =>
       updateUser(userId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: RegisterRequest) => registerUser(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },

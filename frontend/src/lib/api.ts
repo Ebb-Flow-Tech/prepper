@@ -70,6 +70,14 @@ import type {
   LoginResponse,
   RegisterRequest,
   User,
+  Menu,
+  MenuDetail,
+  MenuItem,
+  MenuItemRead,
+  MenuSection,
+  MenuSectionRead,
+  CreateMenuRequest,
+  UpdateMenuRequest,
 } from '@/types';
 import { refreshAccessToken, triggerLogout, type RefreshTokenResult } from '@/lib/auth-interceptor';
 
@@ -1239,4 +1247,48 @@ export async function updateUser(userId: string, data: Partial<User>): Promise<U
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+}
+
+// ============ Menus ============
+
+export async function getMenus(): Promise<Menu[]> {
+  return fetchApi<Menu[]>('/menus');
+}
+
+export async function getMenu(menuId: number): Promise<MenuDetail> {
+  return fetchApi<MenuDetail>(`/menus/${menuId}`);
+}
+
+export async function createMenu(data: CreateMenuRequest): Promise<MenuDetail> {
+  return fetchApi<MenuDetail>('/menus', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateMenu(menuId: number, data: UpdateMenuRequest): Promise<MenuDetail> {
+  return fetchApi<MenuDetail>(`/menus/${menuId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function forkMenu(menuId: number): Promise<MenuDetail> {
+  return fetchApi<MenuDetail>(`/menus/${menuId}/fork`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteMenu(menuId: number): Promise<Menu> {
+  return fetchApi<Menu>(`/menus/${menuId}/delete`, {
+    method: 'PATCH',
+  });
+}
+
+export async function getMenusByOutlet(outletId: number): Promise<Menu[]> {
+  return fetchApi<Menu[]>(`/menu-outlets/${outletId}`);
+}
+
+export async function getMenuItemsBySection(sectionId: number): Promise<MenuItemRead[]> {
+  return fetchApi<MenuItemRead[]>(`/menu-items/${sectionId}`);
 }

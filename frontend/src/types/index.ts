@@ -703,6 +703,7 @@ export interface User {
   email: string;
   username: string;
   user_type: 'normal' | 'admin';
+  is_manager: boolean;
   outlet_id: number | null;
   created_at: string;
   updated_at: string;
@@ -719,4 +720,100 @@ export interface RefreshTokenResponse {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+}
+
+// ============================================================================
+// Menu Types
+// ============================================================================
+
+export interface Menu {
+  id: number;
+  name: string;
+  is_published: boolean;
+  is_active: boolean;
+  version_no: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MenuSection {
+  id: number;
+  name: string;
+  menu_id: number;
+  order_no: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MenuItem {
+  id: number;
+  recipe_id: number;
+  section_id: number;
+  order_no: number;
+  display_price: number | null;
+  additional_info: string | null;
+  key_highlights: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MenuOutlet {
+  id: number;
+  menu_id: number;
+  outlet_id: number;
+  created_at?: string;
+}
+
+export interface MenuItemRead extends MenuItem {
+  recipe_name: string;
+}
+
+export interface MenuSectionRead extends MenuSection {
+  items: MenuItemRead[];
+}
+
+export interface MenuDetail extends Menu {
+  sections: MenuSectionRead[];
+  outlets?: MenuOutlet[];
+}
+
+export interface CreateMenuItemRequest {
+  recipe_id: number;
+  order_no: number;
+  display_price?: number | null;
+  additional_info?: string | null;
+  key_highlights?: string | null;
+}
+
+export interface CreateMenuSectionRequest {
+  name: string;
+  order_no: number;
+  items?: CreateMenuItemRequest[];
+}
+
+export interface CreateMenuRequest {
+  name: string;
+  is_published?: boolean;
+  outlet_ids: number[];
+  sections?: CreateMenuSectionRequest[];
+}
+
+export interface UpdateMenuRequest {
+  name?: string;
+  is_published?: boolean;
+  outlet_ids?: number[];
+  sections?: Array<{
+    id?: number;
+    name: string;
+    order_no: number;
+    items: Array<{
+      id?: number;
+      recipe_id: number;
+      order_no: number;
+      display_price?: number | null;
+      additional_info?: string | null;
+      key_highlights?: string | null;
+    }>;
+  }>;
 }

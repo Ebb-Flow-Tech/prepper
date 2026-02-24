@@ -19,6 +19,7 @@ class UserBase(SQLModel):
     email: str = Field(unique=True, index=True)
     username: str = Field(index=True)
     user_type: UserType = Field(default=UserType.NORMAL)
+    is_manager: bool = Field(default=False, description="Can manage menus and other resources")
     outlet_id: int | None = Field(default=None, foreign_key="outlets.id")
 
 
@@ -50,6 +51,7 @@ class UserUpdate(SQLModel):
     email: str | None = None
     username: str | None = None
     user_type: UserType | None = None
+    is_manager: bool | None = None
     outlet_id: int | None = None
 
 
@@ -57,5 +59,6 @@ class UserRead(UserBase):
     """Schema for reading a user (API response)."""
 
     id: str
+    is_manager: bool
     created_at: datetime
     updated_at: datetime

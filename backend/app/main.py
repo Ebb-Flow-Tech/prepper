@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import create_db_and_tables
-from app.api import auth, ingredients, recipes, recipe_ingredients, instructions, costing, sub_recipes, outlets, tastings, suppliers, recipe_tastings, tasting_history, categories, category_agent, feedback_summary_agent, recipe_images, tasting_note_images, recipe_categories, recipe_recipe_categories, users, ingredient_tastings, ingredient_tasting_notes, allergens, ingredient_allergens, recipe_allergens
+from app.api import auth, ingredients, recipes, recipe_ingredients, instructions, costing, sub_recipes, outlets, tastings, suppliers, recipe_tastings, tasting_history, categories, category_agent, feedback_summary_agent, recipe_images, tasting_note_images, recipe_categories, recipe_recipe_categories, users, ingredient_tastings, ingredient_tasting_notes, allergens, ingredient_allergens, recipe_allergens, menus
 
 settings = get_settings()
 
@@ -173,6 +173,21 @@ def create_app() -> FastAPI:
         recipe_allergens.batch_router,
         prefix=f"{settings.api_v1_prefix}/recipes",
         tags=["recipe-allergens"],
+    )
+    app.include_router(
+        menus.router,
+        prefix=f"{settings.api_v1_prefix}/menus",
+        tags=["menus"],
+    )
+    app.include_router(
+        menus.menu_outlets_router,
+        prefix=f"{settings.api_v1_prefix}/menu-outlets",
+        tags=["menu-outlets"],
+    )
+    app.include_router(
+        menus.menu_items_router,
+        prefix=f"{settings.api_v1_prefix}/menu-items",
+        tags=["menu-items"],
     )
 
     @app.get("/health")

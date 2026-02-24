@@ -15,3 +15,4 @@ export * from './useOutlets';
 export * from './useRecipeOutlets';
 export * from './useAgents';
 export * from './useUsers';
+export * from './useMenus';
