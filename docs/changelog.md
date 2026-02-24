@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.15** (2026-02-23) - Access Control & Allergen Management: Admin User Management, Hierarchical Access Control, Allergen Tracking & Supplier Soft Delete
 - **0.0.14** (2026-02-12) - Parent Outlet Recipes Display: Read-Only Table for Multi-Brand Recipe Management
 - **0.0.13** (2026-01-28) - Ingredient Tasting & Text-Based Features: Standalone Tasting Notes, Direct Ingredient Input, Collapsible UI & Image Support
 - **0.0.12** (2026-01-21) - Wastage, Outlets & Recipe Enhancements: Multi-Image Gallery, Outlet Hierarchy, Profit Margins, AI Feedback Summary & R&D Workflow
@@ -20,6 +21,68 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.15] - 2026-02-23
+
+### Added
+
+#### Admin User Management & Route Access Control
+
+Implemented admin user management system with role-based access control to protect admin-only routes.
+
+**Features**:
+- Admin user model and database support
+- Admin identification in user authentication
+- Protected admin routes with access control checks
+- Fix for infinite loop on admin pages for non-admin users
+
+#### Hierarchical Outlet-Based Access Control
+
+Implemented comprehensive outlet hierarchy-based access control system for recipes and tasting sessions.
+
+**Features**:
+- Hierarchical outlet-based recipe filtering
+- User access restricted to outlets within their hierarchy
+- Recipe access control based on user outlet assignment
+- Read-only mode for users without edit permissions
+- Outlet hierarchy validation for access checks
+
+**API Enhancements**:
+- Enhanced recipe endpoints with outlet-based filtering
+- Tasting session endpoints with user hierarchy access control
+- Outlet hierarchy tree support for permission validation
+
+#### Allergen Management System
+
+Complete allergen tracking and display system for ingredients and recipes.
+
+**New Features**:
+- Allergen field on `Ingredient` model for tracking allergen information
+- Allergen display across recipe views (ingredients panel, recipe detail, BOM)
+- Ingredient allergen data management through ingredient detail UI
+- Hierarchical allergen display in recipe sub-recipes and BOM tree
+
+**Files Created/Modified**:
+- Ingredient model extended with allergen field
+- Recipe/ingredient components updated to display allergens
+- Allergen badges in ingredient lists and recipe views
+
+#### Supplier Soft Delete
+
+Implemented soft delete functionality for suppliers to maintain referential integrity.
+
+**Features**:
+- Soft delete support for supplier records
+- Archived suppliers remain available for historical reference
+- Deactivation logic prevents orphaning ingredient-supplier links
+
+### Fixed
+
+- **JWT Token Regeneration**: Fixed token refresh endpoint to properly handle JWT token regeneration
+- **Tasting Notes Access**: Allow tasting notes to be accessible regardless of recipe permissions (users can view tasting history even without full recipe edit access)
+- **Admin Page Infinite Loop**: Fixed infinite loop occurring on admin pages for non-admin users
 
 ---
 

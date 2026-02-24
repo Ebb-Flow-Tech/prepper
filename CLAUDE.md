@@ -62,7 +62,7 @@ app/
 ├── config.py            # pydantic-settings (env-driven)
 ├── database.py          # SQLModel engine + session management
 ├── models/              # SQLModel entities
-│   ├── ingredient.py            # Ingredient, SupplierEntry
+│   ├── ingredient.py            # Ingredient (+ allergen field), SupplierEntry
 │   ├── recipe.py                # Recipe (+ version, root_id, description, summary_feedback, rnd_started, review_ready)
 │   ├── recipe_ingredient.py     # RecipeIngredient (+ wastage_percentage, unit_price, base_unit, supplier_id)
 │   ├── recipe_recipe.py         # RecipeRecipe (sub-recipe/BOM hierarchy)
@@ -74,8 +74,8 @@ app/
 │   ├── recipe_recipe_category.py # RecipeRecipeCategory (recipe-category many-to-many)
 │   ├── tasting.py               # TastingSession, TastingNote
 │   ├── recipe_tasting.py        # RecipeTasting (session-recipe many-to-many)
-│   ├── supplier.py              # Supplier (name, address, phone, email)
-│   ├── user.py                  # User (email, username, user_type, outlet_id, Supabase auth)
+│   ├── supplier.py              # Supplier (name, address, phone, email, soft-delete support)
+│   ├── user.py                  # User (email, username, user_type [normal/admin], outlet_id, Supabase auth, hierarchical access)
 │   ├── auth.py                  # Auth DTOs: LoginRequest, RegisterRequest, LoginResponse
 │   └── costing.py               # CostingResult (+ adjusted_cost_per_unit), CostBreakdownItem
 ├── domain/              # Business logic services
@@ -305,6 +305,26 @@ All endpoints under `/api/v1`:
 - `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
 
 ## Key Features (Recent Additions)
+
+**Access Control & Admin Management** (Feb 13-23)
+- Admin user model and role-based access control
+- Protected admin routes with authorization checks
+- Hierarchical outlet-based access control for recipes and tasting sessions
+- User access restricted to outlets within their hierarchy
+- Read-only mode for users without edit permissions
+- Outlet hierarchy validation for permission enforcement
+
+**Allergen Management System** (Feb 20-23)
+- `allergen` field on `Ingredient` model for tracking allergen information
+- Allergen display across recipe views (ingredients panel, recipe detail, BOM tree)
+- Hierarchical allergen display in recipe sub-recipes
+- Ingredient allergen data management through ingredient detail UI
+- Allergen badges in ingredient lists and recipe views
+
+**Supplier Soft Delete** (Feb 23)
+- Soft delete support for supplier records
+- Archived suppliers remain available for historical reference
+- Deactivation logic prevents orphaning ingredient-supplier links
 
 **User Authentication System** (Jan 23)
 - `User` model with email, username, user_type (normal/admin), outlet_id reference
