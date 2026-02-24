@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_key: str | None = None
     supabase_bucket: str = ""
+    supabase_recipe_images_folder: str = "recipe-images"
+    supabase_tasting_note_images_folder: str = "tasting-note-images"
+    supabase_ingredient_tasting_note_images_folder: str = "ingredient-tasting-note-images"
 
     # Supabase Auth
     # supabase_service_role_key: str | None = None
