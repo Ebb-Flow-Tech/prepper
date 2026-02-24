@@ -6,6 +6,8 @@ venv/
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.stage
 
 # Python
 __pycache__/
