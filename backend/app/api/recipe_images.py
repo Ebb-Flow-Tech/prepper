@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
+from app.config import get_settings
 from app.models import RecipeImage
 from app.domain import RecipeImageService, RecipeService
 from app.domain.storage_service import StorageService, StorageError, is_storage_configured
@@ -56,7 +57,7 @@ async def add_recipe_image(
     try:
         storage_service = StorageService()
         image_url = await storage_service.upload_image_from_base64(
-            data.image_base64, recipe_id, folder="recipe-images"
+            data.image_base64, recipe_id, folder=get_settings().supabase_recipe_images_folder
         )
     except StorageError as e:
         raise HTTPException(
