@@ -53,9 +53,13 @@ export function TopAppBar() {
     <>
       <header className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         {/* Tabs row */}
-        {recipe && (
-          <nav className="flex gap-1 px-4" aria-label="Recipe tabs">
-            {CANVAS_TABS.map((tab) => (
+        <nav className="flex gap-1 px-4" aria-label="Recipe tabs">
+          {CANVAS_TABS.map((tab) => {
+            // Always show canvas tab, show other tabs only if recipe exists
+            if (tab.id !== 'canvas' && !recipe) {
+              return null;
+            }
+            return (
               <button
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
@@ -68,9 +72,9 @@ export function TopAppBar() {
               >
                 {tab.label}
               </button>
-            ))}
-          </nav>
-        )}
+            );
+          })}
+        </nav>
       </header>
 
       <ConfirmModal

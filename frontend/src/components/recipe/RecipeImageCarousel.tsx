@@ -40,8 +40,8 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
       const base64String = (e.target?.result as string).split(',')[1]; // Remove data URL prefix
       try {
         await uploadMutation.mutateAsync({ recipeId, imageBase64: base64String });
-        // Move to the new image (will be refetched by query)
-        setCurrentIndex((prev) => prev + 1);
+        // Move to the newly uploaded image (last in the list)
+        setCurrentIndex(images.length);
         // Reset file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -61,8 +61,8 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
         recipeName,
         ingredients,
       });
-      // Move to the new image (will be refetched by query)
-      setCurrentIndex((prev) => prev + 1);
+      // Move to the newly generated image (last in the list)
+      setCurrentIndex(images.length);
     } catch (error) {
       console.error('Failed to generate image:', error);
     } finally {

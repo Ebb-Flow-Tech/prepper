@@ -144,6 +144,8 @@ export function useGenerateRecipeImage() {
       // Invalidate recipe queries if image was stored
       if (data.stored && variables.recipeId) {
         queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
+        queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
+        queryClient.invalidateQueries({ queryKey: ['recipes'] });
       }
     },
   });
@@ -163,7 +165,13 @@ export function useUploadRecipeImage() {
   return useMutation({
     mutationFn: ({ recipeId, imageBase64 }: { recipeId: number; imageBase64: string }) =>
       api.uploadRecipeImage(recipeId, imageBase64),
-    onSuccess: (_, variables) => {
+    onSuccess: (newImage, variables) => {
+      // Optimistically update the images list cache to show the new image immediately
+      queryClient.setQueryData(
+        ['recipe-images', variables.recipeId],
+        (oldData: any[] | undefined) => [...(oldData || []), newImage]
+      );
+      // Still refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
       queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
       queryClient.invalidateQueries({ queryKey: ['recipes'] });

@@ -380,7 +380,7 @@ function StagedIngredientCard({
                         )}
                       </span>
                       <span className="text-blue-200/60">
-                        ${supplier.cost_per_unit.toFixed(2)}/{supplier.pack_unit}
+                        ${supplier.cost_per_unit ? supplier.cost_per_unit.toFixed(2) : 'N/A'}/{supplier.pack_unit}
                       </span>
                     </li>
                   ))}
@@ -427,9 +427,9 @@ function StagedIngredientListItem({
             )}
           </div>
           {preferredSupplier ? (
-            <div>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit.toFixed(2)}/{preferredSupplier.pack_unit}</div>
+            <div>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit ? preferredSupplier.cost_per_unit.toFixed(2) : 'N/A'}/{preferredSupplier.pack_unit}</div>
           ) : suppliers.length > 0 ? (
-            <div>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit.toFixed(2)}/{suppliers[0].pack_unit}</div>
+            <div>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit ? suppliers[0].cost_per_unit.toFixed(2) : 'N/A'}/{suppliers[0].pack_unit}</div>
           ) : (
             <div className="text-zinc-400">No supplier</div>
           )}
