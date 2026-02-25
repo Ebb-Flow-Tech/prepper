@@ -1,6 +1,8 @@
 """User API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
@@ -13,10 +15,14 @@ router = APIRouter()
 
 @router.get("", response_model=list[UserRead])
 def list_users(
+    email: Optional[str] = Query(None),
     session: Session = Depends(get_session),
 ):
-    """Get all users."""
+    """Get all users or search by email. Returns empty list if email not found."""
     service = UserService(session)
+    if email:
+        user = service.get_user_by_email(email)
+        return [user] if user else []
     return service.get_all_users()
 
 

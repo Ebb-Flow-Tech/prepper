@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useAppState } from '@/lib/store';
 import {
   ArrowLeft,
   Calendar,
@@ -204,11 +205,9 @@ function FeedbackForm({
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
           Taster Name
         </label>
-        <Input
-          value={tasterName}
-          onChange={(e) => setTasterName(e.target.value)}
-          placeholder="e.g., Chef Marco"
-        />
+        <p className="text-sm text-zinc-900 dark:text-zinc-100 py-2">
+          {tasterName || '(not set)'}
+        </p>
       </div>
 
       <div>
@@ -273,11 +272,13 @@ function FeedbackForm({
 interface FeedbackNoteCardProps {
   note: TastingNote;
   isExpired: boolean;
+  currentUserId: string | null;
+  isAdmin: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
 }
 
-function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, isExpired, currentUserId, isAdmin, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -333,7 +334,7 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
             )}
           </div>
         </div>
-        {!isExpired && (
+        {!isExpired && (isAdmin || note.user_id === null || note.user_id === currentUserId) && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
@@ -456,7 +457,10 @@ export default function RecipeTastingPage() {
   const sessionId = params.id ? Number(params.id) : null;
   const recipeId = params.recipeId ? Number(params.recipeId) : null;
 
+  const { userId, username, email, userType } = useAppState();
+
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
+  const isInvited = email && session ? session.attendees?.includes(email) ?? false : false;
   const { data: recipe, isLoading: recipeLoading } = useRecipeForTasting(recipeId);
   const { data: allergens = [] } = useRecipeAllergens(recipeId);
   const { data: allNotes } = useSessionNotes(sessionId);
@@ -479,7 +483,8 @@ export default function RecipeTastingPage() {
         sessionId,
         data: {
           recipe_id: recipeId,
-          taster_name: data.taster_name || null,
+          user_id: userId || undefined,
+          taster_name: username || data.taster_name || null,
           decision: data.decision || null,
           feedback: data.feedback || null,
           action_items: data.action_items || null,
@@ -488,6 +493,7 @@ export default function RecipeTastingPage() {
           texture_rating: data.texture_rating,
           overall_rating: data.overall_rating,
         },
+        userId,
       });
 
       // If there are images to sync, sync them after note creation
@@ -512,7 +518,7 @@ export default function RecipeTastingPage() {
   const handleUpdateNote = async (noteId: number, data: Partial<TastingNote>) => {
     if (!sessionId) return;
     try {
-      await updateNote.mutateAsync({ sessionId, noteId, data });
+      await updateNote.mutateAsync({ sessionId, noteId, data, userId });
     } catch (error) {
       console.error('Failed to update note:', error);
     }
@@ -522,7 +528,7 @@ export default function RecipeTastingPage() {
     if (!sessionId) return;
     if (!confirm('Remove this feedback from the tasting session?')) return;
     try {
-      await deleteNote.mutateAsync({ sessionId, noteId });
+      await deleteNote.mutateAsync({ sessionId, noteId, userId });
     } catch (error) {
       console.error('Failed to delete note:', error);
     }
@@ -612,7 +618,7 @@ export default function RecipeTastingPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Feedback ({recipeNotes.length})
           </h2>
-          {!showAddForm && (
+          {!showAddForm && isInvited && (
             <Button
               size="sm"
               onClick={() => setShowAddForm(true)}
@@ -630,6 +636,7 @@ export default function RecipeTastingPage() {
           <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
             <CardContent className="pt-4">
               <FeedbackForm
+                initialData={{ taster_name: username || '' }}
                 onSubmit={handleAddNote}
                 onCancel={() => setShowAddForm(false)}
                 submitLabel="Add Feedback"
@@ -654,6 +661,8 @@ export default function RecipeTastingPage() {
                 key={note.id}
                 note={note}
                 isExpired={isSessionExpired(session.date)}
+                currentUserId={userId}
+                isAdmin={userType === 'admin'}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
               />

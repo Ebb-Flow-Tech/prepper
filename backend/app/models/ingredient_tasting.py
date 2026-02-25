@@ -65,6 +65,7 @@ class IngredientTastingNote(IngredientTastingNoteBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     session_id: int = Field(foreign_key="tasting_sessions.id", index=True)
     ingredient_id: int = Field(foreign_key="ingredients.id", index=True)
+    user_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -73,6 +74,7 @@ class IngredientTastingNoteCreate(IngredientTastingNoteBase):
     """Schema for creating an ingredient tasting note."""
 
     ingredient_id: int
+    user_id: Optional[str] = None
 
 
 class IngredientTastingNoteUpdate(SQLModel):
@@ -95,6 +97,7 @@ class IngredientTastingNoteRead(IngredientTastingNoteBase):
     id: int
     session_id: int
     ingredient_id: int
+    user_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

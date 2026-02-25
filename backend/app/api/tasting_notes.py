@@ -82,7 +82,7 @@ def update_tasting_note(
     data: TastingNoteUpdate,
     session: Session = Depends(get_session),
 ):
-    """Update a tasting note."""
+    """Update a tasting note. Ownership check is done on the frontend."""
     service = TastingNoteService(session)
     note = service.get(note_id)
     if not note or note.session_id != session_id:

@@ -41,6 +41,7 @@ import {
 } from '@/components/ui';
 import type { Recipe, RecipeTasting, Ingredient, IngredientTasting } from '@/types';
 import { useAppState } from '@/lib/store';
+import { getUserByEmail } from '@/lib/api';
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-GB', {
@@ -469,6 +470,7 @@ function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
   const [localRecipients, setLocalRecipients] = useState<string[]>(recipients);
   const [currentEmail, setCurrentEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync local state when recipients prop changes (e.g., after API update)
@@ -484,16 +486,47 @@ function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
     }
   }, [isEditing]);
 
+  const validateAndAddEmail = async (email: string) => {
+    setError(null);
+
+    if (!email) return;
+
+    if (localRecipients.includes(email)) {
+      setError(`Email already added: ${email}`);
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setError(`Invalid email: ${email}`);
+      return;
+    }
+
+    // Validate that email exists in database
+    setIsValidating(true);
+    try {
+      const user = await getUserByEmail(email);
+      setIsValidating(false);
+
+      if (!user) {
+        setError(`Not registered: ${email}`);
+        return;
+      }
+
+      setLocalRecipients([...localRecipients, email]);
+      setCurrentEmail('');
+    } catch (err) {
+      setIsValidating(false);
+      console.error(`Failed to validate email ${email}:`, err);
+      setError(`Failed to validate email: ${email}`);
+    }
+  };
+
   const handleEmailInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setError(null);
 
     if (value.endsWith(' ') && value.trim()) {
       const email = value.trim();
-      if (email && !localRecipients.includes(email)) {
-        setLocalRecipients([...localRecipients, email]);
-      }
-      setCurrentEmail('');
+      validateAndAddEmail(email);
     } else {
       setCurrentEmail(value);
     }
@@ -503,16 +536,15 @@ function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
     if (e.key === 'Enter') {
       e.preventDefault();
       const email = currentEmail.trim();
-      if (email && !localRecipients.includes(email)) {
-        setLocalRecipients([...localRecipients, email]);
-      }
-      setCurrentEmail('');
+      validateAndAddEmail(email);
     } else if (e.key === 'Backspace' && !currentEmail && localRecipients.length > 0) {
       setLocalRecipients(localRecipients.slice(0, -1));
+      setError(null);
     } else if (e.key === 'Escape') {
       setIsEditing(false);
       setCurrentEmail('');
       setLocalRecipients(recipients); // Reset to original
+      setError(null);
     }
   };
 
@@ -522,24 +554,8 @@ function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
   };
 
   const handleDone = () => {
-    // Add current email if there's one being typed
-    let finalRecipients = localRecipients;
-    const trimmedEmail = currentEmail.trim();
-    if (trimmedEmail && !localRecipients.includes(trimmedEmail)) {
-      finalRecipients = [...localRecipients, trimmedEmail];
-    }
-
-    // Check for invalid emails before closing
-    const invalidEmails = finalRecipients.filter((email) => !isValidEmail(email));
-    if (invalidEmails.length > 0) {
-      setError(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`);
-      setLocalRecipients(finalRecipients); // Update local state to show the invalid email
-      setCurrentEmail('');
-      return;
-    }
-
-    // Only call onUpdate (API) when clicking Done
-    onUpdate(finalRecipients);
+    // All validation happens during email input, so just save and close
+    onUpdate(localRecipients);
     setIsEditing(false);
     setCurrentEmail('');
     setError(null);
@@ -632,8 +648,8 @@ function EditableRecipients({ recipients, onUpdate }: EditableRecipientsProps) {
         </p>
       )}
       <div className="flex items-center gap-2 mt-1">
-        <Button type="button" size="sm" onClick={handleDone}>
-          Done
+        <Button type="button" size="sm" onClick={handleDone} disabled={isValidating}>
+          {isValidating ? 'Validating...' : 'Done'}
         </Button>
       </div>
     </div>

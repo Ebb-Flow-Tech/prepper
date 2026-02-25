@@ -241,6 +241,7 @@ export interface TastingNote {
   action_items_done: boolean;
   decision: TastingDecision | null;
   taster_name: string | null;
+  user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -350,6 +351,7 @@ export interface IngredientTastingNote {
   action_items_done: boolean;
   decision: TastingDecision | null;
   taster_name: string | null;
+  user_id: string | null;
   created_at: string;
   updated_at: string;
 }
