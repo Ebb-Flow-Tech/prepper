@@ -33,6 +33,10 @@ export async function POST(request: Request) {
     // Initialize SendGrid with API key
     sgMail.setApiKey(sendGridApiKey);
 
+    // Build invite link
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const inviteLink = `${appUrl}/tastings/invite/${validatedData.session_id}`;
+
     // Format the date nicely
     const formattedDate = new Date(validatedData.session_date).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -70,8 +74,14 @@ export async function POST(request: Request) {
 
             ${customMessage}
 
-            <p style="margin-top: 30px; color: #666; font-size: 14px;">
-              Please log in to RecipePrep to view session details and submit your tasting notes.
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${escapeHtml(inviteLink)}" style="background-color: #2c3e50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                View Tasting Session
+              </a>
+            </div>
+
+            <p style="color: #666; font-size: 14px; text-align: center; margin: 20px 0;">
+              Or copy this link: ${escapeHtml(inviteLink)}
             </p>
 
             <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;" />
