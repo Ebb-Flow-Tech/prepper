@@ -36,7 +36,6 @@ class TastingSession(TastingSessionBase, table=True):
     __tablename__ = "tasting_sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    attendees: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -55,6 +54,41 @@ class TastingSessionUpdate(SQLModel):
     location: Optional[str] = None
     attendees: Optional[List[str]] = None
     notes: Optional[str] = None
+
+
+# -----------------------------------------------------------------------------
+# TastingUser (join table for participants)
+# -----------------------------------------------------------------------------
+
+
+class TastingUser(SQLModel, table=True):
+    """Join table linking registered users as participants of a tasting session."""
+
+    __tablename__ = "tasting_users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tasting_session_id: int = Field(foreign_key="tasting_sessions.id", index=True)
+    user_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+
+
+class TastingUserRead(SQLModel):
+    """Participant summary embedded in TastingSessionRead responses."""
+
+    id: int
+    user_id: Optional[str]
+    email: str
+    username: str
+
+
+class TastingSessionRead(TastingSessionBase):
+    """TastingSession for API responses — includes resolved participant list."""
+
+    id: int
+    participants: List[TastingUserRead] = []
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
 
 
 # -----------------------------------------------------------------------------

@@ -217,12 +217,19 @@ export interface ParseInstructionsRequest {
 
 export type TastingDecision = 'approved' | 'needs_work' | 'rejected';
 
+export interface TastingParticipant {
+  id: number;
+  user_id: string | null;
+  email: string;
+  username: string;
+}
+
 export interface TastingSession {
   id: number;
   name: string;
   date: string;
   location: string | null;
-  attendees: string[] | null;
+  participants: TastingParticipant[];
   notes: string | null;
   created_at: string;
   updated_at: string;

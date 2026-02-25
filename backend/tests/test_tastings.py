@@ -2,6 +2,9 @@
 
 from datetime import datetime
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.models import User, UserType
 
 
 def test_create_tasting_session(client: TestClient):
@@ -12,7 +15,6 @@ def test_create_tasting_session(client: TestClient):
             "name": "December Menu Tasting",
             "date": "2024-12-15T10:00:00",
             "location": "Main Kitchen",
-            "attendees": ["Chef Marco", "Sarah", "James"],
         },
     )
     assert response.status_code == 201
@@ -20,7 +22,7 @@ def test_create_tasting_session(client: TestClient):
     assert data["name"] == "December Menu Tasting"
     assert data["date"] == "2024-12-15T10:00:00"
     assert data["location"] == "Main Kitchen"
-    assert data["attendees"] == ["Chef Marco", "Sarah", "James"]
+    assert data["participants"] == []
     assert "id" in data
 
 
@@ -637,3 +639,185 @@ def test_add_note_requires_user_id(client: TestClient):
     assert response.status_code == 201
     data = response.json()
     assert data["user_id"] == "current-user-id"
+
+
+# ============================================================================
+# Participant Association Tests
+# ============================================================================
+
+
+def test_create_session_with_participants_resolves_registered_users(
+    client: TestClient, session: Session
+):
+    """Creating a session with attendees emails that match real users should populate participants list."""
+    # Create a user in the DB
+    user = User(
+        id="user-123",
+        email="chef@example.com",
+        username="Chef Marco",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+    session.add(user)
+    session.commit()
+
+    # Create session with that user's email
+    response = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Menu Tasting",
+            "date": "2024-12-15T10:00:00",
+            "attendees": ["chef@example.com"],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["participants"]) == 1
+    assert data["participants"][0]["email"] == "chef@example.com"
+    assert data["participants"][0]["username"] == "Chef Marco"
+    assert data["participants"][0]["user_id"] == "user-123"
+
+
+def test_create_session_skips_unregistered_emails(client: TestClient):
+    """Unregistered emails in attendees are silently ignored."""
+    response = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Menu Tasting",
+            "date": "2024-12-15T10:00:00",
+            "attendees": ["nonexistent@example.com", "also-not-real@test.com"],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    # No participants because emails don't exist
+    assert data["participants"] == []
+
+
+def test_update_session_attendees_replaces_participants(
+    client: TestClient, session: Session
+):
+    """PATCHing attendees list fully replaces current participants."""
+    # Create two users
+    user1 = User(
+        id="user-1",
+        email="chef1@example.com",
+        username="Chef One",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+    user2 = User(
+        id="user-2",
+        email="chef2@example.com",
+        username="Chef Two",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+    session.add(user1)
+    session.add(user2)
+    session.commit()
+
+    # Create session with user1
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Menu Tasting",
+            "date": "2024-12-15T10:00:00",
+            "attendees": ["chef1@example.com"],
+        },
+    )
+    session_id = create_response.json()["id"]
+    assert len(create_response.json()["participants"]) == 1
+
+    # Update to replace with user2
+    update_response = client.patch(
+        f"/api/v1/tasting-sessions/{session_id}",
+        json={"attendees": ["chef2@example.com"]},
+    )
+    assert update_response.status_code == 200
+    data = update_response.json()
+    assert len(data["participants"]) == 1
+    assert data["participants"][0]["email"] == "chef2@example.com"
+
+
+def test_update_session_without_attendees_preserves_participants(
+    client: TestClient, session: Session
+):
+    """PATCHing name only should NOT remove existing participants."""
+    # Create a user
+    user = User(
+        id="user-1",
+        email="chef@example.com",
+        username="Chef One",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+    session.add(user)
+    session.commit()
+
+    # Create session with user
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Menu Tasting",
+            "date": "2024-12-15T10:00:00",
+            "attendees": ["chef@example.com"],
+        },
+    )
+    session_id = create_response.json()["id"]
+    original_participants = create_response.json()["participants"]
+
+    # Update only the name (no attendees key)
+    update_response = client.patch(
+        f"/api/v1/tasting-sessions/{session_id}",
+        json={"name": "Updated Name"},
+    )
+    assert update_response.status_code == 200
+    data = update_response.json()
+    # Participants should be unchanged
+    assert data["participants"] == original_participants
+
+
+def test_nonadmin_cannot_access_session_they_are_not_invited_to(
+    session: Session, normal_user_client: TestClient
+):
+    """GET /tasting-sessions/{id} returns 403 for non-participant non-admin."""
+    # Create a session with admin user (using default client/admin context)
+    # We need to use the normal_user_client to make the GET request
+    # Create an unrelated session first - create it via SQL to avoid auth issues
+    from app.models import TastingSession
+    from datetime import datetime
+
+    unrelated_session = TastingSession(
+        name="Not Mine",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        location="Somewhere",
+    )
+    session.add(unrelated_session)
+    session.commit()
+    session.refresh(unrelated_session)
+
+    # Normal user tries to access session they're not in
+    response = normal_user_client.get(
+        f"/api/v1/tasting-sessions/{unrelated_session.id}"
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Access denied"
+
+
+def test_admin_can_access_any_session(client: TestClient, session: Session):
+    """Admin users always get 200 regardless of participant list."""
+    # Create a session with no participants
+    response = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Test Session",
+            "date": "2024-12-15T10:00:00",
+        },
+    )
+    session_id = response.json()["id"]
+
+    # Admin can still access it
+    get_response = client.get(f"/api/v1/tasting-sessions/{session_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["name"] == "Test Session"

@@ -3,11 +3,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_current_user
 from app.models import (
-    TastingSession,
+    TastingSessionRead,
     TastingSessionCreate,
     TastingSessionUpdate,
+    User,
+    UserType,
 )
 from app.domain import TastingSessionService
 
@@ -27,7 +29,7 @@ router.include_router(notes_router)
 # -----------------------------------------------------------------------------
 
 
-@router.post("", response_model=TastingSession, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TastingSessionRead, status_code=status.HTTP_201_CREATED)
 def create_tasting_session(
     data: TastingSessionCreate,
     session: Session = Depends(get_session),
@@ -37,23 +39,32 @@ def create_tasting_session(
     return service.create(data)
 
 
-@router.get("", response_model=list[TastingSession])
+@router.get("", response_model=list[TastingSessionRead])
 def list_tasting_sessions(
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """List all tasting sessions, ordered by date descending."""
+    """List all tasting sessions, ordered by date descending.
+
+    All authenticated users can see all sessions.
+    Access control is enforced at the detail page level.
+    """
     service = TastingSessionService(session)
     return service.list(limit=limit, offset=offset)
 
 
-@router.get("/{session_id}", response_model=TastingSession)
+@router.get("/{session_id}", response_model=TastingSessionRead)
 def get_tasting_session(
     session_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get a tasting session by ID."""
+    """Get a tasting session by ID.
+
+    Non-admin users can only access sessions they participate in.
+    """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
     if not tasting_session:
@@ -61,6 +72,16 @@ def get_tasting_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting session not found",
         )
+
+    # Non-admin users must be a participant
+    if current_user.user_type != UserType.ADMIN:
+        participant_ids = {p.user_id for p in tasting_session.participants}
+        if current_user.id not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+
     return tasting_session
 
 
@@ -68,8 +89,12 @@ def get_tasting_session(
 def get_tasting_session_stats(
     session_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get statistics for a tasting session."""
+    """Get statistics for a tasting session.
+
+    Non-admin users can only access sessions they participate in.
+    """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
     if not tasting_session:
@@ -77,33 +102,83 @@ def get_tasting_session_stats(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting session not found",
         )
+
+    # Non-admin users must be a participant
+    if current_user.user_type != UserType.ADMIN:
+        participant_ids = {p.user_id for p in tasting_session.participants}
+        if current_user.id not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+
     return service.get_stats(session_id)
 
 
-@router.patch("/{session_id}", response_model=TastingSession)
+@router.patch("/{session_id}", response_model=TastingSessionRead)
 def update_tasting_session(
     session_id: int,
     data: TastingSessionUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a tasting session."""
+    """Update a tasting session.
+
+    Non-admin users can only update sessions they participate in.
+    """
     service = TastingSessionService(session)
-    tasting_session = service.update(session_id, data)
+    tasting_session = service.get(session_id)
     if not tasting_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting session not found",
         )
-    return tasting_session
+
+    # Non-admin users must be a participant
+    if current_user.user_type != UserType.ADMIN:
+        participant_ids = {p.user_id for p in tasting_session.participants}
+        if current_user.id not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+
+    updated_session = service.update(session_id, data)
+    if not updated_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tasting session not found",
+        )
+    return updated_session
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tasting_session(
     session_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a tasting session and all its notes."""
+    """Delete a tasting session and all its notes.
+
+    Non-admin users can only delete sessions they participate in.
+    """
     service = TastingSessionService(session)
+    tasting_session = service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tasting session not found",
+        )
+
+    # Non-admin users must be a participant
+    if current_user.user_type != UserType.ADMIN:
+        participant_ids = {p.user_id for p in tasting_session.participants}
+        if current_user.id not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied",
+            )
+
     deleted = service.delete(session_id)
     if not deleted:
         raise HTTPException(
