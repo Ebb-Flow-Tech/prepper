@@ -23,6 +23,7 @@ const VALID_ROUTE_PATTERNS = [
   /^\/recipe-categories\/[^/]+$/,            // Recipe category detail
   /^\/tastings$/,                            // Tastings list
   /^\/tastings\/new$/,                       // New tasting
+  /^\/tastings\/invite\/[^/]+$/,             // Tasting invite redirect
   /^\/tastings\/[^/]+$/,                     // Tasting detail
   /^\/tastings\/[^/]+\/r\/[^/]+$/,           // Tasting recipe notes
   /^\/tastings\/[^/]+\/i\/[^/]+$/,           // Tasting ingredient notes
@@ -36,6 +37,9 @@ const VALID_ROUTE_PATTERNS = [
   /^\/design-system$/,                       // Design system
   /^\/admin\/users$/,                        // Admin users management
 ];
+
+// Routes that bypass auth checks (accessible by both authenticated and unauthenticated users)
+const PASSTHROUGH_ROUTE_PATTERNS = [/^\/tastings\/invite\/[^/]+$/];
 
 function isValidRoute(pathname: string): boolean {
   return VALID_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
@@ -53,7 +57,7 @@ function setLastRoute(route: string) {
 }
 
 // Separate component for search params to isolate Suspense boundary
-function RouteTracker({ pathname, isPublicRoute, isAdminRoute, userType }: { pathname: string; isPublicRoute: boolean; isAdminRoute: boolean; userType?: string | null }) {
+function RouteTracker({ pathname, isPublicRoute, isAdminRoute, isPassthroughRoute, userType }: { pathname: string; isPublicRoute: boolean; isAdminRoute: boolean; isPassthroughRoute: boolean; userType?: string | null }) {
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -61,12 +65,13 @@ function RouteTracker({ pathname, isPublicRoute, isAdminRoute, userType }: { pat
     // 1. It's a valid route
     // 2. It's not a public route
     // 3. It's not an admin route for non-admin users
-    if (isValidRoute(pathname) && !isPublicRoute && !(isAdminRoute && userType !== 'admin')) {
+    // 4. It's not a passthrough route
+    if (isValidRoute(pathname) && !isPublicRoute && !(isAdminRoute && userType !== 'admin') && !isPassthroughRoute) {
       const queryString = searchParams.toString();
       const fullRoute = queryString ? `${pathname}?${queryString}` : pathname;
       setLastRoute(fullRoute);
     }
-  }, [pathname, searchParams, isPublicRoute, isAdminRoute, userType]);
+  }, [pathname, searchParams, isPublicRoute, isAdminRoute, isPassthroughRoute, userType]);
 
   return null;
 }
@@ -80,6 +85,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
   const isNotFound = !isValidRoute(pathname);
   const isAdminRoute = pathname.startsWith('/admin');
+  const isPassthroughRoute = PASSTHROUGH_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
 
   useEffect(() => {
     if (isAuthenticated && isPublicRoute) {
@@ -93,15 +99,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       } else {
         router.replace(lastRoute);
       }
-    } else if (!isAuthenticated && !isPublicRoute) {
+    } else if (!isAuthenticated && !isPublicRoute && !isPassthroughRoute) {
       // Not logged in on protected page -> redirect to login
       // This includes session expiration (token refresh failed)
+      // Passthrough routes handle their own auth logic
       router.replace('/login');
     } else if (isAdminRoute && userType && userType !== 'admin') {
       // Non-admin user on admin route -> redirect to outlets
       router.replace('/outlets');
     }
-  }, [isAuthenticated, isPublicRoute, isAdminRoute, userType, router]);
+  }, [isAuthenticated, isPublicRoute, isAdminRoute, isPassthroughRoute, userType, router]);
 
   // Show nothing while redirecting
   if (isNotFound) {
@@ -110,14 +117,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (isAuthenticated && isPublicRoute) {
     return null;
   }
-  if (!isAuthenticated && !isPublicRoute) {
+  if (!isAuthenticated && !isPublicRoute && !isPassthroughRoute) {
     return null;
   }
 
   return (
     <>
       <Suspense fallback={null}>
-        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} isAdminRoute={isAdminRoute} userType={userType} />
+        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} isAdminRoute={isAdminRoute} isPassthroughRoute={isPassthroughRoute} userType={userType} />
       </Suspense>
       {children}
     </>
