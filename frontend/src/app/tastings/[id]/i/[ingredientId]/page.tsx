@@ -452,7 +452,7 @@ export default function IngredientTastingPage() {
   const sessionId = params.id ? Number(params.id) : null;
   const ingredientId = params.ingredientId ? Number(params.ingredientId) : null;
 
-  const { userId, username, email, userType } = useAppState();
+  const { userId, username, userType } = useAppState();
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: ingredient, isLoading: ingredientLoading } = useIngredient(ingredientId);
   const { data: allNotes } = useIngredientNotes(sessionId);
@@ -466,7 +466,8 @@ export default function IngredientTastingPage() {
   const ingredientNotes = allNotes?.filter((n) => n.ingredient_id === ingredientId) || [];
 
   // Invitation gate
-  const isInvited = email && session ? session.attendees?.includes(email) ?? false : false;
+  const isInvited = userType === 'admin' ||
+    (userId && (session?.participants?.some(p => p.user_id === userId) ?? false));
 
   // For new notes
   const [showAddForm, setShowAddForm] = useState(false);
@@ -586,10 +587,10 @@ export default function IngredientTastingPage() {
                 <span>{session.location}</span>
               </div>
             )}
-            {session.attendees && session.attendees.length > 0 && (
+            {session.participants && session.participants.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Users className="h-4 w-4 text-zinc-400" />
-                <span>{session.attendees.join(', ')}</span>
+                <span>{session.participants.map(p => p.username).join(', ')}</span>
               </div>
             )}
           </div>

@@ -130,6 +130,33 @@ def client_with_storage(session: Session, mock_storage):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def normal_user_client(session: Session):
+    """Create a test client with a normal (non-admin) user."""
+
+    def get_session_override():
+        return session
+
+    # Create a mock normal user for testing
+    mock_normal_user = User(
+        id="test-normal-user",
+        email="user@test.com",
+        username="testuser",
+        user_type=UserType.NORMAL,
+        outlet_id=None,
+    )
+
+    def get_current_user_override():
+        return mock_normal_user
+
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[db_get_session] = get_session_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
 # ============================================================================
 # Anthropic/Claude Agent Mocks
 # ============================================================================

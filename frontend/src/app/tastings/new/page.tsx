@@ -1,20 +1,17 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { DayPicker } from 'react-day-picker';
 import { format, startOfDay } from 'date-fns';
 import 'react-day-picker/style.css';
 import { useCreateTastingSession } from '@/lib/hooks/useTastings';
 import { useSendTastingInvitation } from '@/lib/hooks/useSendTastingInvitation';
-import { PageHeader, Button, Input, Textarea, Badge } from '@/components/ui';
-
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
+import { PageHeader, Button, Input, Textarea } from '@/components/ui';
+import { ParticipantPicker } from '@/components/tasting/ParticipantPicker';
+import type { User } from '@/types';
 
 export default function NewTastingSessionPage() {
   const router = useRouter();
@@ -28,11 +25,9 @@ export default function NewTastingSessionPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
   const [showCalendar, setShowCalendar] = useState(false);
   const [location, setLocation] = useState('');
-  const [attendees, setAttendees] = useState<string[]>([]);
-  const [currentEmail, setCurrentEmail] = useState('');
+  const [selectedParticipants, setSelectedParticipants] = useState<User[]>([]);
   const [notes, setNotes] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; date?: string; attendees?: string }>({});
-  const emailInputRef = useRef<HTMLInputElement>(null);
+  const [errors, setErrors] = useState<{ name?: string; date?: string }>({});
 
   const today = startOfDay(new Date());
 
@@ -66,39 +61,8 @@ export default function NewTastingSessionPage() {
     return `${dateStr}T${get24HourTime()}`;
   };
 
-  const handleEmailInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-
-    if (value.endsWith(' ') && value.trim()) {
-      const email = value.trim();
-      if (email && !attendees.includes(email)) {
-        setAttendees([...attendees, email]);
-      }
-      setCurrentEmail('');
-    } else {
-      setCurrentEmail(value);
-    }
-  };
-
-  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const email = currentEmail.trim();
-      if (email && !attendees.includes(email)) {
-        setAttendees([...attendees, email]);
-      }
-      setCurrentEmail('');
-    } else if (e.key === 'Backspace' && !currentEmail && attendees.length > 0) {
-      setAttendees(attendees.slice(0, -1));
-    }
-  };
-
-  const removeAttendee = (emailToRemove: string) => {
-    setAttendees(attendees.filter((email) => email !== emailToRemove));
-  };
-
   const validateForm = (): boolean => {
-    const newErrors: { name?: string; date?: string; attendees?: string } = {};
+    const newErrors: { name?: string; date?: string } = {};
 
     if (!name.trim()) {
       newErrors.name = 'Session name is required';
@@ -114,13 +78,6 @@ export default function NewTastingSessionPage() {
       }
     }
 
-    if (attendees.length > 0) {
-      const invalidEmails = attendees.filter((email) => !isValidEmail(email));
-      if (invalidEmails.length > 0) {
-        newErrors.attendees = `Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`;
-      }
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -131,22 +88,23 @@ export default function NewTastingSessionPage() {
     if (!validateForm()) return;
 
     try {
+      const attendeeEmails = selectedParticipants.map((p) => p.email);
       const session = await createSession.mutateAsync({
         name: name.trim(),
         date: getDateTimeString(),
         location: location.trim() || null,
-        attendees: attendees.length > 0 ? attendees : null,
+        attendees: attendeeEmails.length > 0 ? attendeeEmails : null,
         notes: notes.trim() || null,
       });
 
       // Send email invitations if there are attendees
-      if (attendees.length > 0) {
+      if (attendeeEmails.length > 0) {
         sendInvitation.mutate({
           session_id: session.id,
           session_name: name.trim(),
           session_date: getDateTimeString(),
           session_location: location.trim() || null,
-          recipients: attendees,
+          recipients: attendeeEmails,
         });
       }
 
@@ -308,56 +266,13 @@ export default function NewTastingSessionPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="attendees"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               Attendees
             </label>
-            <div
-              className={`flex flex-wrap items-center gap-2 p-2 border rounded-md bg-white dark:bg-zinc-900 min-h-[42px] cursor-text ${
-                errors.attendees ? 'border-red-500' : 'border-zinc-300 dark:border-zinc-700'
-              }`}
-              onClick={() => emailInputRef.current?.focus()}
-            >
-              {attendees.map((email) => (
-                <Badge
-                  key={email}
-                  variant={isValidEmail(email) ? 'default' : 'destructive'}
-                  className="flex items-center gap-1 pr-1"
-                >
-                  {email}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeAttendee(email);
-                      if (errors.attendees) setErrors((prev) => ({ ...prev, attendees: undefined }));
-                    }}
-                    className="ml-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full p-0.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              <input
-                ref={emailInputRef}
-                id="attendees"
-                type="text"
-                placeholder={attendees.length === 0 ? 'Enter email addresses...' : ''}
-                value={currentEmail}
-                onChange={handleEmailInput}
-                onKeyDown={handleEmailKeyDown}
-                className="flex-1 min-w-[150px] bg-transparent border-none outline-none text-sm placeholder:text-zinc-400"
-              />
-            </div>
-            {errors.attendees ? (
-              <p className="text-xs text-red-500 mt-1">{errors.attendees}</p>
-            ) : (
-              <p className="text-xs text-zinc-500 mt-1">
-                Press space or enter to add an email. Invalid emails appear in red.
-              </p>
-            )}
+            <ParticipantPicker
+              selectedUsers={selectedParticipants}
+              onChange={setSelectedParticipants}
+            />
           </div>
 
           <div>
