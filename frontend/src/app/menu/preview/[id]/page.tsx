@@ -2,9 +2,10 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
-import { useMenu } from '@/lib/hooks';
-import { Skeleton } from '@/components/ui';
+import Image from 'next/image';
+import { ChevronDown, ChevronUp, ArrowLeft, LayoutGrid, List } from 'lucide-react';
+import { useMenu, useRecipes } from '@/lib/hooks';
+import { Skeleton, Button } from '@/components/ui';
 
 interface PreviewMenuPageProps {
   params: Promise<{ id: string }>;
@@ -14,7 +15,9 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
   const { id } = use(params);
   const menuId = parseInt(id, 10);
   const { data: menu, isLoading, error } = useMenu(menuId);
+  const { data: recipes = [] } = useRecipes();
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
 
   const toggleSection = (sectionId: number) => {
     setExpandedSections((prev) => {
@@ -77,19 +80,39 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
         </Link>
 
         {/* Menu Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{menu.name}</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Version {menu.version_no} •{' '}
-            {menu.is_published ? 'Published' : 'Draft'}
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{menu.name}</h1>
+            <p className="text-sm text-zinc-500 mt-1">
+              Version {menu.version_no} •{' '}
+              {menu.is_published ? 'Published' : 'Draft'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-800 rounded-md p-1">
+            <Button
+              onClick={() => setViewMode('list')}
+              size="sm"
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              className="px-3"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => setViewMode('card')}
+              size="sm"
+              variant={viewMode === 'card' ? 'default' : 'ghost'}
+              className="px-3"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Menu Sections */}
           {menu.sections.length === 0 ? (
             <p className="text-center text-zinc-500">No sections in this menu</p>
           ) : (
-            <div className="space-y-4">
+            <div className={viewMode === 'card' ? 'space-y-8' : 'space-y-4'}>
               {menu.sections.map((section) => (
                 <div
                   key={section.id}
@@ -111,6 +134,79 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                     <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
                       {section.items.length === 0 ? (
                         <p className="text-sm text-zinc-500">No items</p>
+                      ) : viewMode === 'card' ? (
+                        <div className="grid grid-cols-2 gap-4">
+                          {section.items.map((item) => {
+                            const recipe = recipes.find((r) => r.id === item.recipe_id);
+                            return (
+                              <div key={item.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+                                {/* Recipe Image */}
+                                {recipe?.image_url && (
+                                  <div className="relative w-full h-32 bg-zinc-100 dark:bg-zinc-800">
+                                    <Image
+                                      src={recipe.image_url}
+                                      alt={recipe.name}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  </div>
+                                )}
+                                {!recipe?.image_url && (
+                                  <div className="w-full h-32 bg-zinc-100 dark:bg-zinc-800" />
+                                )}
+
+                                {/* Content */}
+                                <div className="p-4 space-y-3">
+                                  {/* Recipe Name */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Recipe Name
+                                    </p>
+                                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                                      {item.recipe_name}
+                                    </p>
+                                  </div>
+
+                                  {/* Key Highlights */}
+                                  {item.key_highlights && (
+                                    <div>
+                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                        Key Highlights
+                                      </p>
+                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                        {item.key_highlights}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Additional Info */}
+                                  {item.additional_info && (
+                                    <div>
+                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                        Additional Info
+                                      </p>
+                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                        {item.additional_info}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Price */}
+                                  {item.display_price && (
+                                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                        Price
+                                      </p>
+                                      <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                                        ${item.display_price.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       ) : (
                         <ul className="space-y-3">
                           {section.items.map((item) => (
@@ -118,14 +214,14 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                   <p className="font-medium">{item.recipe_name}</p>
-                                  {item.additional_info && (
-                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                      {item.additional_info}
-                                    </p>
-                                  )}
                                   {item.key_highlights && (
                                     <p className="text-sm text-zinc-500 italic">
                                       {item.key_highlights}
+                                    </p>
+                                  )}
+                                  {item.additional_info && (
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.additional_info}
                                     </p>
                                   )}
                                 </div>
