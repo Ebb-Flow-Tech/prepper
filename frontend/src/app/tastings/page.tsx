@@ -63,11 +63,11 @@ function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
                 <span className="truncate">{session.location}</span>
               </div>
             )}
-            {session.attendees && session.attendees.length > 0 && (
+            {session.participants && session.participants.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5 text-zinc-400" />
                 <span className="truncate">
-                  {session.attendees.length} attendee{session.attendees.length !== 1 ? 's' : ''}
+                  {session.participants.length} attendee{session.participants.length !== 1 ? 's' : ''}
                 </span>
               </div>
             )}
@@ -98,7 +98,10 @@ export default function TastingsPage() {
         (session) =>
           session.name.toLowerCase().includes(searchLower) ||
           session.location?.toLowerCase().includes(searchLower) ||
-          session.attendees?.some((a) => a.toLowerCase().includes(searchLower))
+          session.participants?.some((p) =>
+            p.username.toLowerCase().includes(searchLower) ||
+            p.email.toLowerCase().includes(searchLower)
+          )
       );
     }
 
