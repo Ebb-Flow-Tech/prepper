@@ -22,12 +22,12 @@ import {
   useUpdateTastingSession,
   useDeleteTastingSession,
   useSessionRecipes,
-  useSessionRecipesFull,
   useAddRecipeToSession,
   useRemoveRecipeFromSession,
   useSessionIngredients,
   useAddIngredientToSession,
   useRemoveIngredientFromSession,
+  useRecipes,
 } from '@/lib/hooks';
 import { useIngredients } from '@/lib/hooks';
 import {
@@ -62,7 +62,7 @@ function isSessionExpired(dateString: string): boolean {
 interface SessionRecipesSectionProps {
   sessionId: number;
   sessionRecipes: RecipeTasting[];
-  allRecipes: Recipe[];
+  availableRecipes: Recipe[];
   isLoading: boolean;
   isExpired: boolean;
   onAddRecipe: (recipeId: number) => void;
@@ -72,28 +72,27 @@ interface SessionRecipesSectionProps {
 function SessionRecipesSection({
   sessionId,
   sessionRecipes,
-  allRecipes,
+  availableRecipes,
   isLoading,
   isExpired,
   onAddRecipe,
   onRemoveRecipe,
 }: SessionRecipesSectionProps) {
-  const { userId } = useAppState();
   const [showAddRecipe, setShowAddRecipe] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const linkedRecipeIds = sessionRecipes.map((sr) => sr.recipe_id);
-  const availableRecipes = allRecipes.filter(
-    (r) => !linkedRecipeIds.includes(r.id) && r.created_by === userId
+  const filteredAvailableRecipes = availableRecipes.filter(
+    (r) => !linkedRecipeIds.includes(r.id)
   );
 
   // Filter recipes based on search query
   const filteredRecipes = searchQuery
-    ? availableRecipes.filter((r) =>
+    ? filteredAvailableRecipes.filter((r) =>
         r.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : availableRecipes;
+    : filteredAvailableRecipes;
 
   const handleAddRecipe = () => {
     if (!selectedRecipeId) return;
@@ -183,7 +182,7 @@ function SessionRecipesSection({
                 </Button>
                 {selectedRecipeId && (
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Selected: {availableRecipes.find((r) => r.id === selectedRecipeId)?.name}
+                    Selected: {filteredAvailableRecipes.find((r) => r.id === selectedRecipeId)?.name}
                   </span>
                 )}
               </div>
@@ -212,7 +211,7 @@ function SessionRecipesSection({
       {!isLoading && sessionRecipes.length > 0 && (
         <div className="space-y-2">
           {sessionRecipes.map((sr) => {
-            const recipe = allRecipes.find((r) => r.id === sr.recipe_id);
+            const recipe = availableRecipes.find((r) => r.id === sr.recipe_id);
             return (
               <div
                 key={sr.id}
@@ -648,7 +647,7 @@ export default function TastingSessionDetailPage() {
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
-  const { data: recipes } = useSessionRecipesFull(sessionId);
+  const { data: availableRecipes } = useRecipes();
   const { data: sessionIngredients, isLoading: ingredientsLoading } = useSessionIngredients(sessionId);
   const { data: ingredients } = useIngredients();
 
@@ -939,11 +938,11 @@ export default function TastingSessionDetailPage() {
         </div>
 
         {/* Session Recipes Section */}
-        {recipes && sessionId && (
+        {availableRecipes && sessionId && (
           <SessionRecipesSection
             sessionId={sessionId}
             sessionRecipes={sessionRecipes || []}
-            allRecipes={recipes}
+            availableRecipes={availableRecipes}
             isLoading={recipesLoading}
             isExpired={isSessionExpired(session.date)}
             onAddRecipe={handleAddRecipeToSession}
