@@ -1242,6 +1242,11 @@ export async function getUsers(): Promise<User[]> {
   return fetchApi<User[]>('/users');
 }
 
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const users = await fetchApi<User[]>(`/users?email=${encodeURIComponent(email)}`);
+  return users.length > 0 ? users[0] : null;
+}
+
 export async function updateUser(userId: string, data: Partial<User>): Promise<User> {
   return fetchApi<User>(`/users/${userId}`, {
     method: 'PATCH',

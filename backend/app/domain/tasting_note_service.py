@@ -113,6 +113,7 @@ class TastingNoteService:
                 "action_items_done": note.action_items_done,
                 "decision": note.decision,
                 "taster_name": note.taster_name,
+                "user_id": note.user_id,
                 "created_at": note.created_at,
                 "updated_at": note.updated_at,
                 "recipe_name": recipe.name,

@@ -74,6 +74,7 @@ export default function RegisterPage() {
         response.user.user_type,
         response.refresh_token,
         response.user.username,
+        response.user.email,
         response.user.is_manager
       );
       router.push('/recipes');

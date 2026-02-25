@@ -27,6 +27,7 @@ import {
   useSyncIngredientTastingNoteImages,
 } from '@/lib/hooks';
 import { useIngredient } from '@/lib/hooks/useIngredients';
+import { useAppState } from '@/lib/store';
 import { ImageUploadPreview, type ImageWithId } from '@/components/tasting/ImageUploadPreview';
 import {
   Button,
@@ -35,7 +36,6 @@ import {
   CardHeader,
   CardContent,
   Badge,
-  Input,
   Textarea,
   Select,
 } from '@/components/ui';
@@ -202,11 +202,7 @@ function FeedbackForm({
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
           Taster Name
         </label>
-        <Input
-          value={tasterName}
-          onChange={(e) => setTasterName(e.target.value)}
-          placeholder="e.g., Chef Marco"
-        />
+        <p className="text-sm text-zinc-900 dark:text-zinc-100 py-2">{tasterName || '(not set)'}</p>
       </div>
 
       <div>
@@ -273,9 +269,11 @@ interface FeedbackNoteCardProps {
   isExpired: boolean;
   onUpdate: (noteId: number, data: Partial<IngredientTastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
+  currentUserId: string | null;
+  isAdmin: boolean;
 }
 
-function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete, currentUserId, isAdmin }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useIngredientTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -311,6 +309,8 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
     setIsEditing(false);
   };
 
+  const canEdit = !isExpired && (isAdmin || note.user_id === null || note.user_id === currentUserId);
+
   return (
     <Card className="mb-4">
       <CardHeader>
@@ -329,7 +329,7 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete }: FeedbackNoteC
             )}
           </div>
         </div>
-        {!isExpired && (
+        {canEdit && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
@@ -452,6 +452,7 @@ export default function IngredientTastingPage() {
   const sessionId = params.id ? Number(params.id) : null;
   const ingredientId = params.ingredientId ? Number(params.ingredientId) : null;
 
+  const { userId, username, email, userType } = useAppState();
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: ingredient, isLoading: ingredientLoading } = useIngredient(ingredientId);
   const { data: allNotes } = useIngredientNotes(sessionId);
@@ -464,6 +465,9 @@ export default function IngredientTastingPage() {
   // Filter notes for this specific ingredient
   const ingredientNotes = allNotes?.filter((n) => n.ingredient_id === ingredientId) || [];
 
+  // Invitation gate
+  const isInvited = email && session ? session.attendees?.includes(email) ?? false : false;
+
   // For new notes
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -474,7 +478,7 @@ export default function IngredientTastingPage() {
         sessionId,
         data: {
           ingredient_id: ingredientId,
-          taster_name: data.taster_name || null,
+          taster_name: username || data.taster_name || null,
           decision: data.decision || null,
           feedback: data.feedback || null,
           action_items: data.action_items || null,
@@ -482,6 +486,7 @@ export default function IngredientTastingPage() {
           aroma_rating: data.aroma_rating,
           texture_rating: data.texture_rating,
           overall_rating: data.overall_rating,
+          user_id: userId || undefined,
         },
       });
 
@@ -505,7 +510,7 @@ export default function IngredientTastingPage() {
   const handleUpdateNote = async (noteId: number, data: Partial<IngredientTastingNote>) => {
     if (!sessionId) return;
     try {
-      await updateNote.mutateAsync({ sessionId, noteId, data, ingredientId: ingredientId?? undefined });
+      await updateNote.mutateAsync({ sessionId, noteId, data, ingredientId: ingredientId?? undefined, userId });
     } catch (error) {
       console.error('Failed to update note:', error);
     }
@@ -515,7 +520,7 @@ export default function IngredientTastingPage() {
     if (!sessionId) return;
     if (!confirm('Remove this feedback from the tasting session?')) return;
     try {
-      await deleteNote.mutateAsync({ sessionId, noteId });
+      await deleteNote.mutateAsync({ sessionId, noteId, userId });
     } catch (error) {
       console.error('Failed to delete note:', error);
     }
@@ -614,7 +619,7 @@ export default function IngredientTastingPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Feedback ({ingredientNotes.length})
           </h2>
-          {!showAddForm && (
+          {!showAddForm && isInvited && (
             <Button
               size="sm"
               onClick={() => setShowAddForm(true)}
@@ -632,6 +637,7 @@ export default function IngredientTastingPage() {
           <Card className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
             <CardContent className="pt-4">
               <FeedbackForm
+                initialData={{ taster_name: username || '' }}
                 onSubmit={handleAddNote}
                 onCancel={() => setShowAddForm(false)}
                 submitLabel="Add Feedback"
@@ -658,6 +664,8 @@ export default function IngredientTastingPage() {
                 isExpired={isSessionExpired(session.date)}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
+                currentUserId={userId}
+                isAdmin={userType === 'admin'}
               />
             ))}
           </div>

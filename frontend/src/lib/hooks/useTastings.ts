@@ -88,9 +88,11 @@ export function useAddNoteToSession() {
     mutationFn: ({
       sessionId,
       data,
+      userId,
     }: {
       sessionId: number;
-      data: CreateTastingNoteRequest;
+      data: CreateTastingNoteRequest & { user_id?: string | null };
+      userId?: string | null;
     }) => api.addNoteToSession(sessionId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -118,11 +120,13 @@ export function useUpdateTastingNote() {
       sessionId,
       noteId,
       data,
+      userId,
       recipeId,
     }: {
       sessionId: number;
       noteId: number;
       data: UpdateTastingNoteRequest;
+      userId?: string | null;
       recipeId?: number;
     }) => api.updateTastingNote(sessionId, noteId, data),
     onSuccess: (_, variables) => {
@@ -146,7 +150,7 @@ export function useDeleteTastingNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ sessionId, noteId }: { sessionId: number; noteId: number }) =>
+    mutationFn: ({ sessionId, noteId, userId }: { sessionId: number; noteId: number; userId?: string | null }) =>
       api.deleteTastingNote(sessionId, noteId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
