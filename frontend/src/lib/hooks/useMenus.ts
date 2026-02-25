@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
-import type { Menu, MenuDetail, CreateMenuRequest, UpdateMenuRequest, MenuItemRead } from '@/types';
+import type { CreateMenuRequest, UpdateMenuRequest } from '@/types';
 import { useAppState } from '@/lib/store';
 
 const MENUS_QUERY_KEY = 'menus';
@@ -33,7 +33,7 @@ export function useCreateMenu() {
       queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY] });
       toast.success('Menu created successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to create menu');
     },
   });
@@ -49,7 +49,7 @@ export function useUpdateMenu() {
       queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY, variables.menuId], exact: false });
       toast.success('Menu updated successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to update menu');
     },
   });
@@ -63,7 +63,7 @@ export function useForkMenu() {
       queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY] });
       toast.success('Menu forked successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to fork menu');
     },
   });
@@ -77,7 +77,7 @@ export function useDeleteMenu() {
       queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY] });
       toast.success('Menu deleted successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete menu');
     },
   });

@@ -169,7 +169,7 @@ export function useUploadRecipeImage() {
       // Optimistically update the images list cache to show the new image immediately
       queryClient.setQueryData(
         ['recipe-images', variables.recipeId],
-        (oldData: any[] | undefined) => [...(oldData || []), newImage]
+        (oldData: unknown[] | undefined) => [...(oldData || []), newImage]
       );
       // Still refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['recipe-images', variables.recipeId] });
