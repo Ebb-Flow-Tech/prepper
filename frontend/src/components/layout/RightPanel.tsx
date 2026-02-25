@@ -333,7 +333,6 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const { data: categories } = useCategories();
   const { data: recipeCategories } = useRecipeCategories();
   const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
-  const { userId, userType } = useAppState();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
@@ -427,26 +426,16 @@ export function RightPanel({ outlets }: RightPanelProps) {
 
     return recipes.filter((recipe) => {
       // Filter by search
+      // Note: Backend already handles access control, so we only filter by search term
       if (search.trim()) {
         const lower = search.toLowerCase();
         if (!recipe.name.toLowerCase().includes(lower)) {
           return false;
         }
       }
-
-      // Admin users can see all recipes
-      if (userType === 'admin') {
-        return true;
-      }
-
-      // Show recipe if user is the owner OR if recipe is public
-      const currUserId = userId ? userId : null;
-      if (recipe.owner_id !== currUserId && !recipe.is_public) {
-        return false;
-      }
       return true;
     });
-  }, [recipes, search, userId, userType]);
+  }, [recipes, search]);
 
   const isLoading = ingredientsLoading || recipesLoading;
   const hasError = ingredientsError || recipesError;
