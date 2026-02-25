@@ -698,11 +698,13 @@ export interface RegisterRequest {
   outlet_id?: number | null;
 }
 
+export type UserType = 'normal' | 'admin';
+
 export interface User {
   id: string;
   email: string;
   username: string;
-  user_type: 'normal' | 'admin';
+  user_type: UserType;
   is_manager: boolean;
   outlet_id: number | null;
   created_at: string;
