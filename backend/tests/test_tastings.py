@@ -132,6 +132,7 @@ def test_add_note_to_session(client: TestClient):
             "action_items": "Add more black pepper",
             "decision": "approved",
             "taster_name": "Chef Marco",
+            "user_id": "test-user-123",
         },
     )
     assert response.status_code == 201
@@ -139,6 +140,7 @@ def test_add_note_to_session(client: TestClient):
     assert data["recipe_id"] == recipe_id
     assert data["taste_rating"] == 5
     assert data["decision"] == "approved"
+    assert data["user_id"] == "test-user-123"
 
 
 def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
@@ -160,14 +162,24 @@ def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
     # Add note first time - should succeed
     response1 = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 4, "taster_name": "Chef Marco"},
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 4,
+            "taster_name": "Chef Marco",
+            "user_id": "user-marco",
+        },
     )
     assert response1.status_code == 201
 
     # Add note second time with different taster - should also succeed
     response2 = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 5, "taster_name": "Chef Sarah"},
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 5,
+            "taster_name": "Chef Sarah",
+            "user_id": "user-sarah",
+        },
     )
     assert response2.status_code == 201
 
@@ -198,11 +210,21 @@ def test_list_session_notes(client: TestClient):
     # Add notes
     client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe1["id"], "overall_rating": 4, "decision": "approved"},
+        json={
+            "recipe_id": recipe1["id"],
+            "overall_rating": 4,
+            "decision": "approved",
+            "user_id": "user-1",
+        },
     )
     client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe2["id"], "overall_rating": 3, "decision": "needs_work"},
+        json={
+            "recipe_id": recipe2["id"],
+            "overall_rating": 3,
+            "decision": "needs_work",
+            "user_id": "user-2",
+        },
     )
 
     # List notes
@@ -210,6 +232,9 @@ def test_list_session_notes(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
+    # Verify user_id is present in responses
+    assert data[0]["user_id"] is not None
+    assert data[1]["user_id"] is not None
 
 
 def test_update_tasting_note(client: TestClient):
@@ -231,9 +256,15 @@ def test_update_tasting_note(client: TestClient):
     # Add note
     note_response = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 3, "decision": "needs_work"},
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 3,
+            "decision": "needs_work",
+            "user_id": "user-123",
+        },
     )
     note_id = note_response.json()["id"]
+    assert note_response.json()["user_id"] == "user-123"
 
     # Update note
     response = client.patch(
@@ -245,6 +276,8 @@ def test_update_tasting_note(client: TestClient):
     assert data["overall_rating"] == 5
     assert data["decision"] == "approved"
     assert data["feedback"] == "Much better!"
+    # user_id should still be present
+    assert data["user_id"] == "user-123"
 
 
 def test_delete_tasting_note(client: TestClient):
@@ -266,9 +299,10 @@ def test_delete_tasting_note(client: TestClient):
     # Add note
     note_response = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 4},
+        json={"recipe_id": recipe_id, "overall_rating": 4, "user_id": "user-456"},
     )
     note_id = note_response.json()["id"]
+    assert note_response.json()["user_id"] == "user-456"
 
     # Delete note
     response = client.delete(f"/api/v1/tasting-sessions/{session_id}/notes/{note_id}")
@@ -572,3 +606,34 @@ def test_cascade_delete_session_notes(client: TestClient):
     # Verify notes are also deleted
     notes_after = client.get(f"/api/v1/recipes/{recipe_id}/tasting-notes").json()
     assert len(notes_after) == 0
+
+
+def test_add_note_requires_user_id(client: TestClient):
+    """Test that user_id should be provided when adding a note."""
+    # Create recipe
+    recipe_response = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Create session
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add note with user_id should succeed
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={
+            "recipe_id": recipe_id,
+            "overall_rating": 4,
+            "taster_name": "Chef",
+            "user_id": "current-user-id",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["user_id"] == "current-user-id"

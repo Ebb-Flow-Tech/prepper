@@ -68,9 +68,11 @@ export function useAddIngredientNote() {
     mutationFn: ({
       sessionId,
       data,
+      userId,
     }: {
       sessionId: number;
-      data: CreateIngredientTastingNoteRequest;
+      data: CreateIngredientTastingNoteRequest & { user_id?: string | null };
+      userId?: string | null;
     }) => api.addIngredientNote(sessionId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -95,11 +97,13 @@ export function useUpdateIngredientNote() {
       sessionId,
       noteId,
       data,
+      userId,
       ingredientId,
     }: {
       sessionId: number;
       noteId: number;
       data: UpdateIngredientTastingNoteRequest;
+      userId?: string | null;
       ingredientId?: number;
     }) => api.updateIngredientNote(sessionId, noteId, data),
     onSuccess: (_, variables) => {
@@ -120,7 +124,7 @@ export function useDeleteIngredientNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ sessionId, noteId }: { sessionId: number; noteId: number }) =>
+    mutationFn: ({ sessionId, noteId, userId }: { sessionId: number; noteId: number; userId?: string | null }) =>
       api.deleteIngredientNote(sessionId, noteId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
