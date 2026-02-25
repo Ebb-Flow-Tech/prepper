@@ -37,7 +37,14 @@ export default function LoginPage() {
         response.user.email,
         response.user.is_manager
       );
-      router.push('/recipes');
+
+      // Determine redirect destination
+      const params = new URLSearchParams(window.location.search);
+      const redirectParam = params.get('redirect');
+      const storedRedirect = localStorage.getItem('tasting_redirect_url');
+      const destination = redirectParam || storedRedirect || '/recipes';
+
+      router.push(destination);
     } catch (err: unknown) {
       console.error('Login error:', err);
       const apiError = err as AuthApiError;

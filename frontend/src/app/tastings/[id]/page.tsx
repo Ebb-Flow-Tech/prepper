@@ -697,6 +697,11 @@ export default function TastingSessionDetailPage() {
     }
   }, [session?.date]);
 
+  // Clear the tasting redirect URL when this page is accessed
+  useEffect(() => {
+    localStorage.removeItem('tasting_redirect_url');
+  }, []);
+
   const get24HourTime = (): string => {
     let hour = parseInt(selectedHour);
     if (selectedPeriod === 'AM') {
