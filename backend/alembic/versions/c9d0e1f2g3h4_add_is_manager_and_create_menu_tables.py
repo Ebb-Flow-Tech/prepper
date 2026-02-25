@@ -1,7 +1,7 @@
 """Add is_manager to users and create menu tables
 
-Revision ID: a7b8c9d0e1f2
-Revises: z6a7b8c9d0e1
+Revision ID: c9d0e1f2g3h4
+Revises: a7b8c9d0e1f2
 Create Date: 2026-02-24
 
 - Add is_manager column to users table with default False
@@ -17,8 +17,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a7b8c9d0e1f2'
-down_revision: Union[str, None] = 'z6a7b8c9d0e1'
+revision: str = 'c9d0e1f2g3h4'
+down_revision: Union[str, None] = 'a7b8c9d0e1f2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(['created_by'], ['user.id'], ),
+        sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_menus_name'), 'menus', ['name'], unique=False)
