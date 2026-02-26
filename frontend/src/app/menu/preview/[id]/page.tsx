@@ -213,16 +213,14 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                   )}
 
                                   {/* Substitution */}
-                                  {item.substitution && (
-                                    <div>
-                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                                        Substitution
-                                      </p>
-                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                        {item.substitution}
-                                      </p>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Substitution
+                                    </p>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.substitution || <span className="text-zinc-400 dark:text-zinc-600 italic">None</span>}
+                                    </p>
+                                  </div>
 
                                   {/* Price */}
                                   {item.display_price && (
