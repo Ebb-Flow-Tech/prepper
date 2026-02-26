@@ -474,6 +474,44 @@ def test_get_items_by_section(client: TestClient):
     assert data[0]["display_price"] == 10.00
 
 
+def test_menu_item_with_substitution(client: TestClient):
+    """Test creating menu item with substitution field."""
+    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+    recipe_id = _create_recipe(client, "Test Recipe")
+
+    response = client.post(
+        "/api/v1/menus",
+        json={
+            "name": "Menu with Substitution",
+            "outlet_ids": [outlet_id],
+            "sections": [
+                {
+                    "name": "Appetizers",
+                    "order_no": 1,
+                    "items": [
+                        {
+                            "recipe_id": recipe_id,
+                            "order_no": 1,
+                            "display_price": 12.00,
+                            "additional_info": "Served warm",
+                            "key_highlights": "House special",
+                            "substitution": "Can be made gluten-free",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["sections"]) == 1
+    assert len(data["sections"][0]["items"]) == 1
+    item = data["sections"][0]["items"][0]
+    assert item["substitution"] == "Can be made gluten-free"
+    assert item["additional_info"] == "Served warm"
+    assert item["key_highlights"] == "House special"
+
+
 # =============================================================================
 # Authorization Tests
 # =============================================================================

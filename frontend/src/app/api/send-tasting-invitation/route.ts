@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import sgMail from '@sendgrid/mail';
 import type { MailDataRequired } from '@sendgrid/mail';
+import twilio from 'twilio';
 
 // Request schema for sending tasting invitations
 const SendTastingInvitationSchema = z.object({
@@ -8,7 +9,10 @@ const SendTastingInvitationSchema = z.object({
   session_name: z.string().min(1),
   session_date: z.string(),
   session_location: z.string().optional().nullable(),
-  recipients: z.array(z.string().email()).min(1),
+  recipients: z.array(z.object({
+    email: z.string().email(),
+    phone_number: z.string().nullable().optional(),
+  })).min(1),
   message: z.string().optional(),
 });
 
@@ -94,9 +98,13 @@ export async function POST(request: Request) {
       </html>
     `;
 
-    // Create email messages for each recipient
-    const messages: MailDataRequired[] = validatedData.recipients.map((email) => ({
-      to: email,
+    // Separate recipients by channel (email vs SMS)
+    const emailRecipients = validatedData.recipients.filter((r) => r.email);
+    const smsRecipients = validatedData.recipients.filter((r) => r.phone_number);
+
+    // Create email messages for email recipients
+    const emailMessages: MailDataRequired[] = emailRecipients.map((recipient) => ({
+      to: recipient.email,
       from: {
         email: senderEmail,
         name: senderName,
@@ -105,12 +113,65 @@ export async function POST(request: Request) {
       html: emailHtml,
     }));
 
-    // Send emails via SendGrid SDK
-    await sgMail.send(messages);
+    // Build SMS message
+    const locationSuffix = validatedData.session_location ? ` at ${validatedData.session_location}` : '';
+    const smsText = `You're invited to a tasting session: "${validatedData.session_name}" on ${formattedDate}${locationSuffix}. Join here: ${inviteLink}`;
+
+    // Initialize Twilio for SMS (if configured)
+    let smsCount = 0;
+    const twilioSends: Promise<unknown>[] = [];
+
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
+
+    if (twilioAccountSid && twilioAuthToken && twilioFromNumber && smsRecipients.length > 0) {
+      try {
+        const twilioClient = twilio(twilioAccountSid, twilioAuthToken);
+        smsRecipients.forEach((recipient) => {
+          if (recipient.phone_number) {
+            twilioSends.push(
+              twilioClient.messages.create({
+                body: smsText,
+                from: twilioFromNumber,
+                to: recipient.phone_number,
+              })
+            );
+            smsCount++;
+          }
+        });
+      } catch (error) {
+        console.error('Twilio initialization error:', error);
+        // Continue with email sending even if Twilio fails
+      }
+    }
+
+    // Send emails and SMS in parallel
+    const sendPromises: Promise<unknown>[] = [];
+
+    if (emailMessages.length > 0) {
+      sendPromises.push(sgMail.send(emailMessages));
+    }
+
+    sendPromises.push(...twilioSends);
+
+    if (sendPromises.length > 0) {
+      await Promise.all(sendPromises);
+    }
+
+    const summary = [];
+    if (emailMessages.length > 0) {
+      summary.push(`${emailMessages.length} email(s)`);
+    }
+    if (smsCount > 0) {
+      summary.push(`${smsCount} SMS`);
+    }
 
     return Response.json({
       success: true,
-      message: `Invitations sent to ${validatedData.recipients.length} recipient(s)`,
+      message: `Invitations sent via ${summary.join(' and ')}`,
+      email_count: emailMessages.length,
+      sms_count: smsCount,
       recipient_count: validatedData.recipients.length,
     });
   } catch (error) {

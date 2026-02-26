@@ -6,7 +6,10 @@ interface SendTastingInvitationPayload {
   session_name: string;
   session_date: string;
   session_location?: string | null;
-  recipients: string[];
+  recipients: Array<{
+    email: string;
+    phone_number?: string | null;
+  }>;
   message?: string;
 }
 
@@ -14,6 +17,8 @@ interface SendTastingInvitationResponse {
   success: boolean;
   message: string;
   recipient_count: number;
+  email_count?: number;
+  sms_count?: number;
 }
 
 async function sendTastingInvitation(

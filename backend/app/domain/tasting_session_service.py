@@ -50,6 +50,7 @@ class TastingSessionService:
                         user_id=tu.user_id,
                         email=user.email,
                         username=user.username,
+                        phone_number=user.phone_number,
                     )
                 )
         return result

@@ -530,11 +530,11 @@ export default function TastingSessionDetailPage() {
     if (!sessionId) return;
     try {
       // Convert participants to attendees (emails) if needed
-      let updateData = data;
+      let updateData: { name?: string; location?: string | null; date?: string; attendees?: string[] } = data as { name?: string; location?: string | null; date?: string; attendees?: string[] };
       if ('participants' in data && data.participants) {
         updateData = { attendees: data.participants.map((p) => p.email) };
       }
-      await updateSession.mutateAsync({ id: sessionId, data: updateData as any });
+      await updateSession.mutateAsync({ id: sessionId, data: updateData });
     } catch (error) {
       console.error('Failed to update session:', error);
     }

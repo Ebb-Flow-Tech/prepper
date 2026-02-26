@@ -97,14 +97,17 @@ export default function NewTastingSessionPage() {
         notes: notes.trim() || null,
       });
 
-      // Send email invitations if there are attendees
+      // Send email/SMS invitations if there are attendees
       if (attendeeEmails.length > 0) {
         sendInvitation.mutate({
           session_id: session.id,
           session_name: name.trim(),
           session_date: getDateTimeString(),
           session_location: location.trim() || null,
-          recipients: attendeeEmails,
+          recipients: selectedParticipants.map((p) => ({
+            email: p.email,
+            phone_number: p.phone_number ?? null,
+          })),
         });
       }
 
