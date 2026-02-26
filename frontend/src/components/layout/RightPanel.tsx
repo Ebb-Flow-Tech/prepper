@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
@@ -37,7 +37,6 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
   const categoryName = ingredient.category_id ? categoryMap[ingredient.category_id] : null;
 
   const handleAddClick = () => {
-    // Dispatch custom event for CanvasTab to listen to
     window.dispatchEvent(
       new CustomEvent('canvas-add-ingredient', {
         detail: { ingredient },
@@ -50,64 +49,56 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
       ref={setNodeRef}
       data-ingredient-card
       className={cn(
-        'game-card game-card-ingredient game-card-sm game-card-hover',
+        'flex items-center gap-2.5 rounded-lg px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all group cursor-default',
         isDragging && 'opacity-50'
       )}
     >
-      {/* Card frame */}
-      <div className="game-card-frame" />
-
-      {/* Rarity indicator */}
-      <div className="game-card-rarity game-card-rarity-ingredient" />
-
-      {/* Card Art */}
-      <div className="game-card-art game-card-art-ingredient flex items-center justify-center">
-        <ImagePlus className="h-8 w-8 text-blue-300/50" />
-      </div>
-
-      {/* Title Banner */}
-      <div className="game-card-title">
-        <div className="flex items-center gap-2">
-          {isDragDropEnabled && (
-            <button
-              {...listeners}
-              {...attributes}
-              className="cursor-grab touch-none text-blue-300 hover:text-blue-100 active:cursor-grabbing"
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
-          )}
-          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
-            {ingredient.name}
-          </h3>
+      {/* Left accent + drag handle */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="w-0.5 h-6 rounded-full bg-blue-400 dark:bg-blue-500" />
+        {isDragDropEnabled && (
           <button
-            onClick={handleAddClick}
-            className="ml-auto p-1 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-            aria-label="Add to canvas"
+            {...listeners}
+            {...attributes}
+            className="cursor-grab touch-none text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 active:cursor-grabbing"
           >
-            <Plus className="h-3 w-3" />
+            <GripVertical className="h-3.5 w-3.5" />
           </button>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-sm text-zinc-900 dark:text-white truncate">
+          {ingredient.name}
+        </h3>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{ingredient.base_unit}</span>
+          {categoryName && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{categoryName}</span>
+            </>
+          )}
+          {ingredient.cost_per_base_unit !== null && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                {formatCurrency(ingredient.cost_per_base_unit)}/{ingredient.base_unit}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Card Body */}
-      <div className="game-card-body">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="game-card-stat game-card-stat-ingredient">{ingredient.base_unit}</span>
-            {categoryName && (
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 truncate">
-                {categoryName}
-              </span>
-            )}
-          </div>
-          <span className="text-sm text-blue-200/80 flex-shrink-0">
-            {ingredient.cost_per_base_unit !== null
-              ? `${formatCurrency(ingredient.cost_per_base_unit)}/${ingredient.base_unit}`
-              : 'no cost'}
-          </span>
-        </div>
-      </div>
+      {/* Add button */}
+      <button
+        onClick={handleAddClick}
+        className="shrink-0 p-1 rounded-md text-zinc-400 dark:text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all"
+        aria-label="Add to canvas"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -135,7 +126,6 @@ function DraggableRecipeCard({
       toast.warning('Cannot add this recipe to itself');
       return;
     }
-    // Dispatch custom event for CanvasTab to listen to
     window.dispatchEvent(
       new CustomEvent('canvas-add-recipe', {
         detail: { recipe },
@@ -148,89 +138,72 @@ function DraggableRecipeCard({
       ref={setNodeRef}
       data-recipe-card
       className={cn(
-        'game-card game-card-recipe game-card-sm game-card-hover',
+        'flex items-center gap-2.5 rounded-lg px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all group cursor-default',
         isDragging && 'opacity-50',
         isCurrentRecipe && 'opacity-40 cursor-not-allowed'
       )}
     >
-      {/* Card frame */}
-      <div className="game-card-frame" />
+      {/* Left accent + drag handle */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="w-0.5 h-6 rounded-full bg-green-400 dark:bg-green-500" />
+        {isDragDropEnabled && (
+          <button
+            {...listeners}
+            {...attributes}
+            className={cn(
+              'touch-none text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400',
+              isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+            )}
+            disabled={isCurrentRecipe}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
-      {/* Rarity indicator */}
-      <div className="game-card-rarity game-card-rarity-recipe" />
-
-      {/* Card Art */}
-      {recipe.image_url ? (
-        <div className="game-card-art relative">
-          <img
-            src={recipe.image_url}
-            alt={recipe.name}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <div className="game-card-art game-card-art-recipe flex items-center justify-center">
-          <ImagePlus className="h-8 w-8 text-green-300/50" />
+      {/* Image thumbnail (if available) */}
+      {recipe.image_url && (
+        <div className="w-8 h-8 rounded overflow-hidden shrink-0">
+          <img src={recipe.image_url} alt={recipe.name} className="w-full h-full object-cover" />
         </div>
       )}
 
-      {/* Title Banner */}
-      <div className="game-card-title">
-        <div className="flex items-center gap-2">
-          {isDragDropEnabled && (
-            <button
-              {...listeners}
-              {...attributes}
-              className={cn(
-                'touch-none text-green-300 hover:text-green-100',
-                isCurrentRecipe ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
-              )}
-              disabled={isCurrentRecipe}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
-          )}
-          <h3 className="flex-1 font-bold text-white truncate text-sm tracking-wide uppercase">
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <h3 className="font-medium text-sm text-zinc-900 dark:text-white truncate">
             {recipe.name}
           </h3>
-          <button
-            onClick={handleAddClick}
-            disabled={isCurrentRecipe}
-            className="ml-auto p-1 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Add to canvas"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Card Body */}
-      <div className="game-card-body">
-        <div className="flex items-center justify-between mb-2">
-          <span className="game-card-stat game-card-stat-recipe">
-            {recipe.yield_quantity} {recipe.yield_unit}
-          </span>
           {isCurrentRecipe && (
-            <span className="text-xs text-green-300/60 uppercase tracking-wide">Current</span>
+            <span className="text-[10px] font-medium uppercase text-zinc-400 dark:text-zinc-500 shrink-0">current</span>
           )}
         </div>
-
-        {/* Outlets and Categories */}
-        {(outletNames.length > 0 || categoryNames.length > 0) && (
-          <div className="flex flex-wrap gap-1">
-            {outletNames.map((name) => (
-              <span key={name} className="text-xs bg-green-500/30 text-green-200 px-1.5 py-0.5 rounded">
-                {name}
-              </span>
-            ))}
-            {categoryNames.map((name) => (
-              <span key={name} className="text-xs bg-green-400/20 text-green-300 px-1.5 py-0.5 rounded">
-                {name}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{recipe.yield_quantity} {recipe.yield_unit}</span>
+          {outletNames.length > 0 && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{outletNames.join(', ')}</span>
+            </>
+          )}
+          {categoryNames.length > 0 && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{categoryNames.join(', ')}</span>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Add button */}
+      <button
+        onClick={handleAddClick}
+        disabled={isCurrentRecipe}
+        className="shrink-0 p-1 rounded-md text-zinc-400 dark:text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-green-500 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-all disabled:opacity-0"
+        aria-label="Add to canvas"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -444,57 +417,58 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const showRecipes = activeTab === 'all' || activeTab === 'items';
 
   return (
-    <aside className={cn("flex h-full flex-col border-l border-border bg-secondary transition-all duration-300 ease-in-out overflow-hidden", isCollapsed ? "w-12" : "w-72")}>
+    <aside className={cn("flex h-full flex-col border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 transition-all duration-300 ease-in-out overflow-hidden", isCollapsed ? "w-10" : "w-72")}>
       {/* Header */}
       {!isCollapsed && (
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <h2 className="font-semibold">Library</h2>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
-              <Plus className="h-4 w-4" />
-              New
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Library</h2>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowForm(true)}
+              disabled={showForm}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40"
+              title="New ingredient"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
               onClick={() => setIsCollapsed(true)}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title="Collapse panel"
             >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}
 
       {/* Collapsed Header */}
       {isCollapsed && (
-        <div className="flex items-center justify-center border-b border-zinc-200 px-2 py-3 dark:border-zinc-800">
-          <Button
-            size="sm"
-            variant="ghost"
+        <div className="flex items-center justify-center border-b border-zinc-200 dark:border-zinc-800 px-1 py-2.5">
+          <button
             onClick={() => setIsCollapsed(false)}
+            className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             title="Expand panel"
-            className="p-1"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
       {!isCollapsed && (
         <>
           {/* Tabs */}
-          <div className="border-b border-zinc-200 dark:border-zinc-800">
-            <nav className="flex" aria-label="Library tabs">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 px-3 pt-1">
+            <nav className="flex gap-1" aria-label="Library tabs">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors',
                     activeTab === tab.id
-                      ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
-                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                      ? 'bg-zinc-200/70 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
                   )}
                 >
                   {tab.label}
@@ -504,44 +478,38 @@ export function RightPanel({ outlets }: RightPanelProps) {
           </div>
 
           {/* Search */}
-          <div className="border-b border-border p-3">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  activeTab === 'ingredients'
-                    ? 'Search ingredients...'
-                    : activeTab === 'items'
-                      ? 'Search recipes...'
-                      : 'Search all...'
-                }
-                className="pl-9"
+                placeholder="Search..."
+                className="pl-8 h-8 text-sm"
               />
             </div>
           </div>
 
-          {/* Category Filter - Only show for ingredients tab */}
+          {/* Category Filter — compact */}
           {(activeTab === 'all' || activeTab === 'ingredients') && categories && categories.length > 0 && (
-            <div className="border-b border-border">
+            <div className="border-b border-zinc-200 dark:border-zinc-800">
               <button
                 onClick={() => setShowCategoryFilter(!showCategoryFilter)}
-                className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="w-full px-3 py-1.5 flex items-center justify-between text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50 transition-colors"
               >
-                <span>Categories {selectedCategories.length > 0 && `(${selectedCategories.length})`}</span>
-                <ChevronDown className={cn("h-4 w-4 transition-transform", showCategoryFilter && "rotate-180")} />
+                <span>Filter{selectedCategories.length > 0 ? ` (${selectedCategories.length})` : ''}</span>
+                <ChevronDown className={cn("h-3 w-3 transition-transform", showCategoryFilter && "rotate-180")} />
               </button>
 
               {showCategoryFilter && (
-                <div className="p-3 border-t border-zinc-100 dark:border-zinc-800">
-                  <div className="flex flex-wrap gap-1.5 mb-3">
+                <div className="px-3 pb-2">
+                  <div className="flex flex-wrap gap-1">
                     {categories.filter(c => c.is_active).map((category) => (
                       <button
                         key={category.id}
                         onClick={() => toggleCategory(category.id)}
                         className={cn(
-                          'px-2 py-1 text-xs font-medium rounded transition-colors',
+                          'px-2 py-0.5 text-[11px] font-medium rounded-full transition-colors',
                           selectedCategories.includes(category.id)
                             ? 'bg-blue-500 text-white'
                             : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
@@ -550,15 +518,15 @@ export function RightPanel({ outlets }: RightPanelProps) {
                         {category.name}
                       </button>
                     ))}
+                    {selectedCategories.length > 0 && (
+                      <button
+                        onClick={clearCategoryFilters}
+                        className="px-2 py-0.5 text-[11px] text-blue-500 dark:text-blue-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                  {selectedCategories.length > 0 && (
-                    <button
-                      onClick={clearCategoryFilters}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Clear filters
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -566,7 +534,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
 
           {/* List */}
           <div
-            className="flex-1 overflow-y-auto p-3"
+            className="flex-1 overflow-y-auto px-2.5 py-2"
             onDoubleClick={(e) => {
               if (!(e.target as HTMLElement).closest('[data-ingredient-card]') && !(e.target as HTMLElement).closest('[data-recipe-card]')) {
                 setShowForm(true);
@@ -574,7 +542,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
             }}
           >
         {showForm && (
-          <div className="mb-3">
+          <div className="mb-2">
             <NewIngredientForm onClose={() => setShowForm(false)} />
           </div>
         )}
@@ -582,28 +550,23 @@ export function RightPanel({ outlets }: RightPanelProps) {
         {isLoading ? (
           <ListSkeleton />
         ) : hasError ? (
-          <div className="rounded-lg bg-red-50 p-4 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <div className="rounded-lg bg-red-50 p-3 text-center text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
             Failed to load items
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Ingredients Section */}
             {showIngredients && (
               <div>
                 {activeTab === 'all' && (
-                  <h3 className="mb-2 text-xs font-semibold uppercase text-zinc-500">Ingredients</h3>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-1">Ingredients</h3>
                 )}
                 {filteredIngredients.length === 0 ? (
-                  <p className="text-sm text-zinc-500">
-                    {search ? 'No ingredients found' : 'No ingredients yet'}
+                  <p className="text-xs text-zinc-500 px-1">
+                    {search ? 'No matches' : 'No ingredients yet'}
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {activeTab !== 'all' && (
-                      <p className="mb-2 text-xs text-zinc-500">
-                        Drag to add to recipe
-                      </p>
-                    )}
+                  <div className="space-y-1">
                     {filteredIngredients.map((ingredient) => (
                       <DraggableIngredientCard
                         key={ingredient.id}
@@ -620,19 +583,14 @@ export function RightPanel({ outlets }: RightPanelProps) {
             {showRecipes && (
               <div>
                 {activeTab === 'all' && (
-                  <h3 className="mb-2 text-xs font-semibold uppercase text-zinc-500">Items (Recipes)</h3>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-1">Items</h3>
                 )}
                 {filteredRecipes.length === 0 ? (
-                  <p className="text-sm text-zinc-500">
-                    {search ? 'No recipes found' : 'No recipes yet'}
+                  <p className="text-xs text-zinc-500 px-1">
+                    {search ? 'No matches' : 'No recipes yet'}
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {activeTab !== 'all' && (
-                      <p className="mb-2 text-xs text-zinc-500">
-                        Drag to add as item
-                      </p>
-                    )}
+                  <div className="space-y-1">
                     {filteredRecipes.map((recipe) => (
                       <DraggableRecipeCard
                         key={recipe.id}
@@ -646,13 +604,10 @@ export function RightPanel({ outlets }: RightPanelProps) {
               </div>
             )}
 
-            {/* Empty state for All tab */}
+            {/* Empty state */}
             {activeTab === 'all' && filteredIngredients.length === 0 && filteredRecipes.length === 0 && !search && (
               <div className="py-8 text-center">
-                <p className="text-sm text-zinc-500">No items yet</p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  Double-click to add an ingredient
-                </p>
+                <p className="text-xs text-zinc-500">No items yet</p>
               </div>
             )}
           </div>
