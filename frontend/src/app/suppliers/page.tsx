@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
 import { useSuppliers, useUpdateSupplier, useDeactivateSupplier } from '@/lib/hooks';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle, Checkbox } from '@/components/ui';
 import { AddSupplierModal, SupplierListRow } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
@@ -230,15 +230,11 @@ export default function SuppliersPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="rounded border-zinc-300 dark:border-zinc-700"
-              />
-              Show archived
-            </label>
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
 
             <ViewToggle view={view} onViewChange={setView} />
           </div>

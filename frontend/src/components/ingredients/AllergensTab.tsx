@@ -6,7 +6,7 @@ import { useAllergens, useUpdateAllergen, useDeleteAllergen } from '@/lib/hooks'
 import { AddAllergenModal } from '@/components/allergens/AddAllergenModal';
 import { AllergenCard } from '@/components/allergens/AllergenCard';
 import { AllergenListRow } from '@/components/allergens/AllergenListRow';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Allergen } from '@/types';
 
@@ -181,15 +181,11 @@ export function AllergensTab() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="rounded border-zinc-300 dark:border-zinc-700"
-              />
-              Show archived
-            </label>
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
 
             <ViewToggle view={view} onViewChange={setView} />
           </div>

@@ -66,6 +66,13 @@ class RecipeIngredientReorder(SQLModel):
     ordered_ids: list[int]
 
 
+class AllergenInfo(SQLModel):
+    """Minimal allergen data for nested response."""
+
+    id: int
+    name: str
+
+
 class IngredientNested(SQLModel):
     """Ingredient data for nested response in RecipeIngredientRead."""
 
@@ -75,6 +82,7 @@ class IngredientNested(SQLModel):
     cost_per_base_unit: float | None = None
     is_active: bool = True
     suppliers: list[dict] | None = None
+    allergens: list[AllergenInfo] | None = None
 
 
 class RecipeIngredientRead(SQLModel):

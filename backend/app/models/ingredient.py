@@ -10,6 +10,7 @@ from sqlmodel import Field, Relationship, SQLModel
 if TYPE_CHECKING:
     from app.models.recipe_ingredient import RecipeIngredient
     from app.models.category import Category
+    from app.models.ingredient_allergen import IngredientAllergen
 
 
 class FoodCategory(str, Enum):
@@ -129,6 +130,9 @@ class Ingredient(IngredientBase, table=True):
 
     # Relationship to Category
     category_rel: Optional["Category"] = Relationship(back_populates="ingredients")
+
+    # Relationship to IngredientAllergen
+    ingredient_allergens: list["IngredientAllergen"] = Relationship(back_populates="ingredient")
 
 
 class IngredientCreate(SQLModel):

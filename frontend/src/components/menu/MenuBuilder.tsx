@@ -22,9 +22,9 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useRecipes, useOutlets, useCreateMenu, useUpdateMenu, useForkMenu } from '@/lib/hooks';
+import { useRecipes, useOutlets, useCreateMenu, useUpdateMenu, useForkMenu, useRecipeAllergensBatch } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
-import { Button, Input, Select, Textarea } from '@/components/ui';
+import { Button, Input, Select, Textarea, Badge, Checkbox } from '@/components/ui';
 import type { MenuDetail, Recipe } from '@/types';
 
 interface MenuBuilderProps {
@@ -59,6 +59,7 @@ function DraggableSection({
   onRemoveItem,
   onUpdateItem,
   viewMode,
+  allergenMap,
 }: {
   section: LocalSection;
   sectionIndex: number;
@@ -69,6 +70,7 @@ function DraggableSection({
   onRemoveItem: (sectionIndex: number, itemIndex: number) => void;
   onUpdateItem: (sectionIndex: number, itemIndex: number, field: string, value: unknown) => void;
   viewMode: 'card' | 'list';
+  allergenMap?: Map<number, any[]>;
 }) {
   const {
     attributes,
@@ -146,6 +148,7 @@ function DraggableSection({
                   onUpdateItem(sectionIndex, itemIndex, field, value)
                 }
                 viewMode={viewMode}
+                allergenMap={allergenMap}
               />
             ))}
           </div>
@@ -164,6 +167,7 @@ function DraggableItem({
   onRemove,
   onUpdate,
   viewMode,
+  allergenMap,
 }: {
   item: LocalItem;
   itemIndex: number;
@@ -172,6 +176,7 @@ function DraggableItem({
   onRemove: () => void;
   onUpdate: (field: string, value: unknown) => void;
   viewMode: 'card' | 'list';
+  allergenMap?: Map<number, any[]>;
 }) {
   const {
     attributes,
@@ -249,6 +254,20 @@ function DraggableItem({
               className="w-full"
             />
           </div>
+
+          {/* Allergens */}
+          {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Allergens
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
+                  <Badge key={a.id} variant="warning">{a.name}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Price */}
           <div>
@@ -346,6 +365,15 @@ function DraggableItem({
         </Button>
       </div>
 
+      {/* Allergens */}
+      {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-1 ml-6 mt-1">
+          {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
+            <Badge key={a.id} variant="warning">{a.name}</Badge>
+          ))}
+        </div>
+      )}
+
       {/* Key highlights and additional info */}
       <div className="space-y-2 ml-6">
         <Textarea
@@ -395,6 +423,13 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
       })),
     })) || []
   );
+
+  // Extract all recipe IDs from sections for batch allergen fetching
+  const recipeIds = useMemo(
+    () => sections.flatMap((s) => s.items.map((i) => i.recipe_id)).filter(Boolean) as number[],
+    [sections]
+  );
+  const { data: allergenMap } = useRecipeAllergensBatch(recipeIds);
 
   // Setup sensors for dnd-kit
   const sensors = useSensors(
@@ -591,41 +626,28 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <input
-            id="published"
-            type="checkbox"
-            checked={isPublished}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsPublished(e.target.checked)}
-            className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-          />
-          <label htmlFor="published" className="text-sm font-medium cursor-pointer">
-            Publish menu
-          </label>
-        </div>
+        <Checkbox
+          checked={isPublished}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsPublished(e.target.checked)}
+          label="Publish menu"
+        />
 
         <div>
           <label className="block text-sm font-medium mb-2">Outlets *</label>
           <div className="space-y-2">
             {accessibleOutlets.map((outlet) => (
-              <div key={outlet.id} className="flex items-center gap-3">
-                <input
-                  id={`outlet-${outlet.id}`}
-                  type="checkbox"
-                  checked={selectedOutletIds.includes(outlet.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedOutletIds([...selectedOutletIds, outlet.id]);
-                    } else {
-                      setSelectedOutletIds(selectedOutletIds.filter((id) => id !== outlet.id));
-                    }
-                  }}
-                  className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                />
-                <label htmlFor={`outlet-${outlet.id}`} className="text-sm cursor-pointer">
-                  {outlet.name}
-                </label>
-              </div>
+              <Checkbox
+                key={outlet.id}
+                checked={selectedOutletIds.includes(outlet.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedOutletIds([...selectedOutletIds, outlet.id]);
+                  } else {
+                    setSelectedOutletIds(selectedOutletIds.filter((id) => id !== outlet.id));
+                  }
+                }}
+                label={outlet.name}
+              />
             ))}
           </div>
         </div>
@@ -681,6 +703,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
                   onRemoveItem={removeItem}
                   onUpdateItem={updateItem}
                   viewMode={viewMode}
+                  allergenMap={allergenMap}
                 />
               ))}
             </div>

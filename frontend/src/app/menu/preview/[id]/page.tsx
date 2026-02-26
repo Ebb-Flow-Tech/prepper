@@ -1,11 +1,11 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ChevronDown, ChevronUp, ArrowLeft, LayoutGrid, List } from 'lucide-react';
-import { useMenu, useRecipes } from '@/lib/hooks';
-import { Skeleton, Button } from '@/components/ui';
+import { useMenu, useRecipes, useRecipeAllergensBatch } from '@/lib/hooks';
+import { Skeleton, Button, Badge } from '@/components/ui';
 
 interface PreviewMenuPageProps {
   params: Promise<{ id: string }>;
@@ -18,6 +18,13 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
   const { data: recipes = [] } = useRecipes();
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
+
+  // Extract all recipe IDs from menu sections for batch allergen fetching
+  const recipeIds = useMemo(
+    () => menu?.sections.flatMap((s) => s.items.map((i) => i.recipe_id)) ?? [],
+    [menu]
+  );
+  const { data: allergenMap } = useRecipeAllergensBatch(recipeIds);
 
   const toggleSection = (sectionId: number) => {
     setExpandedSections((prev) => {
@@ -167,6 +174,20 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                     </p>
                                   </div>
 
+                                  {/* Allergens */}
+                                  {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                        Allergens
+                                      </p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {(allergenMap.get(item.recipe_id) ?? []).map((a) => (
+                                          <Badge key={a.id} variant="warning">{a.name}</Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
                                   {/* Key Highlights */}
                                   {item.key_highlights && (
                                     <div>
@@ -214,8 +235,15 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                   <p className="font-medium">{item.recipe_name}</p>
+                                  {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {(allergenMap.get(item.recipe_id) ?? []).map((a) => (
+                                        <Badge key={a.id} variant="warning">{a.name}</Badge>
+                                      ))}
+                                    </div>
+                                  )}
                                   {item.key_highlights && (
-                                    <p className="text-sm text-zinc-500 italic">
+                                    <p className="text-sm text-zinc-500 italic mt-2">
                                       {item.key_highlights}
                                     </p>
                                   )}

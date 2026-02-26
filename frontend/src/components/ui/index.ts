@@ -5,6 +5,7 @@ export { Textarea } from './Textarea';
 export { Badge } from './Badge';
 export { Skeleton } from './Skeleton';
 export { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from './Card';
+export { Checkbox } from './Checkbox';
 export { MasonryGrid } from './MasonryGrid';
 export { GroupSection } from './GroupSection';
 export { ListSection } from './ListSection';
