@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@config "../../tailwind.config.ts";
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -591,7 +593,7 @@
 
   /* Auto dark mode (respects system preference when no manual toggle) */
   @media (prefers-color-scheme: dark) {
-    :root:not(.light) {
+    :root:not(.light):not(.dark) {
       /* Core Brand Colors - Adjusted for dark mode */
       --color-terracotta: 15 65% 60%;
       --color-terracotta-light: 15 65% 15%;
@@ -753,11 +755,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not(.light) ::-webkit-scrollbar-thumb {
+  :root:not(.light):not(.dark) ::-webkit-scrollbar-thumb {
     background: hsl(220 15% 25%);
   }
 
-  :root:not(.light) ::-webkit-scrollbar-thumb:hover {
+  :root:not(.light):not(.dark) ::-webkit-scrollbar-thumb:hover {
     background: hsl(220 15% 35%);
   }
 }
