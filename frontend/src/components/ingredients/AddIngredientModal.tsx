@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCreateIngredient, useSuppliers, useCategorizeIngredient } from '@/lib/hooks';
-import { Button, Input, Select, Modal } from '@/components/ui';
+import { Button, Input, Select, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
@@ -226,15 +226,11 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={isHalal}
-                onChange={(e) => setIsHalal(e.target.checked)}
-                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500"
-              />
-              Halal
-            </label>
+            <Checkbox
+              checked={isHalal}
+              onChange={(e) => setIsHalal(e.target.checked)}
+              label="Halal"
+            />
           </div>
         </div>
 
@@ -419,20 +415,12 @@ function SupplierEntryForm({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="checkbox"
-          id={`preferred-${entry.id}`}
+      <div className="mt-3">
+        <Checkbox
           checked={entry.is_preferred}
           onChange={(e) => onChange(entry.id, 'is_preferred', e.target.checked)}
-          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500"
+          label="Preferred Supplier"
         />
-        <label
-          htmlFor={`preferred-${entry.id}`}
-          className="text-sm text-zinc-700 dark:text-zinc-300"
-        >
-          Preferred Supplier
-        </label>
       </div>
     </div>
   );

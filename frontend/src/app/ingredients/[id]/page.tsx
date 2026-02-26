@@ -20,7 +20,7 @@ import {
   useDeleteIngredientAllergen,
 } from '@/lib/hooks';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateIngredientSupplierRequest } from '@/types';
 
@@ -574,17 +574,11 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                           options={UNIT_OPTIONS}
                         />
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={ingredient.is_halal}
-                            onChange={(e) => handleUpdateIngredient({ is_halal: e.target.checked })}
-                            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500"
-                          />
-                          <span className="text-zinc-500 dark:text-zinc-400">Halal</span>
-                        </label>
-                      </div>
+                      <Checkbox
+                        checked={ingredient.is_halal}
+                        onChange={(e) => handleUpdateIngredient({ is_halal: e.target.checked })}
+                        label="Halal"
+                      />
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-zinc-500 dark:text-zinc-400">Category:</span>
                         <Badge variant={currentCategory ? 'default' : 'secondary'}>

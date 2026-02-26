@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useAllergens, useIngredientAllergenLinks } from '@/lib/hooks';
 import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal, AllergensTab } from '@/components/ingredients';
-import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
+import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
 import { useAppState, type IngredientTab } from '@/lib/store';
@@ -236,15 +236,11 @@ function IngredientsListTab() {
               className="w-36"
             />
 
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="rounded border-zinc-300 dark:border-zinc-700"
-              />
-              Show archived
-            </label>
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
 
             <ViewToggle view={view} onViewChange={setView} />
           </div>
