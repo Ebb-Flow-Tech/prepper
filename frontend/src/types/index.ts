@@ -228,6 +228,7 @@ export interface TastingParticipant {
   user_id: string | null;
   email: string;
   username: string;
+  phone_number?: string | null;
 }
 
 export interface TastingSession {
@@ -711,6 +712,7 @@ export interface RegisterRequest {
   username: string;
   user_type?: string;
   outlet_id?: number | null;
+  phone_number?: string | null;
 }
 
 export type UserType = 'normal' | 'admin';
@@ -722,6 +724,7 @@ export interface User {
   user_type: UserType;
   is_manager: boolean;
   outlet_id: number | null;
+  phone_number?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -771,6 +774,7 @@ export interface MenuItem {
   display_price: number | null;
   additional_info: string | null;
   key_highlights: string | null;
+  substitution: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -801,6 +805,7 @@ export interface CreateMenuItemRequest {
   display_price?: number | null;
   additional_info?: string | null;
   key_highlights?: string | null;
+  substitution?: string | null;
 }
 
 export interface CreateMenuSectionRequest {

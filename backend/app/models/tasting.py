@@ -80,6 +80,7 @@ class TastingUserRead(SQLModel):
     user_id: Optional[str]
     email: str
     username: str
+    phone_number: Optional[str] = None
 
 
 class TastingSessionRead(TastingSessionBase):

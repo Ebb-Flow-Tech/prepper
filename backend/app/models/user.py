@@ -21,6 +21,7 @@ class UserBase(SQLModel):
     user_type: UserType = Field(default=UserType.NORMAL)
     is_manager: bool = Field(default=False, description="Can manage menus and other resources")
     outlet_id: int | None = Field(default=None, foreign_key="outlets.id")
+    phone_number: str | None = Field(default=None, description="Optional phone number")
 
 
 class User(UserBase, table=True):
@@ -53,6 +54,7 @@ class UserUpdate(SQLModel):
     user_type: UserType | None = None
     is_manager: bool | None = None
     outlet_id: int | None = None
+    phone_number: str | None = None
 
 
 class UserRead(UserBase):
@@ -60,5 +62,6 @@ class UserRead(UserBase):
 
     id: str
     is_manager: bool
+    phone_number: str | None
     created_at: datetime
     updated_at: datetime

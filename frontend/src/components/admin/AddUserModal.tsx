@@ -23,6 +23,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [userType, setUserType] = useState<UserType>('normal');
   const [outletId, setOutletId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,6 +32,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
     setEmail('');
     setUsername('');
     setPassword('');
+    setPhoneNumber('');
     setUserType('normal');
     setOutletId('');
     setIsSubmitting(false);
@@ -59,6 +61,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
         email: email.trim(),
         username: username.trim(),
         password: password.trim(),
+        phone_number: phoneNumber || undefined,
         user_type: userType,
         outlet_id: outletId ? parseInt(outletId) : null,
       });
@@ -110,6 +113,18 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Phone Number (optional)
+          </label>
+          <Input
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            placeholder="+1 (555) 000-0000"
           />
         </div>
 
