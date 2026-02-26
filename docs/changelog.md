@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.16** (2026-02-26) - SMS Invitations, Tasting Participant Association & Menu Management: Twilio SMS Integration, User-Based Session Relationships & Drag-and-Drop Menu Reordering
 - **0.0.15** (2026-02-23) - Access Control & Allergen Management: Admin User Management, Hierarchical Access Control, Allergen Tracking & Supplier Soft Delete
 - **0.0.14** (2026-02-12) - Parent Outlet Recipes Display: Read-Only Table for Multi-Brand Recipe Management
 - **0.0.13** (2026-01-28) - Ingredient Tasting & Text-Based Features: Standalone Tasting Notes, Direct Ingredient Input, Collapsible UI & Image Support
@@ -21,6 +22,98 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.16] - 2026-02-26
+
+### Added
+
+#### SMS Invitations for Tasting Sessions
+
+Integrated Twilio SMS delivery for tasting session invitations, providing multi-channel communication alongside email.
+
+**Features**:
+- Twilio SMS integration for sending SMS invitations to tasting session participants
+- Parallel email (SendGrid) and SMS (Twilio) delivery in single API call
+- Graceful degradation if Twilio not configured—falls back to email-only without errors
+- SMS includes session name, date, location, and invite link in plain text format
+- Participant phone numbers managed through `TastingParticipant` type with optional `phone_number` field
+- API response includes `email_count` and `sms_count` for delivery transparency
+
+**Files Modified**:
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Added Twilio integration
+- `frontend/src/lib/hooks/useSendTastingInvitation.ts` — Updated recipient type and response schema
+- `frontend/src/app/tastings/new/page.tsx` — Updated invitation caller to pass phone numbers
+- `frontend/package.json` — Added `twilio` dependency
+
+**Environment Variables**:
+- `TWILIO_ACCOUNT_SID` — Twilio account identifier
+- `TWILIO_AUTH_TOKEN` — Twilio authentication token
+- `TWILIO_FROM_NUMBER` — Twilio phone number for sending SMS
+
+#### Tasting Session Participant Association
+
+Replaced email-based attendee lists with proper user-session relationships via `TastingUser` join table.
+
+**Features**:
+- `TastingUser` many-to-many join table links users to tasting sessions
+- `TastingUserRead` DTO displays participant names and emails from User table (instead of email strings)
+- Email-to-user resolution in service layer (`_resolve_attendees_to_users()`) with silent skipping of unregistered emails
+- Access control: non-admin users can only access sessions they participate in (403 Forbidden otherwise)
+- Admin users bypass participant check for unrestricted access
+- Backward compatibility: `attendees` field retained on request DTOs for wire compatibility
+
+**Database Changes**:
+- New `TastingUser` model as join table
+- Alembic migration creates `tasting_users` table
+- Cascade delete on session deletion, SET NULL on user deletion
+- Unique constraint on (session_id, user_id) prevents duplicate participation
+
+**API Changes**:
+- All tasting endpoints return `TastingSessionRead` with `participants: List[TastingUserRead]`
+- Non-admin GET/PATCH/DELETE now require user participation or admin status
+- Email lookup happens transparently during create/update operations
+
+**Frontend**:
+- New `ParticipantPicker` component for user selection during session creation
+- Uses existing `useUsers()` hook for user lookup
+- Supports search by username or email
+- Displays selected user badges with removal capability
+
+**Test Coverage**:
+- 26/26 tests passing with participant resolution and access control validation
+- Tests verify unregistered email skipping and admin access override
+
+**Files Modified**:
+- `backend/app/models/tasting.py` — Added `TastingUser` and `TastingUserRead`
+- `backend/app/domain/tasting_session_service.py` — Service layer improvements
+- `backend/app/api/tastings.py` — API router updates with access control
+- `backend/tests/test_tastings.py` — Comprehensive test coverage
+
+#### Menu Management Enhancements
+
+Enhanced menu builder with drag-and-drop reordering and new editable metadata fields.
+
+**Features**:
+- Drag-and-drop reordering for menu sections and individual menu items
+- Real-time order number updates during drag operations
+- New `key_highlights` textarea field for signature items, seasonal specials, etc. (appears first)
+- New `additional_info` textarea field for dietary notes, preparation tips, etc. (appears second)
+- `DraggableSection` component wrapper for section-level drag handling
+- `DraggableItem` component wrapper for item-level drag handling
+- Visual feedback with opacity changes during drag operations
+- Grip icons for clear drag handles
+- Support for both create mode (no IDs) and update mode (with existing IDs)
+
+**Components**:
+- `MenuBuilder.tsx` — Main component managing drag-drop state and operations
+- `DraggableSection` — Section wrapper with drag handle
+- `DraggableItem` — Item wrapper with drag handle
+- Proper type handling for `MenuItem` model fields
+
+**Files Modified**:
+- `frontend/src/components/menu/MenuBuilder.tsx` — Full drag-and-drop implementation
 
 ---
 
