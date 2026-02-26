@@ -303,8 +303,45 @@ All endpoints under `/api/v1`:
 **Frontend** (`.env.local`):
 - `NEXT_PUBLIC_API_URL` — Backend URL (default: `http://localhost:8000/api/v1`)
 - `OPENAI_API_KEY` — OpenAI API key (optional, for DALL-E 3 image generation)
+- `TWILIO_ACCOUNT_SID` — Twilio account SID (optional, for SMS invitations)
+- `TWILIO_AUTH_TOKEN` — Twilio auth token (optional, for SMS invitations)
+- `TWILIO_FROM_NUMBER` — Twilio phone number for SMS sending (optional, for SMS invitations)
 
 ## Key Features (Recent Additions)
+
+**SMS Invitations for Tasting Sessions** (Feb 26)
+- Twilio SMS integration for tasting session invitations
+- `useSendTastingInvitation` hook supports parallel email (SendGrid) and SMS (Twilio) delivery
+- API route `/api/send-tasting-invitation` handles both channels with configurable recipients
+- Graceful degradation if Twilio not configured—falls back to email-only without error
+- SMS includes session name, date, location, and invite link in plain text format
+- Participant phone numbers managed through `TastingParticipant` type with `phone_number` field
+- Response includes `email_count` and `sms_count` for transparency
+- Frontend updated to pass recipients as objects with email and optional phone_number
+
+**Tasting Session Participant Association** (Feb 26)
+- `TastingUser` join table replaces email-based attendees with proper user-session relationships
+- `TastingUserRead` DTO displays participant names and emails from User table
+- `TastingSessionRead` returns `participants: List[TastingUserRead]` instead of email strings
+- Service layer email lookup (`_resolve_attendees_to_users()`) silently skips unregistered emails
+- Access control: non-admin users can only access sessions they participate in (403 otherwise)
+- Admin users bypass participant check for full access
+- Alembic migration with cascade delete on session deletion, SET NULL on user deletion
+- Unique constraint on (session_id, user_id) prevents duplicate participation
+- Backend tests: 26/26 passing with participant resolution, unregistered email skipping, and access control validation
+- Frontend `ParticipantPicker` component for user selection during session creation
+- Backward compatible: `attendees` field kept on request DTOs for wire compatibility
+
+**Menu Management Enhancements** (Feb 26)
+- Drag-and-drop reordering for menu sections and items via `dnd-kit` library
+- Order numbers automatically updated during drag operations
+- Editable `key_highlights` textarea field (appears first) for signature items, seasonal specials
+- Editable `additional_info` textarea field (appears second) for dietary notes, preparation tips
+- `DraggableSection` and `DraggableItem` wrapper components with grip icons
+- Real-time UI feedback with opacity changes during dragging
+- Support for both create mode (no IDs) and update mode (with existing IDs)
+- Separate data structures to handle create vs. update workflows
+- Components properly typed with `MenuItem` model fields
 
 **Access Control & Admin Management** (Feb 13-23)
 - Admin user model and role-based access control
