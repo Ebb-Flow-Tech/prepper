@@ -6,6 +6,11 @@ export interface AuthApiError {
 
 export type RecipeStatus = 'draft' | 'active' | 'archived';
 
+export interface Allergen {
+  id: number;
+  name: string;
+}
+
 export interface Ingredient {
   id: number;
   name: string;
@@ -17,6 +22,7 @@ export interface Ingredient {
   created_at: string;
   updated_at: string;
   suppliers?: IngredientSupplierEntry[];
+  allergens?: Allergen[];
 }
 
 export interface Recipe {

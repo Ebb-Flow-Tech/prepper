@@ -32,7 +32,7 @@ import {
   useRecipeOutletsBatch,
 } from '@/lib/hooks';
 import { useAutoFlowLayout } from '@/lib/hooks/useAutoFlowLayout';
-import { Button, Input, Select, ConfirmModal, Switch, Modal } from '@/components/ui';
+import { Button, Input, Select, ConfirmModal, Switch, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus, Outlet } from '@/types';
 import { RightPanel } from '../RightPanel';
@@ -1497,15 +1497,11 @@ function CanvasContent({
             </div>
 
             {/* Public */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={metadata.is_public}
-                onChange={(e) => onMetadataChange({ is_public: e.target.checked })}
-                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
-              />
-              <span className="text-sm text-zinc-500">Public</span>
-            </label>
+            <Checkbox
+              checked={metadata.is_public}
+              onChange={(e) => onMetadataChange({ is_public: e.target.checked })}
+              label="Public"
+            />
 
             {/* Drag & Drop */}
             <div className="flex items-center gap-2">

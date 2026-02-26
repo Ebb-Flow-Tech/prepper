@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlmodel import Session, select
 
 from app.models import (
@@ -17,6 +17,12 @@ from app.models import (
     RecipeUpdate,
     User,
     UserType,
+    Ingredient,
+    IngredientAllergen,
+    Allergen,
+    RecipeIngredientRead,
+    IngredientNested,
+    AllergenInfo,
 )
 
 
@@ -232,19 +238,64 @@ class RecipeService:
 
     # --- Recipe Ingredient Management ---
 
-    def get_recipe_ingredients(self, recipe_id: int) -> list[RecipeIngredient]:
+    def _build_recipe_ingredient_read(self, ri: RecipeIngredient) -> RecipeIngredientRead:
+        """Build a RecipeIngredientRead from RecipeIngredient with allergen data."""
+        ingredient_nested = None
+        if ri.ingredient:
+            # Build allergen list from ingredient_allergens
+            allergens = []
+            if ri.ingredient.ingredient_allergens:
+                allergens = [
+                    AllergenInfo(id=ia.allergen.id, name=ia.allergen.name)
+                    for ia in ri.ingredient.ingredient_allergens
+                    if ia.allergen
+                ]
+
+            ingredient_nested = IngredientNested(
+                id=ri.ingredient.id,
+                name=ri.ingredient.name,
+                base_unit=ri.ingredient.base_unit,
+                cost_per_base_unit=ri.ingredient.cost_per_base_unit,
+                is_active=ri.ingredient.is_active,
+                suppliers=ri.ingredient.suppliers,
+                allergens=allergens or None,
+            )
+
+        return RecipeIngredientRead(
+            id=ri.id,
+            recipe_id=ri.recipe_id,
+            ingredient_id=ri.ingredient_id,
+            quantity=ri.quantity,
+            unit=ri.unit,
+            sort_order=ri.sort_order,
+            created_at=ri.created_at,
+            base_unit=ri.base_unit,
+            unit_price=ri.unit_price,
+            supplier_id=ri.supplier_id,
+            wastage_percentage=ri.wastage_percentage,
+            ingredient=ingredient_nested,
+        )
+
+    def get_recipe_ingredients(self, recipe_id: int) -> list[RecipeIngredientRead]:
         """Get all ingredients for a recipe, ordered by sort_order."""
         statement = (
             select(RecipeIngredient)
             .where(RecipeIngredient.recipe_id == recipe_id)
             .order_by(RecipeIngredient.sort_order)
-            .options(selectinload(RecipeIngredient.ingredient))
+            .options(
+                selectinload(RecipeIngredient.ingredient).options(
+                    selectinload(Ingredient.ingredient_allergens).options(
+                        selectinload(IngredientAllergen.allergen)
+                    )
+                )
+            )
         )
-        return list(self.session.exec(statement).all())
+        recipe_ingredients = self.session.exec(statement).all()
+        return [self._build_recipe_ingredient_read(ri) for ri in recipe_ingredients]
 
     def add_ingredient_to_recipe(
         self, recipe_id: int, data: RecipeIngredientCreate
-    ) -> RecipeIngredient | None:
+    ) -> RecipeIngredientRead | None:
         """Add an ingredient to a recipe (no duplicates allowed)."""
         # Check for duplicates
         existing = self.session.exec(
@@ -281,11 +332,25 @@ class RecipeService:
         self.session.add(recipe_ingredient)
         self.session.commit()
         self.session.refresh(recipe_ingredient)
-        return recipe_ingredient
+
+        # Reload with allergen data
+        statement = select(RecipeIngredient).where(
+            RecipeIngredient.id == recipe_ingredient.id
+        ).options(
+            selectinload(RecipeIngredient.ingredient).options(
+                selectinload(Ingredient.ingredient_allergens).options(
+                    selectinload(IngredientAllergen.allergen)
+                )
+            )
+        )
+        refreshed = self.session.exec(statement).first()
+        if refreshed:
+            return self._build_recipe_ingredient_read(refreshed)
+        return None
 
     def update_recipe_ingredient(
         self, recipe_ingredient_id: int, data: RecipeIngredientUpdate
-    ) -> RecipeIngredient | None:
+    ) -> RecipeIngredientRead | None:
         """Update a recipe ingredient's quantity or unit."""
         ri = self.session.get(RecipeIngredient, recipe_ingredient_id)
         if not ri:
@@ -297,8 +362,21 @@ class RecipeService:
 
         self.session.add(ri)
         self.session.commit()
-        self.session.refresh(ri)
-        return ri
+
+        # Reload with allergen data
+        statement = select(RecipeIngredient).where(
+            RecipeIngredient.id == recipe_ingredient_id
+        ).options(
+            selectinload(RecipeIngredient.ingredient).options(
+                selectinload(Ingredient.ingredient_allergens).options(
+                    selectinload(IngredientAllergen.allergen)
+                )
+            )
+        )
+        refreshed = self.session.exec(statement).first()
+        if refreshed:
+            return self._build_recipe_ingredient_read(refreshed)
+        return None
 
     def remove_ingredient_from_recipe(self, recipe_ingredient_id: int) -> bool:
         """Remove an ingredient from a recipe."""

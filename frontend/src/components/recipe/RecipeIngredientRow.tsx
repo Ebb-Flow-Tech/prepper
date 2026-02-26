@@ -193,6 +193,18 @@ export function RecipeIngredientRow({
         <p className="truncate font-medium">
           {ingredient.ingredient?.name || `Ingredient #${ingredient.ingredient_id}`}
         </p>
+        {ingredient.ingredient?.allergens && ingredient.ingredient.allergens.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {ingredient.ingredient.allergens.map((allergen) => (
+              <span
+                key={allergen.id}
+                className="inline-block rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300"
+              >
+                {allergen.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <Select

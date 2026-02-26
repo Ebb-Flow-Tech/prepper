@@ -5,7 +5,7 @@ import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { useOutlets, useUpdateOutlet, useDeactivateOutlet, useUser } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { OutletCard, OutletListRow, AddOutletModal } from '@/components/outlets';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Select, ViewToggle } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Select, ViewToggle, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Outlet, UpdateOutletRequest, OutletType } from '@/types';
 
@@ -287,26 +287,18 @@ export function OutletManagementTab({ userType }: OutletManagementTabProps) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="rounded border-zinc-300 dark:border-zinc-700"
-              />
-              Show archived
-            </label>
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
 
             {view === 'grid' && (
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={groupByBrands}
-                  onChange={(e) => setGroupByBrands(e.target.checked)}
-                  className="rounded border-zinc-300 dark:border-zinc-700"
-                />
-                Group by brands
-              </label>
+              <Checkbox
+                checked={groupByBrands}
+                onChange={(e) => setGroupByBrands(e.target.checked)}
+                label="Group by brands"
+              />
             )}
 
             <ViewToggle view={view} onViewChange={setView} />

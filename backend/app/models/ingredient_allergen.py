@@ -1,9 +1,12 @@
 """Ingredient-Allergen model - many-to-many relationship between ingredients and allergens."""
 
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.ingredient import Ingredient
 
 
 class IngredientAllergen(SQLModel, table=True):
@@ -22,6 +25,7 @@ class IngredientAllergen(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationships
+    ingredient: "Ingredient" = Relationship(back_populates="ingredient_allergens")
     allergen: "Allergen" = Relationship(back_populates="ingredient_allergens")
 
 

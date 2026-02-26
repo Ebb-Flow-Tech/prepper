@@ -26,6 +26,7 @@ from app.models.recipe_ingredient import (
     RecipeIngredientReorder,
     RecipeIngredientRead,
     IngredientNested,
+    AllergenInfo,
 )
 from app.models.recipe_recipe import (
     RecipeRecipe,

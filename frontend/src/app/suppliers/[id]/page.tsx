@@ -15,7 +15,7 @@ import {
 } from '@/lib/hooks';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton } from '@/components/ui';
+import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import type { UpdateSupplierIngredientRequest } from '@/types';
 
@@ -393,20 +393,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                           : formatCurrency(0)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="is_preferred_ingredient"
-                        checked={formData.is_preferred}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, is_preferred: e.target.checked }))
-                        }
-                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
-                      />
-                      <label htmlFor="is_preferred_ingredient" className="text-sm text-zinc-700 dark:text-zinc-300">
-                        Preferred Supplier
-                      </label>
-                    </div>
+                    <Checkbox
+                      checked={formData.is_preferred}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, is_preferred: e.target.checked }))
+                      }
+                      label="Preferred Supplier"
+                    />
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-700">
                       <Button
                         type="button"
