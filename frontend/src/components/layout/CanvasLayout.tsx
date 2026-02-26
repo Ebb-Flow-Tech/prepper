@@ -48,25 +48,26 @@ function TabContent({ outlets }: TabContentProps) {
 
 interface CanvasLayoutProps {
   showBackLink?: boolean;
+  showTabs?: boolean;
 }
 
-export function CanvasLayout({ showBackLink = false }: CanvasLayoutProps) {
+export function CanvasLayout({ showBackLink = false, showTabs = true }: CanvasLayoutProps) {
   const { data: outlets } = useOutlets();
 
   return (
     <div className="flex h-full flex-col">
       {showBackLink && (
-        <div className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 px-4 py-2">
+        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-1.5">
           <Link
             href="/recipes"
-            className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back
+            <ArrowLeft className="h-3 w-3" />
+            Recipes
           </Link>
         </div>
       )}
-      <TopAppBar />
+      {showTabs && <TopAppBar />}
       <div className="flex flex-1 overflow-hidden">
         <TabContent outlets={outlets} />
       </div>

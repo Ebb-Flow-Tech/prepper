@@ -51,11 +51,9 @@ export function TopAppBar() {
 
   return (
     <>
-      <header className="shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        {/* Tabs row */}
-        <nav className="flex gap-1 px-4" aria-label="Recipe tabs">
+      <header className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+        <nav className="flex items-center gap-1 px-4 py-1" aria-label="Recipe tabs">
           {CANVAS_TABS.map((tab) => {
-            // Always show canvas tab, show other tabs only if recipe exists
             if (tab.id !== 'canvas' && !recipe) {
               return null;
             }
@@ -64,10 +62,10 @@ export function TopAppBar() {
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
                 className={cn(
-                  'px-4 py-2 text-sm font-medium transition-colors',
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150',
                   canvasTab === tab.id
-                    ? 'border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300'
+                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                    : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-300 dark:hover:bg-zinc-800'
                 )}
               >
                 {tab.label}
