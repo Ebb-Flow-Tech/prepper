@@ -164,6 +164,7 @@ class MenuService:
                     display_price=old_item.display_price,
                     additional_info=old_item.additional_info,
                     key_highlights=old_item.key_highlights,
+                    substitution=old_item.substitution,
                 )
                 self.session.add(new_item)
             self.session.commit()
@@ -291,6 +292,9 @@ class MenuService:
                     item.key_highlights = item_data.get(
                         "key_highlights", item.key_highlights
                     )
+                    item.substitution = item_data.get(
+                        "substitution", item.substitution
+                    )
                     item.updated_at = datetime.utcnow()
                     self.session.add(item)
                 new_item_ids.add(item_id)
@@ -303,6 +307,7 @@ class MenuService:
                     display_price=item_data.get("display_price"),
                     additional_info=item_data.get("additional_info"),
                     key_highlights=item_data.get("key_highlights"),
+                    substitution=item_data.get("substitution"),
                 )
                 self.session.add(new_item)
                 self.session.commit()

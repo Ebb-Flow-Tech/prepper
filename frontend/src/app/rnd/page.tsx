@@ -503,7 +503,7 @@ function ReviewSessionCard({ session, readyForReviewRecipeIds }: ReviewSessionCa
         <CardFooter>
           <div className="flex items-center justify-between w-full">
             <div className="text-sm text-muted-foreground">
-              {session.attendees?.length ?? 0} attendee{session.attendees?.length !== 1 ? 's' : ''}
+              {session.participants?.length ?? 0} attendee{session.participants?.length !== 1 ? 's' : ''}
             </div>
             <ExternalLink className="h-4 w-4 text-zinc-400" />
           </div>

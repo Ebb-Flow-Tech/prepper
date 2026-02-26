@@ -35,6 +35,7 @@ class MenuItemInput(BaseModel):
     display_price: float | None = None
     additional_info: str | None = None
     key_highlights: str | None = None
+    substitution: str | None = None
 
 
 class MenuSectionInput(BaseModel):
@@ -99,6 +100,7 @@ def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
                 display_price=item.display_price,
                 additional_info=item.additional_info,
                 key_highlights=item.key_highlights,
+                substitution=item.substitution,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
             )
@@ -293,6 +295,7 @@ def create_menu(
                 display_price=item_data.display_price,
                 additional_info=item_data.additional_info,
                 key_highlights=item_data.key_highlights,
+                substitution=item_data.substitution,
             )
             session.add(item)
         session.commit()
@@ -410,6 +413,7 @@ def update_menu(
                         "display_price": item.display_price,
                         "additional_info": item.additional_info,
                         "key_highlights": item.key_highlights,
+                        "substitution": item.substitution,
                     }
                     for item in section.items
                 ],
@@ -533,6 +537,7 @@ def get_items_by_section(
             display_price=item.display_price,
             additional_info=item.additional_info,
             key_highlights=item.key_highlights,
+            substitution=item.substitution,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )

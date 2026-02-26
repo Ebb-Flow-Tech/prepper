@@ -46,6 +46,12 @@ interface LocalItem {
   display_price: number | null;
   additional_info: string | null;
   key_highlights: string | null;
+  substitution: string | null;
+}
+
+interface Allergen {
+  id: number;
+  name: string;
 }
 
 // Draggable Section Component
@@ -70,7 +76,7 @@ function DraggableSection({
   onRemoveItem: (sectionIndex: number, itemIndex: number) => void;
   onUpdateItem: (sectionIndex: number, itemIndex: number, field: string, value: unknown) => void;
   viewMode: 'card' | 'list';
-  allergenMap?: Map<number, any[]>;
+  allergenMap?: Map<number, Allergen[]>;
 }) {
   const {
     attributes,
@@ -176,7 +182,7 @@ function DraggableItem({
   onRemove: () => void;
   onUpdate: (field: string, value: unknown) => void;
   viewMode: 'card' | 'list';
-  allergenMap?: Map<number, any[]>;
+  allergenMap?: Map<number, Allergen[]>;
 }) {
   const {
     attributes,
@@ -313,6 +319,20 @@ function DraggableItem({
               rows={2}
             />
           </div>
+
+          {/* Substitution */}
+          <div>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+              Substitution
+            </p>
+            <Textarea
+              value={item.substitution || ''}
+              onChange={(e) => onUpdate('substitution', e.target.value)}
+              placeholder="e.g., alternative ingredients, preparation notes"
+              className="text-sm"
+              rows={2}
+            />
+          </div>
         </div>
       </div>
     );
@@ -374,7 +394,7 @@ function DraggableItem({
         </div>
       )}
 
-      {/* Key highlights and additional info */}
+      {/* Key highlights, additional info, and substitution */}
       <div className="space-y-2 ml-6">
         <Textarea
           value={item.key_highlights || ''}
@@ -387,6 +407,13 @@ function DraggableItem({
           value={item.additional_info || ''}
           onChange={(e) => onUpdate('additional_info', e.target.value)}
           placeholder="Additional info (e.g., dietary notes, preparation tips)"
+          className="text-sm"
+          rows={2}
+        />
+        <Textarea
+          value={item.substitution || ''}
+          onChange={(e) => onUpdate('substitution', e.target.value)}
+          placeholder="Substitution (e.g., alternative ingredients, preparation notes)"
           className="text-sm"
           rows={2}
         />
@@ -420,6 +447,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
         display_price: i.display_price,
         additional_info: i.additional_info,
         key_highlights: i.key_highlights,
+        substitution: i.substitution,
       })),
     })) || []
   );
@@ -471,6 +499,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
       display_price: null,
       additional_info: null,
       key_highlights: null,
+      substitution: null,
     };
     const newSections = [...sections];
     newSections[sectionIndex].items.push(newItem);
@@ -562,6 +591,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
             display_price: i.display_price,
             additional_info: i.additional_info,
             key_highlights: i.key_highlights,
+            substitution: i.substitution,
           })),
         }));
 
@@ -584,6 +614,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
             display_price: i.display_price,
             additional_info: i.additional_info,
             key_highlights: i.key_highlights,
+            substitution: i.substitution,
           })),
         }));
 

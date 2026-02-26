@@ -181,7 +181,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                         Allergens
                                       </p>
                                       <div className="flex flex-wrap gap-1">
-                                        {(allergenMap.get(item.recipe_id) ?? []).map((a) => (
+                                        {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
                                           <Badge key={a.id} variant="warning">{a.name}</Badge>
                                         ))}
                                       </div>
@@ -212,6 +212,18 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                     </div>
                                   )}
 
+                                  {/* Substitution */}
+                                  {item.substitution && (
+                                    <div>
+                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                        Substitution
+                                      </p>
+                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                        {item.substitution}
+                                      </p>
+                                    </div>
+                                  )}
+
                                   {/* Price */}
                                   {item.display_price && (
                                     <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
@@ -237,7 +249,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                   <p className="font-medium">{item.recipe_name}</p>
                                   {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                      {(allergenMap.get(item.recipe_id) ?? []).map((a) => (
+                                      {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
                                         <Badge key={a.id} variant="warning">{a.name}</Badge>
                                       ))}
                                     </div>
@@ -250,6 +262,11 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                   {item.additional_info && (
                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                       {item.additional_info}
+                                    </p>
+                                  )}
+                                  {item.substitution && (
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.substitution}
                                     </p>
                                   )}
                                 </div>

@@ -97,6 +97,7 @@ class MenuItemBase(SQLModel):
     display_price: float | None = Field(default=None, gt=0, description="Price to display for this menu item")
     additional_info: str | None = Field(default=None, max_length=500)
     key_highlights: str | None = Field(default=None, max_length=500)
+    substitution: str | None = Field(default=None, max_length=500)
 
 
 class MenuItem(MenuItemBase, table=True):
@@ -104,7 +105,7 @@ class MenuItem(MenuItemBase, table=True):
     Represents a recipe item within a menu section.
 
     Items are ordered within a section via order_no.
-    Includes optional display_price, additional_info and key_highlights for display.
+    Includes optional display_price, additional_info, key_highlights, and substitution for display.
     """
 
     __tablename__ = "menu_items"
@@ -129,6 +130,7 @@ class MenuItemUpdate(SQLModel):
     display_price: float | None = None
     additional_info: str | None = None
     key_highlights: str | None = None
+    substitution: str | None = None
 
 
 # ---------------------------------------------------------------------------

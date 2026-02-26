@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 export function UserManagementTab() {
   const [search, setSearch] = useState('');
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [editingPhoneValue, setEditingPhoneValue] = useState('');
   const updateUser = useUpdateUser();
   const { data: users, isLoading, error } = useUsers();
   const { data: outlets } = useOutlets();
@@ -33,6 +35,20 @@ export function UserManagementTab() {
       {
         onSuccess: () => {
           toast.success('User outlet updated');
+        },
+        onError: () => {
+          toast.error('Failed to update user');
+        },
+      }
+    );
+  };
+
+  const handlePhoneChange = (userId: string, phoneNumber: string) => {
+    updateUser.mutate(
+      { userId, data: { phone_number: phoneNumber || null } },
+      {
+        onSuccess: () => {
+          toast.success('User phone number updated');
         },
         onError: () => {
           toast.error('Failed to update user');
@@ -119,6 +135,9 @@ export function UserManagementTab() {
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Phone
+                  </th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Role
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-zinc-900 dark:text-zinc-100">
@@ -140,6 +159,41 @@ export function UserManagementTab() {
                     </td>
                     <td className="px-6 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                       {user.email}
+                    </td>
+                    <td className="px-6 py-3 text-sm">
+                      {editingPhoneId === user.id ? (
+                        <input
+                          type="tel"
+                          value={editingPhoneValue}
+                          onChange={(e) => setEditingPhoneValue(e.target.value)}
+                          onBlur={() => {
+                            handlePhoneChange(user.id, editingPhoneValue);
+                            setEditingPhoneId(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handlePhoneChange(user.id, editingPhoneValue);
+                              setEditingPhoneId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingPhoneId(null);
+                            }
+                          }}
+                          autoFocus
+                          disabled={updateUser.isPending}
+                          placeholder="Add phone..."
+                          className="px-2 py-1 text-sm w-full border border-blue-500 rounded bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <div
+                          onClick={() => {
+                            setEditingPhoneId(user.id);
+                            setEditingPhoneValue(user.phone_number || '');
+                          }}
+                          className="cursor-pointer text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 px-2 py-1 rounded"
+                        >
+                          {user.phone_number || '—'}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-sm">
                       <span
