@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2, Users, UtensilsCrossed, LucideIcon } from 'lucide-react';
+import { FlaskConical, DollarSign, Package, BookOpen, Wine, Truck, LogOut, Palette, LayoutGrid, Building2, Users, UtensilsCrossed, LucideIcon, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { logoutUser } from '@/lib/api';
@@ -39,6 +39,12 @@ export function TopNav() {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
   const [isLogoutPending, setIsLogoutPending] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Close mobile menu when pathname changes
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [pathname]);
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     // Only show warning when leaving the canvas page (/) with unsaved changes
@@ -98,11 +104,11 @@ export function TopNav() {
 
   return (
     <>
-      <nav className="flex h-16 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <nav className="relative flex h-16 items-center border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         {/* Logo */}
         <Link
           href="/recipes"
-          className="flex items-center mr-8"
+          className="flex items-center mr-4 md:mr-8"
         >
           <Image
             src="/logo/Reciperep logo inline 840x180.png"
@@ -122,37 +128,52 @@ export function TopNav() {
           />
         </Link>
 
+        {/* Mobile Hamburger */}
+        <div className="flex flex-1 md:hidden justify-end items-center">
+          <button
+            onClick={() => setIsMenuOpen((v) => !v)}
+            className="rounded-md p-2 text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900"
+          >
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+
         {/* Navigation Links */}
-        <div className="flex flex-1 items-center gap-1">
+        <div className="hidden md:flex flex-1 items-center gap-1">
           {NAV_ITEMS.filter((item) => {
             if (item.adminOnly && userType !== 'admin') return false;
             return true;
           }).map(({ href, label, icon: Icon }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
-              <Link
-                key={href}
-                href={href}
-                onClick={(e) => handleNavClick(e, href)}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                    : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="hidden md:inline">{label}</span>
-              </Link>
+              <div key={href} className="group relative">
+                <Link
+                  href={href}
+                  onClick={(e) => handleNavClick(e, href)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                      : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden 2xl:inline">{label}</span>
+                </Link>
+                {/* Tooltip: visible only at md-2xl (when labels are hidden) */}
+                <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 hidden md:block 2xl:hidden rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900 whitespace-nowrap z-50">
+                  {label}
+                </div>
+              </div>
             );
           })}
         </div>
 
-        {/* User Info and Logout */}
+        {/* User Info and Logout (Desktop) */}
         {userId && (
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             {username && (
-              <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              <span className="hidden md:inline text-sm font-medium text-zinc-600 dark:text-zinc-400">
                 {username}
               </span>
             )}
@@ -166,6 +187,65 @@ export function TopNav() {
           </div>
         )}
       </nav>
+
+      {/* Mobile Dropdown Menu */}
+      {isMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 md:hidden"
+            onClick={() => setIsMenuOpen(false)}
+          />
+          {/* Menu */}
+          <div className="absolute top-16 left-0 right-0 z-50 border-b border-zinc-200 bg-white shadow-lg md:hidden dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex flex-col py-2 px-2">
+              {NAV_ITEMS.filter((item) => {
+                if (item.adminOnly && userType !== 'admin') return false;
+                return true;
+              }).map(({ href, label, icon: Icon }) => {
+                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={(e) => {
+                      setIsMenuOpen(false);
+                      handleNavClick(e, href);
+                    }}
+                    className={cn(
+                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                        : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+              {/* Mobile User Section */}
+              {userId && (
+                <>
+                  <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
+                  {username && (
+                    <div className="px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                      {username}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <ConfirmModal
         isOpen={showUnsavedModal}
