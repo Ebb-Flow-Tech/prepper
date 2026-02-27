@@ -322,6 +322,7 @@ All endpoints under `/api/v1`:
 | `/database-schema-designer` | Designing **database schemas** — normalization, indexing strategies, relationship patterns (polymorphic, self-referencing), migrations, and performance optimization. |
 | `/git-commit` | Creating **git commits** — analyzes diffs, generates conventional commit messages (feat/fix/refactor/etc.), handles staging and commit execution. |
 | `/skill-creator` | Creating or updating **new agent skills** — skill anatomy, progressive disclosure design, packaging, and best practices. |
+| `/sqlalchemy-alembic-expert-best-practices-code-review` | **SQLAlchemy & Alembic best practices** — reviewing and writing SQLAlchemy models, Alembic migrations, database schema changes, and query optimization. Enforces safe migration patterns (concurrent indexes, split constraints, column type changes). |
 
 ### Project Commands (`.claude/commands/`)
 
