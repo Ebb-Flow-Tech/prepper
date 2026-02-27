@@ -11,6 +11,11 @@
       "sourceType": "github",
       "computedHash": "b445b45fd23883d030fbd39489a9fdee7a7520c58732b544c27ab788b0e70f7e"
     },
+    "feature-spec": {
+      "source": "anthropics/knowledge-work-plugins",
+      "sourceType": "github",
+      "computedHash": "3eaa2e4a4ee23b6f31ff02ba0fced91c203b8e5fba4c6e536e364fc3fc33f96b"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
@@ -40,6 +45,11 @@
       "source": "anthropics/skills",
       "sourceType": "github",
       "computedHash": "a096b9af85c9d954374ebe3f7a23b5b7737ed3f35fe2a8f5893742c4e00dba1c"
+    },
+    "sqlalchemy-alembic-expert-best-practices-code-review": {
+      "source": "wispbit-ai/skills",
+      "sourceType": "github",
+      "computedHash": "995e671e51c95c73542b48eb7372a752ba1b5f6c0d2277e07ab0d53543dd507c"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
