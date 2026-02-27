@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+backend/venv/
+__pycache__/
+
+# Build outputs
+frontend/.next/
+frontend/out/
+*.pyc
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Binary / media files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.svg
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Test / coverage artifacts
+htmlcov/
+.coverage
+coverage/
+.pytest_cache/
+
+# Misc
+postman_collection.json
+flow-ui-starter/
