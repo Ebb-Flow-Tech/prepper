@@ -161,10 +161,10 @@ export function TopNav() {
                       )}
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="hidden 2xl:inline">{label}</span>
+                      <span className="hidden xl:inline">{label}</span>
                     </Link>
                     {/* Tooltip: visible only at md-2xl (when labels are hidden) */}
-                    <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 hidden md:block 2xl:hidden rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900 whitespace-nowrap z-50">
+                    <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 hidden md:block xl:hidden rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900 whitespace-nowrap z-50">
                       {label}
                     </div>
                   </div>
