@@ -307,6 +307,32 @@ All endpoints under `/api/v1`:
 - `TWILIO_AUTH_TOKEN` — Twilio auth token (optional, for SMS invitations)
 - `TWILIO_FROM_NUMBER` — Twilio phone number for SMS sending (optional, for SMS invitations)
 
+## Skills Reference
+
+### Agent Skills (`.agents/skills/`)
+
+| Skill | When to Use |
+|-------|-------------|
+| `/frontend-design` | **Any UI/frontend work** — building pages, components, styling, layout adjustments, design polish. Proactively invoke for all visual tasks, not just new builds. ANY tasks that concerns frontend; not limited to the mentioned. |
+| `/fastapi-expert` | Building or modifying **backend API endpoints** — async routes, Pydantic V2 models, SQLAlchemy queries, JWT auth, WebSocket handlers, or writing tests for API logic. |
+| `/nextjs-best-practices` | Quick reference for **Next.js principles** — Server vs Client Components decisions, data fetching patterns, routing conventions, caching strategies. |
+| `/nextjs-app-router-patterns` | Deep dive into **App Router patterns** — Server Actions, parallel routes, intercepting routes, streaming with Suspense, metadata/SEO. Use when implementing advanced Next.js features. |
+| `/vercel-react-best-practices` | **React/Next.js performance optimization** — eliminating waterfalls, bundle size reduction, re-render optimization, server-side performance. Use when reviewing or refactoring for performance. |
+| `/python-testing-patterns` | Writing **Python tests with pytest** — fixtures, mocking, parameterization, async testing, property-based testing, test organization and CI/CD integration. |
+| `/database-schema-designer` | Designing **database schemas** — normalization, indexing strategies, relationship patterns (polymorphic, self-referencing), migrations, and performance optimization. |
+| `/git-commit` | Creating **git commits** — analyzes diffs, generates conventional commit messages (feat/fix/refactor/etc.), handles staging and commit execution. |
+| `/skill-creator` | Creating or updating **new agent skills** — skill anatomy, progressive disclosure design, packaging, and best practices. |
+
+### Project Commands (`.claude/commands/`)
+
+| Command | When to Use |
+|---------|-------------|
+| `/get_started` | **Onboarding** — reads CLAUDE.md, docs/intro.md, and docs/changelog.md to get an overview of the project. |
+| `/commit` | **Quick commit** — looks at latest changes and generates a commit message automatically. |
+| `/fe-build-check` | **Frontend validation** — runs `npm run lint` then `npm run build` to check for errors before committing. |
+| `/schema-assembly` | **New database tables** — creates table models, CRUD endpoints, unit tests, and a migration file. Asks about soft vs hard delete. Does NOT run migrations or tests. |
+| `/update-context` | **Refresh CLAUDE.md** — updates this file based on current codebase contents after significant changes. |
+
 ## Key Features (Recent Additions)
 
 **SMS Invitations for Tasting Sessions** (Feb 26)
