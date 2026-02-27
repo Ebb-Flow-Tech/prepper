@@ -11,6 +11,11 @@
       "sourceType": "github",
       "computedHash": "b445b45fd23883d030fbd39489a9fdee7a7520c58732b544c27ab788b0e70f7e"
     },
+    "feature-spec": {
+      "source": "anthropics/knowledge-work-plugins",
+      "sourceType": "github",
+      "computedHash": "3eaa2e4a4ee23b6f31ff02ba0fced91c203b8e5fba4c6e536e364fc3fc33f96b"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",

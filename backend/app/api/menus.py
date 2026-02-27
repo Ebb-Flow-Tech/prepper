@@ -173,6 +173,7 @@ def _validate_menu_items(items: list[MenuItemInput], session: Session) -> bool:
 
 @router.get("", response_model=list[MenuRead])
 def list_menus(
+    include_archived: bool = False,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -180,9 +181,16 @@ def list_menus(
 
     - Admin users see all menus
     - Normal users see menus assigned to their accessible outlets
+    - include_archived: only admins/managers can include archived menus
     """
+    # Only admins/managers can see archived menus
+    can_see_archived = (
+        current_user.user_type == UserType.ADMIN or current_user.is_manager
+    )
+    effective_include_archived = include_archived and can_see_archived
+
     service = MenuService(session)
-    menus = service.list_menus(current_user)
+    menus = service.list_menus(current_user, include_archived=effective_include_archived)
     return [
         MenuRead(
             id=m.id,
@@ -481,6 +489,47 @@ def delete_menu(
         created_by=deleted.created_by,
         created_at=deleted.created_at,
         updated_at=deleted.updated_at,
+    )
+
+
+# --- PATCH /menus/{menu_id}/restore ---
+
+
+@router.patch("/{menu_id}/restore", response_model=MenuRead)
+def restore_menu(
+    menu_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Restore a soft-deleted menu (set is_active to True).
+
+    Only admin and manager users can restore menus.
+    """
+    # Check authorization
+    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators and managers can restore menus",
+        )
+
+    service = MenuService(session)
+    restored = service.restore_menu(menu_id)
+
+    if not restored:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Menu not found",
+        )
+
+    return MenuRead(
+        id=restored.id,
+        name=restored.name,
+        is_published=restored.is_published,
+        is_active=restored.is_active,
+        version_no=restored.version_no,
+        created_by=restored.created_by,
+        created_at=restored.created_at,
+        updated_at=restored.updated_at,
     )
 
 
