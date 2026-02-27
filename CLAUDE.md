@@ -318,11 +318,12 @@ All endpoints under `/api/v1`:
 | `/nextjs-best-practices` | Quick reference for **Next.js principles** — Server vs Client Components decisions, data fetching patterns, routing conventions, caching strategies. |
 | `/nextjs-app-router-patterns` | Deep dive into **App Router patterns** — Server Actions, parallel routes, intercepting routes, streaming with Suspense, metadata/SEO. Use when implementing advanced Next.js features. |
 | `/vercel-react-best-practices` | **React/Next.js performance optimization** — eliminating waterfalls, bundle size reduction, re-render optimization, server-side performance. Use when reviewing or refactoring for performance. |
-| `/python-testing-patterns` | Writing **Python tests with pytest** — fixtures, mocking, parameterization, async testing, property-based testing, test organization and CI/CD integration. |
+| `/python-testing-patterns` | Writing **Python tests with pytest** — fixtures, mocking, parameterization, async testing, property-based testing, test organization and CI/CD integration. Trigger this when there are changes in the backend, as test cases are|
 | `/database-schema-designer` | Designing **database schemas** — normalization, indexing strategies, relationship patterns (polymorphic, self-referencing), migrations, and performance optimization. |
-| `/git-commit` | Creating **git commits** — analyzes diffs, generates conventional commit messages (feat/fix/refactor/etc.), handles staging and commit execution. |
+| `/git-commit` | Creating **git commits** — analyzes diffs, generates conventional commit messages (feat/fix/refactor/etc.), handles staging and commit execution. Use this whenever the user wants to commit ANY changes.|
 | `/skill-creator` | Creating or updating **new agent skills** — skill anatomy, progressive disclosure design, packaging, and best practices. |
 | `/sqlalchemy-alembic-expert-best-practices-code-review` | **SQLAlchemy & Alembic best practices** — reviewing and writing SQLAlchemy models, Alembic migrations, database schema changes, and query optimization. Enforces safe migration patterns (concurrent indexes, split constraints, column type changes). |
+| `/feature-spec` | **Writing PRDs and feature specs** — structured product requirements documents with problem statements, user stories, acceptance criteria, success metrics, and prioritization. Use when speccing a new feature, defining requirements, or documenting product decisions. Also use this for refinements/add-ons of existing features |
 
 ### Project Commands (`.claude/commands/`)
 

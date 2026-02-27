@@ -1,18 +1,30 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
-import { useMenus } from '@/lib/hooks';
+import { Plus, Trash2, ArchiveRestore } from 'lucide-react';
+import { useMenus, useDeleteMenu, useRestoreMenu } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
-import { Button, Card, Skeleton } from '@/components/ui';
-import { PageHeader } from '@/components/ui';
+import { Button, Card, Skeleton, Badge, Checkbox, PageHeader } from '@/components/ui';
 
 export default function MenuPage() {
   const router = useRouter();
   const { userType, isManager } = useAppState();
-  const { data: menus, isLoading } = useMenus();
+  const canManage = userType === 'admin' || isManager;
 
-  const canCreate = userType === 'admin' || isManager;
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: menus, isLoading } = useMenus(canManage && showArchived);
+
+  const deleteMenu = useDeleteMenu();
+  const restoreMenu = useRestoreMenu();
+
+  const handleArchive = (menuId: number) => {
+    deleteMenu.mutate(menuId);
+  };
+
+  const handleRestore = (menuId: number) => {
+    restoreMenu.mutate(menuId);
+  };
 
   return (
     <div className="h-full w-full overflow-auto">
@@ -21,7 +33,7 @@ export default function MenuPage() {
           title="Menus"
           description="Create and manage restaurant menus"
         >
-          {canCreate && (
+          {canManage && (
             <Button
               onClick={() => router.push('/menu/new')}
               className="gap-2"
@@ -31,6 +43,17 @@ export default function MenuPage() {
             </Button>
           )}
         </PageHeader>
+
+        {/* Show archived toggle - only for admins/managers */}
+        {canManage && (
+          <div className="flex items-center gap-2 mb-6">
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
+          </div>
+        )}
 
         {isLoading ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -43,10 +66,17 @@ export default function MenuPage() {
             {menus.map((menu) => (
               <Card
                 key={menu.id}
-                className="flex cursor-pointer flex-col justify-between p-4 hover:shadow-lg transition-shadow"
+                className={`flex cursor-pointer flex-col justify-between p-4 hover:shadow-lg transition-shadow ${
+                  !menu.is_active ? 'opacity-60' : ''
+                }`}
               >
                 <div onClick={() => router.push(`/menu/preview/${menu.id}`)}>
-                  <h3 className="font-semibold">{menu.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{menu.name}</h3>
+                    {!menu.is_active && (
+                      <Badge variant="secondary">Archived</Badge>
+                    )}
+                  </div>
                   <p className="text-sm text-zinc-500">
                     v{menu.version_no} • {menu.is_published ? 'Published' : 'Draft'}
                   </p>
@@ -60,7 +90,7 @@ export default function MenuPage() {
                   >
                     View
                   </Button>
-                  {(userType === 'admin' || isManager) && (
+                  {canManage && menu.is_active && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -70,6 +100,29 @@ export default function MenuPage() {
                       Edit
                     </Button>
                   )}
+                  {canManage && (
+                    menu.is_active ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleArchive(menu.id)}
+                        disabled={deleteMenu.isPending}
+                        title="Archive menu"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRestore(menu.id)}
+                        disabled={restoreMenu.isPending}
+                        title="Restore menu"
+                      >
+                        <ArchiveRestore className="h-4 w-4" />
+                      </Button>
+                    )
+                  )}
                 </div>
               </Card>
             ))}
@@ -77,7 +130,7 @@ export default function MenuPage() {
         ) : (
           <div className="text-center">
             <p className="text-zinc-500">No menus available yet.</p>
-            {canCreate && (
+            {canManage && (
               <Button
                 onClick={() => router.push('/menu/new')}
                 className="mt-4"
