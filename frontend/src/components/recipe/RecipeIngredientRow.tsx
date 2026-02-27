@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2 } from 'lucide-react';
@@ -33,7 +33,7 @@ interface RecipeIngredientRowProps {
   onRemove: () => void;
 }
 
-export function RecipeIngredientRow({
+export const RecipeIngredientRow = memo(function RecipeIngredientRow({
   ingredient,
   canEdit,
   onQuantityChange,
@@ -70,10 +70,10 @@ export function RecipeIngredientRow({
     queryFn: () => getIngredientSuppliers(ingredient.ingredient_id),
   });
 
-  const supplierOptions = suppliers.map((s) => ({
-    value: s.supplier_id,
-    label: s.supplier_name,
-  }));
+  const supplierOptions = useMemo(
+    () => suppliers.map((s) => ({ value: s.supplier_id, label: s.supplier_name })),
+    [suppliers]
+  );
 
   useEffect(() => {
     setLocalQuantity(String(ingredient.quantity));
@@ -256,4 +256,4 @@ export function RecipeIngredientRow({
       )}
     </div>
   );
-}
+});

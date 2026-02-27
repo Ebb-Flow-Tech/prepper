@@ -288,11 +288,11 @@ export function useDeleteTastingNoteImage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (imageId: number) => api.deleteTastingNoteImage(imageId),
-    onSuccess: () => {
-      // Invalidate all tasting note images queries since we don't know which note it belonged to
+    mutationFn: ({ imageId, tastingNoteId }: { imageId: number; tastingNoteId: number }) =>
+      api.deleteTastingNoteImage(imageId),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['tasting-note'],
+        queryKey: ['tasting-note', variables.tastingNoteId, 'images'],
       });
     },
   });

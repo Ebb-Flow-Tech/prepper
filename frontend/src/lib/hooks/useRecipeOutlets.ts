@@ -42,8 +42,7 @@ export function useAddRecipeToOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.data.outlet_id] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
-      // Invalidate parent outlet recipe caches for all outlets
-      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes', variables.data.outlet_id] });
     },
   });
 }
@@ -64,8 +63,7 @@ export function useUpdateRecipeOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.outletId] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
-      // Invalidate parent outlet recipe caches for all outlets
-      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes', variables.outletId] });
     },
   });
 }
@@ -84,15 +82,14 @@ export function useRemoveRecipeFromOutlet() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['outletRecipes', variables.outletId] });
       queryClient.invalidateQueries({ queryKey: ['recipeOutlets', variables.recipeId] });
-      // Invalidate parent outlet recipe caches for all outlets
-      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parentOutletRecipes', variables.outletId] });
     },
   });
 }
 
 export function useRecipeOutletsBatch(recipeIds: number[] | null) {
   return useQuery({
-    queryKey: ['recipeOutletsBatch', recipeIds ? recipeIds.sort() : null],
+    queryKey: ['recipeOutletsBatch', recipeIds ? [...recipeIds].sort() : null],
     queryFn: () => api.getRecipeOutletsBatch(recipeIds!),
     enabled: recipeIds !== null && recipeIds.length > 0,
   });
