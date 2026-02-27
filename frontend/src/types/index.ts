@@ -438,6 +438,7 @@ export interface UpdateSupplierRequest {
   address?: string | null;
   phone_number?: string | null;
   email?: string | null;
+  is_active?: boolean;
 }
 
 // ============ Ingredient Supplier Entry Types ============

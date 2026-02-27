@@ -106,3 +106,134 @@ def test_delete_supplier(client: TestClient):
     # Verify the supplier is deleted
     get_response = client.get(f"/api/v1/suppliers/{supplier_id}")
     assert get_response.status_code == 404
+
+
+def test_get_supplier(client: TestClient):
+    """Test getting a single supplier by ID."""
+    create_response = client.post(
+        "/api/v1/suppliers",
+        json={"name": "Single Supplier", "email": "single@supplier.com"},
+    )
+    supplier_id = create_response.json()["id"]
+
+    response = client.get(f"/api/v1/suppliers/{supplier_id}")
+    assert response.status_code == 200
+    assert response.json()["name"] == "Single Supplier"
+
+
+def test_get_supplier_not_found(client: TestClient):
+    """Test getting a non-existent supplier returns 404."""
+    response = client.get("/api/v1/suppliers/99999")
+    assert response.status_code == 404
+
+
+def test_deactivate_supplier(client: TestClient):
+    """Test soft-deleting a supplier via deactivate endpoint."""
+    create_response = client.post(
+        "/api/v1/suppliers",
+        json={"name": "Supplier To Deactivate"},
+    )
+    supplier_id = create_response.json()["id"]
+
+    response = client.patch(f"/api/v1/suppliers/{supplier_id}/deactivate")
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+
+    # Deactivated supplier should still be retrievable by ID
+    get_response = client.get(f"/api/v1/suppliers/{supplier_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["is_active"] is False
+
+
+def test_deactivate_supplier_not_found(client: TestClient):
+    """Test deactivating a non-existent supplier returns 404."""
+    response = client.patch("/api/v1/suppliers/99999/deactivate")
+    assert response.status_code == 404
+
+
+def test_reactivate_supplier_via_update(client: TestClient):
+    """Test restoring an archived supplier by updating is_active to True."""
+    # Create and deactivate
+    create_response = client.post(
+        "/api/v1/suppliers",
+        json={"name": "Supplier To Restore"},
+    )
+    supplier_id = create_response.json()["id"]
+    client.patch(f"/api/v1/suppliers/{supplier_id}/deactivate")
+
+    # Reactivate via PATCH update
+    response = client.patch(
+        f"/api/v1/suppliers/{supplier_id}",
+        json={"is_active": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["is_active"] is True
+    assert response.json()["name"] == "Supplier To Restore"
+
+
+def test_list_suppliers_active_only(client: TestClient):
+    """Test that listing suppliers filters out deactivated ones by default."""
+    client.post("/api/v1/suppliers", json={"name": "Active Supplier"})
+    deactivate_resp = client.post(
+        "/api/v1/suppliers", json={"name": "Inactive Supplier"}
+    )
+    inactive_id = deactivate_resp.json()["id"]
+    client.patch(f"/api/v1/suppliers/{inactive_id}/deactivate")
+
+    # Default: active_only=True
+    response = client.get("/api/v1/suppliers")
+    assert response.status_code == 200
+    names = [s["name"] for s in response.json()]
+    assert "Active Supplier" in names
+    assert "Inactive Supplier" not in names
+
+
+def test_list_suppliers_include_inactive(client: TestClient):
+    """Test listing all suppliers including deactivated ones."""
+    client.post("/api/v1/suppliers", json={"name": "Active Supplier 2"})
+    deactivate_resp = client.post(
+        "/api/v1/suppliers", json={"name": "Inactive Supplier 2"}
+    )
+    inactive_id = deactivate_resp.json()["id"]
+    client.patch(f"/api/v1/suppliers/{inactive_id}/deactivate")
+
+    # active_only=false returns all
+    response = client.get("/api/v1/suppliers", params={"active_only": False})
+    assert response.status_code == 200
+    names = [s["name"] for s in response.json()]
+    assert "Active Supplier 2" in names
+    assert "Inactive Supplier 2" in names
+
+
+def test_update_supplier_not_found(client: TestClient):
+    """Test updating a non-existent supplier returns 404."""
+    response = client.patch(
+        "/api/v1/suppliers/99999",
+        json={"name": "Does Not Exist"},
+    )
+    assert response.status_code == 404
+
+
+def test_delete_supplier_not_found(client: TestClient):
+    """Test deleting a non-existent supplier returns 404."""
+    response = client.delete("/api/v1/suppliers/99999")
+    assert response.status_code == 404
+
+
+def test_get_supplier_ingredients_empty(client: TestClient):
+    """Test getting ingredients for a supplier with no linked ingredients."""
+    create_response = client.post(
+        "/api/v1/suppliers",
+        json={"name": "No Ingredients Supplier"},
+    )
+    supplier_id = create_response.json()["id"]
+
+    response = client.get(f"/api/v1/suppliers/{supplier_id}/ingredients")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_supplier_ingredients_not_found(client: TestClient):
+    """Test getting ingredients for a non-existent supplier returns 404."""
+    response = client.get("/api/v1/suppliers/99999/ingredients")
+    assert response.status_code == 404

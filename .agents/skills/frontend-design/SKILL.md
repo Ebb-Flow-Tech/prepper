@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
+description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics. IMPORTANT - This skill MUST be proactively invoked for ANY UI-related task, including but not limited to UI refinements, styling tweaks, layout adjustments, design polish, visual improvements, and component restyling — not only when building new interfaces from scratch.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -40,3 +40,14 @@ Interpret creatively and make unexpected choices that feel genuinely designed fo
 **IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
 
 Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.
+
+## When to Invoke This Skill
+
+This skill should be **proactively invoked** for ANY prompt involving UI or frontend work, not just new builds. This includes:
+- UI refinements, polish, or improvements to existing components
+- Styling tweaks, color changes, spacing adjustments
+- Layout restructuring or responsive design fixes
+- Component restyling or visual overhauls
+- Any request mentioning "design", "UI", "look and feel", "styling", "beautify", "refine", or similar terms
+
+**Do NOT wait for the user to explicitly request this skill.** If the task touches frontend visuals in any way, this skill applies.

@@ -50,14 +50,20 @@ class MenuService:
         """Get a menu by ID (without sections/items)."""
         return self.session.get(Menu, menu_id)
 
-    def list_menus(self, current_user: User | None = None) -> list[Menu]:
+    def list_menus(
+        self, current_user: User | None = None, include_archived: bool = False
+    ) -> list[Menu]:
         """List all menus filtered by user access control.
 
         Access control:
         - Admin users see all menus
         - Normal users see menus assigned to their accessible outlets
+        - include_archived: if True, also return archived (is_active=False) menus
         """
-        statement = select(Menu).where(Menu.is_active == True)
+        if include_archived:
+            statement = select(Menu)
+        else:
+            statement = select(Menu).where(Menu.is_active == True)
         menus = list(self.session.exec(statement).all())
 
         # Admin users see all menus
@@ -185,6 +191,19 @@ class MenuService:
             return None
 
         menu.is_active = False
+        menu.updated_at = datetime.utcnow()
+        self.session.add(menu)
+        self.session.commit()
+        self.session.refresh(menu)
+        return menu
+
+    def restore_menu(self, menu_id: int) -> Menu | None:
+        """Restore a soft-deleted menu by setting is_active to True."""
+        menu = self.session.get(Menu, menu_id)
+        if not menu:
+            return None
+
+        menu.is_active = True
         menu.updated_at = datetime.utcnow()
         self.session.add(menu)
         self.session.commit()

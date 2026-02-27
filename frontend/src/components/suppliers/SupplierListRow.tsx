@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { MapPin, Phone, Mail } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui';
+import { Card, CardContent, Badge } from '@/components/ui';
 import type { Supplier } from '@/types';
 
 interface SupplierListRowProps {
@@ -19,6 +19,9 @@ export function SupplierListRow({ supplier, href }: SupplierListRowProps) {
             <div className="flex-1 min-w-0">
               <h3 className="text-base font-medium text-zinc-900 dark:text-zinc-100 truncate hover:text-blue-600 dark:hover:text-blue-400">
                 {supplier.name}
+                {!supplier.is_active && (
+                  <Badge variant="secondary" className="ml-2 align-middle">Archived</Badge>
+                )}
               </h3>
               <div className="flex flex-col gap-1 mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                 {supplier.address && (
