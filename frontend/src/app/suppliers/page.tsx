@@ -1,15 +1,40 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2, Check, X, MapPin, Phone, Mail } from 'lucide-react';
+import { Plus, Trash2, Check, X, MapPin, Phone, Mail, ArchiveRestore } from 'lucide-react';
 import { useSuppliers, useUpdateSupplier, useDeactivateSupplier } from '@/lib/hooks';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle, Checkbox } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle, Checkbox, Badge } from '@/components/ui';
 import { AddSupplierModal, SupplierListRow } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
 
 type ViewType = 'grid' | 'list';
+
+function OverflowTooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = ref.current;
+    if (el) {
+      setIsOverflowing(el.scrollWidth > el.clientWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+    const observer = new ResizeObserver(checkOverflow);
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [checkOverflow]);
+
+  return (
+    <span ref={ref} className="truncate block" title={isOverflowing ? text : undefined}>
+      {children}
+    </span>
+  );
+}
 
 function SupplierCard({ supplier }: { supplier: Supplier }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -72,6 +97,21 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
     });
   };
 
+  const handleUnarchive = () => {
+    updateSupplier.mutate(
+      {
+        id: supplier.id,
+        data: { is_active: true },
+      },
+      {
+        onSuccess: () => {
+          toast.success('Supplier restored');
+        },
+        onError: () => toast.error('Failed to restore supplier'),
+      }
+    );
+  };
+
   return (
     <Card className="mb-4">
       <CardHeader>
@@ -97,21 +137,40 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
             </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-between w-full">
-            <Link href={`/suppliers/${supplier.id}`} className="truncate flex-1">
-              <CardTitle className="truncate text-xl cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
-                {supplier.name}
-              </CardTitle>
+          <div className="flex items-center justify-between w-full gap-2">
+            <Link href={`/suppliers/${supplier.id}`} className="min-w-0 flex-1">
+              <div>
+                <CardTitle className="text-xl cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
+                  <OverflowTooltip text={supplier.name}>{supplier.name}</OverflowTooltip>
+                </CardTitle>
+                {!supplier.is_active && (
+                  <Badge variant="secondary" className="mt-1">Archived</Badge>
+                )}
+              </div>
             </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleArchive}
-              disabled={deactivateSupplier.isPending}
-              title="Archive supplier"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {supplier.is_active ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleArchive}
+                disabled={deactivateSupplier.isPending}
+                title="Archive supplier"
+                className="shrink-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleUnarchive}
+                disabled={updateSupplier.isPending}
+                title="Restore supplier"
+                className="shrink-0"
+              >
+                <ArchiveRestore className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         )}
       </CardHeader>
@@ -150,9 +209,9 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
         ) : (
           <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
             {supplier.address && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <MapPin className="h-4 w-4 shrink-0" />
-                <span className="truncate">{supplier.address}</span>
+                <OverflowTooltip text={supplier.address}>{supplier.address}</OverflowTooltip>
               </div>
             )}
             {supplier.phone_number && (
@@ -162,9 +221,9 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
               </div>
             )}
             {supplier.email && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <Mail className="h-4 w-4 shrink-0" />
-                <span className="truncate">{supplier.email}</span>
+                <OverflowTooltip text={supplier.email}>{supplier.email}</OverflowTooltip>
               </div>
             )}
             {!supplier.address && !supplier.phone_number && !supplier.email && (
