@@ -1,1 +1,0 @@
-Look at the latest changes and then generate a commit message based on these. After which, generate the commit message.
