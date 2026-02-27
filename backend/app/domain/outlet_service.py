@@ -223,37 +223,30 @@ class OutletService:
     def _would_create_cycle(self, outlet_id: int, potential_parent_id: int) -> bool:
         """Check if setting potential_parent_id as parent of outlet_id would create a cycle.
 
-        When we set X as parent of Y, a cycle would be created if:
-        1. X == Y (self-reference)
-        2. Y is an ancestor of X (because then X would become ancestor of itself)
-
-        Example: If A -> B (B's parent is A), then A cannot have B as parent,
-        because that would make: A -> B -> A (cycle).
+        Fetches all outlets once and walks the parent chain in-memory.
         """
-        # Check for self-reference
         if outlet_id == potential_parent_id:
             return True
 
-        # Check if outlet_id is an ancestor of potential_parent_id
-        # by walking UP the parent chain from potential_parent_id
-        visited = set()
+        # Fetch all outlets into a parent lookup map in one query
+        all_outlets = self.session.exec(select(Outlet)).all()
+        parent_map = {o.id: o.parent_outlet_id for o in all_outlets}
+
+        # Walk up the parent chain from potential_parent_id
+        visited: set[int] = set()
         current = potential_parent_id
 
         while current is not None:
             if current in visited:
-                # Cycle already exists, shouldn't happen but catch it
                 return True
             visited.add(current)
 
-            current_outlet = self.get_outlet(current)
-            if not current_outlet:
+            parent_id = parent_map.get(current)
+            if parent_id is None:
                 break
-
-            # If we reach outlet_id while walking up, it means outlet_id is an ancestor
-            if current_outlet.parent_outlet_id == outlet_id:
+            if parent_id == outlet_id:
                 return True
-
-            current = current_outlet.parent_outlet_id
+            current = parent_id
 
         return False
 
@@ -265,22 +258,37 @@ class OutletService:
         return list(self.session.exec(statement).all())
 
     def get_outlet_hierarchy(self, outlet_id: int) -> dict:
-        """Get the full hierarchy tree for an outlet and its children."""
-        outlet = self.get_outlet(outlet_id)
-        if not outlet:
+        """Get the full hierarchy tree for an outlet and its children.
+
+        Fetches all outlets in a single query and builds the tree in memory.
+        """
+        # Fetch all outlets in one query
+        all_outlets = list(self.session.exec(select(Outlet)).all())
+        outlet_map = {o.id: o for o in all_outlets}
+
+        root = outlet_map.get(outlet_id)
+        if not root:
             return {"error": "not_found"}
 
-        children = self.get_child_outlets(outlet_id)
+        # Group by parent_outlet_id for fast child lookup
+        children_map: dict[int, list[Outlet]] = {}
+        for o in all_outlets:
+            if o.parent_outlet_id is not None:
+                children_map.setdefault(o.parent_outlet_id, []).append(o)
 
-        return {
-            "id": outlet.id,
-            "name": outlet.name,
-            "code": outlet.code,
-            "outlet_type": outlet.outlet_type.value if hasattr(outlet.outlet_type, 'value') else outlet.outlet_type,
-            "is_active": outlet.is_active,
-            "children": [
-                self.get_outlet_hierarchy(child.id)
-                for child in children
-                if child.id is not None
-            ],
-        }
+        def build_node(oid: int) -> dict:
+            o = outlet_map[oid]
+            return {
+                "id": o.id,
+                "name": o.name,
+                "code": o.code,
+                "outlet_type": o.outlet_type.value if hasattr(o.outlet_type, 'value') else o.outlet_type,
+                "is_active": o.is_active,
+                "children": [
+                    build_node(child.id)
+                    for child in children_map.get(oid, [])
+                    if child.id is not None
+                ],
+            }
+
+        return build_node(outlet_id)

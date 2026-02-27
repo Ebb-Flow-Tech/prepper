@@ -130,15 +130,17 @@ export function RecipeManagementTab() {
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const [selectedRecipeCategories, setSelectedRecipeCategories] = useState<number[]>([]);
 
-  // Fetch outlets for all recipes (with TanStack Query caching)
-  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
-    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
+  // Memoize recipe IDs to prevent unstable references triggering refetches
+  const recipeIds = useMemo(
+    () => (recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null),
+    [recipes]
   );
 
+  // Fetch outlets for all recipes (with TanStack Query caching)
+  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(recipeIds);
+
   // Fetch allergens for all recipes (with TanStack Query caching)
-  const { data: recipeAllergens = new Map() } = useRecipeAllergensBatch(
-    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
-  );
+  const { data: recipeAllergens = new Map() } = useRecipeAllergensBatch(recipeIds);
 
   // Build a map of recipe_id -> category_ids[] for efficient filtering
   const recipeCategoryMap = useMemo(() => {

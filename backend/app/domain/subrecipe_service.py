@@ -196,30 +196,60 @@ class SubRecipeService:
         Get the full Bill of Materials tree for a recipe.
 
         Returns a nested structure showing all sub-recipes recursively.
-        Includes depth limiting to prevent runaway queries.
+        Pre-fetches all data in 2 queries then builds tree in memory.
         """
-        if depth >= max_depth:
-            return {"recipe_id": recipe_id, "truncated": True}
+        # Collect all recipe IDs in the tree via BFS
+        all_recipe_ids: set[int] = {recipe_id}
+        frontier = {recipe_id}
+        current_depth = 0
 
-        recipe = self.session.get(Recipe, recipe_id)
-        if not recipe:
-            return {"recipe_id": recipe_id, "error": "not_found"}
+        # Pre-fetch all RecipeRecipe links level by level
+        all_links: list[RecipeRecipe] = []
+        while frontier and current_depth < max_depth:
+            statement = (
+                select(RecipeRecipe)
+                .where(RecipeRecipe.parent_recipe_id.in_(frontier))
+                .order_by(RecipeRecipe.position)
+            )
+            links = list(self.session.exec(statement).all())
+            all_links.extend(links)
+            frontier = set()
+            for link in links:
+                if link.child_recipe_id not in all_recipe_ids:
+                    all_recipe_ids.add(link.child_recipe_id)
+                    frontier.add(link.child_recipe_id)
+            current_depth += 1
 
-        sub_recipes = self.get_sub_recipes(recipe_id)
+        # Fetch all recipes in a single query
+        statement = select(Recipe).where(Recipe.id.in_(all_recipe_ids))
+        recipes = {r.id: r for r in self.session.exec(statement).all()}
 
-        return {
-            "recipe_id": recipe_id,
-            "recipe_name": recipe.name,
-            "sub_recipes": [
-                {
-                    "link_id": rr.id,
-                    "quantity": rr.quantity,
-                    "unit": rr.unit.value if hasattr(rr.unit, 'value') else rr.unit,
-                    "position": rr.position,
-                    "child": self.get_full_bom_tree(
-                        rr.child_recipe_id, depth + 1, max_depth
-                    ),
-                }
-                for rr in sub_recipes
-            ],
-        }
+        # Group links by parent_recipe_id
+        links_by_parent: dict[int, list[RecipeRecipe]] = {}
+        for link in all_links:
+            links_by_parent.setdefault(link.parent_recipe_id, []).append(link)
+
+        # Build tree in memory
+        def build_node(rid: int, d: int) -> dict:
+            if d >= max_depth:
+                return {"recipe_id": rid, "truncated": True}
+            recipe = recipes.get(rid)
+            if not recipe:
+                return {"recipe_id": rid, "error": "not_found"}
+            children = links_by_parent.get(rid, [])
+            return {
+                "recipe_id": rid,
+                "recipe_name": recipe.name,
+                "sub_recipes": [
+                    {
+                        "link_id": rr.id,
+                        "quantity": rr.quantity,
+                        "unit": rr.unit.value if hasattr(rr.unit, 'value') else rr.unit,
+                        "position": rr.position,
+                        "child": build_node(rr.child_recipe_id, d + 1),
+                    }
+                    for rr in children
+                ],
+            }
+
+        return build_node(recipe_id, 0)

@@ -25,13 +25,10 @@ class TastingSessionService:
 
     def _resolve_attendees_to_users(self, emails: list[str]) -> list[User]:
         """Look up User records by email. Silently skips unregistered emails."""
-        users = []
-        for email in emails:
-            statement = select(User).where(User.email == email)
-            user = self.session.exec(statement).first()
-            if user:
-                users.append(user)
-        return users
+        if not emails:
+            return []
+        statement = select(User).where(User.email.in_(emails))
+        return list(self.session.exec(statement).all())
 
     def _load_participants(self, session_id: int) -> list[TastingUserRead]:
         """Load all TastingUserRead objects for a session."""
@@ -55,9 +52,44 @@ class TastingSessionService:
                 )
         return result
 
+    def _load_participants_batch(
+        self, session_ids: list[int]
+    ) -> dict[int, list[TastingUserRead]]:
+        """Load all TastingUserRead objects for multiple sessions in a single query."""
+        if not session_ids:
+            return {}
+        statement = (
+            select(TastingUser, User)
+            .join(User, TastingUser.user_id == User.id, isouter=True)
+            .where(TastingUser.tasting_session_id.in_(session_ids))
+        )
+        rows = self.session.exec(statement).all()
+        result: dict[int, list[TastingUserRead]] = {sid: [] for sid in session_ids}
+        for tu, user in rows:
+            if user:
+                result[tu.tasting_session_id].append(
+                    TastingUserRead(
+                        id=tu.id,
+                        user_id=tu.user_id,
+                        email=user.email,
+                        username=user.username,
+                        phone_number=user.phone_number,
+                    )
+                )
+        return result
+
     def _build_read(self, tasting_session: TastingSession) -> TastingSessionRead:
         """Compose a TastingSessionRead from a TastingSession row."""
         participants = self._load_participants(tasting_session.id)
+        return TastingSessionRead(
+            **tasting_session.model_dump(),
+            participants=participants,
+        )
+
+    def _build_read_with_participants(
+        self, tasting_session: TastingSession, participants: list[TastingUserRead]
+    ) -> TastingSessionRead:
+        """Compose a TastingSessionRead with pre-loaded participants."""
         return TastingSessionRead(
             **tasting_session.model_dump(),
             participants=participants,
@@ -101,7 +133,12 @@ class TastingSessionService:
             .limit(limit)
         )
         sessions = list(self.session.exec(statement).all())
-        return [self._build_read(s) for s in sessions]
+        session_ids = [s.id for s in sessions]
+        participants_map = self._load_participants_batch(session_ids)
+        return [
+            self._build_read_with_participants(s, participants_map.get(s.id, []))
+            for s in sessions
+        ]
 
     def get(self, session_id: int) -> Optional[TastingSessionRead]:
         """Get a tasting session by ID."""

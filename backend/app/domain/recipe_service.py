@@ -56,62 +56,49 @@ class RecipeService:
 
         Admin users see all recipes.
         """
+        from sqlalchemy import or_
+
         statement = select(Recipe)
         if status:
             statement = statement.where(Recipe.status == status)
 
-        recipes = list(self.session.exec(statement).all())
-
         # Admin users see all recipes
         if current_user and current_user.user_type == UserType.ADMIN:
-            return recipes
+            return list(self.session.exec(statement).all())
 
-        # Normal users: filter by access control
+        # No user = no access
         if not current_user:
             return []
 
-        accessible_recipe_ids = set()
+        # Build SQL-level access control filters
+        conditions = [
+            Recipe.owner_id == current_user.id,
+            Recipe.is_public == True,
+        ]
 
-        # 1. Own recipes
-        accessible_recipe_ids.update(
-            r.id for r in recipes if r.owner_id == current_user.id and r.id is not None
-        )
-
-        # 2. Public recipes
-        accessible_recipe_ids.update(r.id for r in recipes if r.is_public and r.id is not None)
-
-        # 3. Recipes from outlets
+        # Add outlet-based access
         if current_user.outlet_id:
             from app.domain.outlet_service import OutletService
 
             outlet_service = OutletService(self.session)
-
-            # Get the user's outlet
             user_outlet = outlet_service.get_outlet(current_user.outlet_id)
             if user_outlet:
-                # Collect all accessible outlet IDs
                 accessible_outlet_ids = {current_user.outlet_id}
+                if user_outlet.outlet_type.value != "brand" and user_outlet.parent_outlet_id:
+                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
 
-                # If user is in a parent outlet (brand), they can only see that outlet's recipes
-                if user_outlet.outlet_type.value == "brand":
-                    # Only this parent outlet
-                    pass
-                else:
-                    # If user is in a child outlet (location), they can also see parent outlet recipes
-                    if user_outlet.parent_outlet_id:
-                        accessible_outlet_ids.add(user_outlet.parent_outlet_id)
-
-                # Get all recipes assigned to accessible outlets
-                statement = select(RecipeOutlet).where(
-                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-                    RecipeOutlet.is_active,
+                # Subquery: recipe IDs accessible via outlets
+                outlet_recipe_ids = (
+                    select(RecipeOutlet.recipe_id)
+                    .where(
+                        RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
+                        RecipeOutlet.is_active,
+                    )
                 )
-                recipe_outlets = self.session.exec(statement).all()
-                accessible_recipe_ids.update(
-                    ro.recipe_id for ro in recipe_outlets if ro.recipe_id is not None
-                )
+                conditions.append(Recipe.id.in_(outlet_recipe_ids))
 
-        return [r for r in recipes if r.id in accessible_recipe_ids]
+        statement = statement.where(or_(*conditions))
+        return list(self.session.exec(statement).all())
 
     def get_recipe(self, recipe_id: int) -> Recipe | None:
         """Get a recipe by ID."""
