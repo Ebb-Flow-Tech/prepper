@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.17** (2026-02-27) - UI Redesign & Performance Optimization: Canvas Layout Overhaul, Supplier UI Polish, Menu Publish/Unpublish & Backend Query Optimization
 - **0.0.16** (2026-02-26) - SMS Invitations, Tasting Participant Association & Menu Management: Twilio SMS Integration, User-Based Session Relationships & Drag-and-Drop Menu Reordering
 - **0.0.15** (2026-02-23) - Access Control & Allergen Management: Admin User Management, Hierarchical Access Control, Allergen Tracking & Supplier Soft Delete
 - **0.0.14** (2026-02-12) - Parent Outlet Recipes Display: Read-Only Table for Multi-Brand Recipe Management
@@ -22,6 +23,115 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+
+---
+
+## [0.0.17] - 2026-02-27
+
+### Changed
+
+#### Canvas Layout Redesign
+
+Replaced game-card styled components with clean, compact list-item design across the recipe canvas for a more professional, minimal look.
+
+**Changes**:
+- RightPanel (ingredient palette) redesigned with compact list-item rows instead of large cards
+- CanvasTab overhauled with streamlined, minimal UI for recipe ingredients and sub-recipes
+- TopAppBar tabs switched to pill-style design for cleaner navigation
+- Tabs hidden on new recipe page until recipe is saved
+- Menu preview always shows substitution field for consistency
+
+**Files Modified**:
+- `frontend/src/components/layout/RightPanel.tsx` — List-item redesign
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Compact ingredient/sub-recipe UI
+- `frontend/src/components/layout/CanvasLayout.tsx` — Layout adjustments
+- `frontend/src/components/layout/TopAppBar.tsx` — Pill-style tabs
+- `frontend/src/app/recipes/new/page.tsx` — Hide tabs on new recipe
+- `frontend/src/app/menu/preview/[id]/page.tsx` — Always show substitution field
+
+#### Supplier UI Polish
+
+Enhanced supplier management interface with unarchive support, visual indicators, and better text handling.
+
+**Changes**:
+- Supplier unarchive/restore functionality with ArchiveRestore icon button
+- `OverflowTooltip` component for truncated text with hover titles
+- "Archived" badge displayed on inactive suppliers in both card and list views
+- `is_active` field added to `UpdateSupplierRequest` type for reactivation
+- Navigation labels visible at `xl` breakpoint (down from `2xl`) for better usability
+
+**Files Modified**:
+- `frontend/src/app/suppliers/page.tsx` — Unarchive actions and archived badges
+- `frontend/src/components/suppliers/SupplierListRow.tsx` — Archived badge in list view
+- `frontend/src/components/layout/TopNav.tsx` — Nav label breakpoint change
+- `frontend/src/types/index.ts` — Added `is_active` to update type
+
+### Added
+
+#### Menu Publish/Unpublish
+
+Added publish and unpublish workflow for menus, enabling status management from draft to published state.
+
+**Features**:
+- `POST /menus/{id}/publish` and `POST /menus/{id}/unpublish` backend endpoints
+- Service-layer `publish_menu()` and `unpublish_menu()` methods
+- `usePublishMenu` and `useUnpublishMenu` frontend hooks
+- Status toggle UI on menu management page with visual publish state indicator
+
+**Files Modified**:
+- `backend/app/api/menus.py` — Publish/unpublish endpoints
+- `backend/app/domain/menu_service.py` — Publish/unpublish service methods
+- `frontend/src/app/menu/page.tsx` — Status toggle UI
+- `frontend/src/lib/api.ts` — API client methods
+- `frontend/src/lib/hooks/useMenus.ts` — Mutation hooks
+
+#### Supplier Endpoint Tests
+
+Added comprehensive test coverage for supplier API endpoints.
+
+**Tests**:
+- 11 new tests covering deactivate, reactivate, `active_only` filtering, and 404 error cases
+- Validates soft-delete and restore behavior end-to-end
+
+**Files Created**:
+- `backend/tests/test_suppliers.py` — 11 supplier endpoint tests
+
+### Performance
+
+#### Backend Query Optimization
+
+Eliminated N+1 query patterns across multiple services with batch fetching and SQL-level filtering.
+
+**Optimizations**:
+- **Outlet hierarchy/cycle detection** — Replaced recursive single-row fetches with batch `SELECT IN` queries in `outlet_service.py`
+- **BOM tree** — Batch-loaded sub-recipe links and recipes in `subrecipe_service.py` instead of per-node queries
+- **Tasting session participants** — Single JOIN query to load all participants with user details in `tasting_session_service.py`
+- **Recipe list access control** — SQL-level subquery filtering replaces Python-side loop filtering in `recipe_service.py`; removed debug print statements from recipe access control
+- **Recipe access control cleanup** — Removed debug `print()` statements from `recipes.py` router
+
+**Files Modified**:
+- `backend/app/domain/outlet_service.py` — Batch hierarchy queries
+- `backend/app/domain/subrecipe_service.py` — Batch BOM tree loading
+- `backend/app/domain/tasting_session_service.py` — JOIN-based participant loading
+- `backend/app/domain/recipe_service.py` — SQL subquery access filtering
+- `backend/app/api/recipes.py` — Removed debug prints
+
+#### Frontend Caching & Memoization
+
+Optimized React rendering and TanStack Query cache behavior to reduce unnecessary re-renders and API calls.
+
+**Optimizations**:
+- **`RecipeIngredientRow`** — Wrapped with `React.memo` and memoized supplier options to prevent re-renders on parent state changes
+- **Recipe ID stabilization** — Stabilized recipe ID references in `RecipeManagementTab` to avoid cascading re-renders
+- **Scoped cache invalidation** — Cache invalidation for outlets and tasting notes scoped to specific IDs instead of broad invalidation
+- **Increased stale time** — TanStack Query stale time increased from default to 5 minutes to reduce refetch frequency
+
+**Files Modified**:
+- `frontend/src/components/recipe/RecipeIngredientRow.tsx` — `React.memo` wrapper
+- `frontend/src/components/recipes/RecipeManagementTab.tsx` — Stable ID refs
+- `frontend/src/lib/hooks/useRecipeOutlets.ts` — Scoped invalidation
+- `frontend/src/lib/hooks/useTastings.ts` — Scoped invalidation
+- `frontend/src/lib/providers.tsx` — 5-minute stale time
 
 ---
 
