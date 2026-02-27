@@ -8,11 +8,11 @@ import { useAppState } from '@/lib/store';
 
 const MENUS_QUERY_KEY = 'menus';
 
-export function useMenus() {
+export function useMenus(includeArchived?: boolean) {
   const { userId, userType } = useAppState();
   return useQuery({
-    queryKey: [MENUS_QUERY_KEY, { userId, userType }],
-    queryFn: () => api.getMenus(),
+    queryKey: [MENUS_QUERY_KEY, { userId, userType, includeArchived }],
+    queryFn: () => api.getMenus(includeArchived),
     enabled: !!userId,
   });
 }
@@ -75,10 +75,24 @@ export function useDeleteMenu() {
     mutationFn: (menuId: number) => api.deleteMenu(menuId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY] });
-      toast.success('Menu deleted successfully');
+      toast.success('Menu archived successfully');
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete menu');
+      toast.error(error.message || 'Failed to archive menu');
+    },
+  });
+}
+
+export function useRestoreMenu() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (menuId: number) => api.restoreMenu(menuId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [MENUS_QUERY_KEY] });
+      toast.success('Menu restored successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to restore menu');
     },
   });
 }

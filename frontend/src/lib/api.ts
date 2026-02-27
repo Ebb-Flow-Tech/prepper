@@ -1256,8 +1256,9 @@ export async function updateUser(userId: string, data: Partial<User>): Promise<U
 
 // ============ Menus ============
 
-export async function getMenus(): Promise<Menu[]> {
-  return fetchApi<Menu[]>('/menus');
+export async function getMenus(includeArchived?: boolean): Promise<Menu[]> {
+  const params = includeArchived ? '?include_archived=true' : '';
+  return fetchApi<Menu[]>(`/menus${params}`);
 }
 
 export async function getMenu(menuId: number): Promise<MenuDetail> {
@@ -1286,6 +1287,12 @@ export async function forkMenu(menuId: number): Promise<MenuDetail> {
 
 export async function deleteMenu(menuId: number): Promise<Menu> {
   return fetchApi<Menu>(`/menus/${menuId}/delete`, {
+    method: 'PATCH',
+  });
+}
+
+export async function restoreMenu(menuId: number): Promise<Menu> {
+  return fetchApi<Menu>(`/menus/${menuId}/restore`, {
     method: 'PATCH',
   });
 }
