@@ -236,6 +236,7 @@ export interface TastingSession {
   name: string;
   date: string;
   location: string | null;
+  creator_id: string | null;
   participants: TastingParticipant[];
   notes: string | null;
   created_at: string;
@@ -294,7 +295,7 @@ export interface CreateTastingSessionRequest {
   name: string;
   date: string;
   location?: string | null;
-  attendees?: string[] | null;
+  participant_ids?: string[] | null;
   notes?: string | null;
 }
 
@@ -302,7 +303,7 @@ export interface UpdateTastingSessionRequest {
   name?: string;
   date?: string;
   location?: string | null;
-  attendees?: string[] | null;
+  participant_ids?: string[] | null;
   notes?: string | null;
 }
 

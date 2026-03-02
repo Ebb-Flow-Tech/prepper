@@ -23,6 +23,18 @@ export async function POST(request: Request) {
     // Validate request
     const validatedData = SendTastingInvitationSchema.parse(body);
 
+    // Skip sending invitations if the session date is in the past
+    const sessionDate = new Date(validatedData.session_date);
+    if (sessionDate < new Date()) {
+      return Response.json({
+        success: true,
+        message: 'Session is in the past — invitations not sent',
+        email_count: 0,
+        sms_count: 0,
+        recipient_count: validatedData.recipients.length,
+      });
+    }
+
     // Check if SendGrid is configured
     const sendGridApiKey = process.env.SENDGRID_API_KEY;
     const senderEmail = process.env.SENDER_EMAIL;

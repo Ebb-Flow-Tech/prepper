@@ -51,13 +51,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-function isSessionExpired(dateString: string): boolean {
-  const sessionDate = new Date(dateString);
-  const today = new Date();
-  sessionDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  return sessionDate < today;
-}
+
 
 const DECISION_CONFIG: Record<
   TastingDecision,
@@ -271,14 +265,13 @@ function FeedbackForm({
 
 interface FeedbackNoteCardProps {
   note: TastingNote;
-  isExpired: boolean;
   currentUserId: string | null;
   isAdmin: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
 }
 
-function FeedbackNoteCard({ note, isExpired, currentUserId, isAdmin, onUpdate, onDelete }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, currentUserId, isAdmin, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -334,7 +327,7 @@ function FeedbackNoteCard({ note, isExpired, currentUserId, isAdmin, onUpdate, o
             )}
           </div>
         </div>
-        {!isExpired && (isAdmin || note.user_id === null || note.user_id === currentUserId) && (
+        {(isAdmin || note.user_id === null || note.user_id === currentUserId) && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
@@ -461,6 +454,7 @@ export default function RecipeTastingPage() {
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const isInvited = userType === 'admin' ||
+    (userId && session?.creator_id === userId) ||
     (userId && session?.participants?.some((p) => p.user_id === userId) === true);
   const { data: recipe, isLoading: recipeLoading } = useRecipeForTasting(recipeId);
   const { data: allergens = [] } = useRecipeAllergens(recipeId);
@@ -623,8 +617,6 @@ export default function RecipeTastingPage() {
             <Button
               size="sm"
               onClick={() => setShowAddForm(true)}
-              disabled={isSessionExpired(session.date)}
-              title={isSessionExpired(session.date) ? 'Cannot add feedback to past sessions' : undefined}
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Feedback
@@ -661,7 +653,6 @@ export default function RecipeTastingPage() {
               <FeedbackNoteCard
                 key={note.id}
                 note={note}
-                isExpired={isSessionExpired(session.date)}
                 currentUserId={userId}
                 isAdmin={userType === 'admin'}
                 onUpdate={handleUpdateNote}

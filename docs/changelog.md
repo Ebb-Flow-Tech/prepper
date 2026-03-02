@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.18** (2026-03-02) - Tasting Session Creator Tracking & UX Improvements: Session Creator Ownership, ID-Based Participant Management, Quick-Add Ingredients & Past-Date Invitation Guard
 - **0.0.17** (2026-02-27) - UI Redesign & Performance Optimization: Canvas Layout Overhaul, Supplier UI Polish, Menu Publish/Unpublish & Backend Query Optimization
 - **0.0.16** (2026-02-26) - SMS Invitations, Tasting Participant Association & Menu Management: Twilio SMS Integration, User-Based Session Relationships & Drag-and-Drop Menu Reordering
 - **0.0.15** (2026-02-23) - Access Control & Allergen Management: Admin User Management, Hierarchical Access Control, Allergen Tracking & Supplier Soft Delete
@@ -22,7 +23,83 @@ All notable changes to this project will be documented in this file.
 - **0.0.4** (2025-12-02) - Backend Deployment: Fly.io Production Setup with Supabase PostgreSQL
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
-- **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+- **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.18] - 2026-03-02
+
+### Changed
+
+#### Tasting Session Creator Tracking
+
+Added `creator_id` column to tasting sessions, establishing explicit ownership of who created each session. Creators now have the same access privileges as participants.
+
+**Database Changes**:
+- New `creator_id` column on `tasting_sessions` (FK to `users.id`, nullable, indexed, SET NULL on delete)
+- Legacy `attendees` JSON column dropped (replaced by `tasting_users` join table in 0.0.16)
+
+**Backend**:
+- `TastingSession` model includes `creator_id` field
+- `TastingSessionRead` returns `creator_id` in API responses
+- Service layer sets `creator_id` from authenticated user during session creation
+- Access control updated: admins, creators, and participants can all access sessions
+
+**Frontend**:
+- Session detail page (`/tastings/[id]`) checks `creator_id` for access control
+- Recipe tasting page (`/tastings/[id]/r/[recipeId]`) uses creator-based access check
+- Ingredient tasting page (`/tastings/[id]/i/[ingredientId]`) uses creator-based access check
+- 403 error handling displays "Access Denied" with back-navigation link
+
+**Files Created**:
+- `backend/alembic/versions/e1f2g3h4i5j6_add_creator_id_to_tasting_sessions.py`
+
+**Files Modified**:
+- `backend/app/models/tasting.py` — Added `creator_id` to model and read DTO
+- `backend/app/domain/tasting_session_service.py` — Creator ID set on create
+- `backend/app/api/tastings.py` — Access control includes creator check
+- `backend/tests/test_tastings.py` — Tests assert `creator_id` in responses
+- `frontend/src/app/tastings/[id]/page.tsx` — Creator-based access check
+- `frontend/src/app/tastings/[id]/r/[recipeId]/page.tsx` — Creator-based access check
+- `frontend/src/app/tastings/[id]/i/[ingredientId]/page.tsx` — Creator-based access check
+- `frontend/src/types/index.ts` — Added `creator_id` to `TastingSession` type
+
+#### Simplified Participant Management (ID-Based)
+
+Replaced email-based `attendees` field with direct `participant_ids` (user ID array) on create/update DTOs. Removes email-to-user resolution overhead.
+
+**Changes**:
+- `TastingSessionCreate` and `TastingSessionUpdate` accept `participant_ids: List[str]` instead of `attendees: List[str]`
+- Service layer creates `TastingUser` rows directly by user ID (no email lookup)
+- Frontend sends user IDs from `ParticipantPicker` component directly
+
+**Files Modified**:
+- `backend/app/models/tasting.py` — Schema DTOs use `participant_ids`
+- `backend/app/domain/tasting_session_service.py` — Direct ID-based participant creation
+- `frontend/src/app/tastings/new/page.tsx` — Sends `participant_ids` from selected users
+- `frontend/src/app/tastings/[id]/page.tsx` — Updates participants via `participant_ids`
+
+### Added
+
+#### Quick-Add Ingredient from Search
+
+Added a quick-create shortcut in the RightPanel ingredient library — when a search term yields no matches, a "Add [term]" button appears to instantly create the ingredient with auto-categorization.
+
+**Features**:
+- Quick-add button appears when search has no matching ingredients
+- Auto-categorizes via AI category agent during creation
+- Loading overlay with spinner during ingredient creation
+- Tabs and search disabled while creation is in progress
+- Created ingredient uses default unit `g` and no cost (editable later)
+
+**Files Modified**:
+- `frontend/src/components/layout/RightPanel.tsx` — Quick-add flow with loading state
+
+#### Past-Date Invitation Guard
+
+SMS/email invitations are now skipped when the tasting session date is in the past, preventing unnecessary sends for historical sessions.
+
+**Files Modified**:
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Early return with `email_count: 0, sms_count: 0` for past sessions
 
 ---
 

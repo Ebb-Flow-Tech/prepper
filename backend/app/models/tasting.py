@@ -36,6 +36,7 @@ class TastingSession(TastingSessionBase, table=True):
     __tablename__ = "tasting_sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    creator_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -43,7 +44,7 @@ class TastingSession(TastingSessionBase, table=True):
 class TastingSessionCreate(TastingSessionBase):
     """Schema for creating a new tasting session."""
 
-    attendees: Optional[List[str]] = None
+    participant_ids: Optional[List[str]] = None
 
 
 class TastingSessionUpdate(SQLModel):
@@ -52,7 +53,7 @@ class TastingSessionUpdate(SQLModel):
     name: Optional[str] = None
     date: Optional[datetime.datetime] = None
     location: Optional[str] = None
-    attendees: Optional[List[str]] = None
+    participant_ids: Optional[List[str]] = None
     notes: Optional[str] = None
 
 
@@ -87,6 +88,7 @@ class TastingSessionRead(TastingSessionBase):
     """TastingSession for API responses — includes resolved participant list."""
 
     id: int
+    creator_id: Optional[str] = None
     participants: List[TastingUserRead] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime
