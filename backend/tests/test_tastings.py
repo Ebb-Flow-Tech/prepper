@@ -23,6 +23,7 @@ def test_create_tasting_session(client: TestClient):
     assert data["date"] == "2024-12-15T10:00:00"
     assert data["location"] == "Main Kitchen"
     assert data["participants"] == []
+    assert data["creator_id"] == "test-admin-user"
     assert "id" in data
 
 
@@ -646,10 +647,10 @@ def test_add_note_requires_user_id(client: TestClient):
 # ============================================================================
 
 
-def test_create_session_with_participants_resolves_registered_users(
+def test_create_session_with_participant_ids(
     client: TestClient, session: Session
 ):
-    """Creating a session with attendees emails that match real users should populate participants list."""
+    """Creating a session with participant_ids should populate participants list."""
     # Create a user in the DB
     user = User(
         id="user-123",
@@ -661,13 +662,13 @@ def test_create_session_with_participants_resolves_registered_users(
     session.add(user)
     session.commit()
 
-    # Create session with that user's email
+    # Create session with that user's ID
     response = client.post(
         "/api/v1/tasting-sessions",
         json={
             "name": "Menu Tasting",
             "date": "2024-12-15T10:00:00",
-            "attendees": ["chef@example.com"],
+            "participant_ids": ["user-123"],
         },
     )
     assert response.status_code == 201
@@ -678,26 +679,24 @@ def test_create_session_with_participants_resolves_registered_users(
     assert data["participants"][0]["user_id"] == "user-123"
 
 
-def test_create_session_skips_unregistered_emails(client: TestClient):
-    """Unregistered emails in attendees are silently ignored."""
+def test_create_session_without_participant_ids(client: TestClient):
+    """Creating a session without participant_ids results in empty participants."""
     response = client.post(
         "/api/v1/tasting-sessions",
         json={
             "name": "Menu Tasting",
             "date": "2024-12-15T10:00:00",
-            "attendees": ["nonexistent@example.com", "also-not-real@test.com"],
         },
     )
     assert response.status_code == 201
     data = response.json()
-    # No participants because emails don't exist
     assert data["participants"] == []
 
 
-def test_update_session_attendees_replaces_participants(
+def test_update_session_participant_ids_replaces_participants(
     client: TestClient, session: Session
 ):
-    """PATCHing attendees list fully replaces current participants."""
+    """PATCHing participant_ids fully replaces current participants."""
     # Create two users
     user1 = User(
         id="user-1",
@@ -723,7 +722,7 @@ def test_update_session_attendees_replaces_participants(
         json={
             "name": "Menu Tasting",
             "date": "2024-12-15T10:00:00",
-            "attendees": ["chef1@example.com"],
+            "participant_ids": ["user-1"],
         },
     )
     session_id = create_response.json()["id"]
@@ -732,7 +731,7 @@ def test_update_session_attendees_replaces_participants(
     # Update to replace with user2
     update_response = client.patch(
         f"/api/v1/tasting-sessions/{session_id}",
-        json={"attendees": ["chef2@example.com"]},
+        json={"participant_ids": ["user-2"]},
     )
     assert update_response.status_code == 200
     data = update_response.json()
@@ -740,7 +739,7 @@ def test_update_session_attendees_replaces_participants(
     assert data["participants"][0]["email"] == "chef2@example.com"
 
 
-def test_update_session_without_attendees_preserves_participants(
+def test_update_session_without_participant_ids_preserves_participants(
     client: TestClient, session: Session
 ):
     """PATCHing name only should NOT remove existing participants."""
@@ -761,13 +760,13 @@ def test_update_session_without_attendees_preserves_participants(
         json={
             "name": "Menu Tasting",
             "date": "2024-12-15T10:00:00",
-            "attendees": ["chef@example.com"],
+            "participant_ids": ["user-1"],
         },
     )
     session_id = create_response.json()["id"]
     original_participants = create_response.json()["participants"]
 
-    # Update only the name (no attendees key)
+    # Update only the name (no participant_ids key)
     update_response = client.patch(
         f"/api/v1/tasting-sessions/{session_id}",
         json={"name": "Updated Name"},

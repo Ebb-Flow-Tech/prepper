@@ -50,13 +50,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-function isSessionExpired(dateString: string): boolean {
-  const sessionDate = new Date(dateString);
-  const today = new Date();
-  sessionDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  return sessionDate < today;
-}
+
 
 const DECISION_CONFIG: Record<
   TastingDecision,
@@ -266,14 +260,13 @@ function FeedbackForm({
 
 interface FeedbackNoteCardProps {
   note: IngredientTastingNote;
-  isExpired: boolean;
   onUpdate: (noteId: number, data: Partial<IngredientTastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
   currentUserId: string | null;
   isAdmin: boolean;
 }
 
-function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete, currentUserId, isAdmin }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useIngredientTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -309,7 +302,7 @@ function FeedbackNoteCard({ note, isExpired, onUpdate, onDelete, currentUserId, 
     setIsEditing(false);
   };
 
-  const canEdit = !isExpired && (isAdmin || note.user_id === null || note.user_id === currentUserId);
+  const canEdit = isAdmin || note.user_id === null || note.user_id === currentUserId;
 
   return (
     <Card className="mb-4">
@@ -467,6 +460,7 @@ export default function IngredientTastingPage() {
 
   // Invitation gate
   const isInvited = userType === 'admin' ||
+    (userId && session?.creator_id === userId) ||
     (userId && (session?.participants?.some(p => p.user_id === userId) ?? false));
 
   // For new notes
@@ -624,8 +618,6 @@ export default function IngredientTastingPage() {
             <Button
               size="sm"
               onClick={() => setShowAddForm(true)}
-              disabled={isSessionExpired(session.date)}
-              title={isSessionExpired(session.date) ? 'Cannot add feedback to past sessions' : undefined}
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Feedback
@@ -662,7 +654,6 @@ export default function IngredientTastingPage() {
               <FeedbackNoteCard
                 key={note.id}
                 note={note}
-                isExpired={isSessionExpired(session.date)}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
                 currentUserId={userId}

@@ -23,12 +23,17 @@ class TastingSessionService:
     def __init__(self, session: Session):
         self.session = session
 
-    def _resolve_attendees_to_users(self, emails: list[str]) -> list[User]:
-        """Look up User records by email. Silently skips unregistered emails."""
-        if not emails:
-            return []
-        statement = select(User).where(User.email.in_(emails))
-        return list(self.session.exec(statement).all())
+    def _add_participants(
+        self, session_id: int, user_ids: list[str]
+    ) -> None:
+        """Create TastingUser rows for the given user IDs (deduped)."""
+        seen: set[str] = set()
+        for uid in user_ids:
+            if uid not in seen:
+                self.session.add(
+                    TastingUser(tasting_session_id=session_id, user_id=uid)
+                )
+                seen.add(uid)
 
     def _load_participants(self, session_id: int) -> list[TastingUserRead]:
         """Load all TastingUserRead objects for a session."""
@@ -95,27 +100,20 @@ class TastingSessionService:
             participants=participants,
         )
 
-    def create(self, data: TastingSessionCreate) -> TastingSessionRead:
+    def create(
+        self, data: TastingSessionCreate, creator_id: str | None = None
+    ) -> TastingSessionRead:
         """Create a new tasting session with participants."""
-        # Exclude attendees from session fields (will be handled separately)
-        session_data = data.model_dump(exclude={"attendees"})
+        session_data = data.model_dump(exclude={"participant_ids"})
+        if creator_id is not None:
+            session_data["creator_id"] = creator_id
         tasting_session = TastingSession(**session_data)
         self.session.add(tasting_session)
         self.session.commit()
         self.session.refresh(tasting_session)
 
-        # Resolve emails to users and create TastingUser rows
-        if data.attendees:
-            users = self._resolve_attendees_to_users(data.attendees)
-            seen_ids = set()
-            for user in users:
-                if user.id not in seen_ids:
-                    tu = TastingUser(
-                        tasting_session_id=tasting_session.id,
-                        user_id=user.id,
-                    )
-                    self.session.add(tu)
-                    seen_ids.add(user.id)
+        if data.participant_ids:
+            self._add_participants(tasting_session.id, data.participant_ids)
             self.session.commit()
 
         return self._build_read(tasting_session)
@@ -155,16 +153,15 @@ class TastingSessionService:
         if not tasting_session:
             return None
 
-        # Exclude attendees from direct update
-        update_data = data.model_dump(exclude_unset=True, exclude={"attendees"})
+        update_data = data.model_dump(exclude_unset=True, exclude={"participant_ids"})
         for key, value in update_data.items():
             setattr(tasting_session, key, value)
 
         tasting_session.updated_at = datetime.utcnow()
         self.session.add(tasting_session)
 
-        # Handle attendees if explicitly provided in the payload
-        if "attendees" in data.model_fields_set:
+        # Replace participants if explicitly provided in the payload
+        if "participant_ids" in data.model_fields_set:
             # Delete all existing TastingUser rows for this session
             existing_stmt = select(TastingUser).where(
                 TastingUser.tasting_session_id == session_id
@@ -172,18 +169,8 @@ class TastingSessionService:
             for tu in self.session.exec(existing_stmt).all():
                 self.session.delete(tu)
 
-            # Re-add from the new list
-            if data.attendees:
-                users = self._resolve_attendees_to_users(data.attendees)
-                seen_ids = set()
-                for user in users:
-                    if user.id not in seen_ids:
-                        tu = TastingUser(
-                            tasting_session_id=session_id,
-                            user_id=user.id,
-                        )
-                        self.session.add(tu)
-                        seen_ids.add(user.id)
+            if data.participant_ids:
+                self._add_participants(session_id, data.participant_ids)
 
         self.session.commit()
         self.session.refresh(tasting_session)

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { DayPicker } from 'react-day-picker';
-import { format, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import 'react-day-picker/style.css';
 import { useCreateTastingSession } from '@/lib/hooks/useTastings';
 import { useSendTastingInvitation } from '@/lib/hooks/useSendTastingInvitation';
@@ -29,8 +29,6 @@ export default function NewTastingSessionPage() {
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<{ name?: string; date?: string }>({});
 
-  const today = startOfDay(new Date());
-
   const hours = ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
   const minutes = ['00', '15', '30', '45'];
 
@@ -48,14 +46,6 @@ export default function NewTastingSessionPage() {
     return `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
   };
 
-  const getSelectedDateTime = (): Date => {
-    const timeStr = get24HourTime();
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const dateTime = new Date(selectedDate);
-    dateTime.setHours(hours, minutes, 0, 0);
-    return dateTime;
-  };
-
   const getDateTimeString = (): string => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     return `${dateStr}T${get24HourTime()}`;
@@ -70,12 +60,6 @@ export default function NewTastingSessionPage() {
 
     if (!selectedDate) {
       newErrors.date = 'Please select a date and time';
-    } else {
-      const selectedDateTime = getSelectedDateTime();
-      const now = new Date();
-      if (selectedDateTime < now) {
-        newErrors.date = 'Date and time cannot be in the past';
-      }
     }
 
     setErrors(newErrors);
@@ -88,17 +72,17 @@ export default function NewTastingSessionPage() {
     if (!validateForm()) return;
 
     try {
-      const attendeeEmails = selectedParticipants.map((p) => p.email);
+      const participantIds = selectedParticipants.map((p) => p.id);
       const session = await createSession.mutateAsync({
         name: name.trim(),
         date: getDateTimeString(),
         location: location.trim() || null,
-        attendees: attendeeEmails.length > 0 ? attendeeEmails : null,
+        participant_ids: participantIds.length > 0 ? participantIds : null,
         notes: notes.trim() || null,
       });
 
-      // Send email/SMS invitations if there are attendees
-      if (attendeeEmails.length > 0) {
+      // Send email/SMS invitations if there are participants
+      if (selectedParticipants.length > 0) {
         sendInvitation.mutate({
           session_id: session.id,
           session_name: name.trim(),
@@ -200,7 +184,7 @@ export default function NewTastingSessionPage() {
                         if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }));
                       }
                     }}
-                    disabled={{ before: today }}
+
                   />
                   <div className="border-t border-zinc-200 dark:border-zinc-700 mt-3 pt-3">
                     <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">

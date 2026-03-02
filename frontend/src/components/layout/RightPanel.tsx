@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
@@ -306,12 +306,45 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const { data: categories } = useCategories();
   const { data: recipeCategories } = useRecipeCategories();
   const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
+  const createIngredient = useCreateIngredient();
+  const categorizeIngredient = useCategorizeIngredient();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
+
+  const handleQuickAdd = useCallback(async () => {
+    const name = search.trim();
+    if (!name) return;
+
+    setIsQuickAdding(true);
+    try {
+      let categoryId: number | null = null;
+      try {
+        const categoryData = await categorizeIngredient.mutateAsync(name);
+        categoryId = categoryData.category_id;
+      } catch {
+        // Categorization failed — proceed without category
+      }
+
+      await createIngredient.mutateAsync({
+        name,
+        base_unit: 'g',
+        cost_per_base_unit: null,
+        category_id: categoryId,
+      });
+
+      toast.success(`Ingredient "${name}" created`);
+      setSearch('');
+    } catch {
+      toast.error('Failed to create ingredient');
+    } finally {
+      setIsQuickAdding(false);
+    }
+  }, [search, categorizeIngredient, createIngredient]);
   // Fetch recipe outlets (with TanStack Query caching)
   const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
     recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
@@ -379,7 +412,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
       );
     }
 
-    return filtered;
+    return filtered.sort((a, b) => b.id - a.id);
   }, [ingredients, search, selectedCategories]);
 
   const toggleCategory = (categoryId: number) => {
@@ -458,7 +491,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
       {!isCollapsed && (
         <>
           {/* Tabs */}
-          <div className="border-b border-zinc-200 dark:border-zinc-800 px-3 pt-1">
+          <div className={cn("border-b border-zinc-200 dark:border-zinc-800 px-3 pt-1", isQuickAdding && "pointer-events-none opacity-50")}>
             <nav className="flex gap-1" aria-label="Library tabs">
               {TABS.map((tab) => (
                 <button
@@ -478,7 +511,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
           </div>
 
           {/* Search */}
-          <div className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
+          <div className={cn("border-b border-zinc-200 dark:border-zinc-800 px-3 py-2", isQuickAdding && "pointer-events-none opacity-50")}>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
               <Input
@@ -534,13 +567,22 @@ export function RightPanel({ outlets }: RightPanelProps) {
 
           {/* List */}
           <div
-            className="flex-1 overflow-y-auto px-2.5 py-2"
+            className={cn("flex-1 overflow-y-auto px-2.5 py-2 relative", isQuickAdding && "pointer-events-none")}
             onDoubleClick={(e) => {
               if (!(e.target as HTMLElement).closest('[data-ingredient-card]') && !(e.target as HTMLElement).closest('[data-recipe-card]')) {
                 setShowForm(true);
               }
             }}
           >
+        {/* Loading overlay */}
+        {isQuickAdding && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-50/70 dark:bg-zinc-950/70">
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Creating ingredient...</span>
+            </div>
+          </div>
+        )}
         {showForm && (
           <div className="mb-2">
             <NewIngredientForm onClose={() => setShowForm(false)} />
@@ -562,9 +604,23 @@ export function RightPanel({ outlets }: RightPanelProps) {
                   <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-1">Ingredients</h3>
                 )}
                 {filteredIngredients.length === 0 ? (
-                  <p className="text-xs text-zinc-500 px-1">
-                    {search ? 'No matches' : 'No ingredients yet'}
-                  </p>
+                  <div className="px-1">
+                    {search.trim() ? (
+                      <>
+                        <button
+                          onClick={handleQuickAdd}
+                          disabled={isQuickAdding}
+                          className="w-full mb-1.5 flex items-center gap-2 rounded-lg px-3 py-2.5 border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30 hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-600 dark:text-blue-400 transition-colors text-sm font-medium disabled:opacity-50"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">Add &ldquo;{search.trim()}&rdquo;</span>
+                        </button>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500">No matching ingredients</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-500">No ingredients yet</p>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-1">
                     {filteredIngredients.map((ingredient) => (
