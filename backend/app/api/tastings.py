@@ -24,6 +24,23 @@ router = APIRouter()
 router.include_router(notes_router)
 
 
+def _check_session_access(
+    tasting_session: TastingSessionRead, current_user: User
+) -> None:
+    """Raise 403 if a non-admin user is neither the creator nor a participant."""
+    if current_user.user_type == UserType.ADMIN:
+        return
+    if tasting_session.creator_id == current_user.id:
+        return
+    participant_ids = {p.user_id for p in tasting_session.participants}
+    if current_user.id in participant_ids:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied",
+    )
+
+
 # -----------------------------------------------------------------------------
 # Tasting Sessions
 # -----------------------------------------------------------------------------
@@ -33,10 +50,11 @@ router.include_router(notes_router)
 def create_tasting_session(
     data: TastingSessionCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new tasting session."""
     service = TastingSessionService(session)
-    return service.create(data)
+    return service.create(data, creator_id=current_user.id)
 
 
 @router.get("", response_model=list[TastingSessionRead])
@@ -63,7 +81,7 @@ def get_tasting_session(
 ):
     """Get a tasting session by ID.
 
-    Non-admin users can only access sessions they participate in.
+    Non-admin users can only access sessions they created or participate in.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -73,15 +91,7 @@ def get_tasting_session(
             detail="Tasting session not found",
         )
 
-    # Non-admin users must be a participant
-    if current_user.user_type != UserType.ADMIN:
-        participant_ids = {p.user_id for p in tasting_session.participants}
-        if current_user.id not in participant_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
-
+    _check_session_access(tasting_session, current_user)
     return tasting_session
 
 
@@ -93,7 +103,7 @@ def get_tasting_session_stats(
 ):
     """Get statistics for a tasting session.
 
-    Non-admin users can only access sessions they participate in.
+    Non-admin users can only access sessions they created or participate in.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -103,15 +113,7 @@ def get_tasting_session_stats(
             detail="Tasting session not found",
         )
 
-    # Non-admin users must be a participant
-    if current_user.user_type != UserType.ADMIN:
-        participant_ids = {p.user_id for p in tasting_session.participants}
-        if current_user.id not in participant_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
-
+    _check_session_access(tasting_session, current_user)
     return service.get_stats(session_id)
 
 
@@ -124,7 +126,7 @@ def update_tasting_session(
 ):
     """Update a tasting session.
 
-    Non-admin users can only update sessions they participate in.
+    Non-admin users can only update sessions they created or participate in.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -134,14 +136,7 @@ def update_tasting_session(
             detail="Tasting session not found",
         )
 
-    # Non-admin users must be a participant
-    if current_user.user_type != UserType.ADMIN:
-        participant_ids = {p.user_id for p in tasting_session.participants}
-        if current_user.id not in participant_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
+    _check_session_access(tasting_session, current_user)
 
     updated_session = service.update(session_id, data)
     if not updated_session:
@@ -160,7 +155,7 @@ def delete_tasting_session(
 ):
     """Delete a tasting session and all its notes.
 
-    Non-admin users can only delete sessions they participate in.
+    Non-admin users can only delete sessions they created or participate in.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -170,14 +165,7 @@ def delete_tasting_session(
             detail="Tasting session not found",
         )
 
-    # Non-admin users must be a participant
-    if current_user.user_type != UserType.ADMIN:
-        participant_ids = {p.user_id for p in tasting_session.participants}
-        if current_user.id not in participant_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied",
-            )
+    _check_session_access(tasting_session, current_user)
 
     deleted = service.delete(session_id)
     if not deleted:

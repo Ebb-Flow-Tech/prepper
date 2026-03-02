@@ -38,7 +38,7 @@ import {
   Badge,
 } from '@/components/ui';
 import { ParticipantPicker } from '@/components/tasting/ParticipantPicker';
-import type { Recipe, RecipeTasting, Ingredient, IngredientTasting, User } from '@/types';
+import type { Recipe, RecipeTasting, Ingredient, IngredientTasting, User, UpdateTastingSessionRequest } from '@/types';
 import { useAppState } from '@/lib/store';
 import { ApiError } from '@/lib/api';
 
@@ -51,20 +51,12 @@ function formatDate(dateString: string): string {
   });
 }
 
-function isSessionExpired(dateString: string): boolean {
-  const sessionDate = new Date(dateString);
-  const today = new Date();
-  sessionDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  return sessionDate < today;
-}
 
 interface SessionRecipesSectionProps {
   sessionId: number;
   sessionRecipes: RecipeTasting[];
   availableRecipes: Recipe[];
   isLoading: boolean;
-  isExpired: boolean;
   onAddRecipe: (recipeId: number) => void;
   onRemoveRecipe: (recipeId: number) => void;
 }
@@ -74,7 +66,6 @@ function SessionRecipesSection({
   sessionRecipes,
   availableRecipes,
   isLoading,
-  isExpired,
   onAddRecipe,
   onRemoveRecipe,
 }: SessionRecipesSectionProps) {
@@ -118,8 +109,6 @@ function SessionRecipesSection({
             <Button
               size="sm"
               onClick={() => setShowAddRecipe(true)}
-              disabled={isExpired}
-              title={isExpired ? 'Cannot add recipes to past sessions' : undefined}
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Recipe
@@ -223,15 +212,13 @@ function SessionRecipesSection({
                 >
                   {recipe?.name || `Recipe #${sr.recipe_id}`}
                 </Link>
-                {!isExpired && (
-                  <button
+                <button
                     onClick={() => onRemoveRecipe(sr.recipe_id)}
                     className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
                     title="Remove from session"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                )}
               </div>
             );
           })}
@@ -246,7 +233,6 @@ interface SessionIngredientsSectionProps {
   sessionIngredients: IngredientTasting[];
   allIngredients: Ingredient[];
   isLoading: boolean;
-  isExpired: boolean;
   onAddIngredient: (ingredientId: number) => void;
   onRemoveIngredient: (ingredientId: number) => void;
 }
@@ -256,7 +242,6 @@ function SessionIngredientsSection({
   sessionIngredients,
   allIngredients,
   isLoading,
-  isExpired,
   onAddIngredient,
   onRemoveIngredient,
 }: SessionIngredientsSectionProps) {
@@ -299,8 +284,6 @@ function SessionIngredientsSection({
             <Button
               size="sm"
               onClick={() => setShowAddIngredient(true)}
-              disabled={isExpired}
-              title={isExpired ? 'Cannot add ingredients to past sessions' : undefined}
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Ingredient
@@ -414,15 +397,13 @@ function SessionIngredientsSection({
                 >
                   {ingredient?.name || `Ingredient #${si.ingredient_id}`}
                 </Link>
-                {!isExpired && (
-                  <button
+                <button
                     onClick={() => onRemoveIngredient(si.ingredient_id)}
                     className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
                     title="Remove from session"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                )}
               </div>
             );
           })}
@@ -479,6 +460,7 @@ export default function TastingSessionDetailPage() {
 
   // Access control check
   const isInvited = userType === 'admin' ||
+    (userId && session?.creator_id === userId) ||
     (userId && (session?.participants?.some(p => p.user_id === userId) ?? false)) || false;
 
   // DateTime state for editing
@@ -526,15 +508,10 @@ export default function TastingSessionDetailPage() {
     return `${dateStr}T${get24HourTime()}`;
   };
 
-  const handleUpdateSession = async (data: { name?: string; location?: string | null; date?: string; attendees?: string[] } | { participants?: User[] }) => {
+  const handleUpdateSession = async (data: UpdateTastingSessionRequest) => {
     if (!sessionId) return;
     try {
-      // Convert participants to attendees (emails) if needed
-      let updateData: { name?: string; location?: string | null; date?: string; attendees?: string[] } = data as { name?: string; location?: string | null; date?: string; attendees?: string[] };
-      if ('participants' in data && data.participants) {
-        updateData = { attendees: data.participants.map((p) => p.email) };
-      }
-      await updateSession.mutateAsync({ id: sessionId, data: updateData });
+      await updateSession.mutateAsync({ id: sessionId, data });
     } catch (error) {
       console.error('Failed to update session:', error);
     }
@@ -793,7 +770,7 @@ export default function TastingSessionDetailPage() {
                 email: p.email,
                 username: p.username,
               })) as User[]}
-              onChange={(participants) => handleUpdateSession({ participants })}
+              onChange={(participants) => handleUpdateSession({ participant_ids: participants.map((p) => p.id) })}
             />
           </div>
 
@@ -809,7 +786,6 @@ export default function TastingSessionDetailPage() {
             sessionRecipes={sessionRecipes || []}
             availableRecipes={availableRecipes}
             isLoading={recipesLoading}
-            isExpired={isSessionExpired(session.date)}
             onAddRecipe={handleAddRecipeToSession}
             onRemoveRecipe={handleRemoveRecipeFromSession}
           />
@@ -822,7 +798,6 @@ export default function TastingSessionDetailPage() {
             sessionIngredients={sessionIngredients || []}
             allIngredients={ingredients}
             isLoading={ingredientsLoading}
-            isExpired={isSessionExpired(session.date)}
             onAddIngredient={handleAddIngredientToSession}
             onRemoveIngredient={handleRemoveIngredientFromSession}
           />
