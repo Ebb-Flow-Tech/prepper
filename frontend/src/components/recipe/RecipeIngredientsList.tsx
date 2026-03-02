@@ -12,7 +12,6 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -21,7 +20,6 @@ import {
   useRecipeIngredients,
   useUpdateRecipeIngredient,
   useRemoveRecipeIngredient,
-  useReorderRecipeIngredients,
 } from '@/lib/hooks';
 import { RecipeIngredientRow } from './RecipeIngredientRow';
 import { Skeleton } from '@/components/ui';
@@ -37,8 +35,6 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
   const { data: ingredients, isLoading, error } = useRecipeIngredients(recipeId);
   const updateIngredient = useUpdateRecipeIngredient();
   const removeIngredient = useRemoveRecipeIngredient();
-  const reorderIngredients = useReorderRecipeIngredients();
-
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -107,21 +103,9 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id || !ingredients) return;
-
-      const oldIndex = ingredients.findIndex((i) => i.id === active.id);
-      const newIndex = ingredients.findIndex((i) => i.id === over.id);
-
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newOrder = arrayMove(ingredients, oldIndex, newIndex);
-        const orderedIds = newOrder.map((i) => i.id);
-
-        reorderIngredients.mutate(
-          { recipeId, data: { ordered_ids: orderedIds } },
-          { onError: () => toast.error('Failed to reorder ingredients') }
-        );
-      }
+      // Drag-and-drop reordering is visual only (no backend sort_order)
     },
-    [ingredients, recipeId, reorderIngredients]
+    [ingredients]
   );
 
   const { setNodeRef, isOver } = useDroppable({
@@ -165,7 +149,7 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
   }
 
   const sortedIngredients = [...ingredients].sort(
-    (a, b) => a.sort_order - b.sort_order
+    (a, b) => a.id - b.id
   );
 
   return (

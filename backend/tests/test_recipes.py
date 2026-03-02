@@ -446,7 +446,7 @@ def test_fork_recipe_preserves_selling_price(client: TestClient):
 
 
 def test_fork_recipe_multiple_ingredients_preserves_order(client: TestClient):
-    """Test that forking preserves ingredient sort order."""
+    """Test that forking preserves ingredient insertion order."""
     # Create ingredients
     ing1 = client.post(
         "/api/v1/ingredients",

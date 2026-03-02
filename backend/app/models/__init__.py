@@ -6,9 +6,6 @@ from app.models.ingredient import (
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
-    SupplierEntry,
-    SupplierEntryCreate,
-    SupplierEntryUpdate,
 )
 from app.models.recipe import (
     Recipe,
@@ -23,7 +20,6 @@ from app.models.recipe_ingredient import (
     RecipeIngredient,
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
-    RecipeIngredientReorder,
     RecipeIngredientRead,
     IngredientNested,
     AllergenInfo,
@@ -68,6 +64,12 @@ from app.models.supplier import (
     Supplier,
     SupplierCreate,
     SupplierUpdate,
+)
+from app.models.supplier_ingredient import (
+    SupplierIngredient,
+    SupplierIngredientCreate,
+    SupplierIngredientUpdate,
+    SupplierIngredientRead,
 )
 from app.models.recipe_tasting import (
     RecipeTasting,
@@ -156,9 +158,6 @@ __all__ = [
     "IngredientUpdate",
     "FoodCategory",
     "IngredientSource",
-    "SupplierEntry",
-    "SupplierEntryCreate",
-    "SupplierEntryUpdate",
     # Recipe
     "Recipe",
     "RecipeCreate",
@@ -171,7 +170,6 @@ __all__ = [
     "RecipeIngredient",
     "RecipeIngredientCreate",
     "RecipeIngredientUpdate",
-    "RecipeIngredientReorder",
     "RecipeIngredientRead",
     "IngredientNested",
     # RecipeRecipe (sub-recipes)
@@ -210,6 +208,11 @@ __all__ = [
     "Supplier",
     "SupplierCreate",
     "SupplierUpdate",
+    # SupplierIngredient
+    "SupplierIngredient",
+    "SupplierIngredientCreate",
+    "SupplierIngredientUpdate",
+    "SupplierIngredientRead",
     # RecipeTasting
     "RecipeTasting",
     "RecipeTastingCreate",

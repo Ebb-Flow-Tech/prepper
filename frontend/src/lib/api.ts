@@ -11,7 +11,6 @@ import type {
   UpdateIngredientRequest,
   AddRecipeIngredientRequest,
   UpdateRecipeIngredientRequest,
-  ReorderIngredientsRequest,
   ParseInstructionsRequest,
   InstructionsStructured,
   TastingSession,
@@ -36,10 +35,7 @@ import type {
   Supplier,
   CreateSupplierRequest,
   UpdateSupplierRequest,
-  IngredientSupplierEntry,
-  AddIngredientSupplierRequest,
-  UpdateIngredientSupplierRequest,
-  SupplierIngredientEntry,
+  SupplierIngredient,
   AddSupplierIngredientRequest,
   UpdateSupplierIngredientRequest,
   SubRecipe,
@@ -332,16 +328,6 @@ export async function removeRecipeIngredient(
 ): Promise<void> {
   return fetchApi<void>(`/recipes/${recipeId}/ingredients/${ingredientId}`, {
     method: 'DELETE',
-  });
-}
-
-export async function reorderRecipeIngredients(
-  recipeId: number,
-  data: ReorderIngredientsRequest
-): Promise<void> {
-  return fetchApi<void>(`/recipes/${recipeId}/ingredients/reorder`, {
-    method: 'POST',
-    body: JSON.stringify(data),
   });
 }
 
@@ -678,15 +664,15 @@ export async function deactivateSupplier(id: number): Promise<Supplier> {
 
 export async function getIngredientSuppliers(
   ingredientId: number
-): Promise<IngredientSupplierEntry[]> {
-  return fetchApi<IngredientSupplierEntry[]>(`/ingredients/${ingredientId}/suppliers`);
+): Promise<SupplierIngredient[]> {
+  return fetchApi<SupplierIngredient[]>(`/ingredients/${ingredientId}/suppliers`);
 }
 
 export async function addIngredientSupplier(
   ingredientId: number,
-  data: AddIngredientSupplierRequest
-): Promise<Ingredient> {
-  return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers`, {
+  data: AddSupplierIngredientRequest
+): Promise<SupplierIngredient> {
+  return fetchApi<SupplierIngredient>(`/ingredients/${ingredientId}/suppliers`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -694,10 +680,10 @@ export async function addIngredientSupplier(
 
 export async function updateIngredientSupplier(
   ingredientId: number,
-  supplierId: string,
-  data: UpdateIngredientSupplierRequest
-): Promise<Ingredient> {
-  return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+  supplierIngredientId: number,
+  data: UpdateSupplierIngredientRequest
+): Promise<SupplierIngredient> {
+  return fetchApi<SupplierIngredient>(`/ingredients/${ingredientId}/suppliers/${supplierIngredientId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
@@ -705,9 +691,9 @@ export async function updateIngredientSupplier(
 
 export async function removeIngredientSupplier(
   ingredientId: number,
-  supplierId: string
-): Promise<Ingredient> {
-  return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+  supplierIngredientId: number
+): Promise<void> {
+  return fetchApi<void>(`/ingredients/${ingredientId}/suppliers/${supplierIngredientId}`, {
     method: 'DELETE',
   });
 }
@@ -716,48 +702,39 @@ export async function removeIngredientSupplier(
 
 export async function getSupplierIngredients(
   supplierId: number
-): Promise<SupplierIngredientEntry[]> {
-  return fetchApi<SupplierIngredientEntry[]>(`/suppliers/${supplierId}/ingredients`);
+): Promise<SupplierIngredient[]> {
+  return fetchApi<SupplierIngredient[]>(`/suppliers/${supplierId}/ingredients`);
 }
 
 export async function addSupplierIngredient(
   supplierId: number,
   data: AddSupplierIngredientRequest
-): Promise<Ingredient> {
-  // This adds the supplier to an ingredient, so we use the ingredient's endpoint
-  return fetchApi<Ingredient>(`/ingredients/${data.ingredient_id}/suppliers`, {
+): Promise<SupplierIngredient> {
+  return fetchApi<SupplierIngredient>(`/ingredients/${data.ingredient_id}/suppliers`, {
     method: 'POST',
     body: JSON.stringify({
-      supplier_id: supplierId.toString(),
-      supplier_name: '', // Will be set by the caller
-      sku: data.sku,
-      pack_size: data.pack_size,
-      pack_unit: data.pack_unit,
-      price_per_pack: data.price_per_pack,
-      cost_per_unit: data.cost_per_unit,
-      currency: data.currency || 'SGD',
-      is_preferred: data.is_preferred || false,
-      source: data.source || 'manual',
+      ...data,
+      supplier_id: supplierId,
     }),
   });
 }
 
 export async function updateSupplierIngredient(
-  supplierId: number,
+  supplierIngredientId: number,
   ingredientId: number,
   data: UpdateSupplierIngredientRequest
-): Promise<Ingredient> {
-  return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+): Promise<SupplierIngredient> {
+  return fetchApi<SupplierIngredient>(`/ingredients/${ingredientId}/suppliers/${supplierIngredientId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 export async function removeSupplierIngredient(
-  supplierId: number,
+  supplierIngredientId: number,
   ingredientId: number
-): Promise<Ingredient> {
-  return fetchApi<Ingredient>(`/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+): Promise<void> {
+  return fetchApi<void>(`/ingredients/${ingredientId}/suppliers/${supplierIngredientId}`, {
     method: 'DELETE',
   });
 }

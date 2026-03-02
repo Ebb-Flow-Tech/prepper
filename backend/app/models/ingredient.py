@@ -4,13 +4,14 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, JSON, String
+from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.recipe_ingredient import RecipeIngredient
     from app.models.category import Category
     from app.models.ingredient_allergen import IngredientAllergen
+    from app.models.supplier_ingredient import SupplierIngredient
 
 
 class FoodCategory(str, Enum):
@@ -35,37 +36,6 @@ class IngredientSource(str, Enum):
     MANUAL = "manual"  # Manually entered
 
 
-class SupplierEntry(SQLModel):
-    """Schema for a supplier entry within the suppliers JSONB field.
-
-    Structure:
-    {
-        "supplier_id": "fmh-123",        # External ID (FMH) or internal UUID
-        "supplier_name": "ABC Foods",
-        "sku": "TOM-001",
-        "pack_size": 5.0,
-        "pack_unit": "kg",
-        "price_per_pack": 12.50,
-        "currency": "SGD",               # Multi-currency supported
-        "is_preferred": true,
-        "source": "fmh",                 # "fmh" | "manual" - tracks origin
-        "last_updated": "2024-12-01",
-        "last_synced": "2024-12-01"      # Only for FMH-sourced entries
-    }
-    """
-
-    supplier_id: str
-    supplier_name: str
-    sku: str | None = None
-    pack_size: float
-    pack_unit: str
-    price_per_pack: float
-    currency: str = "SGD"
-    is_preferred: bool = False
-    source: str = "manual"  # "fmh" | "manual"
-    last_updated: str | None = None
-    last_synced: str | None = None  # Only for FMH-sourced entries
-
 
 class IngredientBase(SQLModel):
     """Shared fields for Ingredient."""
@@ -84,7 +54,7 @@ class Ingredient(IngredientBase, table=True):
     Canonical ingredient reference with supplier pricing.
 
     Supports:
-    - Multiple suppliers with pricing (JSONB)
+    - Multiple suppliers via supplier_ingredients join table
     - Master ingredient linking for canonical references
     - Food category classification
     - Source tracking (FMH sync vs manual entry)
@@ -108,17 +78,12 @@ class Ingredient(IngredientBase, table=True):
         default="manual", sa_column=Column(String(20), nullable=False, default="manual")
     )
 
-    # NEW: Supplier pricing data (JSONB array of SupplierEntry)
-    # Structure: [{"supplier_id": "...", "supplier_name": "...", ...}, ...]
-    suppliers: list[dict] | None = Field(default=None, sa_column=Column(JSON))
-
-    # NEW: Self-referential FK to master ingredient (for variants)
+    # Self-referential FK to master ingredient (for variants)
     master_ingredient_id: int | None = Field(
         default=None, foreign_key="ingredients.id", index=True
     )
 
     # Self-referential relationships
-    # Note: Using Optional["Ingredient"] for SQLAlchemy's string-based class resolution
     master_ingredient: Optional["Ingredient"] = Relationship(
         back_populates="variants",
         sa_relationship_kwargs={"remote_side": "Ingredient.id"},
@@ -134,6 +99,9 @@ class Ingredient(IngredientBase, table=True):
     # Relationship to IngredientAllergen
     ingredient_allergens: list["IngredientAllergen"] = Relationship(back_populates="ingredient")
 
+    # Relationship to SupplierIngredient
+    supplier_ingredients: list["SupplierIngredient"] = Relationship(back_populates="ingredient")
+
 
 class IngredientCreate(SQLModel):
     """Schema for creating a new ingredient."""
@@ -146,7 +114,6 @@ class IngredientCreate(SQLModel):
     category_id: int | None = None  # Foreign key to categories table
     source: str = "manual"  # "fmh" or "manual"
     master_ingredient_id: int | None = None
-    suppliers: list[dict] | None = None
 
 
 class IngredientUpdate(SQLModel):
@@ -160,33 +127,4 @@ class IngredientUpdate(SQLModel):
     category_id: int | None = None  # Foreign key to categories table
     source: str | None = None  # "fmh" or "manual"
     master_ingredient_id: int | None = None
-    suppliers: list[dict] | None = None
     is_active: bool | None = None
-
-
-class SupplierEntryCreate(SQLModel):
-    """Schema for adding a supplier entry to an ingredient."""
-
-    supplier_id: str
-    supplier_name: str
-    sku: str | None = None
-    pack_size: float
-    pack_unit: str
-    price_per_pack: float
-    cost_per_unit: float
-    currency: str = "SGD"
-    is_preferred: bool = False
-    source: str = "manual"
-
-
-class SupplierEntryUpdate(SQLModel):
-    """Schema for updating a supplier entry (all fields optional except supplier_id)."""
-
-    supplier_name: str | None = None
-    sku: str | None = None
-    pack_size: float | None = None
-    pack_unit: str | None = None
-    price_per_pack: float | None = None
-    cost_per_unit: float | None = None
-    currency: str | None = None
-    is_preferred: bool | None = None

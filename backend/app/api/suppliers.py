@@ -9,6 +9,7 @@ from app.models.supplier import (
     SupplierCreate,
     SupplierUpdate,
 )
+from app.models.supplier_ingredient import SupplierIngredientRead
 from app.domain.supplier_service import SupplierService
 
 router = APIRouter()
@@ -102,7 +103,7 @@ def delete_supplier(
         )
 
 
-@router.get("/{supplier_id}/ingredients", response_model=list[dict])
+@router.get("/{supplier_id}/ingredients", response_model=list[SupplierIngredientRead])
 def get_supplier_ingredients(
     supplier_id: int,
     session: Session = Depends(get_session),

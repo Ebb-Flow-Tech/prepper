@@ -80,18 +80,22 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     });
   };
 
-  const handleUpdateIngredient = (ingredientId: number, data: UpdateSupplierIngredientRequest) => {
+  const handleUpdateIngredient = (supplierIngredientId: number, ingredientId: number, data: UpdateSupplierIngredientRequest) => {
     updateIngredientMutation.mutate({
       supplierId,
+      supplierIngredientId,
       ingredientId,
       data,
     });
   };
 
-  const handleDeleteIngredient = (ingredientId: number) => {
+  const handleDeleteIngredient = (supplierIngredientId: number) => {
+    const si = supplierIngredients.find((i) => i.id === supplierIngredientId);
+    if (!si) return;
     removeIngredientMutation.mutate({
       supplierId,
-      ingredientId,
+      supplierIngredientId,
+      ingredientId: si.ingredient_id,
     });
   };
 
@@ -104,7 +108,6 @@ export default function SupplierPage({ params }: SupplierPageProps) {
 
     const packSize = parseFloat(formData.pack_size);
     const pricePerPack = parseFloat(formData.price_per_pack);
-    const calculatedUnitCost = packSize > 0 ? pricePerPack / packSize : 0;
 
     const selectedIngredient = availableIngredients?.find(
       (i) => i.id === parseInt(formData.ingredient_id, 10)
@@ -115,12 +118,11 @@ export default function SupplierPage({ params }: SupplierPageProps) {
         supplierId,
         data: {
           ingredient_id: parseInt(formData.ingredient_id, 10),
-          supplier_name: supplier?.name || '',
+          supplier_id: supplierId,
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
           price_per_pack: pricePerPack,
-          cost_per_unit: calculatedUnitCost,
           is_preferred: formData.is_preferred,
         },
       },
@@ -139,8 +141,8 @@ export default function SupplierPage({ params }: SupplierPageProps) {
           toast.success(`${selectedIngredient?.name || 'Ingredient'} added`);
         },
         onError: (error) => {
-          // Check for 409 Conflict (duplicate supplier-ingredient link)
-          if (error && typeof error === 'object' && 'status' in error && error.status === 409) {
+          // Check for 422 (duplicate supplier-ingredient link or SKU)
+          if (error && typeof error === 'object' && 'status' in error && error.status === 422) {
             toast.error(`${selectedIngredient?.name || 'This ingredient'} is already linked to this supplier`);
           } else {
             toast.error('Failed to add ingredient');
@@ -455,7 +457,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                       <tbody>
                         {supplierIngredients.map((ingredient) => (
                           <tr
-                            key={ingredient.ingredient_id}
+                            key={ingredient.id}
                             className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 group"
                           >
                             <td className="py-3 px-2 text-zinc-900 dark:text-zinc-100 font-medium">
@@ -467,15 +469,15 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               </Link>
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
-                              {editingIngredient === ingredient.ingredient_id ? (
+                              {editingIngredient === ingredient.id ? (
                                 <input
                                   type="text"
-                                  value={editData[ingredient.ingredient_id]?.sku ?? ingredient.sku ?? ''}
+                                  value={editData[ingredient.id]?.sku ?? ingredient.sku ?? ''}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [ingredient.ingredient_id]: {
-                                        ...editData[ingredient.ingredient_id],
+                                      [ingredient.id]: {
+                                        ...editData[ingredient.id],
                                         sku: e.target.value || null,
                                       },
                                     })
@@ -488,17 +490,17 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingIngredient === ingredient.ingredient_id ? (
+                              {editingIngredient === ingredient.id ? (
                                 <input
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  value={editData[ingredient.ingredient_id]?.pack_size ?? ingredient.pack_size}
+                                  value={editData[ingredient.id]?.pack_size ?? ingredient.pack_size}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [ingredient.ingredient_id]: {
-                                        ...editData[ingredient.ingredient_id],
+                                      [ingredient.id]: {
+                                        ...editData[ingredient.id],
                                         pack_size: parseFloat(e.target.value),
                                       },
                                     })
@@ -510,14 +512,14 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2">
-                              {editingIngredient === ingredient.ingredient_id ? (
+                              {editingIngredient === ingredient.id ? (
                                 <select
-                                  value={editData[ingredient.ingredient_id]?.pack_unit ?? ingredient.pack_unit}
+                                  value={editData[ingredient.id]?.pack_unit ?? ingredient.pack_unit}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [ingredient.ingredient_id]: {
-                                        ...editData[ingredient.ingredient_id],
+                                      [ingredient.id]: {
+                                        ...editData[ingredient.id],
                                         pack_unit: e.target.value,
                                       },
                                     })
@@ -535,17 +537,17 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingIngredient === ingredient.ingredient_id ? (
+                              {editingIngredient === ingredient.id ? (
                                 <input
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  value={editData[ingredient.ingredient_id]?.price_per_pack ?? ingredient.price_per_pack}
+                                  value={editData[ingredient.id]?.price_per_pack ?? ingredient.price_per_pack}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [ingredient.ingredient_id]: {
-                                        ...editData[ingredient.ingredient_id],
+                                      [ingredient.id]: {
+                                        ...editData[ingredient.id],
                                         price_per_pack: parseFloat(e.target.value),
                                       },
                                     })
@@ -557,14 +559,14 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingIngredient === ingredient.ingredient_id
+                              {editingIngredient === ingredient.id
                                 ? formatCurrency(
                                     calculateUnitCost(
-                                      editData[ingredient.ingredient_id]?.pack_size ?? ingredient.pack_size,
-                                      editData[ingredient.ingredient_id]?.price_per_pack ?? ingredient.price_per_pack
+                                      editData[ingredient.id]?.pack_size ?? ingredient.pack_size,
+                                      editData[ingredient.id]?.price_per_pack ?? ingredient.price_per_pack
                                     )
                                   )
-                                : formatCurrency(ingredient.cost_per_unit)}
+                                : formatCurrency((ingredient.pack_size > 0 ? ingredient.price_per_pack / ingredient.pack_size : 0))}
                             </td>
                             <td className="py-3 px-2">
                               <div className="relative group/menu">
@@ -575,7 +577,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
 
                                 {/* Dropdown menu */}
                                 <div className="absolute right-0 top-full mt-0 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-md shadow-lg opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
-                                  {editingIngredient === ingredient.ingredient_id ? (
+                                  {editingIngredient === ingredient.id ? (
                                     <>
                                       <Button
                                         variant="ghost"
@@ -594,15 +596,9 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          const dataToSave = editData[ingredient.ingredient_id];
+                                          const dataToSave = editData[ingredient.id];
                                           if (dataToSave) {
-                                            const packSize = dataToSave.pack_size ?? ingredient.pack_size;
-                                            const pricePerPack = dataToSave.price_per_pack ?? ingredient.price_per_pack;
-                                            const calculatedCost = packSize > 0 ? pricePerPack / packSize : 0;
-                                            handleUpdateIngredient(ingredient.ingredient_id, {
-                                              ...dataToSave,
-                                              cost_per_unit: calculatedCost,
-                                            });
+                                            handleUpdateIngredient(ingredient.id, ingredient.ingredient_id, dataToSave);
                                             setEditingIngredient(null);
                                             setEditData({});
                                           }
@@ -620,9 +616,9 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          setEditingIngredient(ingredient.ingredient_id);
+                                          setEditingIngredient(ingredient.id);
                                           setEditData({
-                                            [ingredient.ingredient_id]: {
+                                            [ingredient.id]: {
                                               sku: ingredient.sku,
                                               pack_size: ingredient.pack_size,
                                               price_per_pack: ingredient.price_per_pack,
@@ -638,7 +634,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleDeleteIngredient(ingredient.ingredient_id)}
+                                        onClick={() => handleDeleteIngredient(ingredient.id)}
                                         disabled={removeIngredientMutation.isPending}
                                         className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 rounded-none last:rounded-b-md h-8 px-3"
                                       >
