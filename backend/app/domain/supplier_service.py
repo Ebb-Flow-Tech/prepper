@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.models.supplier import (
@@ -9,7 +10,7 @@ from app.models.supplier import (
     SupplierCreate,
     SupplierUpdate,
 )
-from app.models.ingredient import Ingredient
+from app.models.supplier_ingredient import SupplierIngredient, SupplierIngredientRead
 
 
 class SupplierService:
@@ -82,41 +83,38 @@ class SupplierService:
         self.session.commit()
         return True
 
-    def get_supplier_ingredients(self, supplier_id: int) -> list[dict]:
-        """Get all ingredients associated with a supplier.
-
-        Returns a list of dicts containing ingredient info and supplier entry data.
-        Each entry includes the ingredient details and the supplier-specific pricing info.
-        """
-        # Get all active ingredients
-        statement = select(Ingredient).where(Ingredient.is_active == True)
-        ingredients = self.session.exec(statement).all()
+    def get_supplier_ingredients(self, supplier_id: int) -> list[SupplierIngredientRead]:
+        """Get all ingredients associated with a supplier via the supplier_ingredients table."""
+        statement = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.supplier_id == supplier_id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+        )
+        rows = self.session.exec(statement).all()
 
         result = []
-        supplier_id_str = str(supplier_id)
-
-        for ingredient in ingredients:
-            if not ingredient.suppliers:
-                continue
-
-            # Check if this supplier is in the ingredient's suppliers
-            for supplier_entry in ingredient.suppliers:
-                if supplier_entry.get("supplier_id") == supplier_id_str:
-                    result.append({
-                        "ingredient_id": ingredient.id,
-                        "ingredient_name": ingredient.name,
-                        "base_unit": ingredient.base_unit,
-                        "supplier_id": supplier_entry.get("supplier_id"),
-                        "sku": supplier_entry.get("sku"),
-                        "pack_size": supplier_entry.get("pack_size"),
-                        "pack_unit": supplier_entry.get("pack_unit"),
-                        "price_per_pack": supplier_entry.get("price_per_pack"),
-                        "cost_per_unit": supplier_entry.get("cost_per_unit"),
-                        "currency": supplier_entry.get("currency", "SGD"),
-                        "is_preferred": supplier_entry.get("is_preferred", False),
-                        "source": supplier_entry.get("source", "manual"),
-                        "last_updated": supplier_entry.get("last_updated"),
-                    })
-                    break
-
+        for si in rows:
+            supplier_name = si.supplier.name if si.supplier else None
+            ingredient_name = si.ingredient.name if si.ingredient else None
+            result.append(
+                SupplierIngredientRead(
+                    id=si.id,
+                    ingredient_id=si.ingredient_id,
+                    supplier_id=si.supplier_id,
+                    sku=si.sku,
+                    pack_size=si.pack_size,
+                    pack_unit=si.pack_unit,
+                    price_per_pack=si.price_per_pack,
+                    currency=si.currency,
+                    source=si.source,
+                    is_preferred=si.is_preferred,
+                    created_at=si.created_at,
+                    updated_at=si.updated_at,
+                    supplier_name=supplier_name,
+                    ingredient_name=ingredient_name,
+                )
+            )
         return result

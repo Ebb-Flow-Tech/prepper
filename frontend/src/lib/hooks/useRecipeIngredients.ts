@@ -5,7 +5,6 @@ import * as api from '@/lib/api';
 import type {
   AddRecipeIngredientRequest,
   UpdateRecipeIngredientRequest,
-  ReorderIngredientsRequest,
 } from '@/types';
 
 export function useRecipeIngredients(recipeId: number | null) {
@@ -79,25 +78,6 @@ export function useRemoveRecipeIngredient() {
       });
       queryClient.invalidateQueries({
         queryKey: ['costing', variables.recipeId],
-      });
-    },
-  });
-}
-
-export function useReorderRecipeIngredients() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      recipeId,
-      data,
-    }: {
-      recipeId: number;
-      data: ReorderIngredientsRequest;
-    }) => api.reorderRecipeIngredients(recipeId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['recipeIngredients', variables.recipeId],
       });
     },
   });

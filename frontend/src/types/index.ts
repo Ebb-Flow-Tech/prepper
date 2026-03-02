@@ -21,7 +21,7 @@ export interface Ingredient {
   category_id: number | null;
   created_at: string;
   updated_at: string;
-  suppliers?: IngredientSupplierEntry[];
+  supplier_ingredients?: SupplierIngredient[];
   allergens?: Allergen[];
 }
 
@@ -57,7 +57,6 @@ export interface RecipeIngredient {
   ingredient_id: number;
   quantity: number;
   unit: string;
-  sort_order: number;
   created_at: string;
   base_unit: string | null;
   unit_price: number | null;
@@ -161,26 +160,12 @@ export interface UpdateRecipeImageRequest {
   image_base64: string;
 }
 
-export interface CreateIngredientSupplier {
-  supplier_id: string;
-  supplier_name: string;
-  sku?: string | null;
-  pack_size: number;
-  pack_unit: string;
-  price_per_pack: number;
-  cost_per_unit: number;
-  currency?: string;
-  is_preferred?: boolean;
-  source?: string;
-}
-
 export interface CreateIngredientRequest {
   name: string;
   base_unit: string;
   cost_per_base_unit?: number | null;
   is_halal?: boolean;
   category_id?: number | null;
-  suppliers?: CreateIngredientSupplier[];
 }
 
 export interface UpdateIngredientRequest {
@@ -209,10 +194,6 @@ export interface UpdateRecipeIngredientRequest {
   unit_price?: number;
   supplier_id?: number | null;
   wastage_percentage?: number;
-}
-
-export interface ReorderIngredientsRequest {
-  ordered_ids: number[];
 }
 
 export interface ParseInstructionsRequest {
@@ -442,75 +423,35 @@ export interface UpdateSupplierRequest {
   is_active?: boolean;
 }
 
-// ============ Ingredient Supplier Entry Types ============
+// ============ Supplier-Ingredient Types (normalized join table) ============
 
-export interface IngredientSupplierEntry {
-  supplier_id: string;
-  supplier_name: string;
-  sku: string | null;
-  pack_size: number;
-  pack_unit: string;
-  price_per_pack: number;
-  cost_per_unit: number;
-  currency: string;
-  is_preferred: boolean;
-  source: string;
-  last_updated: string | null;
-  last_synced: string | null;
-}
-
-export interface AddIngredientSupplierRequest {
-  supplier_id: string;
-  supplier_name: string;
-  sku?: string | null;
-  pack_size: number;
-  pack_unit: string;
-  price_per_pack: number;
-  cost_per_unit: number;
-  currency?: string;
-  is_preferred?: boolean;
-  source?: string;
-}
-
-export interface UpdateIngredientSupplierRequest {
-  supplier_name?: string;
-  sku?: string | null;
-  pack_size?: number;
-  pack_unit?: string;
-  price_per_pack?: number;
-  cost_per_unit?: number;
-  currency?: string;
-  is_preferred?: boolean;
-}
-
-// ============ Supplier Ingredient Entry Types ============
-
-export interface SupplierIngredientEntry {
+export interface SupplierIngredient {
+  id: number;
   ingredient_id: number;
-  ingredient_name: string;
-  base_unit: string;
-  supplier_id: string;
+  supplier_id: number;
   sku: string | null;
   pack_size: number;
   pack_unit: string;
   price_per_pack: number;
-  cost_per_unit: number;
   currency: string;
-  is_preferred: boolean;
   source: string;
-  last_updated: string | null;
+  is_preferred: boolean;
+  created_at: string;
+  updated_at: string;
+  supplier_name: string | null;
+  ingredient_name: string | null;
 }
 
 export interface AddSupplierIngredientRequest {
   ingredient_id: number;
+  supplier_id: number;
   sku?: string | null;
   pack_size: number;
   pack_unit: string;
   price_per_pack: number;
-  cost_per_unit: number;
   currency?: string;
-  is_preferred?: boolean;
   source?: string;
+  is_preferred?: boolean;
 }
 
 export interface UpdateSupplierIngredientRequest {
@@ -518,8 +459,8 @@ export interface UpdateSupplierIngredientRequest {
   pack_size?: number;
   pack_unit?: string;
   price_per_pack?: number;
-  cost_per_unit?: number;
   currency?: string;
+  source?: string;
   is_preferred?: boolean;
 }
 

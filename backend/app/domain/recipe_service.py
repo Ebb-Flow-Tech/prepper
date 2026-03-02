@@ -190,7 +190,6 @@ class RecipeService:
                 ingredient_id=ri.ingredient_id,
                 quantity=ri.quantity,
                 unit=ri.unit,
-                sort_order=ri.sort_order,
                 unit_price=ri.unit_price,
                 base_unit=ri.base_unit,
                 supplier_id=ri.supplier_id,
@@ -244,7 +243,6 @@ class RecipeService:
                 base_unit=ri.ingredient.base_unit,
                 cost_per_base_unit=ri.ingredient.cost_per_base_unit,
                 is_active=ri.ingredient.is_active,
-                suppliers=ri.ingredient.suppliers,
                 allergens=allergens or None,
             )
 
@@ -254,7 +252,6 @@ class RecipeService:
             ingredient_id=ri.ingredient_id,
             quantity=ri.quantity,
             unit=ri.unit,
-            sort_order=ri.sort_order,
             created_at=ri.created_at,
             base_unit=ri.base_unit,
             unit_price=ri.unit_price,
@@ -264,11 +261,11 @@ class RecipeService:
         )
 
     def get_recipe_ingredients(self, recipe_id: int) -> list[RecipeIngredientRead]:
-        """Get all ingredients for a recipe, ordered by sort_order."""
+        """Get all ingredients for a recipe, ordered by id (insertion order)."""
         statement = (
             select(RecipeIngredient)
             .where(RecipeIngredient.recipe_id == recipe_id)
-            .order_by(RecipeIngredient.sort_order)
+            .order_by(RecipeIngredient.id)
             .options(
                 selectinload(RecipeIngredient.ingredient).options(
                     selectinload(Ingredient.ingredient_allergens).options(
@@ -295,22 +292,11 @@ class RecipeService:
         if existing:
             return None  # Duplicate not allowed
 
-        # Get max sort_order for this recipe
-        max_order_result = self.session.exec(
-            select(RecipeIngredient.sort_order)
-            .where(RecipeIngredient.recipe_id == recipe_id)
-            .order_by(RecipeIngredient.sort_order.desc())
-        ).first()
-        next_order = (max_order_result or 0) + 1
-
-        # no priority -> just take the ingredient
-
         recipe_ingredient = RecipeIngredient(
             recipe_id=recipe_id,
             ingredient_id=data.ingredient_id,
             quantity=data.quantity,
             unit=data.unit,
-            sort_order=next_order,
             base_unit=data.base_unit,
             unit_price=data.unit_price,
             supplier_id=data.supplier_id,
@@ -374,19 +360,6 @@ class RecipeService:
         self.session.delete(ri)
         self.session.commit()
         return True
-
-    def reorder_recipe_ingredients(
-        self, recipe_id: int, ordered_ids: list[int]
-    ) -> list[RecipeIngredient]:
-        """Reorder recipe ingredients based on provided ID order."""
-        for index, ri_id in enumerate(ordered_ids):
-            ri = self.session.get(RecipeIngredient, ri_id)
-            if ri and ri.recipe_id == recipe_id:
-                ri.sort_order = index
-                self.session.add(ri)
-
-        self.session.commit()
-        return self.get_recipe_ingredients(recipe_id)
 
     # --- Versioning Operations ---
 

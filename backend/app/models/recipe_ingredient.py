@@ -29,7 +29,6 @@ class RecipeIngredient(RecipeIngredientBase, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     recipe_id: int = Field(foreign_key="recipes.id", index=True)
-    sort_order: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     unit_price: float | None = Field(default=None)  # not all unit prices are known
@@ -60,12 +59,6 @@ class RecipeIngredientUpdate(SQLModel):
     wastage_percentage: float | None = None
 
 
-class RecipeIngredientReorder(SQLModel):
-    """Schema for reordering recipe ingredients."""
-
-    ordered_ids: list[int]
-
-
 class AllergenInfo(SQLModel):
     """Minimal allergen data for nested response."""
 
@@ -81,7 +74,6 @@ class IngredientNested(SQLModel):
     base_unit: str
     cost_per_base_unit: float | None = None
     is_active: bool = True
-    suppliers: list[dict] | None = None
     allergens: list[AllergenInfo] | None = None
 
 
@@ -93,7 +85,6 @@ class RecipeIngredientRead(SQLModel):
     ingredient_id: int
     quantity: float
     unit: str
-    sort_order: int
     created_at: datetime
     base_unit: str | None = None
     unit_price: float | None = None

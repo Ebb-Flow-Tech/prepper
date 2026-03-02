@@ -17,7 +17,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlmodel import Session, select
 
 from app.database import engine
-from app.models.ingredient import Ingredient, SupplierEntry
+from app.models.ingredient import Ingredient
+from app.models.supplier import Supplier
+from app.models.supplier_ingredient import SupplierIngredient
 from app.models.category import Category
 
 
@@ -32,7 +34,6 @@ INGREDIENTS_DATA = [
         "is_halal": True,
         "suppliers": [
             {
-                "supplier_id": "sup_001",
                 "supplier_name": "Golden Poultry",
                 "sku": "CB-001",
                 "pack_size": 5.0,
@@ -52,7 +53,6 @@ INGREDIENTS_DATA = [
         "is_halal": False,
         "suppliers": [
             {
-                "supplier_id": "sup_002",
                 "supplier_name": "Prime Beef Co",
                 "sku": "BC-001",
                 "pack_size": 10.0,
@@ -72,7 +72,6 @@ INGREDIENTS_DATA = [
         "is_halal": True,
         "suppliers": [
             {
-                "supplier_id": "sup_003",
                 "supplier_name": "Fresh Seafood",
                 "sku": "SF-001",
                 "pack_size": 2.5,
@@ -100,7 +99,6 @@ INGREDIENTS_DATA = [
         "is_halal": True,
         "suppliers": [
             {
-                "supplier_id": "sup_004",
                 "supplier_name": "Farm Fresh Eggs",
                 "sku": "EGG-001",
                 "pack_size": 30.0,
@@ -121,7 +119,6 @@ INGREDIENTS_DATA = [
         "is_halal": True,
         "suppliers": [
             {
-                "supplier_id": "sup_005",
                 "supplier_name": "Local Farm Produce",
                 "sku": "TOM-001",
                 "pack_size": 5.0,
@@ -248,7 +245,6 @@ INGREDIENTS_DATA = [
         "is_halal": True,
         "suppliers": [
             {
-                "supplier_id": "sup_006",
                 "supplier_name": "Premium Rice Mills",
                 "sku": "RICE-001",
                 "pack_size": 25.0,
@@ -405,6 +401,19 @@ def get_category_id(session: Session, category_name: str) -> int | None:
     return category.id if category else None
 
 
+def get_or_create_supplier(session: Session, supplier_name: str) -> Supplier:
+    """Get existing supplier by name or create a new one."""
+    existing = session.exec(
+        select(Supplier).where(Supplier.name == supplier_name)
+    ).first()
+    if existing:
+        return existing
+    supplier = Supplier(name=supplier_name)
+    session.add(supplier)
+    session.flush()
+    return supplier
+
+
 def seed_ingredients() -> None:
     """Seed ingredients table if empty."""
     with Session(engine) as session:
@@ -421,10 +430,11 @@ def seed_ingredients() -> None:
             if cat_id:
                 category_ids[category_name] = cat_id
             else:
-                print(f"⚠️  Category '{category_name}' not found")
+                print(f"Warning: Category '{category_name}' not found")
 
         # Seed ingredients
         created_count = 0
+        supplier_link_count = 0
         for ing_data in INGREDIENTS_DATA:
             category_id = category_ids.get(ing_data["category"])
 
@@ -435,20 +445,37 @@ def seed_ingredients() -> None:
                 is_halal=ing_data["is_halal"],
                 category_id=category_id,
                 source="manual",
-                suppliers=ing_data.get("suppliers") or None,
                 is_active=True,
             )
             session.add(ingredient)
+            session.flush()  # Get the ingredient ID
             created_count += 1
 
+            # Create supplier-ingredient links
+            for sup_data in ing_data.get("suppliers", []):
+                supplier = get_or_create_supplier(session, sup_data["supplier_name"])
+                si = SupplierIngredient(
+                    ingredient_id=ingredient.id,
+                    supplier_id=supplier.id,
+                    sku=sup_data.get("sku"),
+                    pack_size=sup_data["pack_size"],
+                    pack_unit=sup_data["pack_unit"],
+                    price_per_pack=sup_data["price_per_pack"],
+                    currency=sup_data.get("currency", "SGD"),
+                    is_preferred=sup_data.get("is_preferred", False),
+                    source=sup_data.get("source", "manual"),
+                )
+                session.add(si)
+                supplier_link_count += 1
+
         session.commit()
-        print(f"✅ Seeded {created_count} ingredients.")
+        print(f"Seeded {created_count} ingredients with {supplier_link_count} supplier links.")
 
         # Print summary
-        print("\n📊 Ingredients by category:")
+        print("\nIngredients by category:")
         for category_name in sorted(set(ing["category"] for ing in INGREDIENTS_DATA)):
             count = sum(1 for ing in INGREDIENTS_DATA if ing["category"] == category_name)
-            print(f"  • {category_name}: {count}")
+            print(f"  {category_name}: {count}")
 
 
 if __name__ == "__main__":

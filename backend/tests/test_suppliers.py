@@ -237,3 +237,42 @@ def test_get_supplier_ingredients_not_found(client: TestClient):
     """Test getting ingredients for a non-existent supplier returns 404."""
     response = client.get("/api/v1/suppliers/99999/ingredients")
     assert response.status_code == 404
+
+
+def test_get_supplier_ingredients_with_links(client: TestClient):
+    """Test getting ingredients linked via supplier_ingredients table."""
+    # Create supplier
+    sup = client.post(
+        "/api/v1/suppliers",
+        json={"name": "Test Supplier"},
+    ).json()
+
+    # Create ingredient
+    ing = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Rice", "base_unit": "kg", "cost_per_base_unit": 1.5},
+    ).json()
+
+    # Link them via ingredient supplier endpoint
+    client.post(
+        f"/api/v1/ingredients/{ing['id']}/suppliers",
+        json={
+            "ingredient_id": ing["id"],
+            "supplier_id": sup["id"],
+            "pack_size": 25.0,
+            "pack_unit": "kg",
+            "price_per_pack": 30.00,
+        },
+    )
+
+    # Query from supplier side
+    response = client.get(f"/api/v1/suppliers/{sup['id']}/ingredients")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["ingredient_id"] == ing["id"]
+    assert data[0]["supplier_id"] == sup["id"]
+    assert data[0]["ingredient_name"] == "Rice"
+    assert data[0]["supplier_name"] == "Test Supplier"
+    assert data[0]["pack_size"] == 25.0
+    assert data[0]["price_per_pack"] == 30.00

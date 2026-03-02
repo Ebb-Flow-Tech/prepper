@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
-import type { UpdateIngredientSupplierRequest } from '@/types';
+import type { UpdateSupplierIngredientRequest, SupplierIngredient } from '@/types';
 
 // Unit options (same as Add Ingredient form)
 const UNIT_OPTIONS = [
@@ -42,8 +42,12 @@ function calculateMedian(values: number[]): number | null {
 }
 
 // Get suppliers that match a specific unit
-function getSuppliersWithUnit(suppliers: { pack_unit: string; cost_per_unit: number }[], unit: string) {
+function getSuppliersWithUnit(suppliers: { pack_unit: string; price_per_pack: number; pack_size: number }[], unit: string) {
   return suppliers.filter((s) => s.pack_unit === unit);
+}
+
+function getCostPerUnit(s: { price_per_pack: number; pack_size: number }): number {
+  return s.pack_size > 0 ? s.price_per_pack / s.pack_size : 0;
 }
 
 // Inline editable select component
@@ -282,7 +286,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
     if (!ingredient) return;
     const suppliersWithUnit = getSuppliersWithUnit(updatedSuppliers, ingredient.base_unit);
     const newMedianCost = suppliersWithUnit.length > 0
-      ? calculateMedian(suppliersWithUnit.map((s) => s.cost_per_unit))
+      ? calculateMedian(suppliersWithUnit.map((s) => getCostPerUnit(s)))
       : null;
     // Only update if there's a change
     if (newMedianCost !== ingredient.cost_per_base_unit) {
@@ -307,19 +311,19 @@ export default function IngredientPage({ params }: IngredientPageProps) {
     );
   };
 
-  const handleUpdateSupplier = (supplierId: string, data: UpdateIngredientSupplierRequest) => {
+  const handleUpdateSupplier = (supplierIngredientId: number, data: UpdateSupplierIngredientRequest) => {
     updateSupplierMutation.mutate(
       {
         ingredientId,
-        supplierId,
+        supplierIngredientId,
         data,
       },
       {
         onSuccess: () => {
-          // Recalculate median if cost_per_unit or pack_unit changed
-          if (data.cost_per_unit !== undefined || data.pack_unit !== undefined) {
+          // Recalculate median if pricing or pack_unit changed
+          if (data.price_per_pack !== undefined || data.pack_size !== undefined || data.pack_unit !== undefined) {
             const updatedSuppliers = suppliers.map((s) =>
-              s.supplier_id === supplierId ? { ...s, ...data } : s
+              s.id === supplierIngredientId ? { ...s, ...data } : s
             );
             recalculateMedianCost(updatedSuppliers);
           }
@@ -329,8 +333,8 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   };
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Record<string, UpdateIngredientSupplierRequest>>({});
+  const [editingSupplier, setEditingSupplier] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Record<number, UpdateSupplierIngredientRequest>>({});
   const [formData, setFormData] = useState({
     supplier_id: '',
     sku: '',
@@ -342,18 +346,18 @@ export default function IngredientPage({ params }: IngredientPageProps) {
 
   // Filter out suppliers that are already linked to this ingredient
   const existingSupplierIds = new Set(suppliers.map((s) => s.supplier_id));
-  const suppliersToAdd = availableSuppliers?.filter((s) => !existingSupplierIds.has(s.id.toString())) || [];
+  const suppliersToAdd = availableSuppliers?.filter((s) => !existingSupplierIds.has(s.id)) || [];
 
-  const handleDeleteSupplier = (supplierId: string) => {
+  const handleDeleteSupplier = (supplierIngredientId: number) => {
     removeSupplierMutation.mutate(
       {
         ingredientId,
-        supplierId,
+        supplierIngredientId,
       },
       {
         onSuccess: () => {
           // Recalculate median after removing supplier
-          const updatedSuppliers = suppliers.filter((s) => s.supplier_id !== supplierId);
+          const updatedSuppliers = suppliers.filter((s) => s.id !== supplierIngredientId);
           recalculateMedianCost(updatedSuppliers);
         },
       }
@@ -383,13 +387,12 @@ export default function IngredientPage({ params }: IngredientPageProps) {
       {
         ingredientId,
         data: {
-          supplier_id: selectedSupplier.id.toString(),
-          supplier_name: selectedSupplier.name,
+          ingredient_id: ingredientId,
+          supplier_id: selectedSupplier.id,
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
           price_per_pack: pricePerPack,
-          cost_per_unit: calculatedUnitCost,
           currency: "SGD",
           is_preferred: false,
           source: "manual"
@@ -398,20 +401,22 @@ export default function IngredientPage({ params }: IngredientPageProps) {
       {
         onSuccess: () => {
           toast.success(`${selectedSupplier.name} added as supplier`);
-          // Recalculate median after adding supplier
+          // Recalculate median after adding — query will refresh with real data
           const newSupplier = {
-            supplier_id: selectedSupplier.id.toString(),
+            id: 0,
+            ingredient_id: ingredientId,
+            supplier_id: selectedSupplier.id,
             supplier_name: selectedSupplier.name,
+            ingredient_name: ingredient?.name ?? null,
             sku: formData.sku || null,
             pack_size: packSize,
             pack_unit: formData.pack_unit,
             price_per_pack: pricePerPack,
-            cost_per_unit: calculatedUnitCost,
             currency: "SGD",
             is_preferred: false,
             source: "manual",
-            last_updated: null,
-            last_synced: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
           const updatedSuppliers = [...suppliers, newSupplier];
           recalculateMedianCost(updatedSuppliers);
@@ -426,8 +431,8 @@ export default function IngredientPage({ params }: IngredientPageProps) {
           setShowAddModal(false);
         },
         onError: (error) => {
-          // Check for 409 Conflict (duplicate supplier)
-          if (error && typeof error === 'object' && 'status' in error && error.status === 409) {
+          // Check for 422 (duplicate supplier or SKU)
+          if (error && typeof error === 'object' && 'status' in error && error.status === 422) {
             toast.error(`${selectedSupplier.name} is already a supplier for this ingredient`);
           } else {
             toast.error('Failed to add supplier');
@@ -530,7 +535,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         const suppliersWithUnit = getSuppliersWithUnit(suppliers, ingredient.base_unit);
                         const hasSupplierWithUnit = suppliersWithUnit.length > 0;
                         const medianCost = hasSupplierWithUnit
-                          ? calculateMedian(suppliersWithUnit.map((s) => s.cost_per_unit))
+                          ? calculateMedian(suppliersWithUnit.map((s) => getCostPerUnit(s)))
                           : null;
                         const displayCost = hasSupplierWithUnit ? medianCost : ingredient.cost_per_base_unit;
 
@@ -563,7 +568,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                           onSave={(newUnit) => {
                             const suppliersWithNewUnit = getSuppliersWithUnit(suppliers, newUnit);
                             const newMedianCost = suppliersWithNewUnit.length > 0
-                              ? calculateMedian(suppliersWithNewUnit.map((s) => s.cost_per_unit))
+                              ? calculateMedian(suppliersWithNewUnit.map((s) => getCostPerUnit(s)))
                               : null;
                             // Update base_unit and cost_per_base_unit together
                             handleUpdateIngredient({
@@ -780,7 +785,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                       <tbody>
                         {suppliers.map((supplier) => (
                           <tr
-                            key={supplier.supplier_id}
+                            key={supplier.id}
                             className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 group"
                           >
                             <td className="py-3 px-2 text-zinc-900 dark:text-zinc-100 font-medium">
@@ -792,15 +797,15 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               </Link>
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
-                              {editingSupplier === supplier.supplier_id ? (
+                              {editingSupplier === supplier.id ? (
                                 <input
                                   type="text"
-                                  value={editData[supplier.supplier_id]?.sku ?? supplier.sku ?? ''}
+                                  value={editData[supplier.id]?.sku ?? supplier.sku ?? ''}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [supplier.supplier_id]: {
-                                        ...editData[supplier.supplier_id],
+                                      [supplier.id]: {
+                                        ...editData[supplier.id],
                                         sku: e.target.value || null,
                                       },
                                     })
@@ -813,17 +818,17 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingSupplier === supplier.supplier_id ? (
+                              {editingSupplier === supplier.id ? (
                                 <input
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  value={editData[supplier.supplier_id]?.pack_size ?? supplier.pack_size}
+                                  value={editData[supplier.id]?.pack_size ?? supplier.pack_size}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [supplier.supplier_id]: {
-                                        ...editData[supplier.supplier_id],
+                                      [supplier.id]: {
+                                        ...editData[supplier.id],
                                         pack_size: parseFloat(e.target.value),
                                       },
                                     })
@@ -835,14 +840,14 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2">
-                              {editingSupplier === supplier.supplier_id ? (
+                              {editingSupplier === supplier.id ? (
                                 <select
-                                  value={editData[supplier.supplier_id]?.pack_unit ?? supplier.pack_unit}
+                                  value={editData[supplier.id]?.pack_unit ?? supplier.pack_unit}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [supplier.supplier_id]: {
-                                        ...editData[supplier.supplier_id],
+                                      [supplier.id]: {
+                                        ...editData[supplier.id],
                                         pack_unit: e.target.value,
                                       },
                                     })
@@ -860,17 +865,17 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingSupplier === supplier.supplier_id ? (
+                              {editingSupplier === supplier.id ? (
                                 <input
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  value={editData[supplier.supplier_id]?.price_per_pack ?? supplier.price_per_pack}
+                                  value={editData[supplier.id]?.price_per_pack ?? supplier.price_per_pack}
                                   onChange={(e) =>
                                     setEditData({
                                       ...editData,
-                                      [supplier.supplier_id]: {
-                                        ...editData[supplier.supplier_id],
+                                      [supplier.id]: {
+                                        ...editData[supplier.id],
                                         price_per_pack: parseFloat(e.target.value),
                                       },
                                     })
@@ -882,14 +887,14 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               )}
                             </td>
                             <td className="py-3 px-2 text-right text-zinc-900 dark:text-zinc-100">
-                              {editingSupplier === supplier.supplier_id
+                              {editingSupplier === supplier.id
                                 ? formatCurrency(
                                     calculateUnitCost(
-                                      editData[supplier.supplier_id]?.pack_size ?? supplier.pack_size,
-                                      editData[supplier.supplier_id]?.price_per_pack ?? supplier.price_per_pack
+                                      editData[supplier.id]?.pack_size ?? supplier.pack_size,
+                                      editData[supplier.id]?.price_per_pack ?? supplier.price_per_pack
                                     )
                                   )
-                                : formatCurrency(supplier.cost_per_unit)}
+                                : formatCurrency(getCostPerUnit(supplier))}
                             </td>
                             <td className="py-3 px-2">
                               <div className="relative group/menu">
@@ -900,7 +905,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
 
                                 {/* Dropdown menu */}
                                 <div className="absolute right-0 top-full mt-0 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-md shadow-lg opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
-                                  {editingSupplier === supplier.supplier_id ? (
+                                  {editingSupplier === supplier.id ? (
                                     <>
                                       <Button
                                         variant="ghost"
@@ -919,15 +924,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          const dataToSave = editData[supplier.supplier_id];
+                                          const dataToSave = editData[supplier.id];
                                           if (dataToSave) {
-                                            const packSize = dataToSave.pack_size ?? supplier.pack_size;
-                                            const pricePerPack = dataToSave.price_per_pack ?? supplier.price_per_pack;
-                                            const calculatedCost = packSize > 0 ? pricePerPack / packSize : 0;
-                                            handleUpdateSupplier(supplier.supplier_id, {
-                                              ...dataToSave,
-                                              cost_per_unit: calculatedCost,
-                                            });
+                                            handleUpdateSupplier(supplier.id, dataToSave);
                                             setEditingSupplier(null);
                                             setEditData({});
                                           }
@@ -945,9 +944,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          setEditingSupplier(supplier.supplier_id);
+                                          setEditingSupplier(supplier.id);
                                           setEditData({
-                                            [supplier.supplier_id]: {
+                                            [supplier.id]: {
                                               sku: supplier.sku,
                                               pack_size: supplier.pack_size,
                                               price_per_pack: supplier.price_per_pack,
@@ -963,7 +962,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleDeleteSupplier(supplier.supplier_id)}
+                                        onClick={() => handleDeleteSupplier(supplier.id)}
                                         disabled={removeSupplierMutation.isPending}
                                         className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 rounded-none last:rounded-b-md h-8 px-3"
                                       >
