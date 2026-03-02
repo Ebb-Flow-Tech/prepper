@@ -10,8 +10,9 @@ from app.models import (
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
-    SupplierEntryCreate,
-    SupplierEntryUpdate,
+    SupplierIngredientCreate,
+    SupplierIngredientUpdate,
+    SupplierIngredientRead,
     Category,
 )
 from app.domain import IngredientService
@@ -137,100 +138,104 @@ def deactivate_ingredient(
 # -----------------------------------------------------------------------------
 
 
-@router.post("/{ingredient_id}/suppliers", response_model=Ingredient)
-def add_supplier(
+@router.get("/{ingredient_id}/suppliers", response_model=list[SupplierIngredientRead])
+def get_ingredient_suppliers(
     ingredient_id: int,
-    data: SupplierEntryCreate,
     session: Session = Depends(get_session),
 ):
-    """Add a supplier entry to an ingredient.
-
-    If a supplier with the same supplier_id already exists, it will be updated instead.
-    """
+    """Get all suppliers for an ingredient."""
     service = IngredientService(session)
-    ingredient = service.add_supplier(ingredient_id, data)
-    if not ingredient:
+    result = service.get_ingredient_suppliers(ingredient_id)
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingredient not found",
         )
-    return ingredient
+    return result
 
 
-@router.patch("/{ingredient_id}/suppliers/{supplier_id}", response_model=Ingredient)
-def update_supplier(
+@router.post(
+    "/{ingredient_id}/suppliers",
+    response_model=SupplierIngredientRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_ingredient_supplier(
     ingredient_id: int,
-    supplier_id: str,
-    data: SupplierEntryUpdate,
+    data: SupplierIngredientCreate,
     session: Session = Depends(get_session),
 ):
-    """Update a supplier entry for an ingredient."""
+    """Add a supplier to an ingredient."""
+    # Ensure the path ingredient_id matches the body
+    data.ingredient_id = ingredient_id
     service = IngredientService(session)
-    ingredient = service.update_supplier(ingredient_id, supplier_id, data)
-    if not ingredient:
+    result = service.add_ingredient_supplier(ingredient_id, data)
+    if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingredient or supplier not found",
         )
-    return ingredient
+    if isinstance(result, str):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=result,
+        )
+    return result
 
 
-@router.delete("/{ingredient_id}/suppliers/{supplier_id}", response_model=Ingredient)
-def remove_supplier(
+@router.patch(
+    "/{ingredient_id}/suppliers/{supplier_ingredient_id}",
+    response_model=SupplierIngredientRead,
+)
+def update_ingredient_supplier(
     ingredient_id: int,
-    supplier_id: str,
+    supplier_ingredient_id: int,
+    data: SupplierIngredientUpdate,
     session: Session = Depends(get_session),
 ):
-    """Remove a supplier entry from an ingredient."""
+    """Update a supplier-ingredient link."""
     service = IngredientService(session)
-    ingredient = service.remove_supplier(ingredient_id, supplier_id)
-    if not ingredient:
+    result = service.update_ingredient_supplier(supplier_ingredient_id, data)
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ingredient or supplier not found",
+            detail="Supplier-ingredient link not found",
         )
-    return ingredient
+    return result
 
 
-@router.get("/{ingredient_id}/suppliers", response_model=list[dict])
-def get_suppliers(
+@router.delete(
+    "/{ingredient_id}/suppliers/{supplier_ingredient_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_ingredient_supplier(
     ingredient_id: int,
+    supplier_ingredient_id: int,
     session: Session = Depends(get_session),
 ):
-    """Get all suppliers for an ingredient.
-
-    Returns the list of all supplier entries for this ingredient.
-    """
+    """Remove a supplier from an ingredient."""
     service = IngredientService(session)
-
-    suppliers = service.get_suppliers(ingredient_id)
-    if suppliers is None:
+    success = service.remove_ingredient_supplier(supplier_ingredient_id)
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ingredient not found",
+            detail="Supplier-ingredient link not found",
         )
 
-    return suppliers
 
-
-@router.get("/{ingredient_id}/suppliers/preferred", response_model=dict | None)
+@router.get(
+    "/{ingredient_id}/suppliers/preferred",
+    response_model=SupplierIngredientRead | None,
+)
 def get_preferred_supplier(
     ingredient_id: int,
     session: Session = Depends(get_session),
 ):
-    """Get the preferred supplier for an ingredient.
-
-    Returns the supplier entry marked as preferred, or the first supplier
-    if none is marked as preferred, or null if no suppliers exist.
-    """
+    """Get the preferred supplier for an ingredient."""
     service = IngredientService(session)
-
-    # Verify the ingredient exists
     ingredient = service.get_ingredient(ingredient_id)
     if not ingredient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingredient not found",
         )
-
     return service.get_preferred_supplier(ingredient_id)

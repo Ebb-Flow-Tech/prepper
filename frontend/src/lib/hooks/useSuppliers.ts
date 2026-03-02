@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
-import type { CreateSupplierRequest, UpdateSupplierRequest, UpdateSupplierIngredientRequest } from '@/types';
+import type { CreateSupplierRequest, UpdateSupplierRequest, AddSupplierIngredientRequest, UpdateSupplierIngredientRequest } from '@/types';
 
 export function useSuppliers(showArchived: boolean = false) {
   const activeOnly = !showArchived;
@@ -73,29 +73,8 @@ export function useAddSupplierIngredient() {
       data,
     }: {
       supplierId: number;
-      data: {
-        ingredient_id: number;
-        supplier_name: string;
-        sku?: string | null;
-        pack_size: number;
-        pack_unit: string;
-        price_per_pack: number;
-        cost_per_unit: number;
-        is_preferred?: boolean;
-      };
-    }) =>
-      api.addIngredientSupplier(data.ingredient_id, {
-        supplier_id: supplierId.toString(),
-        supplier_name: data.supplier_name,
-        sku: data.sku,
-        pack_size: data.pack_size,
-        pack_unit: data.pack_unit,
-        price_per_pack: data.price_per_pack,
-        cost_per_unit: data.cost_per_unit,
-        currency: 'SGD',
-        is_preferred: data.is_preferred || false,
-        source: 'manual',
-      }),
+      data: AddSupplierIngredientRequest;
+    }) => api.addSupplierIngredient(supplierId, data),
     onSuccess: (_, { supplierId }) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers', supplierId, 'ingredients'] });
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
@@ -109,13 +88,15 @@ export function useUpdateSupplierIngredient() {
   return useMutation({
     mutationFn: ({
       supplierId,
+      supplierIngredientId,
       ingredientId,
       data,
     }: {
       supplierId: number;
+      supplierIngredientId: number;
       ingredientId: number;
       data: UpdateSupplierIngredientRequest;
-    }) => api.updateSupplierIngredient(supplierId, ingredientId, data),
+    }) => api.updateSupplierIngredient(supplierIngredientId, ingredientId, data),
     onSuccess: (_, { supplierId }) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers', supplierId, 'ingredients'] });
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
@@ -129,11 +110,13 @@ export function useRemoveSupplierIngredient() {
   return useMutation({
     mutationFn: ({
       supplierId,
+      supplierIngredientId,
       ingredientId,
     }: {
       supplierId: number;
+      supplierIngredientId: number;
       ingredientId: number;
-    }) => api.removeSupplierIngredient(supplierId, ingredientId),
+    }) => api.removeSupplierIngredient(supplierIngredientId, ingredientId),
     onSuccess: (_, { supplierId }) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers', supplierId, 'ingredients'] });
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });

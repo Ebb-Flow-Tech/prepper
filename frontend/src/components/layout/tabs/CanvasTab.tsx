@@ -33,10 +33,11 @@ import {
 } from '@/lib/hooks';
 import { Button, Input, Select, ConfirmModal, Switch, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
-import type { RecipeStatus, Outlet } from '@/types';
+import type { RecipeStatus, Outlet, SupplierIngredient } from '@/types';
 import { RightPanel } from '../RightPanel';
 import { formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
+import { getIngredientSuppliers } from '@/lib/api';
 
 // Staged item with position on canvas
 interface StagedIngredient {
@@ -44,6 +45,7 @@ interface StagedIngredient {
   ingredient: Ingredient;
   quantity: number;
   wastage_percentage: number;
+  selectedSupplierId: number | null; // user-selected supplier from the map
   x: number;
   y: number;
 }
@@ -189,12 +191,16 @@ function StagedIngredientCard({
   onRemove,
   onQuantityChange,
   onWastageChange,
+  onSupplierSelect,
+  suppliers,
   categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   onWastageChange: (wastage: number) => void;
+  onSupplierSelect: (supplierId: number | null) => void;
+  suppliers: SupplierIngredient[];
   categoryMap: Record<number, string>;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -211,9 +217,7 @@ function StagedIngredientCard({
     zIndex: isExpanded ? 10 : 1,
   };
 
-  const suppliers = staged.ingredient.suppliers || [];
-  const preferredSupplier = suppliers.find((s) => s.is_preferred);
-  const unitCost = preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit;
+  const { cost: unitCost, label: costLabel } = getIngredientUnitCost(staged, suppliers);
 
   return (
     <div
@@ -298,14 +302,31 @@ function StagedIngredientCard({
 
         {/* Cost display */}
         <div className="text-sm text-blue-200/80">
-          {preferredSupplier && preferredSupplier.cost_per_unit != null && preferredSupplier.pack_unit ? (
-            <span>{preferredSupplier.supplier_name} • ${preferredSupplier.cost_per_unit.toFixed(2)}/{preferredSupplier.pack_unit}</span>
-          ) : suppliers.length > 0 && suppliers[0].cost_per_unit != null && suppliers[0].pack_unit ? (
-            <span>{suppliers[0].supplier_name} • ${suppliers[0].cost_per_unit.toFixed(2)}/{suppliers[0].pack_unit}</span>
+          {unitCost != null ? (
+            <span>{costLabel} • ${unitCost.toFixed(2)}/{staged.ingredient.base_unit}</span>
           ) : (
-            <span className="text-blue-300/50">No supplier</span>
+            <span className="text-blue-300/50">No pricing</span>
           )}
         </div>
+
+        {/* Supplier dropdown */}
+        {suppliers.length > 0 && (
+          <div className="mt-2">
+            <select
+              value={staged.selectedSupplierId ?? ''}
+              onChange={(e) => onSupplierSelect(e.target.value ? parseInt(e.target.value, 10) : null)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-xs text-blue-100 focus:border-blue-400 focus:outline-none"
+            >
+              <option value="">No supplier (median)</option>
+              {suppliers.map((s) => (
+                <option key={s.supplier_id} value={s.supplier_id}>
+                  {s.supplier_name} — ${supplierUnitCost(s).toFixed(2)}/{s.pack_unit}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Expanded details */}
         {isExpanded && (
@@ -353,7 +374,7 @@ function StagedIngredientCard({
                         )}
                       </span>
                       <span className="text-blue-200/60">
-                        ${supplier.cost_per_unit ? supplier.cost_per_unit.toFixed(2) : 'N/A'}/{supplier.pack_unit}
+                        ${supplier.pack_size > 0 ? (supplier.price_per_pack / supplier.pack_size).toFixed(2) : 'N/A'}/{supplier.pack_unit}
                       </span>
                     </li>
                   ))}
@@ -374,16 +395,19 @@ function StagedIngredientListItem({
   onRemove,
   onQuantityChange,
   onWastageChange,
+  onSupplierSelect,
+  suppliers,
   categoryMap,
 }: {
   staged: StagedIngredient;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   onWastageChange: (wastage: number) => void;
+  onSupplierSelect: (supplierId: number | null) => void;
+  suppliers: SupplierIngredient[];
   categoryMap: Record<number, string>;
 }) {
-  const suppliers = staged.ingredient.suppliers || [];
-  const preferredSupplier = suppliers.find((s) => s.is_preferred);
+  const { cost: unitCost, label: costLabel } = getIngredientUnitCost(staged, suppliers);
   const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
 
   return (
@@ -402,14 +426,29 @@ function StagedIngredientListItem({
               <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{categoryName}</span>
             </>
           )}
-          {preferredSupplier ? (
-            <>
-              <span className="text-zinc-300 dark:text-zinc-600 text-xs">·</span>
-              <span className="text-xs text-zinc-400 dark:text-zinc-500 truncate">{preferredSupplier.supplier_name}</span>
-            </>
-          ) : null}
+          <span className="text-zinc-300 dark:text-zinc-600 text-xs">·</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            {unitCost != null ? `${costLabel} $${unitCost.toFixed(2)}` : 'No pricing'}
+          </span>
         </div>
       </div>
+
+      {/* Supplier dropdown */}
+      {suppliers.length > 0 && (
+        <select
+          value={staged.selectedSupplierId ?? ''}
+          onChange={(e) => onSupplierSelect(e.target.value ? parseInt(e.target.value, 10) : null)}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 w-32 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-1 text-xs text-zinc-700 dark:text-zinc-300 focus:border-blue-400 focus:outline-none"
+        >
+          <option value="">Median</option>
+          {suppliers.map((s) => (
+            <option key={s.supplier_id} value={s.supplier_id}>
+              {s.supplier_name}
+            </option>
+          ))}
+        </select>
+      )}
 
       {/* Quantity */}
       <div className="flex items-center gap-1 shrink-0">
@@ -711,7 +750,7 @@ function StagedRecipeCard({
                 <ul className="mt-1.5 space-y-1.5">
                   {recipeIngredients.map((ri) => {
                     const ingredient = ri.ingredient;
-                    const suppliers = ingredient?.suppliers || [];
+                    const suppliers = ingredient?.supplier_ingredients || [];
                     const preferredSupplier = suppliers.find((s) => s.is_preferred);
                     return (
                       <li key={ri.id} className="bg-black/20 rounded p-2">
@@ -1091,6 +1130,8 @@ function CanvasDropZone({
   onRemoveRecipe,
   onIngredientQuantityChange,
   onIngredientWastageChange,
+  onSupplierSelect,
+  supplierMap,
   onRecipeQuantityChange,
   onIngredientSelect,
   onRecipeSelect,
@@ -1108,6 +1149,8 @@ function CanvasDropZone({
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
+  onSupplierSelect: (id: string, supplierId: number | null) => void;
+  supplierMap: Record<number, SupplierIngredient[]>;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
   onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
@@ -1168,6 +1211,8 @@ function CanvasDropZone({
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
               onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              onSupplierSelect={(sid) => onSupplierSelect(staged.id, sid)}
+              suppliers={supplierMap[staged.ingredient.id] ?? []}
               categoryMap={categoryMap}
             />
           ))}
@@ -1207,6 +1252,8 @@ function CanvasDropZone({
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
               onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              onSupplierSelect={(sid) => onSupplierSelect(staged.id, sid)}
+              suppliers={supplierMap[staged.ingredient.id] ?? []}
               categoryMap={categoryMap}
             />
           ))}
@@ -1242,6 +1289,8 @@ function CanvasContent({
   onRemoveRecipe,
   onIngredientQuantityChange,
   onIngredientWastageChange,
+  onSupplierSelect,
+  supplierMap,
   onRecipeQuantityChange,
   onIngredientSelect,
   onRecipeSelect,
@@ -1278,6 +1327,8 @@ function CanvasContent({
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
+  onSupplierSelect: (id: string, supplierId: number | null) => void;
+  supplierMap: Record<number, SupplierIngredient[]>;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
   onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
@@ -1485,6 +1536,8 @@ function CanvasContent({
           onRemoveRecipe={onRemoveRecipe}
           onIngredientQuantityChange={onIngredientQuantityChange}
           onIngredientWastageChange={onIngredientWastageChange}
+          onSupplierSelect={onSupplierSelect}
+          supplierMap={supplierMap}
           onRecipeQuantityChange={onRecipeQuantityChange}
           onIngredientSelect={onIngredientSelect}
           onRecipeSelect={onRecipeSelect}
@@ -1554,31 +1607,57 @@ function CanvasContent({
   );
 }
 
+// Compute the unit cost for a given supplier
+function supplierUnitCost(s: SupplierIngredient): number {
+  return s.pack_size > 0 ? s.price_per_pack / s.pack_size : 0;
+}
+
+// Get the display cost for a staged ingredient:
+//  1. If a supplier is selected → that supplier's cost
+//  2. If no selection but suppliers exist → median cost
+//  3. If no suppliers → ingredient.cost_per_base_unit
+function getIngredientUnitCost(
+  staged: StagedIngredient,
+  suppliers: SupplierIngredient[],
+): { cost: number | null; label: string; supplierId: number | null } {
+  if (staged.selectedSupplierId != null) {
+    const selected = suppliers.find((s) => s.supplier_id === staged.selectedSupplierId);
+    if (selected) {
+      return { cost: supplierUnitCost(selected), label: selected.supplier_name ?? 'Supplier', supplierId: selected.supplier_id };
+    }
+  }
+
+  if (suppliers.length > 0) {
+    const costs = suppliers.map(supplierUnitCost).sort((a, b) => a - b);
+    const mid = Math.floor(costs.length / 2);
+    const median = costs.length % 2 !== 0 ? costs[mid] : (costs[mid - 1] + costs[mid]) / 2;
+    return { cost: median, label: 'Median', supplierId: null };
+  }
+
+  return { cost: staged.ingredient.cost_per_base_unit, label: 'Base', supplierId: null };
+}
+
 // Calculate total cost from staged ingredients and recipes
 function calculateCanvasCost(
   stagedIngredients: StagedIngredient[],
   stagedRecipes: StagedRecipe[],
-  allRecipes?: Recipe[]
+  allRecipes?: Recipe[],
+  supplierMap?: Record<number, SupplierIngredient[]>,
 ) {
   let totalCost = 0;
 
-  // Calculate cost from ingredients
   for (const staged of stagedIngredients) {
-    const suppliers = staged.ingredient.suppliers || [];
-    const preferredSupplier = suppliers.find((s) => s.is_preferred);
-    const unitCost = preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit;
+    const suppliers = supplierMap?.[staged.ingredient.id] ?? [];
+    const { cost: unitCost } = getIngredientUnitCost(staged, suppliers);
 
     if (unitCost != null) {
-      // Apply wastage adjustment: actual_cost = cost * (1 / (1 - wastage%))
       const wastageMultiplier = staged.wastage_percentage > 0
         ? 1 / (1 - staged.wastage_percentage / 100)
         : 1;
-      const adjustedCost = unitCost * wastageMultiplier;
-      totalCost += staged.quantity * adjustedCost;
+      totalCost += staged.quantity * unitCost * wastageMultiplier;
     }
   }
 
-  // Calculate cost from sub-recipes
   for (const staged of stagedRecipes) {
     const recipe = allRecipes?.find((r) => r.id === staged.recipe.id);
     if (recipe?.cost_price != null) {
@@ -1685,6 +1764,24 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const [loadedRecipeId, setLoadedRecipeId] = useState<number | null>(null);
   const [metadata, setMetadata] = useState<RecipeMetadata>(DEFAULT_METADATA);
 
+  // Supplier data dictionary — keyed by ingredient ID, populated lazily on drop
+  const [supplierMap, setSupplierMap] = useState<Record<number, SupplierIngredient[]>>({});
+
+  // Fetch suppliers for an ingredient and store in the map (no-op if already loaded)
+  const fetchedIdsRef = useRef<Set<number>>(new Set());
+
+  const fetchSuppliersForIngredient = useCallback((ingredientId: number) => {
+    if (fetchedIdsRef.current.has(ingredientId)) return; // already fetched or in-flight
+    fetchedIdsRef.current.add(ingredientId);
+    getIngredientSuppliers(ingredientId)
+      .then((data) => {
+        setSupplierMap((prev) => ({ ...prev, [ingredientId]: data }));
+      })
+      .catch(() => {
+        // silently ignore — map will stay empty for this ingredient
+      });
+  }, []);
+
   // Track initial state for unsaved changes detection
   const [initialState, setInitialState] = useState<{
     ingredientIds: string[];
@@ -1696,8 +1793,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
   // Calculate total cost from staged items
   const canvasCost = useMemo(() => {
-    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes);
-  }, [stagedIngredients, stagedRecipes, recipes]);
+    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes, supplierMap);
+  }, [stagedIngredients, stagedRecipes, recipes, supplierMap]);
 
   // Handle custom events from RightPanel "Add" buttons
   useEffect(() => {
@@ -1727,10 +1824,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           ingredient,
           quantity: 1,
           wastage_percentage: 0,
+          selectedSupplierId: null,
           x: 0,
           y: 0,
         };
         setStagedIngredients((prev) => [...prev, newStaged]);
+        fetchSuppliersForIngredient(ingredient.id);
         toast.success(`Added ${ingredient.name} to canvas`);
       }
     };
@@ -1834,9 +1933,15 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       },
       quantity: ri.quantity,
       wastage_percentage: ri.wastage_percentage,
-      x: 0, // Placeholder - will be set by position recalculation effect
+      selectedSupplierId: ri.supplier_id ?? null,
+      x: 0,
       y: 0,
     }));
+
+    // Fetch suppliers for all loaded ingredients
+    for (const ri of recipeIngredients) {
+      fetchSuppliersForIngredient(ri.ingredient_id);
+    }
 
     // Load sub-recipes onto canvas
     const loadedSubRecipes: StagedRecipe[] = subRecipes.map((sr) => {
@@ -1895,7 +2000,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       recipeQuantities,
       metadata: loadedMetadata,
     });
-  }, [selectedRecipeId, recipeIngredients, subRecipes, recipes, loadedRecipeId]);
+  }, [selectedRecipeId, recipeIngredients, subRecipes, recipes, loadedRecipeId, fetchSuppliersForIngredient]);
 
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1954,10 +2059,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             ingredient: dragItem.ingredient,
             quantity: 1,
             wastage_percentage: 0,
+            selectedSupplierId: null,
             x: 0, // Placeholder - will be set by position recalculation effect
             y: 0,
           };
           setStagedIngredients((prev) => [...prev, newStaged]);
+          fetchSuppliersForIngredient(dragItem.ingredient.id);
           toast.success(`Added ${dragItem.ingredient.name} to canvas`);
         }
       }
@@ -2012,6 +2119,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const handleIngredientWastageChange = useCallback((id: string, wastage_percentage: number) => {
     setStagedIngredients((prev) =>
       prev.map((item) => (item.id === id ? { ...item, wastage_percentage } : item))
+    );
+  }, []);
+
+  const handleSupplierSelect = useCallback((id: string, supplierId: number | null) => {
+    setStagedIngredients((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, selectedSupplierId: supplierId } : item))
     );
   }, []);
 
@@ -2114,6 +2227,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         }
 
         // Add as new ingredient
+        fetchSuppliersForIngredient(ingredient.id);
         return [
           ...prev,
           {
@@ -2121,6 +2235,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             ingredient,
             quantity,
             wastage_percentage: 0,
+            selectedSupplierId: null,
             x: 0,
             y: 0,
           },
@@ -2184,6 +2299,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         },
         quantity: ri.quantity,
         wastage_percentage: ri.wastage_percentage,
+        selectedSupplierId: ri.supplier_id ?? null,
         x: 20 + (index % 3) * 220,
         y: 20 + Math.floor(index / 3) * 100,
       }));
@@ -2287,13 +2403,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
       // Add all staged ingredients to the new recipe
       for (const staged of stagedIngredients) {
-        const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
-        const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
-        const unit_price =
-          preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit ?? 0;
-        const supplier_id = preferredSupplier
-          ? parseInt(preferredSupplier.supplier_id, 10)
-          : null;
+        const suppliers = supplierMap[staged.ingredient.id] ?? [];
+        const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
+        const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
+        const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
+        const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
+        const supplier_id = supplierId;
 
         await addIngredient.mutateAsync({
           recipeId: newRecipe.id,
@@ -2334,15 +2449,28 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     } finally {
       setIsForking(false);
     }
-  }, [selectedRecipeId, recipes, metadata, stagedIngredients, stagedRecipes, createRecipe, addIngredient, addSubRecipe, userId, router]);
+  }, [selectedRecipeId, recipes, metadata, stagedIngredients, stagedRecipes, createRecipe, addIngredient, addSubRecipe, userId, router, supplierMap]);
 
   const handleSubmitClick = useCallback(() => {
     if (stagedIngredients.length === 0 && stagedRecipes.length === 0) {
       toast.error('Add some ingredients or recipes first');
       return;
     }
+
+    // Validate all ingredients have at least 1 supplier before publishing
+    if (metadata.status === 'active') {
+      const ingredientsWithoutSupplier = stagedIngredients.filter(
+        (si) => !(supplierMap[si.ingredient.id]?.length > 0)
+      );
+      if (ingredientsWithoutSupplier.length > 0) {
+        const names = ingredientsWithoutSupplier.map((si) => si.ingredient.name).join(', ');
+        toast.error(`Cannot publish: the following ingredients have no supplier — ${names}`);
+        return;
+      }
+    }
+
     setShowSubmitModal(true);
-  }, [stagedIngredients.length, stagedRecipes.length]);
+  }, [stagedIngredients, stagedRecipes.length, metadata.status, supplierMap]);
 
   const handleSubmitConfirm = useCallback(async () => {
     setShowSubmitModal(false);
@@ -2410,13 +2538,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
         // Add or update ingredients
         for (const staged of stagedIngredients) {
-          const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
-          const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
-          const unit_price =
-            preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit ?? 0;
-          const supplier_id = preferredSupplier
-            ? parseInt(preferredSupplier.supplier_id, 10)
-            : null;
+          const suppliers = supplierMap[staged.ingredient.id] ?? [];
+          const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
+          const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
+          const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
+          const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
+          const supplier_id = supplierId;
 
           const existingRi = serverIngredientMap.get(staged.ingredient.id);
           if (existingRi) {
@@ -2474,8 +2601,22 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           }
         }
 
-        // Reset loaded recipe to force reload of data
-        setLoadedRecipeId(null);
+        // Update initial state to match current canvas (so unsaved changes detection resets)
+        const ingredientQuantities: Record<string, number> = {};
+        stagedIngredients.forEach((ing) => {
+          ingredientQuantities[ing.ingredient.id.toString()] = ing.quantity;
+        });
+        const recipeQuantities: Record<string, number> = {};
+        stagedRecipes.forEach((rec) => {
+          recipeQuantities[rec.recipe.id.toString()] = rec.quantity;
+        });
+        setInitialState({
+          ingredientIds: stagedIngredients.map((ing) => ing.ingredient.id.toString()),
+          ingredientQuantities,
+          recipeIds: stagedRecipes.map((rec) => rec.recipe.id.toString()),
+          recipeQuantities,
+          metadata,
+        });
 
         toast.success('Recipe updated successfully!');
       } else {
@@ -2495,13 +2636,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
         // Add all staged ingredients
         for (const staged of stagedIngredients) {
-          const preferredSupplier = staged.ingredient.suppliers?.find((s) => s.is_preferred);
-          const base_unit = preferredSupplier?.pack_unit ?? staged.ingredient.base_unit;
-          const unit_price =
-            preferredSupplier?.cost_per_unit ?? staged.ingredient.cost_per_base_unit ?? 0;
-          const supplier_id = preferredSupplier
-            ? parseInt(preferredSupplier.supplier_id, 10)
-            : null;
+          const suppliers = supplierMap[staged.ingredient.id] ?? [];
+          const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
+          const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
+          const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
+          const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
+          const supplier_id = supplierId;
 
           await addIngredient.mutateAsync({
             recipeId: newRecipe.id,
@@ -2560,6 +2700,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     recipeIngredients,
     subRecipes,
     router,
+    supplierMap,
   ]);
 
   // Determine if there are  by comparing to initial state
@@ -2647,6 +2788,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       onRemoveRecipe={handleRemoveRecipe}
       onIngredientQuantityChange={handleIngredientQuantityChange}
       onIngredientWastageChange={handleIngredientWastageChange}
+      onSupplierSelect={handleSupplierSelect}
+      supplierMap={supplierMap}
       onRecipeQuantityChange={handleRecipeQuantityChange}
       onIngredientSelect={handleIngredientSelect}
       onRecipeSelect={handleRecipeSelect}
@@ -2691,16 +2834,16 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
   return (
     <>
-      {isDragDropEnabled ? (
-        <DndContext
-          collisionDetection={pointerWithin}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex h-full w-full">
-            {canvasContent}
-            <RightPanel outlets={outlets} />
-          </div>
+      <DndContext
+        collisionDetection={pointerWithin}
+        onDragStart={isDragDropEnabled ? handleDragStart : undefined}
+        onDragEnd={isDragDropEnabled ? handleDragEnd : undefined}
+      >
+        <div className="flex h-full w-full">
+          {canvasContent}
+          <RightPanel outlets={outlets} />
+        </div>
+        {isDragDropEnabled && (
           <DragOverlay>
             {activeDragItem && (
               <DragOverlayContent
@@ -2710,13 +2853,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
               />
             )}
           </DragOverlay>
-        </DndContext>
-      ) : (
-        <div className="flex h-full w-full">
-          {canvasContent}
-          <RightPanel outlets={outlets} />
-        </div>
-      )}
+        )}
+      </DndContext>
 
       <ConfirmModal
         isOpen={showSubmitModal}
@@ -2813,10 +2951,12 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                       ingredient: matchedIngredient,
                       quantity: parsed.quantity,
                       wastage_percentage: 0,
+                      selectedSupplierId: null,
                       x: 0,
                       y: 0,
                     };
                     newIngredientsToAdd.push(newStaged);
+                    fetchSuppliersForIngredient(matchedIngredient.id);
                   }
                 }
 

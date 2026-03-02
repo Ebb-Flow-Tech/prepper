@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useCreateIngredient, useSuppliers, useCategorizeIngredient } from '@/lib/hooks';
+import { useCreateIngredient, useAddIngredientSupplier, useSuppliers, useCategorizeIngredient } from '@/lib/hooks';
 import { Button, Input, Select, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
@@ -23,7 +23,6 @@ interface SupplierEntry {
   pack_size: string;
   pack_unit: string;
   price_per_pack: string;
-  cost_per_unit: string;
   is_preferred: boolean;
 }
 
@@ -34,6 +33,7 @@ interface AddIngredientModalProps {
 
 export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps) {
   const createIngredient = useCreateIngredient();
+  const addIngredientSupplier = useAddIngredientSupplier();
   const categorizeIngredient = useCategorizeIngredient();
   const { data: suppliers = [] } = useSuppliers();
 
@@ -71,7 +71,6 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
       pack_size: '',
       pack_unit: baseUnit,
       price_per_pack: '',
-      cost_per_unit: '',
       is_preferred: supplierEntries.length === 0, // First supplier is preferred by default
     };
     setSupplierEntries((prev) => [...prev, newEntry]);
@@ -113,8 +112,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
       entry.supplier_id &&
       entry.pack_size &&
       entry.pack_unit &&
-      entry.price_per_pack &&
-      entry.cost_per_unit
+      entry.price_per_pack
     );
   };
 
@@ -136,33 +134,36 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
     setIsSubmitting(true);
 
     try {
-      // Build suppliers array for the request
-      const suppliersData = validSupplierEntries.map((entry) => ({
-        supplier_id: entry.supplier_id,
-        supplier_name: entry.supplier_name,
-        sku: entry.sku || null,
-        pack_size: parseFloat(entry.pack_size),
-        pack_unit: entry.pack_unit,
-        price_per_pack: parseFloat(entry.price_per_pack),
-        cost_per_unit: parseFloat(entry.cost_per_unit),
-        currency: 'SGD',
-        is_preferred: entry.is_preferred,
-        source: 'manual',
-      }));
-
       // get the category ID (AGENT CALL)
       const categoryData = await categorizeIngredient.mutateAsync(name);
       const categoryId = categoryData.category_id;
 
-      // Create the ingredient with suppliers in a single request
-      await createIngredient.mutateAsync({
+      // Create the ingredient first
+      const newIngredient = await createIngredient.mutateAsync({
         name: name.trim(),
         base_unit: baseUnit,
         cost_per_base_unit: cost ? parseFloat(cost) : null,
         is_halal: isHalal,
         category_id: categoryId,
-        suppliers: suppliersData.length > 0 ? suppliersData : undefined,
       });
+
+      // Then add suppliers via the join table
+      for (const entry of validSupplierEntries) {
+        await addIngredientSupplier.mutateAsync({
+          ingredientId: newIngredient.id,
+          data: {
+            ingredient_id: newIngredient.id,
+            supplier_id: parseInt(entry.supplier_id, 10),
+            sku: entry.sku || null,
+            pack_size: parseFloat(entry.pack_size),
+            pack_unit: entry.pack_unit,
+            price_per_pack: parseFloat(entry.price_per_pack),
+            currency: 'SGD',
+            is_preferred: entry.is_preferred,
+            source: 'manual',
+          },
+        });
+      }
 
       const supplierCount = validSupplierEntries.length;
       const message = supplierCount > 0
@@ -400,19 +401,6 @@ function SupplierEntryForm({
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-            Cost per Unit ({baseUnit}) *
-          </label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-            value={entry.cost_per_unit}
-            onChange={(e) => onChange(entry.id, 'cost_per_unit', e.target.value)}
-          />
-        </div>
       </div>
 
       <div className="mt-3">

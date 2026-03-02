@@ -4,8 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type {
   CreateIngredientRequest,
-  AddIngredientSupplierRequest,
-  UpdateIngredientSupplierRequest,
+  AddSupplierIngredientRequest,
+  UpdateSupplierIngredientRequest,
   UpdateIngredientRequest,
 } from '@/types';
 
@@ -86,7 +86,7 @@ export function useAddIngredientSupplier() {
       data,
     }: {
       ingredientId: number;
-      data: AddIngredientSupplierRequest;
+      data: AddSupplierIngredientRequest;
     }) => api.addIngredientSupplier(ingredientId, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ingredient-suppliers', variables.ingredientId] });
@@ -101,13 +101,13 @@ export function useUpdateIngredientSupplier() {
   return useMutation({
     mutationFn: ({
       ingredientId,
-      supplierId,
+      supplierIngredientId,
       data,
     }: {
       ingredientId: number;
-      supplierId: string;
-      data: UpdateIngredientSupplierRequest;
-    }) => api.updateIngredientSupplier(ingredientId, supplierId, data),
+      supplierIngredientId: number;
+      data: UpdateSupplierIngredientRequest;
+    }) => api.updateIngredientSupplier(ingredientId, supplierIngredientId, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ingredient-suppliers', variables.ingredientId] });
       queryClient.invalidateQueries({ queryKey: ['ingredient', variables.ingredientId] });
@@ -121,11 +121,11 @@ export function useRemoveIngredientSupplier() {
   return useMutation({
     mutationFn: ({
       ingredientId,
-      supplierId,
+      supplierIngredientId,
     }: {
       ingredientId: number;
-      supplierId: string;
-    }) => api.removeIngredientSupplier(ingredientId, supplierId),
+      supplierIngredientId: number;
+    }) => api.removeIngredientSupplier(ingredientId, supplierIngredientId),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ingredient-suppliers', variables.ingredientId] });
       queryClient.invalidateQueries({ queryKey: ['ingredient', variables.ingredientId] });

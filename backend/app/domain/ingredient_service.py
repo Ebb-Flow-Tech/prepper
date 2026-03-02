@@ -10,9 +10,12 @@ from app.models import (
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
-    SupplierEntryCreate,
-    SupplierEntryUpdate,
+    SupplierIngredient,
+    SupplierIngredientCreate,
+    SupplierIngredientUpdate,
+    SupplierIngredientRead,
 )
+from app.models.supplier import Supplier
 
 
 class IngredientService:
@@ -119,138 +122,227 @@ class IngredientService:
         return ingredient
 
     # -------------------------------------------------------------------------
-    # Supplier Management
+    # Supplier Management (via supplier_ingredients table)
     # -------------------------------------------------------------------------
 
-    def add_supplier(
-        self, ingredient_id: int, data: SupplierEntryCreate
-    ) -> Ingredient | None:
-        """Add a supplier entry to an ingredient."""
+    def _build_supplier_ingredient_read(
+        self, si: SupplierIngredient
+    ) -> SupplierIngredientRead:
+        """Build a SupplierIngredientRead DTO from a SupplierIngredient row."""
+        supplier_name = None
+        ingredient_name = None
+        if si.supplier:
+            supplier_name = si.supplier.name
+        if si.ingredient:
+            ingredient_name = si.ingredient.name
+
+        return SupplierIngredientRead(
+            id=si.id,
+            ingredient_id=si.ingredient_id,
+            supplier_id=si.supplier_id,
+            sku=si.sku,
+            pack_size=si.pack_size,
+            pack_unit=si.pack_unit,
+            price_per_pack=si.price_per_pack,
+            currency=si.currency,
+            source=si.source,
+            is_preferred=si.is_preferred,
+            created_at=si.created_at,
+            updated_at=si.updated_at,
+            supplier_name=supplier_name,
+            ingredient_name=ingredient_name,
+        )
+
+    def get_ingredient_suppliers(
+        self, ingredient_id: int
+    ) -> list[SupplierIngredientRead] | None:
+        """Get all supplier links for an ingredient.
+
+        Returns None if ingredient not found, empty list if no suppliers.
+        """
         ingredient = self.get_ingredient(ingredient_id)
         if not ingredient:
             return None
 
-        # Initialize suppliers list if None
-        if ingredient.suppliers is None:
-            ingredient.suppliers = []
+        from sqlalchemy.orm import selectinload
 
-        # Check if supplier_id already exists
-        for supplier in ingredient.suppliers:
-            if supplier.get("supplier_id") == data.supplier_id:
-                # Update existing supplier instead
-                return self.update_supplier(ingredient_id, data.supplier_id, data)
+        statement = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.ingredient_id == ingredient_id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+        )
+        rows = self.session.exec(statement).all()
+        return [self._build_supplier_ingredient_read(si) for si in rows]
 
-        # Build supplier entry dict
-        supplier_entry = data.model_dump()
-        supplier_entry["last_updated"] = datetime.utcnow().isoformat()
+    def add_ingredient_supplier(
+        self, ingredient_id: int, data: SupplierIngredientCreate
+    ) -> SupplierIngredientRead | None | str:
+        """Add a supplier link to an ingredient.
+
+        Returns:
+            SupplierIngredientRead on success, None if ingredient/supplier not found,
+            or an error string if a duplicate link or SKU exists.
+        """
+        ingredient = self.get_ingredient(ingredient_id)
+        if not ingredient:
+            return None
+
+        # Verify supplier exists
+        supplier = self.session.get(Supplier, data.supplier_id)
+        if not supplier:
+            return None
+
+        # Check for duplicate (ingredient_id, supplier_id)
+        existing = self.session.exec(
+            select(SupplierIngredient).where(
+                SupplierIngredient.ingredient_id == ingredient_id,
+                SupplierIngredient.supplier_id == data.supplier_id,
+            )
+        ).first()
+        if existing:
+            return "Supplier is already linked to this ingredient"
+
+        # Check for duplicate SKU
+        if data.sku:
+            sku_exists = self.session.exec(
+                select(SupplierIngredient).where(
+                    SupplierIngredient.sku == data.sku,
+                )
+            ).first()
+            if sku_exists:
+                return "SKU already exists"
 
         # If this is marked as preferred, unset preferred on others
         if data.is_preferred:
-            updated_suppliers = [{**s, "is_preferred": False} for s in ingredient.suppliers]
-        else:
-            updated_suppliers = list(ingredient.suppliers)
+            self._unset_preferred(ingredient_id)
 
-        # Create a new list to force SQLAlchemy to detect the change in JSON column
-        ingredient.suppliers = updated_suppliers + [supplier_entry]
-        ingredient.updated_at = datetime.utcnow()
-
-        self.session.add(ingredient)
+        si = SupplierIngredient(
+            ingredient_id=ingredient_id,
+            supplier_id=data.supplier_id,
+            sku=data.sku,
+            pack_size=data.pack_size,
+            pack_unit=data.pack_unit,
+            price_per_pack=data.price_per_pack,
+            currency=data.currency,
+            source=data.source,
+            is_preferred=data.is_preferred,
+        )
+        self.session.add(si)
         self.session.commit()
-        self.session.refresh(ingredient)
-        return ingredient
+        self.session.refresh(si)
 
-    def update_supplier(
-        self, ingredient_id: int, supplier_id: str, data: SupplierEntryUpdate
-    ) -> Ingredient | None:
-        """Update a supplier entry for an ingredient."""
-        ingredient = self.get_ingredient(ingredient_id)
-        if not ingredient or not ingredient.suppliers:
+        # Reload with relationships
+        from sqlalchemy.orm import selectinload
+
+        statement = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.id == si.id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+        )
+        refreshed = self.session.exec(statement).first()
+        return self._build_supplier_ingredient_read(refreshed) if refreshed else None
+
+    def update_ingredient_supplier(
+        self, supplier_ingredient_id: int, data: SupplierIngredientUpdate
+    ) -> SupplierIngredientRead | None:
+        """Update a supplier-ingredient link."""
+        si = self.session.get(SupplierIngredient, supplier_ingredient_id)
+        if not si:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
-        supplier_found = False
-        updated_suppliers = []
 
-        for supplier in ingredient.suppliers:
-            if supplier.get("supplier_id") == supplier_id:
-                supplier_found = True
-                # Create updated supplier entry
-                updated_supplier = {**supplier}
+        # If setting as preferred, unset others first
+        if update_data.get("is_preferred"):
+            self._unset_preferred(si.ingredient_id)
 
-                # If setting as preferred, we'll unset others below
-                for key, value in update_data.items():
-                    updated_supplier[key] = value
+        for key, value in update_data.items():
+            setattr(si, key, value)
 
-                updated_supplier["last_updated"] = datetime.utcnow().isoformat()
-                updated_suppliers.append(updated_supplier)
-            else:
-                # If we're setting this supplier as preferred, unset others
-                if update_data.get("is_preferred"):
-                    updated_suppliers.append({**supplier, "is_preferred": False})
-                else:
-                    updated_suppliers.append({**supplier})
-
-        if not supplier_found:
-            return None
-
-        # Reassign list to force SQLAlchemy to detect the change
-        ingredient.suppliers = updated_suppliers
-        ingredient.updated_at = datetime.utcnow()
-        self.session.add(ingredient)
+        si.updated_at = datetime.utcnow()
+        self.session.add(si)
         self.session.commit()
-        self.session.refresh(ingredient)
-        return ingredient
+        self.session.refresh(si)
 
-    def remove_supplier(
-        self, ingredient_id: int, supplier_id: str
-    ) -> Ingredient | None:
-        """Remove a supplier entry from an ingredient."""
-        ingredient = self.get_ingredient(ingredient_id)
-        if not ingredient or not ingredient.suppliers:
-            return None
+        # Reload with relationships
+        from sqlalchemy.orm import selectinload
 
-        # Find and remove the supplier entry
-        original_length = len(ingredient.suppliers)
-        ingredient.suppliers = [
-            s for s in ingredient.suppliers if s.get("supplier_id") != supplier_id
-        ]
+        statement = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.id == si.id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+        )
+        refreshed = self.session.exec(statement).first()
+        return self._build_supplier_ingredient_read(refreshed) if refreshed else None
 
-        if len(ingredient.suppliers) == original_length:
-            # Supplier not found
-            return None
+    def remove_ingredient_supplier(self, supplier_ingredient_id: int) -> bool:
+        """Remove a supplier-ingredient link."""
+        si = self.session.get(SupplierIngredient, supplier_ingredient_id)
+        if not si:
+            return False
 
-        ingredient.updated_at = datetime.utcnow()
-        self.session.add(ingredient)
+        self.session.delete(si)
         self.session.commit()
-        self.session.refresh(ingredient)
-        return ingredient
+        return True
 
-    def get_suppliers(self, ingredient_id: int) -> list[dict] | None:
-        """Get all suppliers for an ingredient.
+    def get_preferred_supplier(
+        self, ingredient_id: int
+    ) -> SupplierIngredientRead | None:
+        """Get the preferred supplier for an ingredient.
 
-        Returns the list of supplier entries, or None if ingredient not found.
-        Returns an empty list if the ingredient has no suppliers.
+        Returns the supplier link marked as preferred, or the first one
+        if none is marked, or None if no suppliers exist.
         """
         ingredient = self.get_ingredient(ingredient_id)
         if not ingredient:
             return None
 
-        return ingredient.suppliers or []
+        from sqlalchemy.orm import selectinload
 
-    def get_preferred_supplier(self, ingredient_id: int) -> dict | None:
-        """Get the preferred supplier for an ingredient.
-
-        Returns the supplier entry marked as preferred, or the first supplier
-        if none is marked as preferred, or None if no suppliers exist.
-        """
-        ingredient = self.get_ingredient(ingredient_id)
-        if not ingredient or not ingredient.suppliers:
-            return None
-
-        # Find preferred supplier
-        for supplier in ingredient.suppliers:
-            if supplier.get("is_preferred"):
-                return supplier
+        # Try preferred first
+        statement = (
+            select(SupplierIngredient)
+            .where(
+                SupplierIngredient.ingredient_id == ingredient_id,
+                SupplierIngredient.is_preferred == True,
+            )
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+        )
+        preferred = self.session.exec(statement).first()
+        if preferred:
+            return self._build_supplier_ingredient_read(preferred)
 
         # Fall back to first supplier
-        return ingredient.suppliers[0] if ingredient.suppliers else None
+        statement = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.ingredient_id == ingredient_id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+            )
+            .limit(1)
+        )
+        first = self.session.exec(statement).first()
+        return self._build_supplier_ingredient_read(first) if first else None
+
+    def _unset_preferred(self, ingredient_id: int) -> None:
+        """Unset is_preferred on all supplier links for an ingredient."""
+        statement = select(SupplierIngredient).where(
+            SupplierIngredient.ingredient_id == ingredient_id,
+            SupplierIngredient.is_preferred == True,
+        )
+        for si in self.session.exec(statement).all():
+            si.is_preferred = False
+            self.session.add(si)

@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
-- **0.0.18** (2026-03-02) - Tasting Session Creator Tracking & UX Improvements: Session Creator Ownership, ID-Based Participant Management, Quick-Add Ingredients & Past-Date Invitation Guard
+- **0.0.18** (2026-03-02) - Supplier-Ingredient Normalization & UX Improvements: JSONB-to-Join-Table Refactor, Canvas Supplier Selection, Costing Integration, Session Creator Tracking, ID-Based Participants & Quick-Add Ingredients
 - **0.0.17** (2026-02-27) - UI Redesign & Performance Optimization: Canvas Layout Overhaul, Supplier UI Polish, Menu Publish/Unpublish & Backend Query Optimization
 - **0.0.16** (2026-02-26) - SMS Invitations, Tasting Participant Association & Menu Management: Twilio SMS Integration, User-Based Session Relationships & Drag-and-Drop Menu Reordering
 - **0.0.15** (2026-02-23) - Access Control & Allergen Management: Admin User Management, Hierarchical Access Control, Allergen Tracking & Supplier Soft Delete
@@ -100,6 +100,68 @@ SMS/email invitations are now skipped when the tasting session date is in the pa
 
 **Files Modified**:
 - `frontend/src/app/api/send-tasting-invitation/route.ts` — Early return with `email_count: 0, sms_count: 0` for past sessions
+
+#### Supplier-Ingredient Normalization (JSONB → Join Table)
+
+Replaced the `suppliers` JSONB column on the `Ingredient` model with a proper `supplier_ingredients` join table, normalizing the supplier-ingredient relationship for better data integrity, querying, and referential constraints.
+
+**Database Changes**:
+- New `supplier_ingredients` table with FK constraints to `ingredients` and `suppliers`
+- Unique constraint on `(ingredient_id, supplier_id)` prevents duplicates
+- Unique constraint on `sku` for SKU-level deduplication
+- Indexes on `ingredient_id` and `supplier_id` for efficient lookups
+- Dropped `suppliers` JSONB column from `ingredients` table
+- Dropped unused `sort_order` column from `recipe_ingredients` table
+
+**Backend**:
+- New `SupplierIngredient` model with `SupplierIngredientCreate`, `SupplierIngredientUpdate`, and `SupplierIngredientRead` DTOs
+- `IngredientService` rewritten: supplier CRUD now operates on `supplier_ingredients` rows instead of JSONB array manipulation
+- `SupplierService.get_supplier_ingredients()` uses JOIN query with `selectinload` instead of scanning all ingredients
+- `CostingService` updated: looks up `SupplierIngredient` row by `(ingredient_id, supplier_id)` to derive unit price from `price_per_pack / pack_size`
+- Removed `SupplierEntry`, `SupplierEntryCreate`, `SupplierEntryUpdate` schemas from ingredient model
+- API endpoints now return `SupplierIngredientRead` DTOs with nested `supplier_name` and `ingredient_name`
+
+**Frontend**:
+- `SupplierIngredient` type replaces `IngredientSupplierEntry`, `AddIngredientSupplierRequest`, `UpdateIngredientSupplierRequest`, and `SupplierIngredientEntry`
+- API client updated: supplier CRUD functions use numeric `supplierIngredientId` instead of string `supplierId`
+- Ingredient detail page (`/ingredients/[id]`) updated for new supplier data shape
+- Supplier detail page (`/suppliers/[id]`) updated for `SupplierIngredient` response type
+- `AddIngredientModal` simplified (no longer passes suppliers on create)
+- Canvas supplier selection: `StagedIngredientCard` shows supplier dropdown with per-unit cost calculation
+- `RecipeIngredientRow` and `RecipeIngredientsList` updated for removed `sort_order` field
+- Removed `ReorderIngredientsRequest` type and `reorderRecipeIngredients` API function
+
+**Files Created**:
+- `backend/app/models/supplier_ingredient.py` — `SupplierIngredient` model and DTOs
+- `backend/alembic/versions/f1g2h3i4j5k6_refactor_supplier_ingredients.py` — Migration
+
+**Files Modified**:
+- `backend/app/models/ingredient.py` — Removed JSONB `suppliers` field and `SupplierEntry` schemas
+- `backend/app/models/supplier.py` — Added `supplier_ingredients` relationship
+- `backend/app/models/recipe_ingredient.py` — Removed `sort_order` field
+- `backend/app/models/__init__.py` — Updated exports
+- `backend/app/domain/ingredient_service.py` — Rewritten supplier CRUD
+- `backend/app/domain/supplier_service.py` — JOIN-based ingredient lookup
+- `backend/app/domain/costing_service.py` — Supplier-aware unit price resolution
+- `backend/app/domain/recipe_service.py` — Removed sort_order references
+- `backend/app/api/ingredients.py` — Updated supplier endpoints
+- `backend/app/api/recipe_ingredients.py` — Removed reorder endpoint
+- `backend/app/api/suppliers.py` — Updated response model
+- `backend/scripts/seed_ingredients.py` — Updated for new supplier model
+- `backend/tests/test_ingredients.py` — Expanded supplier CRUD tests
+- `backend/tests/test_recipes.py` — Updated for removed sort_order
+- `backend/tests/test_suppliers.py` — Updated for SupplierIngredient response
+- `frontend/src/types/index.ts` — Consolidated supplier types
+- `frontend/src/lib/api.ts` — Updated supplier API functions
+- `frontend/src/lib/hooks/useIngredients.ts` — Updated hook types
+- `frontend/src/lib/hooks/useRecipeIngredients.ts` — Removed reorder hook
+- `frontend/src/lib/hooks/useSuppliers.ts` — Updated for SupplierIngredient
+- `frontend/src/app/ingredients/[id]/page.tsx` — Updated supplier UI
+- `frontend/src/app/suppliers/[id]/page.tsx` — Updated ingredient list UI
+- `frontend/src/components/ingredients/AddIngredientModal.tsx` — Simplified
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Supplier dropdown + cost calc
+- `frontend/src/components/recipe/RecipeIngredientRow.tsx` — Removed sort_order
+- `frontend/src/components/recipe/RecipeIngredientsList.tsx` — Removed sort_order
 
 ---
 

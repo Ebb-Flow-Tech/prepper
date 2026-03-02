@@ -5,10 +5,8 @@ from sqlmodel import Session
 
 from app.api.deps import get_session
 from app.models import (
-    RecipeIngredient,
     RecipeIngredientCreate,
     RecipeIngredientUpdate,
-    RecipeIngredientReorder,
     RecipeIngredientRead,
 )
 from app.domain import RecipeService
@@ -97,23 +95,3 @@ def remove_ingredient_from_recipe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe ingredient not found",
         )
-
-
-@router.post(
-    "/{recipe_id}/ingredients/reorder",
-    response_model=list[RecipeIngredientRead],
-)
-def reorder_recipe_ingredients(
-    recipe_id: int,
-    data: RecipeIngredientReorder,
-    session: Session = Depends(get_session),
-):
-    """Reorder recipe ingredients."""
-    service = RecipeService(session)
-    recipe = service.get_recipe(recipe_id)
-    if not recipe:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Recipe not found",
-        )
-    return service.reorder_recipe_ingredients(recipe_id, data.ordered_ids)

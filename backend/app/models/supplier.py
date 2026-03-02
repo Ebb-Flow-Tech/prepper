@@ -1,8 +1,12 @@
 """Supplier model - vendor/supplier entity for ingredient sourcing."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.supplier_ingredient import SupplierIngredient
 
 
 class SupplierBase(SQLModel):
@@ -25,6 +29,9 @@ class Supplier(SupplierBase, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship to SupplierIngredient
+    supplier_ingredients: list["SupplierIngredient"] = Relationship(back_populates="supplier")
 
 
 class SupplierCreate(SQLModel):

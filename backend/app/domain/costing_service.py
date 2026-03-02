@@ -11,6 +11,7 @@ from app.models import (
     CostBreakdownItem,
     SubRecipeCostItem,
     CostingResult,
+    SupplierIngredient,
 )
 from app.domain.recipe_service import RecipeService
 from app.utils.unit_conversion import convert_to_base_unit
@@ -114,23 +115,39 @@ class CostingService:
                 if not ingredient:
                     continue
 
+                # Determine unit price: prefer supplier_ingredients lookup, fall back to ri.unit_price
+                unit_price = ri.unit_price
+                base_unit = ri.base_unit
+
+                if ri.supplier_id:
+                    si = self.session.exec(
+                        select(SupplierIngredient).where(
+                            SupplierIngredient.ingredient_id == ri.ingredient_id,
+                            SupplierIngredient.supplier_id == ri.supplier_id,
+                        )
+                    ).first()
+                    if si and si.pack_size > 0:
+                        unit_price = si.price_per_pack / si.pack_size
+                        if not base_unit:
+                            base_unit = si.pack_unit
+
+                # Fall back to ingredient.cost_per_base_unit if still no price
+                if unit_price is None:
+                    unit_price = ingredient.cost_per_base_unit
+
                 # Convert quantity to base unit
-                # TO DO: should use the base unit for the recipe ingredient unit
                 quantity_in_base = convert_to_base_unit(
-                    ri.quantity, ri.unit, ri.base_unit
+                    ri.quantity, ri.unit, base_unit
                 )
 
                 # Calculate line cost with wastage adjustment
-                # Formula: line_cost = (unit_cost / (100 - wastage_percentage)) × quantity
-                # This accounts for waste: if wastage is 10%, we need 10% more material
                 line_cost = None
                 adjusted_cost_per_unit = None
                 wastage_percentage = ri.wastage_percentage or 0.0
 
-                if ri.unit_price is not None and quantity_in_base is not None:
-                    # Adjust unit price for wastage percentage
+                if unit_price is not None and quantity_in_base is not None:
                     wastage_factor = 1.0 / (1.0 - wastage_percentage / 100.0) if wastage_percentage < 100 else 1.0
-                    adjusted_cost_per_unit = ri.unit_price * wastage_factor
+                    adjusted_cost_per_unit = unit_price * wastage_factor
                     line_cost = quantity_in_base * adjusted_cost_per_unit
                     ingredient_cost += line_cost
                 else:
@@ -143,8 +160,8 @@ class CostingService:
                         quantity=ri.quantity,
                         unit=ri.unit,
                         quantity_in_base_unit=quantity_in_base or ri.quantity,
-                        base_unit=ri.base_unit,
-                        cost_per_base_unit=ri.unit_price,
+                        base_unit=base_unit,
+                        cost_per_base_unit=unit_price,
                         wastage_percentage=wastage_percentage,
                         adjusted_cost_per_unit=adjusted_cost_per_unit,
                         line_cost=line_cost,

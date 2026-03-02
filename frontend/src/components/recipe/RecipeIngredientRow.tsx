@@ -71,7 +71,7 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
   });
 
   const supplierOptions = useMemo(
-    () => suppliers.map((s) => ({ value: s.supplier_id, label: s.supplier_name })),
+    () => suppliers.map((s) => ({ value: s.supplier_id.toString(), label: s.supplier_name ?? `Supplier #${s.supplier_id}` })),
     [suppliers]
   );
 
@@ -143,14 +143,15 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
         setBaseUnit(defaultBaseUnit);
         onSupplierChange(null, defaultUnitPrice, defaultBaseUnit);
       } else {
-        // Find the selected supplier and use its values
-        const supplier = suppliers.find((s) => s.supplier_id === supplierId);
+        // Find the selected supplier and compute cost_per_unit
+        const supplier = suppliers.find((s) => s.supplier_id.toString() === supplierId);
         if (supplier) {
-          setUnitPrice(supplier.cost_per_unit.toString());
+          const costPerUnit = supplier.pack_size > 0 ? supplier.price_per_pack / supplier.pack_size : 0;
+          setUnitPrice(costPerUnit.toString());
           setBaseUnit(supplier.pack_unit);
           onSupplierChange(
             parseInt(supplierId, 10),
-            supplier.cost_per_unit,
+            costPerUnit,
             supplier.pack_unit
           );
         }
