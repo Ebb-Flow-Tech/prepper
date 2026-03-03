@@ -141,7 +141,7 @@ function DraggableSection({
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          <div className={viewMode === 'card' ? 'grid grid-cols-2 gap-4' : 'space-y-2'}>
+          <div className={viewMode === 'card' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-2'}>
             {section.items.map((item, itemIndex) => (
               <DraggableItem
                 key={itemIndex}
@@ -353,33 +353,36 @@ function DraggableItem({
         >
           <GripVertical className="h-4 w-4" />
         </div>
-        <Select
-          value={item.recipe_id.toString()}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-            onUpdate('recipe_id', parseInt(e.target.value))
-          }
-          options={
-            recipes?.map((r) => ({
-              value: r.id.toString(),
-              label: r.name,
-            })) || []
-          }
-          className="flex-1"
-        />
-        <Input
-          type="number"
-          step="0.01"
-          value={item.display_price || ''}
-          onChange={(e) =>
-            onUpdate('display_price', parseFloat(e.target.value) || null)
-          }
-          placeholder="Price"
-          className="w-20"
-        />
+        <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2">
+          <Select
+            value={item.recipe_id.toString()}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              onUpdate('recipe_id', parseInt(e.target.value))
+            }
+            options={
+              recipes?.map((r) => ({
+                value: r.id.toString(),
+                label: r.name,
+              })) || []
+            }
+            className="flex-1"
+          />
+          <Input
+            type="number"
+            step="0.01"
+            value={item.display_price || ''}
+            onChange={(e) =>
+              onUpdate('display_price', parseFloat(e.target.value) || null)
+            }
+            placeholder="Price"
+            className="w-full sm:w-20"
+          />
+        </div>
         <Button
           onClick={onRemove}
           variant="outline"
           size="sm"
+          className="shrink-0"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -707,7 +710,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
             </div>
             <Button onClick={addSection} size="sm" variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              Add Section
+              Add
             </Button>
           </div>
         </div>

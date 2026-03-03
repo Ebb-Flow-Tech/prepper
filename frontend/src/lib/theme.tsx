@@ -49,11 +49,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Remove both classes first
     root.classList.remove('light', 'dark');
 
-    // Add the appropriate class for manual override
-    if (theme !== 'system') {
-      root.classList.add(theme);
-    }
-    // For system preference, CSS handles it via prefers-color-scheme
+    // Always apply the resolved class so Tailwind dark: utilities activate.
+    // Previously, system mode relied on CSS media queries alone, but that
+    // doesn't trigger Tailwind's class-based dark: utilities—causing a
+    // half-light/half-dark UI on mobile devices with dark system theme.
+    root.classList.add(resolved);
+
+    // Update color-scheme for native UI elements (scrollbars, form controls)
+    root.style.colorScheme = resolved;
   }, [theme]);
 
   // Listen for system theme changes
@@ -62,7 +65,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const handleChange = () => {
       if (theme === 'system') {
-        setResolvedTheme(getSystemTheme());
+        const newResolved = getSystemTheme();
+        setResolvedTheme(newResolved);
+
+        const root = document.documentElement;
+        root.classList.remove('light', 'dark');
+        root.classList.add(newResolved);
+        root.style.colorScheme = newResolved;
       }
     };
 

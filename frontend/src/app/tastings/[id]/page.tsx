@@ -99,22 +99,22 @@ function SessionRecipesSection({
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <ChefHat className="h-5 w-5 text-purple-500" />
-          Session Recipes
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 min-w-0">
+          <ChefHat className="h-5 w-5 text-purple-500 shrink-0" />
+          <span className="truncate">Session Recipes</span>
         </h2>
-        <div className="flex items-center gap-2">
-          {!showAddRecipe && (
-            <Button
-              size="sm"
-              onClick={() => setShowAddRecipe(true)}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Recipe
-            </Button>
-          )}
-        </div>
+        {!showAddRecipe && (
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => setShowAddRecipe(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Add Recipe</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        )}
       </div>
 
       {showAddRecipe && (
@@ -274,22 +274,22 @@ function SessionIngredientsSection({
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <span className="text-amber-500">🥘</span>
-          Session Ingredients
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 min-w-0">
+          <span className="text-amber-500 shrink-0">🥘</span>
+          <span className="truncate">Session Ingredients</span>
         </h2>
-        <div className="flex items-center gap-2">
-          {!showAddIngredient && (
-            <Button
-              size="sm"
-              onClick={() => setShowAddIngredient(true)}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Ingredient
-            </Button>
-          )}
-        </div>
+        {!showAddIngredient && (
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => setShowAddIngredient(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Add Ingredient</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        )}
       </div>
 
       {showAddIngredient && (
