@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_current_user
 from app.models import (
     Ingredient,
     IngredientCreate,
@@ -14,6 +14,8 @@ from app.models import (
     SupplierIngredientUpdate,
     SupplierIngredientRead,
     Category,
+    User,
+    UserType,
 )
 from app.domain import IngredientService
 from app.domain.category_service import CategoryService
@@ -142,10 +144,15 @@ def deactivate_ingredient(
 def get_ingredient_suppliers(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get all suppliers for an ingredient."""
+    """Get all suppliers for an ingredient (filtered by user's outlet tree)."""
     service = IngredientService(session)
-    result = service.get_ingredient_suppliers(ingredient_id)
+    result = service.get_ingredient_suppliers(
+        ingredient_id,
+        user_outlet_id=current_user.outlet_id,
+        is_admin=current_user.user_type == UserType.ADMIN,
+    )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,6 +170,7 @@ def add_ingredient_supplier(
     ingredient_id: int,
     data: SupplierIngredientCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Add a supplier to an ingredient."""
     # Ensure the path ingredient_id matches the body
@@ -191,8 +199,15 @@ def update_ingredient_supplier(
     supplier_ingredient_id: int,
     data: SupplierIngredientUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Update a supplier-ingredient link."""
+    # Only admins can change the outlet
+    if data.outlet_id is not None and current_user.user_type != UserType.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can change the outlet",
+        )
     service = IngredientService(session)
     result = service.update_ingredient_supplier(supplier_ingredient_id, data)
     if not result:
@@ -211,6 +226,7 @@ def remove_ingredient_supplier(
     ingredient_id: int,
     supplier_ingredient_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove a supplier from an ingredient."""
     service = IngredientService(session)
@@ -229,8 +245,9 @@ def remove_ingredient_supplier(
 def get_preferred_supplier(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get the preferred supplier for an ingredient."""
+    """Get the preferred supplier for an ingredient (filtered by user's outlet tree)."""
     service = IngredientService(session)
     ingredient = service.get_ingredient(ingredient_id)
     if not ingredient:
@@ -238,4 +255,8 @@ def get_preferred_supplier(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingredient not found",
         )
-    return service.get_preferred_supplier(ingredient_id)
+    return service.get_preferred_supplier(
+        ingredient_id,
+        user_outlet_id=current_user.outlet_id,
+        is_admin=current_user.user_type == UserType.ADMIN,
+    )

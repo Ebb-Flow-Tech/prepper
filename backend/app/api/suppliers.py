@@ -3,13 +3,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_current_user
 from app.models.supplier import (
     Supplier,
     SupplierCreate,
     SupplierUpdate,
 )
 from app.models.supplier_ingredient import SupplierIngredientRead
+from app.models.user import User, UserType
 from app.domain.supplier_service import SupplierService
 
 router = APIRouter()
@@ -107,8 +108,9 @@ def delete_supplier(
 def get_supplier_ingredients(
     supplier_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get all ingredients associated with a supplier."""
+    """Get all ingredients associated with a supplier (filtered by user's outlet tree)."""
     service = SupplierService(session)
     # Check if supplier exists
     supplier = service.get_supplier(supplier_id)
@@ -117,4 +119,8 @@ def get_supplier_ingredients(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Supplier not found",
         )
-    return service.get_supplier_ingredients(supplier_id)
+    return service.get_supplier_ingredients(
+        supplier_id,
+        user_outlet_id=current_user.outlet_id,
+        is_admin=current_user.user_type == UserType.ADMIN,
+    )

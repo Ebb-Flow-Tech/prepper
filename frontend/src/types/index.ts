@@ -429,6 +429,7 @@ export interface SupplierIngredient {
   id: number;
   ingredient_id: number;
   supplier_id: number;
+  outlet_id: number;
   sku: string | null;
   pack_size: number;
   pack_unit: string;
@@ -440,11 +441,13 @@ export interface SupplierIngredient {
   updated_at: string;
   supplier_name: string | null;
   ingredient_name: string | null;
+  outlet_name: string | null;
 }
 
 export interface AddSupplierIngredientRequest {
   ingredient_id: number;
   supplier_id: number;
+  outlet_id: number;
   sku?: string | null;
   pack_size: number;
   pack_unit: string;
@@ -462,6 +465,7 @@ export interface UpdateSupplierIngredientRequest {
   currency?: string;
   source?: string;
   is_preferred?: boolean;
+  outlet_id?: number;
 }
 
 // ============ Sub-Recipe Types ============

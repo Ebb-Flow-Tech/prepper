@@ -18,7 +18,9 @@ import {
   useAllergensByIngredient,
   useAddIngredientAllergen,
   useDeleteIngredientAllergen,
+  useOutlets,
 } from '@/lib/hooks';
+import { useAppState } from '@/lib/store';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
@@ -246,10 +248,14 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const { id } = use(params);
   const ingredientId = parseInt(id, 10);
 
+  const { outletId, userType } = useAppState();
+  const isAdmin = userType === 'admin';
+
   const { data: ingredient, isLoading, error } = useIngredient(ingredientId);
   const { data: availableSuppliers } = useSuppliers();
   const { data: suppliers = [] } = useIngredientSuppliers(ingredientId);
   const { data: categories = [] } = useCategories();
+  const { data: outlets = [] } = useOutlets();
 
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();
@@ -342,6 +348,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
     pack_unit: '',
     pack_size: '',
     price_per_pack: '',
+    outlet_id: outletId ? outletId.toString() : '',
   });
 
   // Filter out suppliers that are already linked to this ingredient
@@ -375,7 +382,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
       (s) => s.id === parseInt(formData.supplier_id, 10)
     );
 
-    if (!selectedSupplier || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack) {
+    if (!selectedSupplier || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.outlet_id) {
       return;
     }
 
@@ -389,6 +396,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
         data: {
           ingredient_id: ingredientId,
           supplier_id: selectedSupplier.id,
+          outlet_id: parseInt(formData.outlet_id, 10),
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
@@ -406,8 +414,10 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             id: 0,
             ingredient_id: ingredientId,
             supplier_id: selectedSupplier.id,
+            outlet_id: parseInt(formData.outlet_id, 10),
             supplier_name: selectedSupplier.name,
             ingredient_name: ingredient?.name ?? null,
+            outlet_name: outlets.find((o) => o.id === parseInt(formData.outlet_id, 10))?.name ?? null,
             sku: formData.sku || null,
             pack_size: packSize,
             pack_unit: formData.pack_unit,
@@ -427,6 +437,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             pack_unit: '',
             pack_size: '',
             price_per_pack: '',
+            outlet_id: outletId ? outletId.toString() : '',
           });
           setShowAddModal(false);
         },
@@ -664,6 +675,25 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Outlet
+                      </label>
+                      <Select
+                        value={formData.outlet_id}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, outlet_id: e.target.value }))
+                        }
+                        disabled={!!outletId}
+                        options={[
+                          { value: '', label: 'Select outlet...' },
+                          ...outlets.map((o) => ({
+                            value: o.id.toString(),
+                            label: o.name,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
                         SKU
                       </label>
                       <Input
@@ -742,6 +772,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         type="submit"
                         disabled={
                           !formData.supplier_id ||
+                          !formData.outlet_id ||
                           !formData.pack_unit ||
                           !formData.pack_size ||
                           !formData.price_per_pack ||
@@ -763,6 +794,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         <tr className="border-b border-zinc-200 dark:border-zinc-700">
                           <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             Supplier Name
+                          </th>
+                          <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
+                            Outlet
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             SKU
@@ -795,6 +829,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               >
                                 {supplier.supplier_name}
                               </Link>
+                            </td>
+                            <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 text-xs">
+                              {supplier.outlet_name ?? '-'}
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                               {editingSupplier === supplier.id ? (

@@ -13,11 +13,12 @@ interface StoredAuth {
   username: string | null;
   email: string | null;
   isManager: boolean;
+  outletId: number | null;
 }
 
 function getStoredAuth(): StoredAuth {
   if (typeof window === 'undefined') {
-    return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false };
+    return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null };
   }
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -27,7 +28,7 @@ function getStoredAuth(): StoredAuth {
   } catch {
     // Ignore parse errors
   }
-  return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false };
+  return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null };
 }
 
 function setStoredAuth(auth: StoredAuth) {
@@ -60,6 +61,7 @@ interface AppState {
   username: string | null;
   email: string | null;
   isManager: boolean;
+  outletId: number | null;
 }
 
 interface AppContextValue extends AppState {
@@ -78,7 +80,8 @@ interface AppContextValue extends AppState {
   setUsername: (username: string | null) => void;
   setEmail: (email: string | null) => void;
   setIsManager: (isManager: boolean) => void;
-  login: (userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager?: boolean) => void;
+  setOutletId: (outletId: number | null) => void;
+  login: (userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager?: boolean, outletId?: number | null) => void;
   logout: () => void;
 }
 
@@ -101,7 +104,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshToken: null,
     username: null,
     email: null,
-    isManager: false
+    isManager: false,
+    outletId: null
   });
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -116,7 +120,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshToken: storedAuth.refreshToken,
       username: storedAuth.username,
       email: storedAuth.email,
-      isManager: storedAuth.isManager
+      isManager: storedAuth.isManager,
+      outletId: storedAuth.outletId
     }));
     setIsHydrated(true);
   }, []);
@@ -132,7 +137,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshToken: null,
         username: null,
         email: null,
-        isManager: false
+        isManager: false,
+        outletId: null
       }));
     });
   }, []);
@@ -147,9 +153,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshToken: state.refreshToken,
       username: state.username,
       email: state.email,
-      isManager: state.isManager
+      isManager: state.isManager,
+      outletId: state.outletId
     });
-  }, [state.userId, state.jwt, state.userType, state.refreshToken, state.username, state.email, state.isManager, isHydrated]);
+  }, [state.userId, state.jwt, state.userType, state.refreshToken, state.username, state.email, state.isManager, state.outletId, isHydrated]);
 
   const selectRecipe = useCallback((id: number | null) => {
     setState((prev) => ({ ...prev, selectedRecipeId: id }));
@@ -211,12 +218,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isManager }));
   }, []);
 
-  const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager: boolean = false) => {
-    setState((prev) => ({ ...prev, userId, jwt, userType, refreshToken, username, email, isManager }));
+  const setOutletId = useCallback((outletId: number | null) => {
+    setState((prev) => ({ ...prev, outletId }));
+  }, []);
+
+  const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager: boolean = false, outletId: number | null = null) => {
+    setState((prev) => ({ ...prev, userId, jwt, userType, refreshToken, username, email, isManager, outletId }));
   }, []);
 
   const logout = useCallback(() => {
-    setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false }));
+    setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null }));
   }, []);
 
   return (
@@ -238,6 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUsername,
         setEmail,
         setIsManager,
+        setOutletId,
         login,
         logout
       }}

@@ -253,12 +253,19 @@ def test_get_supplier_ingredients_with_links(client: TestClient):
         json={"name": "Rice", "base_unit": "kg", "cost_per_base_unit": 1.5},
     ).json()
 
+    # Create outlet
+    outlet = client.post(
+        "/api/v1/outlets",
+        json={"name": "Test Outlet", "code": "TO", "outlet_type": "brand"},
+    ).json()
+
     # Link them via ingredient supplier endpoint
     client.post(
         f"/api/v1/ingredients/{ing['id']}/suppliers",
         json={
             "ingredient_id": ing["id"],
             "supplier_id": sup["id"],
+            "outlet_id": outlet["id"],
             "pack_size": 25.0,
             "pack_unit": "kg",
             "price_per_pack": 30.00,
@@ -272,7 +279,9 @@ def test_get_supplier_ingredients_with_links(client: TestClient):
     assert len(data) == 1
     assert data[0]["ingredient_id"] == ing["id"]
     assert data[0]["supplier_id"] == sup["id"]
+    assert data[0]["outlet_id"] == outlet["id"]
     assert data[0]["ingredient_name"] == "Rice"
     assert data[0]["supplier_name"] == "Test Supplier"
+    assert data[0]["outlet_name"] == "Test Outlet"
     assert data[0]["pack_size"] == 25.0
     assert data[0]["price_per_pack"] == 30.00

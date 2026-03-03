@@ -12,7 +12,9 @@ import {
   useAddSupplierIngredient,
   useUpdateSupplierIngredient,
   useRemoveSupplierIngredient,
+  useOutlets,
 } from '@/lib/hooks';
+import { useAppState } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
@@ -37,9 +39,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const supplierId = parseInt(id, 10);
   const router = useRouter();
 
+  const { outletId, userType } = useAppState();
+  const isAdmin = userType === 'admin';
+
   const { data: supplier, isLoading, error } = useSupplier(supplierId);
   const { data: availableIngredients } = useIngredients(false); // Include inactive too
   const { data: supplierIngredients = [] } = useSupplierIngredients(supplierId);
+  const { data: outlets = [] } = useOutlets();
 
   const updateSupplierMutation = useUpdateSupplier();
   const deactivateSupplierMutation = useDeactivateSupplier();
@@ -58,6 +64,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     unit_cost: '',
     pack_unit: '',
     is_preferred: false,
+    outlet_id: outletId ? outletId.toString() : '',
   });
 
   const handleUpdateSupplier = (data: { name?: string; address?: string | null; phone_number?: string | null; email?: string | null }) => {
@@ -102,7 +109,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const handleAddIngredient = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.ingredient_id || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack) {
+    if (!formData.ingredient_id || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.outlet_id) {
       return;
     }
 
@@ -119,6 +126,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
         data: {
           ingredient_id: parseInt(formData.ingredient_id, 10),
           supplier_id: supplierId,
+          outlet_id: parseInt(formData.outlet_id, 10),
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
@@ -136,6 +144,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
             unit_cost: '',
             pack_unit: '',
             is_preferred: false,
+            outlet_id: outletId ? outletId.toString() : '',
           });
           setShowAddModal(false);
           toast.success(`${selectedIngredient?.name || 'Ingredient'} added`);
@@ -329,6 +338,25 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                        Outlet
+                      </label>
+                      <Select
+                        value={formData.outlet_id}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, outlet_id: e.target.value }))
+                        }
+                        disabled={!!outletId}
+                        options={[
+                          { value: '', label: 'Select outlet...' },
+                          ...outlets.map((o) => ({
+                            value: o.id.toString(),
+                            label: o.name,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
                         SKU
                       </label>
                       <Input
@@ -414,6 +442,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         type="submit"
                         disabled={
                           !formData.ingredient_id ||
+                          !formData.outlet_id ||
                           !formData.pack_unit ||
                           !formData.pack_size ||
                           !formData.price_per_pack ||
@@ -435,6 +464,9 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         <tr className="border-b border-zinc-200 dark:border-zinc-700">
                           <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             Ingredient
+                          </th>
+                          <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
+                            Outlet
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-zinc-500 dark:text-zinc-400">
                             SKU
@@ -467,6 +499,9 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               >
                                 {ingredient.ingredient_name}
                               </Link>
+                            </td>
+                            <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 text-xs">
+                              {ingredient.outlet_name ?? '-'}
                             </td>
                             <td className="py-3 px-2 text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                               {editingIngredient === ingredient.id ? (

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.19** (2026-03-03) - Outlet-Scoped Supplier Ingredients: Per-Outlet Pricing, Hierarchical Access Control & Outlet Selector UI
 - **0.0.18** (2026-03-02) - Supplier-Ingredient Normalization & UX Improvements: JSONB-to-Join-Table Refactor, Canvas Supplier Selection, Costing Integration, Session Creator Tracking, ID-Based Participants & Quick-Add Ingredients
 - **0.0.17** (2026-02-27) - UI Redesign & Performance Optimization: Canvas Layout Overhaul, Supplier UI Polish, Menu Publish/Unpublish & Backend Query Optimization
 - **0.0.16** (2026-02-26) - SMS Invitations, Tasting Participant Association & Menu Management: Twilio SMS Integration, User-Based Session Relationships & Drag-and-Drop Menu Reordering
@@ -24,6 +25,72 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.19] - 2026-03-03
+
+### Changed
+
+#### Outlet-Scoped Supplier Ingredients
+
+Supplier-ingredient links are now scoped per-outlet via a new `outlet_id` column on `supplier_ingredients`. Each supplier pricing entry belongs to a specific outlet, enabling different outlets to maintain independent supplier pricing for the same ingredient.
+
+**Database Changes**:
+- New `outlet_id` column on `supplier_ingredients` (FK to `outlets.id`, NOT NULL, indexed)
+- Unique constraint updated from `(ingredient_id, supplier_id)` to `(ingredient_id, supplier_id, outlet_id)` — same supplier can serve same ingredient at different outlets with different pricing
+- Alembic migration `g2h3i4j5k6l7` with backfill for existing rows
+
+**Backend**:
+- `SupplierIngredient` model includes `outlet_id` field with `Outlet` relationship
+- `SupplierIngredientCreate` requires `outlet_id`; `SupplierIngredientUpdate` allows optional `outlet_id` change
+- `SupplierIngredientRead` returns `outlet_id` and `outlet_name`
+- Duplicate check now includes `outlet_id` in the uniqueness tuple
+
+#### Hierarchical Outlet Access Control for Supplier Ingredients
+
+Supplier-ingredient queries now respect the user's outlet hierarchy tree. Non-admin users only see supplier-ingredient links belonging to outlets in their tree (root → descendants).
+
+**Backend**:
+- `get_accessible_outlet_ids()` utility walks up to root then BFS down to collect all outlet IDs in the user's tree
+- `get_ingredient_suppliers()`, `get_preferred_supplier()`, and `get_supplier_ingredients()` filter by accessible outlet IDs for non-admin users
+- Admin users bypass filtering and see all supplier-ingredient links
+- Non-admin users without an outlet see no supplier-ingredient data
+- Only admins can change `outlet_id` on existing supplier-ingredient links (403 for non-admins)
+
+**Files Created**:
+- `backend/alembic/versions/g2h3i4j5k6l7_add_outlet_id_to_supplier_ingredients.py`
+- `backend/tests/test_supplier_ingredient_outlet_scope.py` — 7 tests covering child-sees-parent, parent-sees-child, admin-sees-all, no-outlet isolation, cross-tree isolation, supplier endpoint filtering, and non-admin outlet change restriction
+
+**Files Modified**:
+- `backend/app/models/supplier_ingredient.py` — `outlet_id` field, updated unique constraint, `Outlet` relationship, DTOs
+- `backend/app/domain/ingredient_service.py` — `get_accessible_outlet_ids()`, outlet filtering in queries
+- `backend/app/domain/supplier_service.py` — Outlet filtering in `get_supplier_ingredients()`
+- `backend/app/api/ingredients.py` — `get_current_user` dependency, outlet filtering params, admin-only outlet change guard
+- `backend/app/api/suppliers.py` — `get_current_user` dependency, outlet filtering params
+- `backend/tests/test_ingredients.py` — All supplier tests updated with `outlet_id`
+- `backend/tests/test_suppliers.py` — Supplier ingredient tests updated with `outlet_id`
+
+### Added
+
+#### Outlet Selector in Supplier-Ingredient Forms
+
+Frontend forms for adding supplier-ingredient links now include an outlet picker. Non-admin users have their outlet auto-selected and locked; admins can choose any outlet.
+
+**Frontend**:
+- Ingredient detail page (`/ingredients/[id]`) — outlet dropdown in add-supplier modal, outlet column in suppliers table
+- Supplier detail page (`/suppliers/[id]`) — outlet dropdown in add-ingredient modal, outlet column in ingredients table
+- `AddIngredientModal` — outlet picker per supplier entry
+- Auth state (`store.tsx`) stores `outletId` from login response, persisted in localStorage
+- Login page passes `outlet_id` to auth store
+
+**Files Modified**:
+- `frontend/src/app/ingredients/[id]/page.tsx` — Outlet selector and table column
+- `frontend/src/app/suppliers/[id]/page.tsx` — Outlet selector and table column
+- `frontend/src/components/ingredients/AddIngredientModal.tsx` — Outlet picker per supplier entry
+- `frontend/src/lib/store.tsx` — `outletId` in auth state, login, logout, persistence
+- `frontend/src/app/login/page.tsx` — Passes `outlet_id` from login response
+- `frontend/src/types/index.ts` — `outlet_id` and `outlet_name` on `SupplierIngredient` type
+
 ---
 
 ## [0.0.18] - 2026-03-02

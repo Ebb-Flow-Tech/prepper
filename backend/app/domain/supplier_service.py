@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
+from app.domain.ingredient_service import get_accessible_outlet_ids
 from app.models.supplier import (
     Supplier,
     SupplierCreate,
@@ -83,27 +84,45 @@ class SupplierService:
         self.session.commit()
         return True
 
-    def get_supplier_ingredients(self, supplier_id: int) -> list[SupplierIngredientRead]:
-        """Get all ingredients associated with a supplier via the supplier_ingredients table."""
+    def get_supplier_ingredients(
+        self,
+        supplier_id: int,
+        user_outlet_id: int | None = None,
+        is_admin: bool = False,
+    ) -> list[SupplierIngredientRead]:
+        """Get all ingredients associated with a supplier via the supplier_ingredients table.
+
+        Filters by outlet tree when user_outlet_id is provided (non-admin).
+        """
         statement = (
             select(SupplierIngredient)
             .where(SupplierIngredient.supplier_id == supplier_id)
             .options(
                 selectinload(SupplierIngredient.supplier),
                 selectinload(SupplierIngredient.ingredient),
+                selectinload(SupplierIngredient.outlet),
             )
         )
+
+        if not is_admin:
+            if user_outlet_id is None:
+                return []
+            accessible = get_accessible_outlet_ids(self.session, user_outlet_id)
+            statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
+
         rows = self.session.exec(statement).all()
 
         result = []
         for si in rows:
             supplier_name = si.supplier.name if si.supplier else None
             ingredient_name = si.ingredient.name if si.ingredient else None
+            outlet_name = si.outlet.name if si.outlet else None
             result.append(
                 SupplierIngredientRead(
                     id=si.id,
                     ingredient_id=si.ingredient_id,
                     supplier_id=si.supplier_id,
+                    outlet_id=si.outlet_id,
                     sku=si.sku,
                     pack_size=si.pack_size,
                     pack_unit=si.pack_unit,
@@ -115,6 +134,7 @@ class SupplierService:
                     updated_at=si.updated_at,
                     supplier_name=supplier_name,
                     ingredient_name=ingredient_name,
+                    outlet_name=outlet_name,
                 )
             )
         return result

@@ -8,6 +8,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.ingredient import Ingredient
+    from app.models.outlet import Outlet
     from app.models.supplier import Supplier
 
 
@@ -16,6 +17,7 @@ class SupplierIngredientBase(SQLModel):
 
     ingredient_id: int = Field(foreign_key="ingredients.id", index=True)
     supplier_id: int = Field(foreign_key="suppliers.id", index=True)
+    outlet_id: int = Field(foreign_key="outlets.id", index=True)
     sku: str | None = Field(default=None, unique=True)
     pack_size: float
     pack_unit: str
@@ -30,7 +32,10 @@ class SupplierIngredient(SupplierIngredientBase, table=True):
 
     __tablename__ = "supplier_ingredients"
     __table_args__ = (
-        UniqueConstraint("ingredient_id", "supplier_id", name="uq_supplier_ingredient"),
+        UniqueConstraint(
+            "ingredient_id", "supplier_id", "outlet_id",
+            name="uq_supplier_ingredient_outlet",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -40,6 +45,7 @@ class SupplierIngredient(SupplierIngredientBase, table=True):
     # Relationships
     ingredient: Optional["Ingredient"] = Relationship(back_populates="supplier_ingredients")
     supplier: Optional["Supplier"] = Relationship(back_populates="supplier_ingredients")
+    outlet: Optional["Outlet"] = Relationship()
 
 
 class SupplierIngredientCreate(SQLModel):
@@ -47,6 +53,7 @@ class SupplierIngredientCreate(SQLModel):
 
     ingredient_id: int
     supplier_id: int
+    outlet_id: int
     sku: str | None = None
     pack_size: float
     pack_unit: str
@@ -66,6 +73,7 @@ class SupplierIngredientUpdate(SQLModel):
     currency: str | None = None
     source: str | None = None
     is_preferred: bool | None = None
+    outlet_id: int | None = None
 
 
 class SupplierIngredientRead(SQLModel):
@@ -74,6 +82,7 @@ class SupplierIngredientRead(SQLModel):
     id: int
     ingredient_id: int
     supplier_id: int
+    outlet_id: int
     sku: str | None = None
     pack_size: float
     pack_unit: str
@@ -85,3 +94,4 @@ class SupplierIngredientRead(SQLModel):
     updated_at: datetime
     supplier_name: str | None = None
     ingredient_name: str | None = None
+    outlet_name: str | None = None
