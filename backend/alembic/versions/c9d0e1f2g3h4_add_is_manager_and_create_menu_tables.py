@@ -24,8 +24,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add is_manager to users table
-    op.add_column('users', sa.Column('is_manager', sa.Boolean(), nullable=False, server_default='false'))
+    # Add is_manager to users table (idempotent: skip if column already exists from manual ALTER)
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'users' AND column_name = 'is_manager'"
+    ))
+    if not result.fetchone():
+        op.add_column('users', sa.Column('is_manager', sa.Boolean(), nullable=False, server_default='false'))
 
     # Create menus table
     op.create_table(
