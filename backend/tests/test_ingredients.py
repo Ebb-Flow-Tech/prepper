@@ -3,6 +3,16 @@
 from fastapi.testclient import TestClient
 
 
+def _create_outlet(client: TestClient, name: str = "Test Outlet", code: str = "TO") -> int:
+    """Helper to create an outlet and return its ID."""
+    resp = client.post(
+        "/api/v1/outlets",
+        json={"name": name, "code": code, "outlet_type": "brand"},
+    )
+    assert resp.status_code == 201
+    return resp.json()["id"]
+
+
 def test_create_ingredient(client: TestClient):
     """Test creating a new ingredient."""
     response = client.post(
@@ -64,7 +74,7 @@ def test_deactivate_ingredient(client: TestClient):
 
 
 def _create_ingredient_and_supplier(client: TestClient):
-    """Helper to create an ingredient and a supplier, returning their IDs."""
+    """Helper to create an ingredient, supplier, and outlet, returning their IDs."""
     ing = client.post(
         "/api/v1/ingredients",
         json={"name": "Tomato", "base_unit": "kg", "cost_per_base_unit": 2.0},
@@ -73,18 +83,20 @@ def _create_ingredient_and_supplier(client: TestClient):
         "/api/v1/suppliers",
         json={"name": "Fresh Farms", "email": "fresh@farms.com"},
     ).json()
-    return ing["id"], sup["id"]
+    outlet_id = _create_outlet(client)
+    return ing["id"], sup["id"], outlet_id
 
 
 def test_add_ingredient_supplier(client: TestClient):
     """Test adding a supplier to an ingredient via the join table."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     response = client.post(
         f"/api/v1/ingredients/{ing_id}/suppliers",
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -95,16 +107,18 @@ def test_add_ingredient_supplier(client: TestClient):
     data = response.json()
     assert data["ingredient_id"] == ing_id
     assert data["supplier_id"] == sup_id
+    assert data["outlet_id"] == outlet_id
     assert data["pack_size"] == 5.0
     assert data["price_per_pack"] == 12.50
     assert data["sku"] == "TOM-001"
     assert data["supplier_name"] == "Fresh Farms"
     assert data["ingredient_name"] == "Tomato"
+    assert data["outlet_name"] == "Test Outlet"
 
 
 def test_get_ingredient_suppliers(client: TestClient):
     """Test listing all suppliers for an ingredient."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Add supplier
     client.post(
@@ -112,6 +126,7 @@ def test_get_ingredient_suppliers(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -145,7 +160,7 @@ def test_get_ingredient_suppliers_not_found(client: TestClient):
 
 def test_update_ingredient_supplier(client: TestClient):
     """Test updating a supplier-ingredient link."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Add supplier
     add_resp = client.post(
@@ -153,6 +168,7 @@ def test_update_ingredient_supplier(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -173,7 +189,7 @@ def test_update_ingredient_supplier(client: TestClient):
 
 def test_remove_ingredient_supplier(client: TestClient):
     """Test removing a supplier-ingredient link."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Add supplier
     add_resp = client.post(
@@ -181,6 +197,7 @@ def test_remove_ingredient_supplier(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -199,7 +216,7 @@ def test_remove_ingredient_supplier(client: TestClient):
 
 def test_preferred_supplier(client: TestClient):
     """Test preferred supplier logic."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Create second supplier
     sup2 = client.post(
@@ -213,6 +230,7 @@ def test_preferred_supplier(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -226,6 +244,7 @@ def test_preferred_supplier(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup2["id"],
+            "outlet_id": outlet_id,
             "pack_size": 10.0,
             "pack_unit": "kg",
             "price_per_pack": 20.00,
@@ -243,7 +262,7 @@ def test_preferred_supplier(client: TestClient):
 
 def test_preferred_supplier_fallback(client: TestClient):
     """Test that preferred supplier falls back to first when none marked."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Add supplier (not preferred)
     client.post(
@@ -251,6 +270,7 @@ def test_preferred_supplier_fallback(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -277,7 +297,7 @@ def test_preferred_supplier_none(client: TestClient):
 
 def test_sku_uniqueness(client: TestClient):
     """Test that SKU uniqueness is enforced across supplier-ingredient links."""
-    ing_id, sup_id = _create_ingredient_and_supplier(client)
+    ing_id, sup_id, outlet_id = _create_ingredient_and_supplier(client)
 
     # Create another ingredient
     ing2 = client.post(
@@ -291,6 +311,7 @@ def test_sku_uniqueness(client: TestClient):
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 5.0,
             "pack_unit": "kg",
             "price_per_pack": 12.50,
@@ -304,6 +325,7 @@ def test_sku_uniqueness(client: TestClient):
         json={
             "ingredient_id": ing2["id"],
             "supplier_id": sup_id,
+            "outlet_id": outlet_id,
             "pack_size": 3.0,
             "pack_unit": "kg",
             "price_per_pack": 8.00,

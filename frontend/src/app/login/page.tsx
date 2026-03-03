@@ -35,7 +35,8 @@ export default function LoginPage() {
         response.refresh_token,
         response.user.username,
         response.user.email,
-        response.user.is_manager
+        response.user.is_manager,
+        response.user.outlet_id ?? null
       );
 
       // Determine redirect destination
