@@ -69,8 +69,8 @@ export default function DesignSystemPage() {
   const [searchValue, setSearchValue] = useState('');
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl p-6 md:p-8 lg:p-12">
+    <div className="h-full overflow-auto bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:p-6 md:p-8 lg:p-12">
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-3xl font-bold text-foreground mb-2">Reciperep Design System</h1>
@@ -81,7 +81,7 @@ export default function DesignSystemPage() {
 
         {/* Theme Toggle */}
         <Section title="Theme">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <p className="text-sm text-muted-foreground">Current theme:</p>
             <div className="flex gap-2">
               <Button
@@ -553,7 +553,7 @@ export default function DesignSystemPage() {
         {/* Utility Classes */}
         <Section title="Utility Classes">
           <Subsection title="Animations">
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6">
               <Card interactive className="flow-ui-hover-lift w-40">
                 <CardContent className="pt-4 text-center">
                   <p className="text-sm">.flow-ui-hover-lift</p>
@@ -566,7 +566,7 @@ export default function DesignSystemPage() {
           </Subsection>
 
           <Subsection title="Gradients">
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6 items-center">
               <div className="w-40 h-24 rounded-lg mono-gradient" />
               <p className="mono-gradient-text text-2xl font-bold">
                 Gradient Text
@@ -615,31 +615,31 @@ export default function DesignSystemPage() {
           </p>
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">gap-2</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">gap-2</code>
               <span>8px — Tight spacing between related elements</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">gap-4</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">gap-4</code>
               <span>16px — Standard spacing between elements</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">gap-6</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">gap-6</code>
               <span>24px — Generous spacing for sections</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">p-4</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">p-4</code>
               <span>16px — Card and component padding</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">p-6</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">p-6</code>
               <span>24px — Page and section padding</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">mb-6</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">mb-6</code>
               <span>24px — Section bottom margin</span>
             </div>
             <div className="flex items-center gap-4">
-              <code className="font-mono text-muted-foreground w-24">mb-8</code>
+              <code className="font-mono text-muted-foreground w-16 shrink-0 sm:w-24">mb-8</code>
               <span>32px — Large section bottom margin</span>
             </div>
           </div>

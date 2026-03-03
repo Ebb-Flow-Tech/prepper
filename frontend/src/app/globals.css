@@ -353,6 +353,9 @@
     /* Kitchen-first recipe workspace           */
     /* ========================================= */
 
+    /* Native UI elements (scrollbars, inputs) respect theme */
+    color-scheme: light dark;
+
     /* -----------------------------------------
        CORE BRAND COLORS - Foundation
        All status/semantic colors reference these
@@ -519,6 +522,8 @@
      ========================================= */
 
   .dark {
+    color-scheme: dark;
+
     /* Core Brand Colors - Adjusted for dark mode */
     --color-terracotta: 15 65% 60%;
     --color-terracotta-light: 15 65% 15%;

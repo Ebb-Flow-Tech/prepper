@@ -34,6 +34,12 @@ export default function RootLayout({
       <head>
         {/* Adobe Typekit - Primary fonts */}
         <link rel="stylesheet" href="https://use.typekit.net/syo6zfp.css" />
+        {/* Prevent FOUC: apply theme class before first paint (critical for mobile) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('prepper-theme')||'system';var d=t==='system'?window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light':t;document.documentElement.classList.add(d);document.documentElement.style.colorScheme=d}catch(e){}})()`,
+          }}
+        />
       </head>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
