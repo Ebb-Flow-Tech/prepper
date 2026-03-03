@@ -65,7 +65,7 @@ pip install -e ".[dev]"
 cp .env.example .env
 
 # Run
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0              
 ```
 
 API docs available at http://localhost:8000/docs

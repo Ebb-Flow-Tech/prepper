@@ -44,6 +44,16 @@ export default function LoginPage() {
       const storedRedirect = localStorage.getItem('tasting_redirect_url');
       const destination = redirectParam || storedRedirect || '/recipes';
 
+      // Persist destination so AuthGuard picks it up when it detects auth
+      // state change (prevents race condition where AuthGuard redirects to
+      // the default /recipes before router.push fires)
+      localStorage.setItem('prepper_last_route', destination);
+
+      // Clean up one-time tasting redirect
+      if (storedRedirect) {
+        localStorage.removeItem('tasting_redirect_url');
+      }
+
       router.push(destination);
     } catch (err: unknown) {
       console.error('Login error:', err);
