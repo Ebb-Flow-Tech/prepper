@@ -35,6 +35,9 @@ def upgrade() -> None:
             ),
             {"oid": first_outlet},
         )
+    else:
+        # No outlets exist — remove orphaned rows that can't satisfy the FK
+        conn.execute(sa.text("DELETE FROM supplier_ingredients WHERE outlet_id IS NULL"))
 
     # 3. Make column NOT NULL (after backfill)
     op.alter_column(
