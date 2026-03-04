@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.20** (2026-03-04) - Server-Side Pagination & Performance: Paginated List Endpoints, Server-Side Search/Filtering, Database Indexes, Connection Pooling & Next.js Optimization
 - **0.0.19** (2026-03-03) - Outlet-Scoped Supplier Ingredients: Per-Outlet Pricing, Hierarchical Access Control & Outlet Selector UI
 - **0.0.18** (2026-03-02) - Supplier-Ingredient Normalization & UX Improvements: JSONB-to-Join-Table Refactor, Canvas Supplier Selection, Costing Integration, Session Creator Tracking, ID-Based Participants & Quick-Add Ingredients
 - **0.0.17** (2026-02-27) - UI Redesign & Performance Optimization: Canvas Layout Overhaul, Supplier UI Polish, Menu Publish/Unpublish & Backend Query Optimization
@@ -25,6 +26,115 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.20] - 2026-03-04
+
+### Added
+
+#### Server-Side Pagination
+
+All major list endpoints now support server-side pagination with `page_number`, `page_size`, and `search` query parameters, returning a standardized `PaginatedResponse` envelope with `items`, `page_number`, `current_page_size`, `total_count`, and `total_pages`.
+
+**Backend**:
+- New `PaginatedResponse` generic model (`backend/app/models/pagination.py`) with `create()` factory method
+- `IngredientListRead` slim DTO for paginated ingredient responses (excludes relationships)
+- `RecipeListRead` lean DTO for paginated recipe responses (excludes heavy text fields)
+- `list_paginated()` and `count()` methods added to all six services:
+  - `IngredientService` — supports `search`, `category_ids`, `units`, `allergen_ids`, `is_halal` filters
+  - `RecipeService` — supports `search`, `category_ids` filters with access control
+  - `SupplierService` — supports `search`, `active_only` filters
+  - `OutletService` — supports `search`, `is_active`, `accessible_ids` filters
+  - `TastingSessionService` — supports `search` filter with batch participant loading
+  - `RecipeCategoryService` — supports `search` filter
+- Each service uses `_build_list_query()` pattern to share filtering logic between `list_paginated()` and `count()`
+- Outlet list endpoint now performs access control filtering at the SQL level (via `accessible_ids`) instead of Python-side loop
+
+**Paginated API Endpoints**:
+- `GET /ingredients` — `page_number`, `page_size`, `search`, `category_ids`, `units`, `allergen_ids`, `is_halal`
+- `GET /recipes` — `page_number`, `page_size`, `search`, `category_ids`
+- `GET /suppliers` — `page_number`, `page_size`, `search`
+- `GET /outlets` — `page_number`, `page_size`, `search`
+- `GET /tasting-sessions` — `page_number`, `page_size`, `search`
+- `GET /recipe-categories` — `page_number`, `page_size`, `search`
+
+**Frontend**:
+- New `Pagination` component (`frontend/src/components/ui/Pagination.tsx`) with prev/next navigation and "X-Y of Z" display
+- New `useDebouncedValue` hook for search input debouncing
+- `PaginatedResponse<T>` TypeScript type added to `types/index.ts`
+- API client param interfaces: `ListParams`, `RecipeListParams`, `IngredientListParams`, `SupplierListParams`, `OutletListParams`
+- All list API functions (`getRecipes`, `getIngredients`, `getSuppliers`, `getOutlets`, `getTastingSessions`, `getRecipeCategories`) updated to accept pagination params and return `PaginatedResponse<T>`
+- TanStack Query hooks updated to pass pagination params as query keys
+- List pages updated to use pagination controls and server-side search
+
+**Files Created**:
+- `backend/app/models/pagination.py` — `PaginatedResponse` generic model
+- `frontend/src/components/ui/Pagination.tsx` — Pagination UI component
+- `frontend/src/lib/hooks/useDebouncedValue.ts` — Debounced value hook
+
+**Files Modified**:
+- `backend/app/api/ingredients.py` — Paginated list endpoint with filters
+- `backend/app/api/recipes.py` — Paginated list endpoint with search and category filters
+- `backend/app/api/suppliers.py` — Paginated list endpoint
+- `backend/app/api/outlets.py` — Paginated list endpoint with SQL-level access control
+- `backend/app/api/tastings.py` — Paginated list endpoint
+- `backend/app/api/recipe_categories.py` — Paginated list endpoint
+- `backend/app/domain/ingredient_service.py` — `list_paginated()`, `count()`, `_build_list_query()`, accessible outlet ID caching
+- `backend/app/domain/recipe_service.py` — `list_paginated()`, `count()`, `_build_list_query()`
+- `backend/app/domain/supplier_service.py` — `list_paginated()`, `count()`, `_build_list_query()`
+- `backend/app/domain/outlet_service.py` — `list_paginated()`, `count()`, `_build_list_query()`
+- `backend/app/domain/tasting_session_service.py` — `list_paginated()`, `count()`, `_build_list_query()`
+- `backend/app/domain/recipe_category_service.py` — `list_paginated()`, `count()`, `_build_list_query()`
+- `backend/app/models/ingredient.py` — Added `IngredientListRead` DTO
+- `backend/app/models/recipe.py` — Added `RecipeListRead` DTO, indexed `owner_id` and `root_id`
+- `backend/app/models/__init__.py` — Updated exports
+- `backend/tests/test_ingredients.py` — Updated for paginated response shape
+- `backend/tests/test_recipes.py` — Updated for paginated response shape
+- `frontend/src/lib/api.ts` — Pagination param interfaces and updated list functions
+- `frontend/src/lib/hooks/useRecipes.ts` — Pagination query key support
+- `frontend/src/lib/hooks/useIngredients.ts` — Pagination query key support
+- `frontend/src/lib/hooks/useSuppliers.ts` — Pagination query key support
+- `frontend/src/lib/hooks/useOutlets.ts` — Pagination query key support
+- `frontend/src/lib/hooks/useTastings.ts` — Pagination query key support
+- `frontend/src/lib/hooks/useRecipeCategories.ts` — Pagination query key support
+- `frontend/src/types/index.ts` — `PaginatedResponse<T>` type
+- Multiple frontend pages updated for pagination UI
+
+### Performance
+
+#### Database Indexes & Connection Pooling
+
+**Database Changes**:
+- Added indexes on `Recipe.owner_id` and `Recipe.root_id` for faster access-control and version-tree queries
+- Alembic migration `2682e67b2782_add_indexes_recipe_owner_id_root_id.py`
+
+**Connection Pooling** (PostgreSQL):
+- `pool_size=20`, `max_overflow=40`, `pool_recycle=3600`, `pool_pre_ping=True`
+- SQLite skips pool configuration automatically
+
+**Caching**:
+- `IngredientService._accessible_outlet_ids_cache` — Per-request cache for outlet hierarchy lookups, avoiding repeated tree walks
+
+**Files Modified**:
+- `backend/app/database.py` — Connection pool configuration
+- `backend/app/domain/ingredient_service.py` — Outlet ID caching
+
+#### Next.js & Frontend Optimization
+
+- Image format optimization: `formats: ["image/avif", "image/webp"]` in next.config.ts
+- Package import optimization: `optimizePackageImports` for `@/lib/hooks`, `lucide-react`, `@tanstack/react-query`
+- Static asset caching: `Cache-Control: public, max-age=31536000, immutable` for `/_next/static/*`
+- Compression enabled: `compress: true`
+- Production source maps disabled: `productionBrowserSourceMaps: false`
+- Removed 84 lines of duplicate dark mode CSS from `globals.css` (auto-dark-mode block already handled by `.dark` class)
+
+**Files Modified**:
+- `frontend/next.config.ts` — Image formats, package optimization, caching headers, compression
+- `frontend/src/app/globals.css` — Removed redundant dark mode styles
+
+**Files Created**:
+- `backend/alembic/versions/2682e67b2782_add_indexes_recipe_owner_id_root_id.py`
+
 ---
 
 ## [0.0.19] - 2026-03-03
