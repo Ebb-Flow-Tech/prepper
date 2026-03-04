@@ -76,48 +76,63 @@ menu_items_router = APIRouter()
 
 
 def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
-    """Get menu with all sections and items populated."""
+    """Get menu with all sections, items, and recipe names in minimal queries."""
+    from sqlmodel import select
+
     service = MenuService(session)
     menu = service.get_menu(menu_id)
     if not menu:
         return None
 
-    sections = service._get_sections_for_menu(menu_id)
-    section_reads = []
+    # Single join query: sections + items + recipe names
+    statement = (
+        select(MenuSection, MenuItem, Recipe.name)
+        .outerjoin(MenuItem, MenuItem.section_id == MenuSection.id)
+        .outerjoin(Recipe, Recipe.id == MenuItem.recipe_id)
+        .where(MenuSection.menu_id == menu_id)
+        .order_by(MenuSection.order_no, MenuItem.order_no)
+    )
+    rows = session.exec(statement).all()
 
-    for section in sections:
-        items = service._get_items_for_section(section.id)
-        item_reads = []
-
-        for item in items:
-            recipe = session.get(Recipe, item.recipe_id)
-            item_read = MenuItemRead(
-                id=item.id,
-                recipe_id=item.recipe_id,
-                recipe_name=recipe.name if recipe else "",
-                section_id=item.section_id,
-                order_no=item.order_no,
-                display_price=item.display_price,
-                additional_info=item.additional_info,
-                key_highlights=item.key_highlights,
-                substitution=item.substitution,
-                created_at=item.created_at,
-                updated_at=item.updated_at,
+    # Group by section
+    sections_map: dict[int, tuple[MenuSection, list[MenuItemRead]]] = {}
+    section_order: list[int] = []
+    for section, item, recipe_name in rows:
+        if section.id not in sections_map:
+            sections_map[section.id] = (section, [])
+            section_order.append(section.id)
+        if item:
+            sections_map[section.id][1].append(
+                MenuItemRead(
+                    id=item.id,
+                    recipe_id=item.recipe_id,
+                    recipe_name=recipe_name or "",
+                    section_id=item.section_id,
+                    order_no=item.order_no,
+                    display_price=item.display_price,
+                    additional_info=item.additional_info,
+                    key_highlights=item.key_highlights,
+                    substitution=item.substitution,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                )
             )
-            item_reads.append(item_read)
 
-        section_read = MenuSectionRead(
-            id=section.id,
-            name=section.name,
-            menu_id=section.menu_id,
-            order_no=section.order_no,
-            items=item_reads,
-            created_at=section.created_at,
-            updated_at=section.updated_at,
+    section_reads = []
+    for sid in section_order:
+        section, item_reads = sections_map[sid]
+        section_reads.append(
+            MenuSectionRead(
+                id=section.id,
+                name=section.name,
+                menu_id=section.menu_id,
+                order_no=section.order_no,
+                items=item_reads,
+                created_at=section.created_at,
+                updated_at=section.updated_at,
+            )
         )
-        section_reads.append(section_read)
 
-    # Get menu outlets
     outlets = service._get_outlets_for_menu(menu_id)
 
     return MenuDetail(
@@ -161,11 +176,15 @@ def _check_menu_accessible(
 
 def _validate_menu_items(items: list[MenuItemInput], session: Session) -> bool:
     """Validate that all recipes exist."""
-    for item in items:
-        recipe = session.get(Recipe, item.recipe_id)
-        if not recipe:
-            return False
-    return True
+    from sqlmodel import select, func
+
+    recipe_ids = list({item.recipe_id for item in items})
+    if not recipe_ids:
+        return True
+    count = session.exec(
+        select(func.count()).where(Recipe.id.in_(recipe_ids))
+    ).one()
+    return count == len(recipe_ids)
 
 
 # --- GET /menus ---
@@ -571,16 +590,21 @@ def get_items_by_section(
     current_user: User = Depends(get_current_user),
 ):
     """Get menu items for a section, ordered by order_no then name."""
-    service = MenuService(session)
-    items = service.get_items_by_section(section_id)
+    from sqlmodel import select
 
-    item_reads = []
-    for item in items:
-        recipe = session.get(Recipe, item.recipe_id)
-        item_read = MenuItemRead(
+    statement = (
+        select(MenuItem, Recipe.name)
+        .outerjoin(Recipe, Recipe.id == MenuItem.recipe_id)
+        .where(MenuItem.section_id == section_id)
+        .order_by(MenuItem.order_no)
+    )
+    rows = session.exec(statement).all()
+
+    return [
+        MenuItemRead(
             id=item.id,
             recipe_id=item.recipe_id,
-            recipe_name=recipe.name if recipe else "",
+            recipe_name=recipe_name or "",
             section_id=item.section_id,
             order_no=item.order_no,
             display_price=item.display_price,
@@ -590,6 +614,5 @@ def get_items_by_section(
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
-        item_reads.append(item_read)
-
-    return item_reads
+        for item, recipe_name in rows
+    ]

@@ -57,20 +57,21 @@ def create_tasting_session(
     return service.create(data, creator_id=current_user.id)
 
 
-@router.get("", response_model=list[TastingSessionRead])
+@router.get("")
 def list_tasting_sessions(
-    limit: int = Query(default=50, le=100),
-    offset: int = Query(default=0, ge=0),
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all tasting sessions, ordered by date descending.
-
-    All authenticated users can see all sessions.
-    Access control is enforced at the detail page level.
-    """
+    """List all tasting sessions, ordered by date descending."""
+    from app.models.pagination import PaginatedResponse
     service = TastingSessionService(session)
-    return service.list(limit=limit, offset=offset)
+    offset = (page_number - 1) * page_size
+    items = service.list_paginated(offset=offset, limit=page_size, search=search)
+    total = service.count(search=search)
+    return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
 @router.get("/{session_id}", response_model=TastingSessionRead)

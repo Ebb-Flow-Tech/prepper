@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ArrowLeft,
   Calendar,
@@ -419,9 +420,11 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: 
                           rel="noopener noreferrer"
                           className="rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 aspect-square hover:ring-2 ring-amber-500 transition-all"
                         >
-                          <img
+                          <Image
                             src={image.image_url}
                             alt="Tasting note"
+                            width={200}
+                            height={200}
                             className="w-full h-full object-cover hover:scale-105 transition-transform"
                           />
                         </a>

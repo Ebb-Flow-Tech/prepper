@@ -4,13 +4,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppState } from '@/lib/store';
 import * as api from '@/lib/api';
 import type { CreateOutletRequest, UpdateOutletRequest } from '@/types';
+import type { OutletListParams } from '@/lib/api';
 
-export function useOutlets(showArchived: boolean = false) {
+export function useOutlets(params?: OutletListParams) {
   const { userId, userType } = useAppState();
-  const activeOnly = !showArchived;
   return useQuery({
-    queryKey: ['outlets', { activeOnly, userId, userType }],
-    queryFn: () => api.getOutlets(activeOnly ? true : null),
+    queryKey: ['outlets', params, userId, userType],
+    queryFn: () => api.getOutlets(params),
+    placeholderData: (prev) => prev,
+    staleTime: 30 * 60 * 1000, // 30 minutes — stable reference data
   });
 }
 

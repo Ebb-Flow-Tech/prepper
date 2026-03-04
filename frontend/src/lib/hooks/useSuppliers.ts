@@ -3,12 +3,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type { CreateSupplierRequest, UpdateSupplierRequest, AddSupplierIngredientRequest, UpdateSupplierIngredientRequest } from '@/types';
+import type { SupplierListParams } from '@/lib/api';
 
-export function useSuppliers(showArchived: boolean = false) {
-  const activeOnly = !showArchived;
+export function useSuppliers(params?: SupplierListParams) {
   return useQuery({
-    queryKey: ['suppliers', { activeOnly }],
-    queryFn: () => api.getSuppliers(activeOnly),
+    queryKey: ['suppliers', params],
+    queryFn: () => api.getSuppliers(params),
+    placeholderData: (prev) => prev,
   });
 }
 

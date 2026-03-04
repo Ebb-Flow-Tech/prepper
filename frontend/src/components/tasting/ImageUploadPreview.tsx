@@ -55,6 +55,8 @@ export function ImageUploadPreview({
     });
   }, [uploadedImages]);
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
     if (!files) return;
@@ -63,6 +65,11 @@ export function ImageUploadPreview({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`"${file.name}" exceeds 5MB limit and was skipped.`);
+        continue;
+      }
       const reader = new FileReader();
 
       await new Promise<void>((resolve) => {

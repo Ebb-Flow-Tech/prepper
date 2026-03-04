@@ -38,20 +38,26 @@ def create_recipe(
     return service.create_recipe(data)
 
 
-@router.get("", response_model=list[Recipe])
+@router.get("")
 def list_recipes(
     status: RecipeStatus | None = Query(default=None),
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None),
+    category_ids: str | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all recipes, optionally filtered by status.
+    """List all recipes, optionally filtered by status and category."""
+    from app.models.pagination import PaginatedResponse
 
-    Access control:
-    - Admin users: see all recipes
-    - Normal users: see only recipes they created, public recipes, or recipes from their outlet
-    """
+    parsed_category_ids = [int(x) for x in category_ids.split(",")] if category_ids else None
+
     service = RecipeService(session)
-    return service.list_recipes(status=status, current_user=current_user)
+    offset = (page_number - 1) * page_size
+    items = service.list_paginated(offset=offset, limit=page_size, status=status, current_user=current_user, search=search, category_ids=parsed_category_ids)
+    total = service.count(status=status, current_user=current_user, search=search, category_ids=parsed_category_ids)
+    return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
 @router.get("/tasting/{recipe_id}", response_model=Recipe)

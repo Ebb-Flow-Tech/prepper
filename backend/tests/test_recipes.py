@@ -26,6 +26,69 @@ def test_create_recipe(client: TestClient):
     assert data["review_ready"] is False
 
 
+def test_list_recipes_paginated(client: TestClient):
+    """Test that listing recipes returns paginated response shape."""
+    client.post(
+        "/api/v1/recipes",
+        json={"name": "Recipe A", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    client.post(
+        "/api/v1/recipes",
+        json={"name": "Recipe B", "yield_quantity": 2, "yield_unit": "portion"},
+    )
+
+    response = client.get("/api/v1/recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total_count" in data
+    assert "page_number" in data
+    assert "current_page_size" in data
+    assert "total_pages" in data
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
+    assert data["page_number"] == 1
+
+
+def test_list_recipes_pagination_params(client: TestClient):
+    """Test pagination params (page_number, page_size)."""
+    for i in range(5):
+        client.post(
+            "/api/v1/recipes",
+            json={"name": f"Recipe {i}", "yield_quantity": 1, "yield_unit": "portion"},
+        )
+
+    # Page 1, size 2
+    response = client.get("/api/v1/recipes", params={"page_size": 2, "page_number": 1})
+    data = response.json()
+    assert data["total_count"] == 5
+    assert data["current_page_size"] == 2
+    assert data["total_pages"] == 3
+    assert data["page_number"] == 1
+
+    # Page 3, size 2
+    response = client.get("/api/v1/recipes", params={"page_size": 2, "page_number": 3})
+    data = response.json()
+    assert data["current_page_size"] == 1  # Only 1 item on last page
+
+
+def test_list_recipes_search(client: TestClient):
+    """Test search filter on recipe list."""
+    client.post(
+        "/api/v1/recipes",
+        json={"name": "Chocolate Cake", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    client.post(
+        "/api/v1/recipes",
+        json={"name": "Vanilla Ice Cream", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+
+    response = client.get("/api/v1/recipes", params={"search": "chocolate"})
+    data = response.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Chocolate Cake"
+
+
 def test_create_recipe_with_cost_price(client: TestClient):
     """Test creating a recipe with cost_price."""
     response = client.post(
@@ -1339,3 +1402,40 @@ def test_get_recipe_brand_user_cannot_access_location_only_recipe(client: TestCl
             outlet_id=None,
         )
         app.dependency_overrides[get_current_user] = lambda: admin_user
+
+
+# -------------------------------------------------------------------------
+# Server-Side Filter tests
+# -------------------------------------------------------------------------
+
+
+def test_list_recipes_filter_by_category_ids(client: TestClient):
+    """Test filtering recipes by category_ids."""
+    # Create recipe categories
+    cat1 = client.post("/api/v1/recipe-categories", json={"name": "Desserts"}).json()
+    cat2 = client.post("/api/v1/recipe-categories", json={"name": "Mains"}).json()
+
+    # Create recipes
+    r1 = client.post("/api/v1/recipes", json={"name": "Cake", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    r2 = client.post("/api/v1/recipes", json={"name": "Steak", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    r3 = client.post("/api/v1/recipes", json={"name": "Salad", "yield_quantity": 1, "yield_unit": "portion"}).json()
+
+    # Link recipes to categories
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r1["id"], "category_id": cat1["id"]})
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r2["id"], "category_id": cat2["id"]})
+
+    # Filter by single category
+    resp = client.get(f"/api/v1/recipes?category_ids={cat1['id']}")
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Cake"
+
+    # Filter by multiple categories
+    resp2 = client.get(f"/api/v1/recipes?category_ids={cat1['id']},{cat2['id']}")
+    data2 = resp2.json()
+    assert data2["total_count"] == 2
+
+    # No filter returns all
+    resp3 = client.get("/api/v1/recipes")
+    data3 = resp3.json()
+    assert data3["total_count"] == 3

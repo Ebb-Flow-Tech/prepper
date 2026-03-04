@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch, useRecipeAllergensBatch } from '@/lib/hooks';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch, useRecipeAllergensBatch, useDebouncedValue } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
 import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import { useAppState } from '@/lib/store';
 import type { Recipe, RecipeStatus, Allergen } from '@/types';
 
@@ -118,21 +119,36 @@ function groupRecipes(
 export function RecipeManagementTab() {
   const router = useRouter();
   const { userId, userType, selectRecipe } = useAppState();
-  const { data: recipes, isLoading, error } = useRecipes();
-  const { data: recipeCategories } = useRecipeCategories();
-  const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
-  const { data: outlets } = useOutlets(false);
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [pageNumber, setPageNumber] = useState(1);
   const [groupBy, setGroupBy] = useState<GroupByOption>('status');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
   const [selectedRecipeCategories, setSelectedRecipeCategories] = useState<number[]>([]);
 
+  // Reset page when search or filters change
+  useEffect(() => setPageNumber(1), [debouncedSearch, statusFilter, selectedRecipeCategories]);
+
+  const { data: recipesData, isLoading, error } = useRecipes({
+    page_size: 30,
+    page_number: pageNumber,
+    search: debouncedSearch || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    category_ids: selectedRecipeCategories.length > 0 ? selectedRecipeCategories.join(',') : undefined,
+  });
+  const recipes = Array.isArray(recipesData?.items) ? recipesData.items : (Array.isArray(recipesData) ? recipesData : []);
+  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const recipeCategories = Array.isArray(recipeCategoriesData?.items) ? recipeCategoriesData.items : (Array.isArray(recipeCategoriesData) ? recipeCategoriesData : []);
+  const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items ?? [];
+
   // Memoize recipe IDs to prevent unstable references triggering refetches
   const recipeIds = useMemo(
-    () => (recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null),
+    () => (recipes.length > 0 ? recipes.map((r) => r.id) : null),
     [recipes]
   );
 
@@ -160,13 +176,11 @@ export function RecipeManagementTab() {
 
   // Map category_id -> name (for grouping)
   const categoryNameMap = useMemo(() => {
-    if (!recipeCategories) return new Map<number, string>();
     return new Map(recipeCategories.map((c) => [c.id, c.name]));
   }, [recipeCategories]);
 
   // Map outlet_id -> name
   const outletNameMap = useMemo(() => {
-    if (!outlets) return new Map<number, string>();
     return new Map(outlets.map((o) => [o.id, o.name]));
   }, [outlets]);
 
@@ -193,38 +207,10 @@ export function RecipeManagementTab() {
     return allergens.map((allergen: Allergen) => allergen.name);
   };
 
-  // Filter and group recipes
+  // Sort recipes (filtering is now server-side)
   const filteredRecipes = useMemo(() => {
-    if (!recipes) return [];
-
-    const filtered = recipes.filter((recipe) => {
-      // Filter by search
-      if (search && !recipe.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      // Filter by status
-      if (statusFilter !== 'all' && recipe.status !== statusFilter) {
-        return false;
-      }
-
-      // Filter by category (if any selected)
-      if (selectedRecipeCategories.length > 0) {
-        const recipeCategories = recipeCategoryMap.get(recipe.id) || [];
-        const hasSelectedCategory = selectedRecipeCategories.some((catId) =>
-          recipeCategories.includes(catId)
-        );
-        if (!hasSelectedCategory) {
-          return false;
-        }
-      }
-
-      // Backend handles access control (ownership, outlet assignment, public status)
-      // Frontend just displays what backend returns
-      return true;
-    });
-
-    return sortRecipes(filtered, sortBy);
-  }, [recipes, search, statusFilter, selectedRecipeCategories, recipeCategoryMap, userId, userType, sortBy]);
+    return sortRecipes(recipes, sortBy);
+  }, [recipes, sortBy]);
 
   const handleCreate = () => {
     // Clear selected recipe and navigate to canvas for new recipe creation
@@ -366,6 +352,17 @@ export function RecipeManagementTab() {
               )
             )}
           </div>
+        )}
+
+        {/* Pagination */}
+        {recipesData && (
+          <Pagination
+            pageNumber={recipesData.page_number}
+            totalPages={recipesData.total_pages}
+            totalCount={recipesData.total_count}
+            currentPageSize={recipesData.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
     </div>

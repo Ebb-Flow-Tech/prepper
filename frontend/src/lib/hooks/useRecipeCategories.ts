@@ -3,11 +3,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type { CreateRecipeCategoryRequest, UpdateRecipeCategoryRequest } from '@/types';
+import type { ListParams } from '@/lib/api';
 
-export function useRecipeCategories() {
+export function useRecipeCategories(params?: ListParams) {
   return useQuery({
-    queryKey: ['recipeCategories'],
-    queryFn: () => api.getRecipeCategories(),
+    queryKey: ['recipeCategories', params],
+    queryFn: () => api.getRecipeCategories(params),
+    placeholderData: (prev) => prev,
+    staleTime: 30 * 60 * 1000, // 30 minutes
   });
 }
 

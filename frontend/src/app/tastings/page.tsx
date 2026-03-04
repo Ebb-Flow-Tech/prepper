@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Wine, Calendar, MapPin, Users, Clock, History } from 'lucide-react';
 import { useTastingSessions } from '@/lib/hooks/useTastings';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { PageHeader, SearchInput, Button, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import type { TastingSession } from '@/types';
 
 function formatDate(dateString: string): string {
@@ -85,30 +87,25 @@ function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
 }
 
 export default function TastingsPage() {
-  const { data: sessions, isLoading, error } = useTastingSessions();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [pageNumber, setPageNumber] = useState(1);
+  useEffect(() => setPageNumber(1), [debouncedSearch]);
+
+  const { data, isLoading, error } = useTastingSessions({
+    page_size: 30,
+    page_number: pageNumber,
+    search: debouncedSearch || undefined,
+  });
+  const sessions = data?.items ?? [];
 
   const { ongoingSessions, expiredSessions } = useMemo(() => {
-    if (!sessions) return { ongoingSessions: [], expiredSessions: [] };
-
-    let filtered = sessions;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = sessions.filter(
-        (session) =>
-          session.name.toLowerCase().includes(searchLower) ||
-          session.location?.toLowerCase().includes(searchLower) ||
-          session.participants?.some((p) =>
-            p.username.toLowerCase().includes(searchLower) ||
-            p.email.toLowerCase().includes(searchLower)
-          )
-      );
-    }
+    if (!sessions || sessions.length === 0) return { ongoingSessions: [], expiredSessions: [] };
 
     const ongoing: TastingSession[] = [];
     const expired: TastingSession[] = [];
 
-    filtered.forEach((session) => {
+    sessions.forEach((session) => {
       if (isSessionExpired(session.date)) {
         expired.push(session);
       } else {
@@ -122,7 +119,7 @@ export default function TastingsPage() {
     expired.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return { ongoingSessions: ongoing, expiredSessions: expired };
-  }, [sessions, search]);
+  }, [sessions]);
 
   const hasNoSessions = ongoingSessions.length === 0 && expiredSessions.length === 0;
 
@@ -229,6 +226,17 @@ export default function TastingsPage() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Pagination */}
+        {data && (
+          <Pagination
+            pageNumber={data.page_number}
+            totalPages={data.total_pages}
+            totalCount={data.total_count}
+            currentPageSize={data.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
     </div>

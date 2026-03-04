@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown, Plus } from 'lucide-react';
 import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories, useRecipeAllergens } from '@/lib/hooks';
 import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
@@ -64,11 +65,13 @@ export function OverviewTab() {
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
   const { data: costing, isLoading: costingLoading } = useCosting(selectedRecipeId);
   const { data: subRecipes, isLoading: subRecipesLoading } = useSubRecipes(selectedRecipeId);
-  const { data: allRecipes } = useRecipes();
+  const { data: allRecipesData } = useRecipes({ page_size: 30 });
+  const allRecipes = allRecipesData?.items;
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(selectedRecipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(selectedRecipeId);
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(selectedRecipeId);
-  const { data: allCategories = [] } = useRecipeCategories();
+  const { data: allCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const allCategories = allCategoriesData?.items ?? [];
   const { data: allergens = [] } = useRecipeAllergens(selectedRecipeId);
   const { data: owner } = useUser(recipe?.owner_id);
   const { data: creator } = useUser(recipe?.created_by);
@@ -188,9 +191,11 @@ export function OverviewTab() {
                   {/* Recipe hero image with edit button */}
                   <div className="relative shrink-0 group">
                     {recipe.image_url ? (
-                      <img
+                      <Image
                         src={recipe.image_url}
                         alt={recipe.name}
+                        width={128}
+                        height={128}
                         className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover"
                       />
                     ) : (

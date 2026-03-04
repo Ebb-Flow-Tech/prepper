@@ -57,7 +57,8 @@ def test_list_recipe_categories(client: TestClient):
     response = client.get("/api/v1/recipe-categories")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_get_recipe_category(client: TestClient):

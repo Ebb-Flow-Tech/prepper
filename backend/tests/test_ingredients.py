@@ -46,7 +46,8 @@ def test_list_ingredients(client: TestClient):
     response = client.get("/api/v1/ingredients")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_deactivate_ingredient(client: TestClient):
@@ -65,7 +66,7 @@ def test_deactivate_ingredient(client: TestClient):
 
     # Should not appear in active list
     list_response = client.get("/api/v1/ingredients?active_only=true")
-    assert len(list_response.json()) == 0
+    assert list_response.json()["total_count"] == 0
 
 
 # -------------------------------------------------------------------------
@@ -293,6 +294,99 @@ def test_preferred_supplier_none(client: TestClient):
     response = client.get(f"/api/v1/ingredients/{ing['id']}/suppliers/preferred")
     assert response.status_code == 200
     assert response.json() is None
+
+
+# -------------------------------------------------------------------------
+# Server-Side Filter tests
+# -------------------------------------------------------------------------
+
+
+def test_list_ingredients_filter_by_category_ids(client: TestClient):
+    """Test filtering ingredients by category_ids."""
+    # Create a category
+    cat = client.post("/api/v1/categories", json={"name": "Dairy"}).json()
+    cat_id = cat["id"]
+
+    # Create ingredients with and without category
+    client.post("/api/v1/ingredients", json={"name": "Milk", "base_unit": "ml", "category_id": cat_id})
+    client.post("/api/v1/ingredients", json={"name": "Flour", "base_unit": "g"})
+
+    # Filter by category
+    resp = client.get(f"/api/v1/ingredients?category_ids={cat_id}")
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Milk"
+
+
+def test_list_ingredients_filter_by_units(client: TestClient):
+    """Test filtering ingredients by units."""
+    client.post("/api/v1/ingredients", json={"name": "Water", "base_unit": "ml"})
+    client.post("/api/v1/ingredients", json={"name": "Oil", "base_unit": "ml"})
+    client.post("/api/v1/ingredients", json={"name": "Flour", "base_unit": "g"})
+
+    resp = client.get("/api/v1/ingredients?units=ml")
+    data = resp.json()
+    assert data["total_count"] == 2
+
+    resp2 = client.get("/api/v1/ingredients?units=ml,g")
+    data2 = resp2.json()
+    assert data2["total_count"] == 3
+
+
+def test_list_ingredients_filter_by_is_halal(client: TestClient):
+    """Test filtering ingredients by is_halal."""
+    client.post("/api/v1/ingredients", json={"name": "Chicken", "base_unit": "kg", "is_halal": True})
+    client.post("/api/v1/ingredients", json={"name": "Pork", "base_unit": "kg", "is_halal": False})
+
+    resp = client.get("/api/v1/ingredients?is_halal=true")
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Chicken"
+
+    resp2 = client.get("/api/v1/ingredients?is_halal=false")
+    data2 = resp2.json()
+    assert data2["total_count"] == 1
+    assert data2["items"][0]["name"] == "Pork"
+
+
+def test_list_ingredients_filter_by_allergen_ids(client: TestClient):
+    """Test filtering ingredients by allergen_ids."""
+    # Create allergen
+    allergen = client.post("/api/v1/allergens", json={"name": "Gluten"}).json()
+    allergen_id = allergen["id"]
+
+    # Create ingredients
+    ing1 = client.post("/api/v1/ingredients", json={"name": "Wheat", "base_unit": "g"}).json()
+    client.post("/api/v1/ingredients", json={"name": "Rice", "base_unit": "g"})
+
+    # Link allergen to ingredient
+    client.post("/api/v1/ingredient-allergens", json={"ingredient_id": ing1["id"], "allergen_id": allergen_id})
+
+    # Filter by allergen
+    resp = client.get(f"/api/v1/ingredients?allergen_ids={allergen_id}")
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Wheat"
+
+
+def test_list_ingredients_combined_filters(client: TestClient):
+    """Test combining multiple filters (AND logic)."""
+    cat = client.post("/api/v1/categories", json={"name": "Grains"}).json()
+
+    client.post("/api/v1/ingredients", json={"name": "Wheat Flour", "base_unit": "g", "category_id": cat["id"], "is_halal": True})
+    client.post("/api/v1/ingredients", json={"name": "Rice Flour", "base_unit": "g", "category_id": cat["id"], "is_halal": False})
+    client.post("/api/v1/ingredients", json={"name": "Water", "base_unit": "ml", "is_halal": True})
+
+    # Filter by category + halal
+    resp = client.get(f"/api/v1/ingredients?category_ids={cat['id']}&is_halal=true")
+    data = resp.json()
+    assert data["total_count"] == 1
+    assert data["items"][0]["name"] == "Wheat Flour"
+
+    # Filter by category + unit
+    resp2 = client.get(f"/api/v1/ingredients?category_ids={cat['id']}&units=g")
+    data2 = resp2.json()
+    assert data2["total_count"] == 2
 
 
 def test_sku_uniqueness(client: TestClient):

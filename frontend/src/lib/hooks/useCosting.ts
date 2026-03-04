@@ -9,6 +9,7 @@ export function useCosting(recipeId: number | null) {
     queryFn: () => api.getRecipeCosting(recipeId!),
     enabled: recipeId !== null,
     retry: false, // Don't retry on 404 (no ingredients yet)
+    staleTime: 1 * 60 * 1000, // 1 minute — volatile data
   });
 }
 

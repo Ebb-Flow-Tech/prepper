@@ -48,7 +48,8 @@ def test_list_suppliers(client: TestClient):
     response = client.get("/api/v1/suppliers")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_update_supplier(client: TestClient):
@@ -183,7 +184,7 @@ def test_list_suppliers_active_only(client: TestClient):
     # Default: active_only=True
     response = client.get("/api/v1/suppliers")
     assert response.status_code == 200
-    names = [s["name"] for s in response.json()]
+    names = [s["name"] for s in response.json()["items"]]
     assert "Active Supplier" in names
     assert "Inactive Supplier" not in names
 
@@ -200,7 +201,7 @@ def test_list_suppliers_include_inactive(client: TestClient):
     # active_only=false returns all
     response = client.get("/api/v1/suppliers", params={"active_only": False})
     assert response.status_code == 200
-    names = [s["name"] for s in response.json()]
+    names = [s["name"] for s in response.json()["items"]]
     assert "Active Supplier 2" in names
     assert "Inactive Supplier 2" in names
 

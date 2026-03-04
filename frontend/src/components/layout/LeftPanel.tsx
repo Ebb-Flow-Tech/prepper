@@ -113,7 +113,8 @@ function RecipeListSkeleton() {
 
 export function LeftPanel() {
   const { selectedRecipeId, selectRecipe, userId, userType } = useAppState();
-  const { data: recipes, isLoading, error } = useRecipes();
+  const { data: recipesData, isLoading, error } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items;
   const createRecipe = useCreateRecipe();
   const deleteRecipe = useDeleteRecipe();
   const [search, setSearch] = useState('');

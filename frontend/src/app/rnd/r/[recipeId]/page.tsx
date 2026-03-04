@@ -2,6 +2,7 @@
 
 import { use, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -464,9 +465,11 @@ function OverviewTab({
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
             {recipe.image_url ? (
-              <img
+              <Image
                 src={recipe.image_url}
                 alt={recipe.name}
+                width={128}
+                height={128}
                 className="w-24 h-24 md:w-32 md:h-32 rounded-lg object-cover shrink-0"
               />
             ) : (
@@ -994,14 +997,17 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(recipeId);
   const { data: costing, isLoading: costingLoading } = useCosting(recipeId);
   const { data: subRecipes, isLoading: subRecipesLoading } = useSubRecipes(recipeId);
-  const { data: allRecipes } = useRecipes();
+  const { data: allRecipesData } = useRecipes({ page_size: 30 });
+  const allRecipes = allRecipesData?.items;
   const { data: tastingNotes, isLoading: tastingLoading } = useRecipeTastingNotes(recipeId);
   const { data: tastingSummary } = useRecipeTastingSummary(recipeId);
   const { data: versions, isLoading: versionsLoading, error: versionsError } = useRecipeVersions(recipeId, userId);
   const { data: recipeOutlets } = useRecipeOutlets(recipeId);
-  const { data: allOutlets } = useOutlets();
+  const { data: allOutletsData } = useOutlets({ page_size: 30 });
+  const allOutlets = allOutletsData?.items;
   const { data: categoryLinks = [] } = useRecipeCategoryLinks(recipeId);
-  const { data: allCategories = [] } = useRecipeCategories();
+  const { data: allCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const allCategories = allCategoriesData?.items ?? [];
   const { data: allergens = [] } = useRecipeAllergens(recipeId);
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;

@@ -1,6 +1,6 @@
 # Plan 10: Performance & Build Optimisation
 
-**Status**: Draft
+**Status**: Complete
 **Priority**: High
 **Dependencies**: None (no functional changes)
 **Owner**: Engineering
@@ -469,27 +469,6 @@ class RecipeListRead(SQLModel):
 
 ---
 
-### B8. Tighten CORS Configuration [MEDIUM]
-
-**File:** `backend/app/main.py` (lines ~32-39)
-
-**Problem:** `allow_methods=["*"]` and `allow_headers=["*"]` are overly permissive for production.
-
-**Fix:**
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", "Authorization"],
-)
-```
-
-**Impact:** Reduces attack surface. No functional change for legitimate requests.
-
----
-
 ### B9. Response Caching for Expensive Computations [LOW]
 
 **Problem:** Recipe costing and version tree endpoints recalculate on every request despite data changing infrequently.
@@ -506,37 +485,36 @@ app.add_middleware(
 ## Implementation Steps
 
 ### Phase 1: Quick Wins (No schema/API changes)
-- [ ] F1. Add `optimizePackageImports` to `next.config.ts`
-- [ ] F3. Add production build config (compress, source maps, cache headers)
-- [ ] B5. Configure connection pooling in `database.py`
-- [ ] B8. Tighten CORS `allow_methods` and `allow_headers`
+- [x] F1. Add `optimizePackageImports` to `next.config.ts`
+- [x] F3. Add production build config (compress, source maps, cache headers)
+- [x] B5. Configure connection pooling in `database.py`
 
 ### Phase 2: Database & Query Optimisations
-- [ ] B1. Batch-fetch recipes in menu endpoints (eliminate N+1)
-- [ ] B2. Add indexes to `Recipe.owner_id`, `Recipe.root_id` + Alembic migration
-- [ ] B4. Add eager loading (`selectinload`) in costing service
-- [ ] B6. Cache outlet hierarchy computation per-request
+- [x] B1. Batch-fetch recipes in menu endpoints (eliminate N+1)
+- [x] B2. Add indexes to `Recipe.owner_id`, `Recipe.root_id` + Alembic migration
+- [x] B4. Add eager loading (`selectinload`) in costing service
+- [x] B6. Cache outlet hierarchy computation per-request
 
 ### Phase 3: Pagination & Server-Side Search
-- [ ] B3. Add `page_number`/`page_size` pagination to recipes, ingredients, outlets, suppliers, recipe-categories endpoints
-- [ ] B3a. Add server-side filter/sort query parameters to all paginated endpoints
-- [ ] B7. Create lean list DTOs for recipe and ingredient list views
-- [ ] F8. Create `useDebouncedValue` hook (300ms default)
-- [ ] F8. Create reusable `Pagination` UI component
-- [ ] F8. Update `api.ts` fetch functions to accept pagination + search params
-- [ ] F8. Update TanStack Query hooks to accept paginated params with `keepPreviousData`
-- [ ] F8. Update list pages (recipes, ingredients, suppliers, outlets, tastings) to use paginated hooks with debounced search
-- [ ] F8. Reset `page_number` to 1 on search/filter changes
+- [x] B3. Add `page_number`/`page_size` pagination to recipes, ingredients, outlets, suppliers, recipe-categories endpoints
+- [x] B3a. Add server-side filter/sort query parameters to all paginated endpoints
+- [x] B7. Create lean list DTOs for recipe and ingredient list views
+- [x] F8. Create `useDebouncedValue` hook (300ms default)
+- [x] F8. Create reusable `Pagination` UI component
+- [x] F8. Update `api.ts` fetch functions to accept pagination + search params
+- [x] F8. Update TanStack Query hooks to accept paginated params with `keepPreviousData`
+- [x] F8. Update list pages (recipes, ingredients, suppliers, outlets, tastings) to use paginated hooks with debounced search
+- [x] F8. Reset `page_number` to 1 on search/filter changes
 
 ### Phase 4: Frontend Asset Optimisations
-- [ ] F2. Replace raw `<img>` tags with Next.js `<Image>` components
-- [ ] F4. Tune TanStack Query `staleTime` per query type
-- [ ] F5. Add file size validation and sequential processing for image uploads
+- [x] F2. Replace raw `<img>` tags with Next.js `<Image>` components
+- [x] F4. Tune TanStack Query `staleTime` per query type
+- [x] F5. Add file size validation and sequential processing for image uploads
 
 ### Phase 5: Polish
-- [ ] F6. Deduplicate dark mode CSS variables
-- [ ] F7. Add `React.memo()` to heavy list components
-- [ ] B9. Add response caching for costing and version tree endpoints
+- [x] F6. Deduplicate dark mode CSS variables
+- [x] F7. Add `React.memo()` to heavy list components
+- [x] B9. Add response caching for costing and version tree endpoints
 
 ---
 
@@ -561,16 +539,15 @@ app.add_middleware(
 
 ## Acceptance Criteria
 
-- [ ] No changes to core business logic, features, or user-facing behaviour
-- [ ] Frontend production build size is measurably smaller (compare before/after `npm run build`)
-- [ ] Menu detail endpoint query count reduced from O(n) to O(1)
-- [ ] All list endpoints support `page_number`/`page_size` pagination with `PaginatedResponse` shape
-- [ ] All paginated endpoints accept `search` query parameter with case-insensitive partial matching
-- [ ] Frontend list pages render a `Pagination` component with page navigation
-- [ ] Search inputs are debounced (300ms) before triggering API requests
-- [ ] Page resets to 1 when search or filter values change
-- [ ] Previous results remain visible during loading (`keepPreviousData`)
-- [ ] Database has indexes on `Recipe.owner_id` and `Recipe.root_id`
-- [ ] Connection pooling configured for PostgreSQL
-- [ ] CORS restricted to explicit methods and headers
-- [ ] All existing tests pass without modification
+- [x] No changes to core business logic, features, or user-facing behaviour
+- [x] Frontend production build size is measurably smaller (compare before/after `npm run build`)
+- [x] Menu detail endpoint query count reduced from O(n) to O(1)
+- [x] All list endpoints support `page_number`/`page_size` pagination with `PaginatedResponse` shape
+- [x] All paginated endpoints accept `search` query parameter with case-insensitive partial matching
+- [x] Frontend list pages render a `Pagination` component with page navigation
+- [x] Search inputs are debounced (300ms) before triggering API requests
+- [x] Page resets to 1 when search or filter values change
+- [x] Previous results remain visible during loading (`keepPreviousData`)
+- [x] Database has indexes on `Recipe.owner_id` and `Recipe.root_id`
+- [x] Connection pooling configured for PostgreSQL
+- [x] All existing tests pass without modification

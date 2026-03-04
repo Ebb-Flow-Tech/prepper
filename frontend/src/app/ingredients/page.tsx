@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useAllergens, useIngredientAllergenLinks } from '@/lib/hooks';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useAllergens, useDebouncedValue } from '@/lib/hooks';
 import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal, AllergensTab } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle, Checkbox } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import { toast } from 'sonner';
 import type { Ingredient } from '@/types';
 import { useAppState, type IngredientTab } from '@/lib/store';
@@ -99,6 +100,10 @@ function IngredientsListTab() {
   const updateIngredient = useUpdateIngredient();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [pageNumber, setPageNumber] = useState(1);
+  useEffect(() => setPageNumber(1), [debouncedSearch]);
+
   const [showForm, setShowForm] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupByOption>('none');
   const [showArchived, setShowArchived] = useState(false);
@@ -108,58 +113,27 @@ function IngredientsListTab() {
   const [selectedAllergens, setSelectedAllergens] = useState<number[]>([]);
   const [view, setView] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortByOption>('price_asc');
-  const { data: ingredients, isLoading, error } = useIngredients(showArchived);
+  // Reset page when filters change
+  useEffect(() => setPageNumber(1), [selectedCategories, selectedUnits, selectedHalal, selectedAllergens, showArchived]);
+
+  const { data, isLoading, error } = useIngredients({
+    active_only: !showArchived,
+    page_size: 30,
+    page_number: pageNumber,
+    search: debouncedSearch || undefined,
+    category_ids: selectedCategories.length > 0 ? selectedCategories.join(',') : undefined,
+    units: selectedUnits.length > 0 ? selectedUnits.join(',') : undefined,
+    allergen_ids: selectedAllergens.length > 0 ? selectedAllergens.join(',') : undefined,
+    is_halal: selectedHalal.length > 0 ? selectedHalal.map(String).join(',') : undefined,
+  });
+  const ingredients = data?.items ?? [];
   const { data: categories } = useCategories();
   const { data: allergens } = useAllergens();
-  const { data: ingredientAllergenLinks } = useIngredientAllergenLinks();
-
-  const ingredientAllergenMap = useMemo(() => {
-    if (!ingredientAllergenLinks) return new Map<number, number[]>();
-    const map = new Map<number, number[]>();
-    ingredientAllergenLinks.forEach((link) => {
-      if (!map.has(link.ingredient_id)) {
-        map.set(link.ingredient_id, []);
-      }
-      map.get(link.ingredient_id)!.push(link.allergen_id);
-    });
-    return map;
-  }, [ingredientAllergenLinks]);
 
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
-
-    const filtered = ingredients.filter((ing) => {
-      // Search filter
-      if (search && !ing.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      // Category filter (if any selected)
-      if (selectedCategories.length > 0 && !selectedCategories.includes(ing.category_id ?? -1)) {
-        return false;
-      }
-      // Unit filter (if any selected)
-      if (selectedUnits.length > 0 && !selectedUnits.includes(ing.base_unit)) {
-        return false;
-      }
-      // Halal filter (if any selected, show matching ingredients)
-      if (selectedHalal.length > 0 && !selectedHalal.includes(ing.is_halal)) {
-        return false;
-      }
-      // Allergen filter (if any selected, show ingredients that have any of them)
-      if (selectedAllergens.length > 0) {
-        const ingredientAllergens = ingredientAllergenMap.get(ing.id) ?? [];
-        const hasSelectedAllergen = ingredientAllergens.some((allergenId) =>
-          selectedAllergens.includes(allergenId)
-        );
-        if (!hasSelectedAllergen) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    return sortIngredients(filtered, sortBy);
-  }, [ingredients, search, selectedCategories, selectedUnits, selectedHalal, selectedAllergens, sortBy, ingredientAllergenMap]);
+    return sortIngredients(ingredients, sortBy);
+  }, [ingredients, sortBy]);
 
   const categoryMap = useMemo(() => {
     if (!categories) return new Map<number, string>();
@@ -321,6 +295,17 @@ function IngredientsListTab() {
               )
             )}
           </div>
+        )}
+
+        {/* Pagination */}
+        {data && (
+          <Pagination
+            pageNumber={data.page_number}
+            totalPages={data.total_pages}
+            totalCount={data.total_count}
+            currentPageSize={data.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
     </div>

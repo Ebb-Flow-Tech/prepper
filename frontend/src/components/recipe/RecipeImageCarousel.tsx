@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Wand2, Trash2, Star } from 'lucide-react';
 import { useRecipeImages, useUploadRecipeImage, useGenerateRecipeImage, useSetMainRecipeImage, useDeleteRecipeImage } from '@/lib/hooks';
 import { Button } from '@/components/ui';
@@ -101,9 +102,11 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
       <div className="relative bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden mx-auto max-w-sm max-h-96">
         {hasImages ? (
           <>
-            <img
+            <Image
               src={currentImage.image_url}
               alt={`Recipe image ${validIndex + 1}`}
+              width={384}
+              height={384}
               className="w-full aspect-square object-cover"
             />
             {images.length > 1 && (

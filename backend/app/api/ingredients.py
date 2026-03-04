@@ -1,6 +1,6 @@
 """Ingredient API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import get_session, get_current_user
@@ -33,29 +33,36 @@ def create_ingredient(
     return service.create_ingredient(data)
 
 
-@router.get("", response_model=list[Ingredient])
+@router.get("")
 def list_ingredients(
     active_only: bool = True,
     category: FoodCategory | None = None,
     source: IngredientSource | None = None,
     master_only: bool = False,
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None),
+    category_ids: str | None = Query(default=None),
+    units: str | None = Query(default=None),
+    allergen_ids: str | None = Query(default=None),
+    is_halal: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ):
-    """List all ingredients with optional filters.
+    """List all ingredients with optional filters."""
+    from app.models.pagination import PaginatedResponse
 
-    Query Parameters:
-        active_only: If True, only return active ingredients (default: True)
-        category: Filter by food category (e.g., "proteins", "vegetables")
-        source: Filter by source ("fmh" or "manual")
-        master_only: If True, only return master ingredients (no variants)
-    """
+    parsed_category_ids = [int(x) for x in category_ids.split(",")] if category_ids else None
+    parsed_units = units.split(",") if units else None
+    parsed_allergen_ids = [int(x) for x in allergen_ids.split(",")] if allergen_ids else None
+    parsed_is_halal = [x.strip().lower() == "true" for x in is_halal.split(",")] if is_halal else None
+
     service = IngredientService(session)
-    return service.list_ingredients(
-        active_only=active_only,
-        category=category,
-        source=source,
-        master_only=master_only,
-    )
+    offset = (page_number - 1) * page_size
+    filter_kwargs = dict(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
+                         category_ids=parsed_category_ids, units=parsed_units, allergen_ids=parsed_allergen_ids, is_halal=parsed_is_halal)
+    items = service.list_paginated(offset=offset, limit=page_size, **filter_kwargs)
+    total = service.count(**filter_kwargs)
+    return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
 @router.get("/categories", response_model=list[Category])

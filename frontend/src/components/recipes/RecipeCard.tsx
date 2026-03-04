@@ -1,6 +1,8 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ImagePlus, ExternalLink } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, Badge } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
@@ -22,7 +24,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [], allergenNames = [] }: RecipeCardProps) {
+export const RecipeCard = memo(function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [], allergenNames = [] }: RecipeCardProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
@@ -36,9 +38,11 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames 
 
           {/* Recipe image */}
           {recipe.image_url ? (
-            <img
+            <Image
               src={recipe.image_url}
               alt={recipe.name}
+              width={64}
+              height={64}
               className="w-16 h-16 rounded-md object-cover"
             />
           ) : (
@@ -122,4 +126,4 @@ export function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames 
       </Card>
     </Link>
   );
-}
+});

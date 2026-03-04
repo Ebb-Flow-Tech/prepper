@@ -18,7 +18,8 @@ const OUTLET_TYPE_OPTIONS = [
 
 export function AddOutletModal({ isOpen, onClose }: AddOutletModalProps) {
   const createOutlet = useCreateOutlet();
-  const { data: allOutlets = [] } = useOutlets(false); // Get all outlets including archived
+  const { data: allOutletsData } = useOutlets({ page_size: 30 });
+  const allOutlets = allOutletsData?.items ?? [];
 
   const [name, setName] = useState('');
   const [code, setCode] = useState('');

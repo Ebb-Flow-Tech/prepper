@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import Link from 'next/link';
 import { Plus, Trash2, Check, X, MapPin, Phone, Mail, ArchiveRestore } from 'lucide-react';
 import { useSuppliers, useUpdateSupplier, useDeactivateSupplier } from '@/lib/hooks';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Card, CardHeader, CardTitle, CardContent, ViewToggle, Checkbox, Badge } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import { AddSupplierModal, SupplierListRow } from '@/components/suppliers';
 import { toast } from 'sonner';
 import type { Supplier } from '@/types';
@@ -238,21 +240,20 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
 
 export default function SuppliersPage() {
   const [showArchived, setShowArchived] = useState(false);
-  const { data: suppliers, isLoading, error } = useSuppliers(showArchived);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [pageNumber, setPageNumber] = useState(1);
+  useEffect(() => setPageNumber(1), [debouncedSearch]);
+
+  const { data, isLoading, error } = useSuppliers({
+    active_only: !showArchived,
+    page_size: 30,
+    page_number: pageNumber,
+    search: debouncedSearch || undefined,
+  });
+  const filteredSuppliers = data?.items ?? [];
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<ViewType>('grid');
-
-  const filteredSuppliers = useMemo(() => {
-    if (!suppliers) return [];
-
-    return suppliers.filter((supplier) => {
-      if (search && !supplier.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [suppliers, search]);
 
   if (error) {
     return (
@@ -340,6 +341,17 @@ export default function SuppliersPage() {
               ))}
             </div>
           )
+        )}
+
+        {/* Pagination */}
+        {data && (
+          <Pagination
+            pageNumber={data.page_number}
+            totalPages={data.total_pages}
+            totalCount={data.total_count}
+            currentPageSize={data.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
     </div>

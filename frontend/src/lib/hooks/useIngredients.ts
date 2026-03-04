@@ -8,12 +8,14 @@ import type {
   UpdateSupplierIngredientRequest,
   UpdateIngredientRequest,
 } from '@/types';
+import type { IngredientListParams } from '@/lib/api';
 
-export function useIngredients(showArchived: boolean = false) {
-  const activeOnly = !showArchived;
+export function useIngredients(params?: IngredientListParams) {
   return useQuery({
-    queryKey: ['ingredients', { activeOnly }],
-    queryFn: () => api.getIngredients(activeOnly),
+    queryKey: ['ingredients', params],
+    queryFn: () => api.getIngredients(params),
+    placeholderData: (prev) => prev,
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 }
 

@@ -596,81 +596,6 @@
     --sheet-overlay: 220 20% 5% / 0.8;
   }
 
-  /* Auto dark mode (respects system preference when no manual toggle) */
-  @media (prefers-color-scheme: dark) {
-    :root:not(.light):not(.dark) {
-      /* Core Brand Colors - Adjusted for dark mode */
-      --color-terracotta: 15 65% 60%;
-      --color-terracotta-light: 15 65% 15%;
-      --color-terracotta-dark: 15 65% 70%;
-
-      --color-green: 140 50% 50%;
-      --color-green-light: 140 50% 15%;
-      --color-green-dark: 140 50% 65%;
-
-      --color-teal: 160 50% 50%;
-      --color-teal-light: 160 50% 15%;
-      --color-teal-dark: 160 50% 65%;
-
-      --color-amber: 35 80% 55%;
-      --color-amber-light: 35 80% 15%;
-      --color-amber-dark: 35 80% 70%;
-
-      --color-red: 0 70% 55%;
-      --color-red-light: 0 70% 15%;
-      --color-red-dark: 0 70% 70%;
-
-      --color-slate: 220 10% 60%;
-      --color-slate-light: 220 10% 15%;
-      --color-slate-dark: 220 10% 75%;
-
-      --color-sage: 120 25% 55%;
-      --color-sage-light: 120 25% 15%;
-      --color-sage-dark: 120 25% 70%;
-
-      /* Base Semantic Colors - Dark Mode */
-      --background: 220 20% 8%;
-      --foreground: 0 0% 95%;
-
-      --primary: var(--color-terracotta);
-      --primary-foreground: 220 20% 8%;
-
-      --secondary: 220 15% 15%;
-      --secondary-foreground: 0 0% 95%;
-
-      --muted: 220 15% 15%;
-      --muted-foreground: 0 0% 50%;
-
-      --accent: 220 15% 18%;
-      --accent-foreground: 0 0% 95%;
-
-      --tertiary: var(--color-sage);
-      --tertiary-foreground: 0 0% 95%;
-      --tertiary-light: var(--color-sage-light);
-
-      --card: 220 15% 12%;
-      --card-foreground: 0 0% 95%;
-      --popover: 220 15% 12%;
-      --popover-foreground: 0 0% 95%;
-
-      --destructive: var(--color-red);
-      --destructive-foreground: 0 0% 95%;
-
-      --border: 220 15% 20%;
-      --input: 220 15% 20%;
-      --ring: var(--color-terracotta);
-
-      --background-contrast: 220 20% 12%;
-
-      /* Gradient - Adjusted for dark mode */
-      --mono-gradient-start: 35 20% 50%;
-      --mono-gradient-end: 15 40% 45%;
-
-      /* Dialog Overlay - Darker for dark mode */
-      --dialog-overlay: 220 20% 8% / 0.4;
-      --sheet-overlay: 220 20% 5% / 0.8;
-    }
-  }
 }
 
 @theme inline {
@@ -759,12 +684,3 @@ h1, h2, h3, h4, h5, h6 {
   background: hsl(220 15% 35%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not(.light):not(.dark) ::-webkit-scrollbar-thumb {
-    background: hsl(220 15% 25%);
-  }
-
-  :root:not(.light):not(.dark) ::-webkit-scrollbar-thumb:hover {
-    background: hsl(220 15% 35%);
-  }
-}

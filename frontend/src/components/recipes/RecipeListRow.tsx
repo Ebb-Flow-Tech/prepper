@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { Card, CardContent, Badge } from '@/components/ui';
@@ -20,7 +21,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [] }: RecipeListRowProps) {
+export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [] }: RecipeListRowProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-2">
@@ -67,4 +68,4 @@ export function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenN
       </Card>
     </Link>
   );
-}
+});

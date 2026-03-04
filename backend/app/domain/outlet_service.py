@@ -38,6 +38,29 @@ class OutletService:
             statement = statement.where(Outlet.is_active == is_active)
         return list(self.session.exec(statement).all())
 
+    def _build_list_query(self, is_active=None, search=None):
+        statement = select(Outlet)
+        if is_active is not None:
+            statement = statement.where(Outlet.is_active == is_active)
+        if search:
+            statement = statement.where(Outlet.name.ilike(f"%{search}%"))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, is_active=None, search=None, accessible_ids: set[int] | None = None) -> list[Outlet]:
+        statement = self._build_list_query(is_active=is_active, search=search)
+        if accessible_ids is not None:
+            statement = statement.where(Outlet.id.in_(accessible_ids))
+        statement = statement.offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count(self, is_active=None, search=None, accessible_ids: set[int] | None = None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(is_active=is_active, search=search)
+        if accessible_ids is not None:
+            statement = statement.where(Outlet.id.in_(accessible_ids))
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
+
     def get_outlet(self, outlet_id: int) -> Outlet | None:
         """Get an outlet by ID."""
         return self.session.get(Outlet, outlet_id)

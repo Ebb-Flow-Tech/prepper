@@ -15,7 +15,8 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
   const { id } = use(params);
   const menuId = parseInt(id, 10);
   const { data: menu, isLoading, error } = useMenu(menuId);
-  const { data: recipes = [] } = useRecipes();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items ?? [];
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
 

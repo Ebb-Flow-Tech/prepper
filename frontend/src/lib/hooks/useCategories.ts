@@ -9,6 +9,7 @@ export function useCategories(showArchived: boolean = false) {
   return useQuery({
     queryKey: ['categories', { activeOnly }],
     queryFn: () => api.getCategories(activeOnly),
+    staleTime: 30 * 60 * 1000, // 30 minutes — stable reference data
   });
 }
 

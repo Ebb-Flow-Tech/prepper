@@ -103,7 +103,8 @@ export function RecipeCategoriesTab() {
   const [editingCategory, setEditingCategory] = useState<RecipeCategory | null>(null);
   const [view, setView] = useState<ViewType>('grid');
   const [deleteConfirm, setDeleteConfirm] = useState<RecipeCategory | null>(null);
-  const { data: categories = [], isLoading, error } = useRecipeCategories();
+  const { data: categoriesData, isLoading, error } = useRecipeCategories({ page_size: 30 });
+  const categories = categoriesData?.items ?? [];
   const deleteRecipeCategory = useDeleteRecipeCategory();
 
   const filteredCategories = useMemo(() => {

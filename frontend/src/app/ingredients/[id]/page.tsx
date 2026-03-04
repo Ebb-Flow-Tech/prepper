@@ -252,10 +252,12 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const isAdmin = userType === 'admin';
 
   const { data: ingredient, isLoading, error } = useIngredient(ingredientId);
-  const { data: availableSuppliers } = useSuppliers();
+  const { data: availableSuppliersData } = useSuppliers({ page_size: 30 });
+  const availableSuppliers = availableSuppliersData?.items;
   const { data: suppliers = [] } = useIngredientSuppliers(ingredientId);
   const { data: categories = [] } = useCategories();
-  const { data: outlets = [] } = useOutlets();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items ?? [];
 
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();

@@ -45,13 +45,14 @@ class Recipe(RecipeBase, table=True):
     selling_price_est: float | None = Field(default=None)
     status: RecipeStatus = Field(default=RecipeStatus.DRAFT)
     is_public: bool = Field(default=False)
-    owner_id: str | None = Field(default=None)
+    owner_id: str | None = Field(default=None, index=True)
 
     # Versioning
     version: int = Field(default=1, description="Version number of this recipe")
     root_id: int | None = Field(
         default=None,
         foreign_key="recipes.id",
+        index=True,
         description="ID of the original recipe this was forked from",
     )
 
@@ -109,6 +110,30 @@ class RecipeUpdate(SQLModel):
     rnd_started: bool | None = None
     review_ready: bool | None = None
     image_url: str | None = None
+
+
+class RecipeListRead(SQLModel):
+    """Lean DTO for recipe list responses (excludes heavy text fields)."""
+
+    id: int
+    name: str
+    yield_quantity: float
+    yield_unit: str
+    is_prep_recipe: bool
+    cost_price: float | None = None
+    selling_price_est: float | None = None
+    status: RecipeStatus
+    is_public: bool
+    owner_id: str | None = None
+    version: int
+    root_id: int | None = None
+    image_url: str | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    rnd_started: bool = False
+    review_ready: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class RecipeStatusUpdate(SQLModel):

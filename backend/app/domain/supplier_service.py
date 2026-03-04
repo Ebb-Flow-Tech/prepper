@@ -39,6 +39,25 @@ class SupplierService:
             statement = statement.where(Supplier.is_active == True)
         return list(self.session.exec(statement).all())
 
+    def _build_list_query(self, active_only=True, search=None):
+        statement = select(Supplier)
+        if active_only:
+            statement = statement.where(Supplier.is_active == True)
+        if search:
+            statement = statement.where(Supplier.name.ilike(f"%{search}%"))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, active_only=True, search=None) -> list[Supplier]:
+        statement = self._build_list_query(active_only=active_only, search=search)
+        statement = statement.offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count(self, active_only=True, search=None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(active_only=active_only, search=search)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
+
     def get_supplier(self, supplier_id: int) -> Supplier | None:
         """Get a supplier by ID."""
         return self.session.get(Supplier, supplier_id)

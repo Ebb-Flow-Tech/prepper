@@ -38,8 +38,10 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
   const createIngredient = useCreateIngredient();
   const addIngredientSupplier = useAddIngredientSupplier();
   const categorizeIngredient = useCategorizeIngredient();
-  const { data: suppliers = [] } = useSuppliers();
-  const { data: outlets = [] } = useOutlets();
+  const { data: suppliersData } = useSuppliers({ page_size: 30 });
+  const suppliers = suppliersData?.items ?? [];
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items ?? [];
 
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');

@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Plus, Grid3x3, List, Table2 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
 import {
@@ -115,7 +116,7 @@ function DragOverlayContent({
       <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
         {item.recipe.image_url ? (
           <div className="h-20 relative overflow-hidden rounded-t-xl">
-            <img src={item.recipe.image_url} alt={item.recipe.name} className="h-full w-full object-cover" />
+            <Image src={item.recipe.image_url} alt={item.recipe.name} fill className="object-cover" />
           </div>
         ) : (
           <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
@@ -163,7 +164,7 @@ function DragOverlayContent({
       <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
         {staged.recipe.image_url ? (
           <div className="h-20 relative overflow-hidden rounded-t-xl">
-            <img src={staged.recipe.image_url} alt={staged.recipe.name} className="h-full w-full object-cover" />
+            <Image src={staged.recipe.image_url} alt={staged.recipe.name} fill className="object-cover" />
           </div>
         ) : (
           <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
@@ -652,10 +653,11 @@ function StagedRecipeCard({
       {/* Card Art */}
       {staged.recipe.image_url ? (
         <div className="game-card-art relative">
-          <img
+          <Image
             src={staged.recipe.image_url}
             alt={staged.recipe.name}
-            className="absolute inset-0 h-full w-full object-cover"
+            fill
+            className="object-cover"
           />
         </div>
       ) : (
@@ -1675,12 +1677,15 @@ interface CanvasTabProps {
 export function CanvasTab({ outlets }: CanvasTabProps) {
   const router = useRouter();
   const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
-  const { data: recipes } = useRecipes();
-  const { data: ingredients } = useIngredients();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items;
+  const { data: ingredientsData } = useIngredients({ page_size: 30 });
+  const ingredients = ingredientsData?.items;
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes } = useSubRecipes(selectedRecipeId);
   const { data: categories } = useCategories();
-  const { data: recipeCategories } = useRecipeCategories();
+  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const recipeCategories = recipeCategoriesData?.items;
   const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
 
   // Create a mapping of category ID to name for efficient lookups

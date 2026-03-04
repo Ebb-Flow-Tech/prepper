@@ -162,7 +162,8 @@ export function OutletManagementTab({ userType }: OutletManagementTabProps) {
   const [view, setView] = useState<ViewType>('grid');
   const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
   const [groupByBrands, setGroupByBrands] = useState(false);
-  const { data: outlets, isLoading, error } = useOutlets(showArchived);
+  const { data: outletsData, isLoading, error } = useOutlets({ is_active: showArchived ? undefined : true, page_size: 30 });
+  const outlets = outletsData?.items;
 
   const toggleParentExpanded = (parentId: number) => {
     const newExpanded = new Set(expandedParents);

@@ -6,6 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton } from '@/components/ui';
+import Image from 'next/image';
 import { formatCurrency, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Ingredient, Recipe, Outlet } from '@/types';
@@ -163,8 +164,8 @@ function DraggableRecipeCard({
 
       {/* Image thumbnail (if available) */}
       {recipe.image_url && (
-        <div className="w-8 h-8 rounded overflow-hidden shrink-0">
-          <img src={recipe.image_url} alt={recipe.name} className="w-full h-full object-cover" />
+        <div className="w-8 h-8 rounded overflow-hidden shrink-0 relative">
+          <Image src={recipe.image_url} alt={recipe.name} fill className="object-cover" />
         </div>
       )}
 
@@ -301,10 +302,13 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ outlets }: RightPanelProps) {
-  const { data: ingredients, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients();
-  const { data: recipes, isLoading: recipesLoading, error: recipesError } = useRecipes();
+  const { data: ingredientsData, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients({ page_size: 30 });
+  const ingredients = ingredientsData?.items;
+  const { data: recipesData, isLoading: recipesLoading, error: recipesError } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items;
   const { data: categories } = useCategories();
-  const { data: recipeCategories } = useRecipeCategories();
+  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const recipeCategories = recipeCategoriesData?.items;
   const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
   const createIngredient = useCreateIngredient();
   const categorizeIngredient = useCategorizeIngredient();

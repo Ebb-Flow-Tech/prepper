@@ -52,7 +52,8 @@ interface CanvasLayoutProps {
 }
 
 export function CanvasLayout({ showBackLink = false, showTabs = true }: CanvasLayoutProps) {
-  const { data: outlets } = useOutlets();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items;
 
   return (
     <div className="flex h-full flex-col">

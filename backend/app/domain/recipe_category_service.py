@@ -30,6 +30,23 @@ class RecipeCategoryService:
         statement = select(RecipeCategory)
         return list(self.session.exec(statement).all())
 
+    def _build_list_query(self, search=None):
+        statement = select(RecipeCategory)
+        if search:
+            statement = statement.where(RecipeCategory.name.ilike(f"%{search}%"))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, search=None) -> list[RecipeCategory]:
+        statement = self._build_list_query(search=search)
+        statement = statement.offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count(self, search=None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(search=search)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
+
     def get_recipe_category(self, category_id: int) -> RecipeCategory | None:
         """Get a recipe category by ID."""
         return self.session.get(RecipeCategory, category_id)

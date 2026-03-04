@@ -8,15 +8,27 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Build connect_args based on database type
+# Build connect_args and pool config based on database type
 connect_args = {}
-if settings.database_url.startswith("sqlite"):
+engine_kwargs: dict = {}
+is_sqlite = settings.database_url.startswith("sqlite")
+
+if is_sqlite:
     connect_args["check_same_thread"] = False
+else:
+    # Connection pooling for PostgreSQL / non-SQLite databases
+    engine_kwargs.update(
+        pool_size=20,
+        max_overflow=40,
+        pool_recycle=3600,
+        pool_pre_ping=True,
+    )
 
 engine = create_engine(
     settings.database_url,
     echo=settings.debug,
     connect_args=connect_args,
+    **engine_kwargs,
 )
 
 

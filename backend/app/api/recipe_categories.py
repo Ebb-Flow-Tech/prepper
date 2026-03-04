@@ -1,6 +1,6 @@
 """Recipe category API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
@@ -24,13 +24,20 @@ def create_recipe_category(
     return service.create_recipe_category(data)
 
 
-@router.get("", response_model=list[RecipeCategory])
+@router.get("")
 def list_recipe_categories(
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ):
     """List all recipe categories."""
+    from app.models.pagination import PaginatedResponse
     service = RecipeCategoryService(session)
-    return service.list_recipe_categories()
+    offset = (page_number - 1) * page_size
+    items = service.list_paginated(offset=offset, limit=page_size, search=search)
+    total = service.count(search=search)
+    return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
 @router.get("/{category_id}", response_model=RecipeCategory)

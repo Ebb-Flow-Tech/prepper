@@ -25,7 +25,8 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
 
   const { data: category, isLoading, error } = useRecipeCategory(categoryId);
   const { data: categoryRecipes = [] } = useCategoryRecipes(categoryId);
-  const { data: recipes = [] } = useRecipes();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items ?? [];
 
   const updateCategoryMutation = useUpdateRecipeCategory();
   const addRecipeMutation = useAddRecipeToCategory();

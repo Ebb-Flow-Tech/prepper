@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.models import (
     Ingredient,
     IngredientCreate,
+    IngredientListRead,
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
@@ -57,6 +58,15 @@ class IngredientService:
 
     def __init__(self, session: Session):
         self.session = session
+        self._accessible_outlet_ids_cache: dict[int, set[int]] = {}
+
+    def _get_accessible_outlet_ids(self, user_outlet_id: int) -> set[int]:
+        """Cached wrapper around get_accessible_outlet_ids (per-request)."""
+        if user_outlet_id not in self._accessible_outlet_ids_cache:
+            self._accessible_outlet_ids_cache[user_outlet_id] = get_accessible_outlet_ids(
+                self.session, user_outlet_id
+            )
+        return self._accessible_outlet_ids_cache[user_outlet_id]
 
     def create_ingredient(self, data: IngredientCreate) -> Ingredient:
         """Create a new ingredient."""
@@ -96,6 +106,49 @@ class IngredientService:
             statement = statement.where(Ingredient.master_ingredient_id == None)
 
         return list(self.session.exec(statement).all())
+
+    def _build_list_query(self, active_only=True, category=None, source=None, master_only=False, search=None,
+                          category_ids=None, units=None, allergen_ids=None, is_halal=None):
+        statement = select(Ingredient)
+        if active_only:
+            statement = statement.where(Ingredient.is_active == True)
+        if category is not None:
+            statement = statement.where(Ingredient.category == category)
+        if source is not None:
+            statement = statement.where(Ingredient.source == source)
+        if master_only:
+            statement = statement.where(Ingredient.master_ingredient_id == None)
+        if search:
+            statement = statement.where(Ingredient.name.ilike(f"%{search}%"))
+        if category_ids:
+            statement = statement.where(Ingredient.category_id.in_(category_ids))
+        if units:
+            statement = statement.where(Ingredient.base_unit.in_(units))
+        if is_halal is not None:
+            statement = statement.where(Ingredient.is_halal.in_(is_halal))
+        if allergen_ids:
+            from app.models.ingredient_allergen import IngredientAllergen
+            allergen_subquery = select(IngredientAllergen.ingredient_id).where(
+                IngredientAllergen.allergen_id.in_(allergen_ids)
+            ).distinct()
+            statement = statement.where(Ingredient.id.in_(allergen_subquery))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, active_only=True, category=None, source=None, master_only=False, search=None,
+                        category_ids=None, units=None, allergen_ids=None, is_halal=None) -> list[IngredientListRead]:
+        statement = self._build_list_query(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
+                                           category_ids=category_ids, units=units, allergen_ids=allergen_ids, is_halal=is_halal)
+        statement = statement.offset(offset).limit(limit)
+        rows = self.session.exec(statement).all()
+        return [IngredientListRead.model_validate(r) for r in rows]
+
+    def count(self, active_only=True, category=None, source=None, master_only=False, search=None,
+              category_ids=None, units=None, allergen_ids=None, is_halal=None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
+                                           category_ids=category_ids, units=units, allergen_ids=allergen_ids, is_halal=is_halal)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
 
     def get_ingredient(self, ingredient_id: int) -> Ingredient | None:
         """Get an ingredient by ID."""
@@ -222,7 +275,7 @@ class IngredientService:
         if not is_admin:
             if user_outlet_id is None:
                 return []
-            accessible = get_accessible_outlet_ids(self.session, user_outlet_id)
+            accessible = self._get_accessible_outlet_ids(user_outlet_id)
             statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
 
         rows = self.session.exec(statement).all()
@@ -371,7 +424,7 @@ class IngredientService:
         if not is_admin:
             if user_outlet_id is None:
                 return None
-            accessible = get_accessible_outlet_ids(self.session, user_outlet_id)
+            accessible = self._get_accessible_outlet_ids(user_outlet_id)
 
         # Try preferred first
         statement = (

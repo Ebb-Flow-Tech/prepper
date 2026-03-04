@@ -91,10 +91,10 @@ def test_list_outlets(client: TestClient):
     response = client.get("/api/v1/outlets")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 3
-    assert data[0]["name"] == "Outlet One"
-    assert data[1]["name"] == "Outlet Two"
-    assert data[2]["name"] == "Outlet Three"
+    assert data["total_count"] == 3
+    assert data["items"][0]["name"] == "Outlet One"
+    assert data["items"][1]["name"] == "Outlet Two"
+    assert data["items"][2]["name"] == "Outlet Three"
 
 
 def test_list_outlets_empty(client: TestClient):
@@ -102,7 +102,7 @@ def test_list_outlets_empty(client: TestClient):
     response = client.get("/api/v1/outlets")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 0
+    assert data["total_count"] == 0
 
 
 def test_list_outlets_filter_by_active(client: TestClient):
@@ -129,15 +129,15 @@ def test_list_outlets_filter_by_active(client: TestClient):
     response = client.get("/api/v1/outlets?is_active=true")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert all(outlet["is_active"] is True for outlet in data)
+    assert data["total_count"] == 2
+    assert all(outlet["is_active"] is True for outlet in data["items"])
 
     # Filter by active=false
     response = client.get("/api/v1/outlets?is_active=false")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["is_active"] is False
+    assert data["total_count"] == 1
+    assert data["items"][0]["is_active"] is False
 
 
 def test_get_outlet(client: TestClient):
@@ -930,8 +930,8 @@ def test_non_admin_user_can_only_see_own_outlet(client: TestClient):
         response = client.get("/api/v1/outlets")
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["id"] == outlet1_id
+        assert data["total_count"] == 1
+        assert data["items"][0]["id"] == outlet1_id
 
         # Non-admin should be able to get outlet1
         response = client.get(f"/api/v1/outlets/{outlet1_id}")
@@ -998,8 +998,8 @@ def test_non_admin_user_can_see_child_outlets(client: TestClient):
         response = client.get("/api/v1/outlets")
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
-        outlet_ids = {o["id"] for o in data}
+        assert data["total_count"] == 2
+        outlet_ids = {o["id"] for o in data["items"]}
         assert parent_id in outlet_ids
         assert child_id in outlet_ids
 

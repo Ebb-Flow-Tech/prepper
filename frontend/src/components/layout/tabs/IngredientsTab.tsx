@@ -10,7 +10,8 @@ export function IngredientsTab() {
   const { data: recipe, isLoading: recipeLoading } = useRecipe(selectedRecipeId);
   const { data: ingredients, isLoading: ingredientsLoading } = useRecipeIngredients(selectedRecipeId);
   const { data: subRecipes, isLoading: subRecipesLoading } = useSubRecipes(selectedRecipeId);
-  const { data: allRecipes } = useRecipes();
+  const { data: allRecipesData } = useRecipes({ page_size: 30 });
+  const allRecipes = allRecipesData?.items;
 
   const isLoading = recipeLoading || ingredientsLoading || subRecipesLoading;
 

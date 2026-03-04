@@ -105,13 +105,43 @@ class CostingService:
 
             recipe_ingredients = self.recipe_service.get_recipe_ingredients(recipe_id)
 
+            # Batch-fetch all ingredients and supplier_ingredients upfront
+            ingredient_ids = [ri.ingredient_id for ri in recipe_ingredients]
+            if ingredient_ids:
+                ingredients_map = {
+                    i.id: i
+                    for i in self.session.exec(
+                        select(Ingredient).where(Ingredient.id.in_(ingredient_ids))
+                    ).all()
+                }
+            else:
+                ingredients_map = {}
+
+            supplier_lookups = [
+                (ri.ingredient_id, ri.supplier_id)
+                for ri in recipe_ingredients
+                if ri.supplier_id
+            ]
+            si_map: dict[tuple[int, int], SupplierIngredient] = {}
+            if supplier_lookups:
+                supplier_ids = list({s_id for _, s_id in supplier_lookups})
+                si_ingredient_ids = list({i_id for i_id, _ in supplier_lookups})
+                all_sis = self.session.exec(
+                    select(SupplierIngredient).where(
+                        SupplierIngredient.ingredient_id.in_(si_ingredient_ids),
+                        SupplierIngredient.supplier_id.in_(supplier_ids),
+                    )
+                ).all()
+                for si in all_sis:
+                    si_map[(si.ingredient_id, si.supplier_id)] = si
+
             # --- 1. Calculate ingredient costs ---
             breakdown: list[CostBreakdownItem] = []
             ingredient_cost = 0.0
             missing_costs: list[str] = []
 
             for ri in recipe_ingredients:
-                ingredient = self.session.get(Ingredient, ri.ingredient_id)
+                ingredient = ingredients_map.get(ri.ingredient_id)
                 if not ingredient:
                     continue
 
@@ -120,12 +150,7 @@ class CostingService:
                 base_unit = ri.base_unit
 
                 if ri.supplier_id:
-                    si = self.session.exec(
-                        select(SupplierIngredient).where(
-                            SupplierIngredient.ingredient_id == ri.ingredient_id,
-                            SupplierIngredient.supplier_id == ri.supplier_id,
-                        )
-                    ).first()
+                    si = si_map.get((ri.ingredient_id, ri.supplier_id))
                     if si and si.pack_size > 0:
                         unit_price = si.price_per_pack / si.pack_size
                         if not base_unit:
@@ -173,8 +198,19 @@ class CostingService:
             sub_recipe_cost = 0.0
 
             sub_recipes = self._get_sub_recipes(recipe_id)
+            child_recipe_ids = [rr.child_recipe_id for rr in sub_recipes]
+            if child_recipe_ids:
+                child_recipes_map = {
+                    r.id: r
+                    for r in self.session.exec(
+                        select(Recipe).where(Recipe.id.in_(child_recipe_ids))
+                    ).all()
+                }
+            else:
+                child_recipes_map = {}
+
             for rr in sub_recipes:
-                child_recipe = self.session.get(Recipe, rr.child_recipe_id)
+                child_recipe = child_recipes_map.get(rr.child_recipe_id)
                 if not child_recipe:
                     missing_costs.append(f"[Sub-recipe {rr.child_recipe_id}]")
                     continue

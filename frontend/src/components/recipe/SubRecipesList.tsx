@@ -279,7 +279,8 @@ function AddSubRecipeForm({ recipeId, existingChildIds, recipes, userId, userTyp
 export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
   const { userId, userType } = useAppState();
   const { data: subRecipes, isLoading, error } = useSubRecipes(recipeId);
-  const { data: recipes } = useRecipes();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items;
   const updateSubRecipe = useUpdateSubRecipe();
   const removeSubRecipe = useRemoveSubRecipe();
   const reorderSubRecipes = useReorderSubRecipes();

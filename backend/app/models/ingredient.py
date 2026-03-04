@@ -103,6 +103,21 @@ class Ingredient(IngredientBase, table=True):
     supplier_ingredients: list["SupplierIngredient"] = Relationship(back_populates="ingredient")
 
 
+class IngredientListRead(SQLModel):
+    """Slim read model for ingredient list views — excludes relationships and heavy fields."""
+
+    id: int
+    name: str
+    base_unit: str
+    cost_per_base_unit: float | None = None
+    is_active: bool = True
+    is_halal: bool = False
+    category: str | None = None
+    category_id: int | None = None
+    source: str = "manual"
+    master_ingredient_id: int | None = None
+
+
 class IngredientCreate(SQLModel):
     """Schema for creating a new ingredient."""
 

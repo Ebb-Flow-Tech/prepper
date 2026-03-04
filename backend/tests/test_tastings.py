@@ -42,9 +42,9 @@ def test_list_tasting_sessions(client: TestClient):
     response = client.get("/api/v1/tasting-sessions")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert data["total_count"] == 2
     # Should be ordered by date descending
-    assert data[0]["date"] == "2024-12-15T14:00:00"
+    assert data["items"][0]["date"] == "2024-12-15T14:00:00"
 
 
 def test_get_tasting_session(client: TestClient):

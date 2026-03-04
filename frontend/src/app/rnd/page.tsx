@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import { FlaskConical, ClipboardList, Loader2, CheckCircle, GitFork, ImagePlus, ExternalLink, Wine, Plus, ChevronDown, ChevronUp, RotateCcw, RefreshCw } from 'lucide-react';
 import { useRecipesWithFeedback, useRecipeTastingNotes, useCreateTastingSession, useAddRecipeToSession, useTastingSessions, useSessionRecipes } from '@/lib/hooks/useTastings';
@@ -125,9 +126,11 @@ function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipe
           </div>
 
           {recipe.image_url ? (
-            <img
+            <Image
               src={recipe.image_url}
               alt={recipe.name}
+              width={64}
+              height={64}
               className="w-16 h-16 rounded-md object-cover"
             />
           ) : (
@@ -327,9 +330,11 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
             </div>
 
             {recipe.image_url ? (
-              <img
+              <Image
                 src={recipe.image_url}
                 alt={recipe.name}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-md object-cover"
               />
             ) : (
@@ -523,8 +528,10 @@ interface WipGroup {
 export default function RndPage() {
   const { userId } = useAppState();
   const { data: recipesWithFeedback, isLoading: isLoadingFeedback, error: feedbackError } = useRecipesWithFeedback(userId);
-  const { data: allRecipes, isLoading: isLoadingRecipes } = useRecipes();
-  const { data: tastingSessions, isLoading: isLoadingSessions } = useTastingSessions();
+  const { data: allRecipesData, isLoading: isLoadingRecipes } = useRecipes({ page_size: 30 });
+  const allRecipes = allRecipesData?.items;
+  const { data: tastingSessionsData, isLoading: isLoadingSessions } = useTastingSessions({ page_size: 30 });
+  const tastingSessions = tastingSessionsData?.items;
   const forkMutation = useForkRecipe();
 
   const [search, setSearch] = useState('');

@@ -13,7 +13,8 @@ export function UserManagementTab() {
   const [editingPhoneValue, setEditingPhoneValue] = useState('');
   const updateUser = useUpdateUser();
   const { data: users, isLoading, error } = useUsers();
-  const { data: outlets } = useOutlets();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items;
 
   const filteredUsers = useMemo(() => {
     if (!users) return [];

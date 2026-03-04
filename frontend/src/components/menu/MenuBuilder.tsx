@@ -428,8 +428,10 @@ function DraggableItem({
 export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
   const router = useRouter();
   const { userType } = useAppState();
-  const { data: recipes } = useRecipes();
-  const { data: outlets } = useOutlets();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items;
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items;
   const createMenuMutation = useCreateMenu();
   const updateMenuMutation = useUpdateMenu();
   const forkMenuMutation = useForkMenu();

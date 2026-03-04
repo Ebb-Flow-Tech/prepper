@@ -100,10 +100,12 @@ export default function OutletPage({ params }: OutletPageProps) {
   const outletId = parseInt(id, 10);
 
   const { data: outlet, isLoading, error } = useOutlet(outletId);
-  const { data: allOutlets = [] } = useOutlets(true);
+  const { data: allOutletsData } = useOutlets({ page_size: 30 });
+  const allOutlets = allOutletsData?.items ?? [];
   const { data: outletRecipes = [] } = useOutletRecipes(outletId);
   const { data: parentOutletRecipes = [] } = useParentOutletRecipes(outletId);
-  const { data: recipes = [] } = useRecipes();
+  const { data: recipesData } = useRecipes({ page_size: 30 });
+  const recipes = recipesData?.items ?? [];
 
   const updateOutletMutation = useUpdateOutlet();
   const addRecipeToOutletMutation = useAddRecipeToOutlet();

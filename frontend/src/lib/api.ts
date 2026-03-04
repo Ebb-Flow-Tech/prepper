@@ -74,7 +74,40 @@ import type {
   MenuSectionRead,
   CreateMenuRequest,
   UpdateMenuRequest,
+  PaginatedResponse,
 } from '@/types';
+
+// ============ Pagination Param Interfaces ============
+
+export interface ListParams {
+  page_number?: number;
+  page_size?: number;
+  search?: string;
+}
+
+export interface RecipeListParams extends ListParams {
+  status?: string;
+  category_ids?: string;
+}
+
+export interface IngredientListParams extends ListParams {
+  active_only?: boolean;
+  category?: string;
+  source?: string;
+  master_only?: boolean;
+  category_ids?: string;
+  units?: string;
+  allergen_ids?: string;
+  is_halal?: string;
+}
+
+export interface SupplierListParams extends ListParams {
+  active_only?: boolean;
+}
+
+export interface OutletListParams extends ListParams {
+  is_active?: boolean | null;
+}
 import { refreshAccessToken, triggerLogout, type RefreshTokenResult } from '@/lib/auth-interceptor';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -184,8 +217,15 @@ async function fetchApi<T>(
 
 // ============ Recipes ============
 
-export async function getRecipes(): Promise<Recipe[]> {
-  return fetchApi<Recipe[]>('/recipes');
+export async function getRecipes(params?: RecipeListParams): Promise<PaginatedResponse<Recipe>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.category_ids) searchParams.set('category_ids', params.category_ids);
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<Recipe>>(`/recipes${query ? `?${query}` : ''}`);
 }
 
 export async function getRecipe(id: number): Promise<Recipe> {
@@ -368,8 +408,21 @@ export async function updateStructuredInstructions(
 
 // ============ Ingredients ============
 
-export async function getIngredients(activeOnly: boolean = true): Promise<Ingredient[]> {
-  return fetchApi<Ingredient[]>(`/ingredients?active_only=${activeOnly}`);
+export async function getIngredients(params?: IngredientListParams): Promise<PaginatedResponse<Ingredient>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.active_only !== undefined) searchParams.set('active_only', String(params.active_only));
+  if (params?.category) searchParams.set('category', params.category);
+  if (params?.source) searchParams.set('source', params.source);
+  if (params?.master_only) searchParams.set('master_only', String(params.master_only));
+  if (params?.category_ids) searchParams.set('category_ids', params.category_ids);
+  if (params?.units) searchParams.set('units', params.units);
+  if (params?.allergen_ids) searchParams.set('allergen_ids', params.allergen_ids);
+  if (params?.is_halal) searchParams.set('is_halal', params.is_halal);
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<Ingredient>>(`/ingredients${query ? `?${query}` : ''}`);
 }
 
 export async function getIngredient(id: number): Promise<Ingredient> {
@@ -417,8 +470,13 @@ export async function recomputeRecipeCosting(
 
 // ============ Tasting Sessions ============
 
-export async function getTastingSessions(): Promise<TastingSession[]> {
-  return fetchApi<TastingSession[]>('/tasting-sessions');
+export async function getTastingSessions(params?: ListParams): Promise<PaginatedResponse<TastingSession>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<TastingSession>>(`/tasting-sessions${query ? `?${query}` : ''}`);
 }
 
 export async function getTastingSession(id: number): Promise<TastingSession> {
@@ -626,9 +684,14 @@ export async function getIngredientTastingSummary(
 
 // ============ Suppliers ============
 
-export async function getSuppliers(activeOnly: boolean = true): Promise<Supplier[]> {
-  const query = activeOnly ? '' : '?active_only=false';
-  return fetchApi<Supplier[]>(`/suppliers${query}`);
+export async function getSuppliers(params?: SupplierListParams): Promise<PaginatedResponse<Supplier>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.active_only !== undefined) searchParams.set('active_only', String(params.active_only));
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<Supplier>>(`/suppliers${query ? `?${query}` : ''}`);
 }
 
 export async function getSupplier(id: number): Promise<Supplier> {
@@ -903,12 +966,14 @@ export async function getRecipeAllergensBatch(
 
 // ============ Outlets ============
 
-export async function getOutlets(isActive: boolean | null = null): Promise<Outlet[]> {
-  const params = new URLSearchParams();
-  if (isActive !== null) {
-    params.append('is_active', String(isActive));
-  }
-  return fetchApi<Outlet[]>(`/outlets?${params}`);
+export async function getOutlets(params?: OutletListParams): Promise<PaginatedResponse<Outlet>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.is_active !== undefined && params.is_active !== null) searchParams.set('is_active', String(params.is_active));
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<Outlet>>(`/outlets${query ? `?${query}` : ''}`);
 }
 
 export async function getOutlet(id: number): Promise<Outlet> {
@@ -1012,8 +1077,13 @@ export async function getRecipeOutletsBatch(
 
 // ============ Recipe Categories ============
 
-export async function getRecipeCategories(): Promise<RecipeCategory[]> {
-  return fetchApi<RecipeCategory[]>('/recipe-categories');
+export async function getRecipeCategories(params?: ListParams): Promise<PaginatedResponse<RecipeCategory>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<RecipeCategory>>(`/recipe-categories${query ? `?${query}` : ''}`);
 }
 
 export async function getRecipeCategory(id: number): Promise<RecipeCategory> {

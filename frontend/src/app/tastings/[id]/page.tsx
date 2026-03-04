@@ -444,9 +444,11 @@ export default function TastingSessionDetailPage() {
   const { userId, userType } = useAppState();
   const { data: session, isLoading: sessionLoading, error: sessionError } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
-  const { data: availableRecipes } = useRecipes();
+  const { data: availableRecipesData } = useRecipes({ page_size: 30 });
+  const availableRecipes = availableRecipesData?.items;
   const { data: sessionIngredients, isLoading: ingredientsLoading } = useSessionIngredients(sessionId);
-  const { data: ingredients } = useIngredients();
+  const { data: ingredientsData } = useIngredients({ page_size: 30 });
+  const ingredients = ingredientsData?.items;
 
   const deleteSession = useDeleteTastingSession();
   const updateSession = useUpdateTastingSession();

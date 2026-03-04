@@ -9,13 +9,15 @@ import type {
   UpdateTastingNoteRequest,
   AddRecipeToSessionRequest,
 } from '@/types';
+import type { ListParams } from '@/lib/api';
 
 // ============ Tasting Sessions ============
 
-export function useTastingSessions() {
+export function useTastingSessions(params?: ListParams) {
   return useQuery({
-    queryKey: ['tasting-sessions'],
-    queryFn: api.getTastingSessions,
+    queryKey: ['tasting-sessions', params],
+    queryFn: () => api.getTastingSessions(params),
+    placeholderData: (prev) => prev,
   });
 }
 

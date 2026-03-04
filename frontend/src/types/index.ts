@@ -1,5 +1,13 @@
 // Types matching backend SQLModel schemas
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  page_number: number;
+  current_page_size: number;
+  total_count: number;
+  total_pages: number;
+}
+
 export interface AuthApiError {
   message?: string;
 }

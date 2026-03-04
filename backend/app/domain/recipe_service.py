@@ -100,6 +100,52 @@ class RecipeService:
         statement = statement.where(or_(*conditions))
         return list(self.session.exec(statement).all())
 
+    def _build_list_query(self, status=None, current_user=None, search=None, category_ids=None):
+        """Build base query for recipe listing with filters."""
+        from sqlalchemy import or_
+        statement = select(Recipe)
+        if status:
+            statement = statement.where(Recipe.status == status)
+        if search:
+            statement = statement.where(Recipe.name.ilike(f"%{search}%"))
+        if category_ids:
+            from app.models.recipe_recipe_category import RecipeRecipeCategory
+            category_subquery = select(RecipeRecipeCategory.recipe_id).where(
+                RecipeRecipeCategory.category_id.in_(category_ids),
+                RecipeRecipeCategory.is_active == True,
+            ).distinct()
+            statement = statement.where(Recipe.id.in_(category_subquery))
+        # Access control
+        if current_user and current_user.user_type == UserType.ADMIN:
+            return statement
+        if not current_user:
+            return statement.where(Recipe.id == None)  # return nothing
+        conditions = [Recipe.owner_id == current_user.id, Recipe.is_public == True]
+        if current_user.outlet_id:
+            from app.domain.outlet_service import OutletService
+            outlet_service = OutletService(self.session)
+            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
+            if user_outlet:
+                accessible_outlet_ids = {current_user.outlet_id}
+                if user_outlet.outlet_type.value != "brand" and user_outlet.parent_outlet_id:
+                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+                outlet_recipe_ids = select(RecipeOutlet.recipe_id).where(
+                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids), RecipeOutlet.is_active)
+                conditions.append(Recipe.id.in_(outlet_recipe_ids))
+        statement = statement.where(or_(*conditions))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, status=None, current_user=None, search: str | None = None, category_ids=None) -> list[Recipe]:
+        statement = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
+        statement = statement.offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count(self, status=None, current_user=None, search: str | None = None, category_ids=None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
+
     def get_recipe(self, recipe_id: int) -> Recipe | None:
         """Get a recipe by ID."""
         return self.session.get(Recipe, recipe_id)

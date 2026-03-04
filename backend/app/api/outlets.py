@@ -86,40 +86,36 @@ def create_outlet(
     return service.create_outlet(data)
 
 
-@router.get("", response_model=list[Outlet])
+@router.get("")
 def list_outlets(
     is_active: bool | None = Query(default=None),
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List outlets based on user permissions.
-
-    - Admin users: see all outlets
-    - Normal users: see only their assigned outlet and child outlets
-    """
+    """List outlets based on user permissions."""
+    from app.models.pagination import PaginatedResponse
     service = OutletService(session)
-    all_outlets = service.list_outlets(is_active=is_active)
 
-    # Admin users can see all outlets
-    if current_user.user_type == UserType.ADMIN:
-        return all_outlets
+    # Build accessible IDs for non-admin users
+    accessible_ids = None
+    if current_user.user_type != UserType.ADMIN:
+        if not current_user.outlet_id:
+            return PaginatedResponse.create(items=[], total_count=0, page_number=page_number, page_size=page_size)
+        accessible_ids = {current_user.outlet_id}
+        def add_children(outlet_id: int):
+            children = service.get_child_outlets(outlet_id)
+            for child in children:
+                accessible_ids.add(child.id)
+                add_children(child.id)
+        add_children(current_user.outlet_id)
 
-    # Normal users can only see their own outlet and child outlets
-    if not current_user.outlet_id:
-        return []
-
-    accessible_outlet_ids = {current_user.outlet_id}
-
-    # Add child outlets to accessible set
-    def add_children(outlet_id: int):
-        children = service.get_child_outlets(outlet_id)
-        for child in children:
-            accessible_outlet_ids.add(child.id)
-            add_children(child.id)
-
-    add_children(current_user.outlet_id)
-
-    return [outlet for outlet in all_outlets if outlet.id in accessible_outlet_ids]
+    offset = (page_number - 1) * page_size
+    items = service.list_paginated(offset=offset, limit=page_size, is_active=is_active, search=search, accessible_ids=accessible_ids)
+    total = service.count(is_active=is_active, search=search, accessible_ids=accessible_ids)
+    return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
 @router.get("/{outlet_id}", response_model=Outlet)

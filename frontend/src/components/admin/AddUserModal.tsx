@@ -18,7 +18,8 @@ const USER_TYPE_OPTIONS = [
 
 export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
   const createUser = useCreateUser();
-  const { data: outlets = [] } = useOutlets();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items ?? [];
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');

@@ -43,9 +43,11 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const isAdmin = userType === 'admin';
 
   const { data: supplier, isLoading, error } = useSupplier(supplierId);
-  const { data: availableIngredients } = useIngredients(false); // Include inactive too
+  const { data: availableIngredientsData } = useIngredients({ active_only: false, page_size: 30 }); // Include inactive too
+  const availableIngredients = availableIngredientsData?.items;
   const { data: supplierIngredients = [] } = useSupplierIngredients(supplierId);
-  const { data: outlets = [] } = useOutlets();
+  const { data: outletsData } = useOutlets({ page_size: 30 });
+  const outlets = outletsData?.items ?? [];
 
   const updateSupplierMutation = useUpdateSupplier();
   const deactivateSupplierMutation = useDeactivateSupplier();

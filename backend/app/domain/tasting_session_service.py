@@ -1,5 +1,7 @@
 """Tasting session management operations."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional
 
@@ -137,6 +139,27 @@ class TastingSessionService:
             self._build_read_with_participants(s, participants_map.get(s.id, []))
             for s in sessions
         ]
+
+    def _build_list_query(self, search=None):
+        statement = select(TastingSession)
+        if search:
+            statement = statement.where(TastingSession.name.ilike(f"%{search}%"))
+        return statement
+
+    def list_paginated(self, offset: int, limit: int, search=None) -> list[TastingSessionRead]:
+        statement = self._build_list_query(search=search)
+        statement = statement.order_by(TastingSession.date.desc(), TastingSession.id.desc())
+        statement = statement.offset(offset).limit(limit)
+        sessions = list(self.session.exec(statement).all())
+        session_ids = [s.id for s in sessions]
+        participants_map = self._load_participants_batch(session_ids)
+        return [self._build_read_with_participants(s, participants_map.get(s.id, [])) for s in sessions]
+
+    def count(self, search=None) -> int:
+        from sqlalchemy import func
+        statement = self._build_list_query(search=search)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
 
     def get(self, session_id: int) -> Optional[TastingSessionRead]:
         """Get a tasting session by ID."""
