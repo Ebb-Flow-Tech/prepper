@@ -46,7 +46,7 @@ def test_add_recipe_to_nonexistent_session(client: TestClient):
         "/api/v1/tasting-sessions/9999/recipes",
         json={"recipe_id": recipe_id},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_add_nonexistent_recipe_to_session(client: TestClient):

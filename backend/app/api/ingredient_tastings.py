@@ -3,9 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
-from app.models import IngredientTasting, IngredientTastingCreate
-from app.domain import IngredientTastingService
+from app.api.deps import get_session, get_current_user
+from app.models import IngredientTasting, IngredientTastingCreate, User
+from app.domain import IngredientTastingService, TastingSessionService
+from app.api.tastings import _check_creator_only
 
 
 router = APIRouter()
@@ -33,8 +34,15 @@ def add_ingredient_to_session(
     session_id: int,
     data: IngredientTastingCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Add an ingredient to a tasting session."""
+    """Add an ingredient to a tasting session. Only the session creator can do this."""
+    tasting_service = TastingSessionService(session)
+    tasting_session = tasting_service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    _check_creator_only(tasting_session, current_user)
+
     service = IngredientTastingService(session)
     ingredient_tasting = service.add_ingredient_to_session(session_id, data)
     if not ingredient_tasting:
@@ -53,8 +61,15 @@ def remove_ingredient_from_session(
     session_id: int,
     ingredient_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Remove an ingredient from a tasting session."""
+    """Remove an ingredient from a tasting session. Only the session creator can do this."""
+    tasting_service = TastingSessionService(session)
+    tasting_session = tasting_service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    _check_creator_only(tasting_session, current_user)
+
     service = IngredientTastingService(session)
     deleted = service.remove_ingredient_from_session(session_id, ingredient_id)
     if not deleted:

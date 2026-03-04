@@ -173,48 +173,18 @@ function FeedbackForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Ratings */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Taste</label>
-          <StarRating rating={tasteRating} onChange={setTasteRating} />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Aroma</label>
-          <StarRating rating={aromaRating} onChange={setAromaRating} />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Texture</label>
-          <StarRating rating={textureRating} onChange={setTextureRating} />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</label>
-          <StarRating rating={overallRating} onChange={setOverallRating} />
-        </div>
+      {/* Overall Rating */}
+      <div>
+        <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</label>
+        <StarRating rating={overallRating} onChange={setOverallRating} />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          Taster Name
-        </label>
-        <p className="text-sm text-zinc-900 dark:text-zinc-100 py-2">{tasterName || '(not set)'}</p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          Decision
-        </label>
-        <Select
-          value={decision}
-          onChange={(e) => setDecision(e.target.value as TastingDecision | '')}
-          options={[
-            { value: '', label: 'Select decision...' },
-            { value: 'approved', label: 'Approved' },
-            { value: 'needs_work', label: 'Needs Work' },
-            { value: 'rejected', label: 'Rejected' },
-          ]}
+      {showImages && (
+        <ImageUploadPreview
+          onImagesSelected={setSelectedImages}
+          uploadedImages={existingImages}
         />
-      </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
@@ -230,7 +200,7 @@ function FeedbackForm({
 
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          Action Items
+          Suggested Actions
         </label>
         <Textarea
           value={actionItems}
@@ -240,12 +210,21 @@ function FeedbackForm({
         />
       </div>
 
-      {showImages && (
-        <ImageUploadPreview
-          onImagesSelected={setSelectedImages}
-          uploadedImages={existingImages}
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+          Suggested Status
+        </label>
+        <Select
+          value={decision}
+          onChange={(e) => setDecision(e.target.value as TastingDecision | '')}
+          options={[
+            { value: '', label: 'Select status...' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'needs_work', label: 'Needs Work' },
+            { value: 'rejected', label: 'Rejected' },
+          ]}
         />
-      )}
+      </div>
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={isSubmitting}>
@@ -362,36 +341,11 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: 
           />
         ) : (
           <>
-            {/* Ratings */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-              <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Taste</p>
-                <StarRating rating={note.taste_rating} />
-              </div>
-              <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Aroma</p>
-                <StarRating rating={note.aroma_rating} />
-              </div>
-              <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Texture</p>
-                <StarRating rating={note.texture_rating} />
-              </div>
-              <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</p>
-                <StarRating rating={note.overall_rating} />
-              </div>
+            {/* Overall Rating */}
+            <div className="mb-4">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Overall</p>
+              <StarRating rating={note.overall_rating} />
             </div>
-            {note.feedback && (
-              <div className="mb-3">
-                <p className="text-sm text-zinc-600 dark:text-zinc-300">&ldquo;{note.feedback}&rdquo;</p>
-              </div>
-            )}
-            {note.action_items && (
-              <div className="mb-3 text-sm">
-                <p className="text-zinc-500 dark:text-zinc-400 font-medium mb-1">Action Items:</p>
-                <p className="text-zinc-600 dark:text-zinc-300">{note.action_items}</p>
-              </div>
-            )}
 
             {/* Collapsible Images Section */}
             <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
@@ -436,6 +390,28 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: 
                 </div>
               )}
             </div>
+
+            {note.feedback && (
+              <div className="mb-3 mt-3">
+                <p className="text-zinc-500 dark:text-zinc-400 font-medium text-sm mb-1">Feedback:</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-300">{note.feedback}</p>
+              </div>
+            )}
+            {note.action_items && (
+              <div className="mb-3 text-sm">
+                <p className="text-zinc-500 dark:text-zinc-400 font-medium mb-1">Suggested Actions:</p>
+                <p className="text-zinc-600 dark:text-zinc-300">{note.action_items}</p>
+              </div>
+            )}
+            {decisionConfig && (
+              <div className="mb-3 text-sm">
+                <p className="text-zinc-500 dark:text-zinc-400 font-medium mb-1">Suggested Status:</p>
+                <Badge variant={decisionConfig.badgeVariant}>
+                  {DecisionIcon && <DecisionIcon className="h-3 w-3 mr-1" />}
+                  {decisionConfig.label}
+                </Badge>
+              </div>
+            )}
           </>
         )}
       </CardContent>

@@ -41,6 +41,18 @@ def _check_session_access(
     )
 
 
+def _check_creator_only(
+    tasting_session: TastingSessionRead, current_user: User
+) -> None:
+    """Raise 403 unless the current user is the session creator."""
+    if tasting_session.creator_id == current_user.id:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Only the session creator can perform this action",
+    )
+
+
 # -----------------------------------------------------------------------------
 # Tasting Sessions
 # -----------------------------------------------------------------------------
@@ -127,7 +139,7 @@ def update_tasting_session(
 ):
     """Update a tasting session.
 
-    Non-admin users can only update sessions they created or participate in.
+    Only the session creator can update the session.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -137,7 +149,7 @@ def update_tasting_session(
             detail="Tasting session not found",
         )
 
-    _check_session_access(tasting_session, current_user)
+    _check_creator_only(tasting_session, current_user)
 
     updated_session = service.update(session_id, data)
     if not updated_session:
@@ -156,7 +168,7 @@ def delete_tasting_session(
 ):
     """Delete a tasting session and all its notes.
 
-    Non-admin users can only delete sessions they created or participate in.
+    Only the session creator can delete the session.
     """
     service = TastingSessionService(session)
     tasting_session = service.get(session_id)
@@ -166,7 +178,7 @@ def delete_tasting_session(
             detail="Tasting session not found",
         )
 
-    _check_session_access(tasting_session, current_user)
+    _check_creator_only(tasting_session, current_user)
 
     deleted = service.delete(session_id)
     if not deleted:

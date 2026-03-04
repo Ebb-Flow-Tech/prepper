@@ -3,9 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.api.deps import get_session
-from app.models import Recipe, RecipeTasting, RecipeTastingCreate
-from app.domain import RecipeTastingService
+from app.api.deps import get_session, get_current_user
+from app.models import Recipe, RecipeTasting, RecipeTastingCreate, User
+from app.domain import RecipeTastingService, TastingSessionService
+from app.api.tastings import _check_creator_only
 
 
 router = APIRouter()
@@ -53,8 +54,15 @@ def add_recipe_to_session(
     session_id: int,
     data: RecipeTastingCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Add a recipe to a tasting session."""
+    """Add a recipe to a tasting session. Only the session creator can do this."""
+    tasting_service = TastingSessionService(session)
+    tasting_session = tasting_service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    _check_creator_only(tasting_session, current_user)
+
     service = RecipeTastingService(session)
     recipe_tasting = service.add_recipe_to_session(session_id, data)
     if not recipe_tasting:
@@ -73,8 +81,15 @@ def remove_recipe_from_session(
     session_id: int,
     recipe_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Remove a recipe from a tasting session."""
+    """Remove a recipe from a tasting session. Only the session creator can do this."""
+    tasting_service = TastingSessionService(session)
+    tasting_session = tasting_service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    _check_creator_only(tasting_session, current_user)
+
     service = RecipeTastingService(session)
     deleted = service.remove_recipe_from_session(session_id, recipe_id)
     if not deleted:

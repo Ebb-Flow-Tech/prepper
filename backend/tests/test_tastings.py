@@ -820,3 +820,286 @@ def test_admin_can_access_any_session(client: TestClient, session: Session):
     get_response = client.get(f"/api/v1/tasting-sessions/{session_id}")
     assert get_response.status_code == 200
     assert get_response.json()["name"] == "Test Session"
+
+
+# ============================================================================
+# Creator-Only Mutation Tests
+# ============================================================================
+
+
+def test_creator_can_update_session(client: TestClient):
+    """Session creator can update their own session."""
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "My Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/tasting-sessions/{session_id}",
+        json={"name": "Updated"},
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Updated"
+
+
+def test_creator_can_delete_session(client: TestClient):
+    """Session creator can delete their own session."""
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "To Delete", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = create_response.json()["id"]
+
+    response = client.delete(f"/api/v1/tasting-sessions/{session_id}")
+    assert response.status_code == 204
+
+
+def test_admin_noncreator_cannot_update_session(
+    client: TestClient, session: Session
+):
+    """Admin who is not the creator cannot update session."""
+    from app.models import TastingSession
+
+    # Create session owned by someone else (not the admin test user)
+    ts = TastingSession(
+        name="Normal User Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Admin tries to update — should be 403
+    response = client.patch(
+        f"/api/v1/tasting-sessions/{ts.id}",
+        json={"name": "Hijacked"},
+    )
+    assert response.status_code == 403
+    assert "creator" in response.json()["detail"].lower()
+
+
+def test_admin_noncreator_cannot_delete_session(
+    client: TestClient, session: Session
+):
+    """Admin who is not the creator cannot delete session."""
+    from app.models import TastingSession
+
+    ts = TastingSession(
+        name="Normal User Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    response = client.delete(f"/api/v1/tasting-sessions/{ts.id}")
+    assert response.status_code == 403
+
+
+def test_participant_cannot_update_session(
+    session: Session, normal_user_client: TestClient
+):
+    """Participant who is not creator cannot update session."""
+    from app.models import TastingSession, TastingUser
+
+    ts = TastingSession(
+        name="Another Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Add normal user as participant
+    tu = TastingUser(tasting_session_id=ts.id, user_id="test-normal-user")
+    session.add(tu)
+    session.commit()
+
+    response = normal_user_client.patch(
+        f"/api/v1/tasting-sessions/{ts.id}",
+        json={"name": "Hijacked"},
+    )
+    assert response.status_code == 403
+
+
+def test_noncreator_cannot_add_recipe_to_session(
+    client: TestClient, session: Session
+):
+    """Non-creator cannot add a recipe to session."""
+    from app.models import TastingSession
+
+    ts = TastingSession(
+        name="Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Create a recipe (admin can create recipes)
+    recipe_resp = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_resp.json()["id"]
+
+    # Admin tries to add recipe to session they didn't create — 403
+    response = client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/recipes",
+        json={"recipe_id": recipe_id},
+    )
+    assert response.status_code == 403
+
+
+def test_noncreator_cannot_remove_recipe_from_session(
+    client: TestClient, session: Session
+):
+    """Non-creator cannot remove a recipe from session."""
+    from app.models import TastingSession, RecipeTasting
+
+    # Create recipe
+    recipe_resp = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_resp.json()["id"]
+
+    ts = TastingSession(
+        name="Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Link recipe to session directly
+    rt = RecipeTasting(tasting_session_id=ts.id, recipe_id=recipe_id)
+    session.add(rt)
+    session.commit()
+
+    response = client.delete(
+        f"/api/v1/tasting-sessions/{ts.id}/recipes/{recipe_id}",
+    )
+    assert response.status_code == 403
+
+
+def test_noncreator_cannot_add_ingredient_to_session(
+    client: TestClient, session: Session
+):
+    """Non-creator cannot add an ingredient to session."""
+    from app.models import TastingSession
+
+    ts = TastingSession(
+        name="Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Create an ingredient
+    ing_resp = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Salt", "base_unit": "g"},
+    )
+    ingredient_id = ing_resp.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/ingredients",
+        json={"ingredient_id": ingredient_id},
+    )
+    assert response.status_code == 403
+
+
+def test_noncreator_cannot_remove_ingredient_from_session(
+    client: TestClient, session: Session
+):
+    """Non-creator cannot remove an ingredient from session."""
+    from app.models import TastingSession, IngredientTasting
+
+    ing_resp = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Salt", "base_unit": "g"},
+    )
+    ingredient_id = ing_resp.json()["id"]
+
+    ts = TastingSession(
+        name="Session",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    it = IngredientTasting(tasting_session_id=ts.id, ingredient_id=ingredient_id)
+    session.add(it)
+    session.commit()
+
+    response = client.delete(
+        f"/api/v1/tasting-sessions/{ts.id}/ingredients/{ingredient_id}",
+    )
+    assert response.status_code == 403
+
+
+def test_creator_can_add_and_remove_recipe(client: TestClient):
+    """Session creator can add and remove recipes."""
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "My Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = create_response.json()["id"]
+
+    recipe_resp = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_resp.json()["id"]
+
+    # Creator adds recipe — should succeed
+    add_resp = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/recipes",
+        json={"recipe_id": recipe_id},
+    )
+    assert add_resp.status_code == 201
+
+    # Creator removes recipe — should succeed
+    del_resp = client.delete(
+        f"/api/v1/tasting-sessions/{session_id}/recipes/{recipe_id}",
+    )
+    assert del_resp.status_code == 204
+
+
+def test_creator_can_add_and_remove_ingredient(client: TestClient):
+    """Session creator can add and remove ingredients."""
+    create_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "My Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = create_response.json()["id"]
+
+    ing_resp = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Pepper", "base_unit": "g"},
+    )
+    ingredient_id = ing_resp.json()["id"]
+
+    # Creator adds ingredient — should succeed
+    add_resp = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients",
+        json={"ingredient_id": ingredient_id},
+    )
+    assert add_resp.status_code == 201
+
+    # Creator removes ingredient — should succeed
+    del_resp = client.delete(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients/{ingredient_id}",
+    )
+    assert del_resp.status_code == 204

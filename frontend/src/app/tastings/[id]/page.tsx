@@ -57,6 +57,7 @@ interface SessionRecipesSectionProps {
   sessionRecipes: RecipeTasting[];
   availableRecipes: Recipe[];
   isLoading: boolean;
+  isCreator: boolean;
   onAddRecipe: (recipeId: number) => void;
   onRemoveRecipe: (recipeId: number) => void;
 }
@@ -66,6 +67,7 @@ function SessionRecipesSection({
   sessionRecipes,
   availableRecipes,
   isLoading,
+  isCreator,
   onAddRecipe,
   onRemoveRecipe,
 }: SessionRecipesSectionProps) {
@@ -104,7 +106,7 @@ function SessionRecipesSection({
           <ChefHat className="h-5 w-5 text-purple-500 shrink-0" />
           <span className="truncate">Session Recipes</span>
         </h2>
-        {!showAddRecipe && (
+        {isCreator && !showAddRecipe && (
           <Button
             size="sm"
             className="shrink-0"
@@ -117,7 +119,7 @@ function SessionRecipesSection({
         )}
       </div>
 
-      {showAddRecipe && (
+      {isCreator && showAddRecipe && (
         <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
           <CardContent className="pt-4">
             <div className="space-y-3">
@@ -212,6 +214,7 @@ function SessionRecipesSection({
                 >
                   {recipe?.name || `Recipe #${sr.recipe_id}`}
                 </Link>
+                {isCreator && (
                 <button
                     onClick={() => onRemoveRecipe(sr.recipe_id)}
                     className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
@@ -219,6 +222,7 @@ function SessionRecipesSection({
                   >
                     <X className="h-4 w-4" />
                   </button>
+              )}
               </div>
             );
           })}
@@ -233,6 +237,7 @@ interface SessionIngredientsSectionProps {
   sessionIngredients: IngredientTasting[];
   allIngredients: Ingredient[];
   isLoading: boolean;
+  isCreator: boolean;
   onAddIngredient: (ingredientId: number) => void;
   onRemoveIngredient: (ingredientId: number) => void;
 }
@@ -242,6 +247,7 @@ function SessionIngredientsSection({
   sessionIngredients,
   allIngredients,
   isLoading,
+  isCreator,
   onAddIngredient,
   onRemoveIngredient,
 }: SessionIngredientsSectionProps) {
@@ -279,7 +285,7 @@ function SessionIngredientsSection({
           <span className="text-amber-500 shrink-0">🥘</span>
           <span className="truncate">Session Ingredients</span>
         </h2>
-        {!showAddIngredient && (
+        {isCreator && !showAddIngredient && (
           <Button
             size="sm"
             className="shrink-0"
@@ -292,7 +298,7 @@ function SessionIngredientsSection({
         )}
       </div>
 
-      {showAddIngredient && (
+      {isCreator && showAddIngredient && (
         <Card className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
           <CardContent className="pt-4">
             <div className="space-y-3">
@@ -397,13 +403,15 @@ function SessionIngredientsSection({
                 >
                   {ingredient?.name || `Ingredient #${si.ingredient_id}`}
                 </Link>
-                <button
+                {isCreator && (
+                  <button
                     onClick={() => onRemoveIngredient(si.ingredient_id)}
                     className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
                     title="Remove from session"
                   >
                     <X className="h-4 w-4" />
                   </button>
+                )}
               </div>
             );
           })}
@@ -464,6 +472,9 @@ export default function TastingSessionDetailPage() {
   const isInvited = userType === 'admin' ||
     (userId && session?.creator_id === userId) ||
     (userId && (session?.participants?.some(p => p.user_id === userId) ?? false)) || false;
+
+  // Only the session creator can edit/add/delete
+  const isCreator = !!(userId && session?.creator_id === userId);
 
   // DateTime state for editing
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -647,27 +658,39 @@ export default function TastingSessionDetailPage() {
         {/* Session Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-            <EditableCell
-              value={session.name}
-              onSave={(value) => handleUpdateSession({ name: value })}
-              className="text-2xl font-bold"
-              placeholder="Session name"
-            />
+            {isCreator ? (
+              <EditableCell
+                value={session.name}
+                onSave={(value) => handleUpdateSession({ name: value })}
+                className="text-2xl font-bold"
+                placeholder="Session name"
+              />
+            ) : (
+              session.name
+            )}
           </h1>
           <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-600 dark:text-zinc-300">
-            {/* Editable DateTime */}
+            {/* DateTime */}
             <div className="flex items-center gap-1.5 relative">
               <Calendar className="h-4 w-4 text-zinc-400" />
-              <button
-                type="button"
-                onClick={() => setShowCalendar(!showCalendar)}
-                className="hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded cursor-pointer flex items-center gap-2"
-              >
-                <span>{formatDate(session.date)}</span>
-                <Clock className="h-3 w-3 text-zinc-400" />
-                <span>{getDisplayTime()}</span>
-              </button>
-              {showCalendar && (
+              {isCreator ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className="hover:bg-zinc-100 dark:hover:bg-zinc-700 px-1 py-0.5 rounded cursor-pointer flex items-center gap-2"
+                >
+                  <span>{formatDate(session.date)}</span>
+                  <Clock className="h-3 w-3 text-zinc-400" />
+                  <span>{getDisplayTime()}</span>
+                </button>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <span>{formatDate(session.date)}</span>
+                  <Clock className="h-3 w-3 text-zinc-400" />
+                  <span>{getDisplayTime()}</span>
+                </span>
+              )}
+              {isCreator && showCalendar && (
                 <div className="absolute z-20 top-full left-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3">
                   <style>{`
                     .rdp-root {
@@ -756,24 +779,36 @@ export default function TastingSessionDetailPage() {
               )}
             </div>
 
-            {/* Editable Location */}
+            {/* Location */}
             <div className="flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-zinc-400" />
-              <EditableCell
-                value={session.location || ''}
-                onSave={(value) => handleUpdateSession({ location: value || null })}
-                placeholder="Add location"
-              />
+              {isCreator ? (
+                <EditableCell
+                  value={session.location || ''}
+                  onSave={(value) => handleUpdateSession({ location: value || null })}
+                  placeholder="Add location"
+                />
+              ) : (
+                <span>{session.location || 'No location'}</span>
+              )}
             </div>
 
-            <ParticipantPicker
-              selectedUsers={(session.participants || []).map((p) => ({
-                id: p.user_id || '',
-                email: p.email,
-                username: p.username,
-              })) as User[]}
-              onChange={(participants) => handleUpdateSession({ participant_ids: participants.map((p) => p.id) })}
-            />
+            {isCreator ? (
+              <ParticipantPicker
+                selectedUsers={(session.participants || []).map((p) => ({
+                  id: p.user_id || '',
+                  email: p.email,
+                  username: p.username,
+                })) as User[]}
+                onChange={(participants) => handleUpdateSession({ participant_ids: participants.map((p) => p.id) })}
+              />
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(session.participants || []).map((p) => (
+                  <Badge key={p.user_id} variant="secondary">{p.username || p.email}</Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {session.notes && (
@@ -788,6 +823,7 @@ export default function TastingSessionDetailPage() {
             sessionRecipes={sessionRecipes || []}
             availableRecipes={availableRecipes}
             isLoading={recipesLoading}
+            isCreator={isCreator}
             onAddRecipe={handleAddRecipeToSession}
             onRemoveRecipe={handleRemoveRecipeFromSession}
           />
@@ -800,34 +836,37 @@ export default function TastingSessionDetailPage() {
             sessionIngredients={sessionIngredients || []}
             allIngredients={ingredients}
             isLoading={ingredientsLoading}
+            isCreator={isCreator}
             onAddIngredient={handleAddIngredientToSession}
             onRemoveIngredient={handleRemoveIngredientFromSession}
           />
         )}
 
-        {/* Delete Session */}
-        <div className="mt-12 pt-6 border-t border-zinc-200 dark:border-zinc-700">
-          {confirmDelete ? (
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-red-600 dark:text-red-400">
-                Are you sure? This will delete the session and all its notes.
-              </p>
-              <Button variant="destructive" size="sm" onClick={handleDeleteSession}>
-                Yes, Delete
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="text-sm text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
-            >
-              Delete this session
-            </button>
-          )}
-        </div>
+        {/* Delete Session - creator only */}
+        {isCreator && (
+          <div className="mt-12 pt-6 border-t border-zinc-200 dark:border-zinc-700">
+            {confirmDelete ? (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  Are you sure? This will delete the session and all its notes.
+                </p>
+                <Button variant="destructive" size="sm" onClick={handleDeleteSession}>
+                  Yes, Delete
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-sm text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
+              >
+                Delete this session
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -191,6 +191,7 @@ class TastingSessionService:
             )
             for tu in self.session.exec(existing_stmt).all():
                 self.session.delete(tu)
+            self.session.flush()
 
             if data.participant_ids:
                 self._add_participants(session_id, data.participant_ids)
