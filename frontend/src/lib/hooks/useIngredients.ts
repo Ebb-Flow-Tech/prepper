@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type {
   CreateIngredientRequest,
@@ -16,6 +16,21 @@ export function useIngredients(params?: IngredientListParams) {
     queryFn: () => api.getIngredients(params),
     placeholderData: (prev) => prev,
     staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+}
+
+export function useInfiniteIngredients(params?: Omit<IngredientListParams, 'page_number'>) {
+  return useInfiniteQuery({
+    queryKey: ['ingredients', params],
+    queryFn: ({ pageParam = 1 }) => api.getIngredients({ ...params, page_number: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.page_number < lastPage.total_pages) {
+        return lastPage.page_number + 1;
+      }
+      return undefined;
+    },
+    staleTime: 10 * 60 * 1000,
   });
 }
 

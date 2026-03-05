@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
+import { useInfiniteIngredients, useCreateIngredient, useInfiniteRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient, useDebouncedValue } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton, Switch } from '@/components/ui';
 import Image from 'next/image';
@@ -303,16 +303,6 @@ interface RightPanelProps {
 
 export function RightPanel({ outlets }: RightPanelProps) {
   const { isDragDropEnabled, setIsDragDropEnabled } = useAppState();
-  const { data: ingredientsData, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients({ page_size: 30 });
-  const ingredients = ingredientsData?.items;
-  const { data: recipesData, isLoading: recipesLoading, error: recipesError } = useRecipes({ page_size: 30 });
-  const recipes = recipesData?.items;
-  const { data: categories } = useCategories();
-  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
-  const recipeCategories = recipeCategoriesData?.items;
-  const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
-  const createIngredient = useCreateIngredient();
-  const categorizeIngredient = useCategorizeIngredient();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<RightPanelTab>('all');
@@ -320,6 +310,31 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isQuickAdding, setIsQuickAdding] = useState(false);
+
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const ingredientParams = useMemo(() => ({
+    page_size: 30,
+    active_only: true,
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+    ...(selectedCategories.length > 0 ? { category_ids: selectedCategories.join(',') } : {}),
+  }), [debouncedSearch, selectedCategories]);
+
+  const recipeParams = useMemo(() => ({
+    page_size: 30,
+    ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+  }), [debouncedSearch]);
+
+  const { data: ingredientsData, isLoading: ingredientsLoading, error: ingredientsError, fetchNextPage: fetchNextIngredients, hasNextPage: hasNextIngredients, isFetchingNextPage: isFetchingNextIngredients } = useInfiniteIngredients(ingredientParams);
+  const ingredients = ingredientsData?.pages.flatMap((page) => page.items);
+  const { data: recipesData, isLoading: recipesLoading, error: recipesError, fetchNextPage: fetchNextRecipes, hasNextPage: hasNextRecipes, isFetchingNextPage: isFetchingNextRecipes } = useInfiniteRecipes(recipeParams);
+  const recipes = recipesData?.pages.flatMap((page) => page.items);
+  const { data: categories } = useCategories();
+  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
+  const recipeCategories = recipeCategoriesData?.items;
+  const { data: allRecipeRecipeCategories } = useAllRecipeRecipeCategories();
+  const createIngredient = useCreateIngredient();
+  const categorizeIngredient = useCategorizeIngredient();
 
   const handleQuickAdd = useCallback(async () => {
     const name = search.trim();
@@ -398,27 +413,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
       .filter(Boolean);
   };
 
-  const filteredIngredients = useMemo(() => {
-    if (!ingredients) return [];
-    const active = ingredients.filter((i) => i.is_active);
-
-    let filtered = active;
-
-    // Search filter
-    if (search.trim()) {
-      const lower = search.toLowerCase();
-      filtered = filtered.filter((i) => i.name.toLowerCase().includes(lower));
-    }
-
-    // Category filter
-    if (selectedCategories.length > 0) {
-      filtered = filtered.filter((i) =>
-        selectedCategories.includes(i.category_id ?? -1)
-      );
-    }
-
-    return filtered.sort((a, b) => b.id - a.id);
-  }, [ingredients, search, selectedCategories]);
+  const filteredIngredients = ingredients ?? [];
 
   const toggleCategory = (categoryId: number) => {
     if (selectedCategories.includes(categoryId)) {
@@ -432,21 +427,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
     setSelectedCategories([]);
   };
 
-  const filteredRecipes = useMemo(() => {
-    if (!recipes) return [];
-
-    return recipes.filter((recipe) => {
-      // Filter by search
-      // Note: Backend already handles access control, so we only filter by search term
-      if (search.trim()) {
-        const lower = search.toLowerCase();
-        if (!recipe.name.toLowerCase().includes(lower)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [recipes, search]);
+  const filteredRecipes = recipes ?? [];
 
   const isLoading = ingredientsLoading || recipesLoading;
   const hasError = ingredientsError || recipesError;
@@ -642,6 +623,22 @@ export function RightPanel({ outlets }: RightPanelProps) {
                         categoryMap={categoryMap}
                       />
                     ))}
+                    {hasNextIngredients && (
+                      <button
+                        onClick={() => fetchNextIngredients()}
+                        disabled={isFetchingNextIngredients}
+                        className="w-full mt-1 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isFetchingNextIngredients ? (
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Loading...
+                          </span>
+                        ) : (
+                          'Load more'
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -667,6 +664,22 @@ export function RightPanel({ outlets }: RightPanelProps) {
                         categoryNames={getCategoryNamesForRecipe(recipe.id)}
                       />
                     ))}
+                    {hasNextRecipes && (
+                      <button
+                        onClick={() => fetchNextRecipes()}
+                        disabled={isFetchingNextRecipes}
+                        className="w-full mt-1 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isFetchingNextRecipes ? (
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Loading...
+                          </span>
+                        ) : (
+                          'Load more'
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

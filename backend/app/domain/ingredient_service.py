@@ -138,7 +138,7 @@ class IngredientService:
                         category_ids=None, units=None, allergen_ids=None, is_halal=None) -> list[IngredientListRead]:
         statement = self._build_list_query(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
                                            category_ids=category_ids, units=units, allergen_ids=allergen_ids, is_halal=is_halal)
-        statement = statement.offset(offset).limit(limit)
+        statement = statement.order_by(Ingredient.id.desc()).offset(offset).limit(limit)
         rows = self.session.exec(statement).all()
         return [IngredientListRead.model_validate(r) for r in rows]
 

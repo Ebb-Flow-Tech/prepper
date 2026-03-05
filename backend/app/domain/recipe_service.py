@@ -137,7 +137,7 @@ class RecipeService:
 
     def list_paginated(self, offset: int, limit: int, status=None, current_user=None, search: str | None = None, category_ids=None) -> list[Recipe]:
         statement = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
-        statement = statement.offset(offset).limit(limit)
+        statement = statement.order_by(Recipe.id.desc()).offset(offset).limit(limit)
         return list(self.session.exec(statement).all())
 
     def count(self, status=None, current_user=None, search: str | None = None, category_ids=None) -> int:
