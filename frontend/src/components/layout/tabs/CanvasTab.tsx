@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useAppState, setCanvasSaveHandler } from '@/lib/store';
 import {
   useRecipes,
+  useRecipe,
   useIngredients,
   useCreateRecipe,
   useUpdateRecipe,
@@ -36,10 +37,10 @@ import { Button, Input, Select, ConfirmModal, Modal, Checkbox } from '@/componen
 import { toast } from 'sonner';
 import type { RecipeStatus, Outlet, SupplierIngredient } from '@/types';
 import { RightPanel } from '../RightPanel';
-import { formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
+import { cn, formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
 import { getIngredientSuppliers } from '@/lib/api';
-import { convertUnit, getCompatibleUnits } from '@/lib/unitConversion';
+import { convertUnit, convertUnitPrice, getCompatibleUnits } from '@/lib/unitConversion';
 
 // Staged item with position on canvas
 interface StagedIngredient {
@@ -47,6 +48,7 @@ interface StagedIngredient {
   ingredient: Ingredient;
   quantity: number;
   unit: string; // display/recipe unit (may differ from base_unit after conversion)
+  unitPrice: number | null; // price per current display unit (auto-converts on unit change)
   wastage_percentage: number;
   selectedSupplierId: number | null; // user-selected supplier from the map
   x: number;
@@ -73,7 +75,7 @@ interface RecipeMetadata {
   yield_unit: string;
   status: RecipeStatus;
   is_public: boolean;
-  profit_margin: number;
+  selling_price: number;
 }
 
 const DEFAULT_METADATA: RecipeMetadata = {
@@ -82,7 +84,7 @@ const DEFAULT_METADATA: RecipeMetadata = {
   yield_unit: 'portion',
   status: 'draft',
   is_public: false,
-  profit_margin: 0,
+  selling_price: 0,
 };
 
 function DragOverlayContent({
@@ -222,7 +224,7 @@ function StagedIngredientCard({
     zIndex: isExpanded ? 10 : 1,
   };
 
-  const { cost: unitCost, label: costLabel } = getIngredientUnitCost(staged, suppliers);
+  const unitCost = staged.unitPrice;
 
   return (
     <div
@@ -317,7 +319,7 @@ function StagedIngredientCard({
         {/* Cost display */}
         <div className="text-sm text-blue-200/80">
           {unitCost != null ? (
-            <span>{costLabel} • ${unitCost.toFixed(2)}/{staged.unit}</span>
+            <span>${unitCost.toFixed(2)}/{staged.unit}</span>
           ) : (
             <span className="text-blue-300/50">No pricing</span>
           )}
@@ -423,7 +425,7 @@ function StagedIngredientListItem({
   suppliers: SupplierIngredient[];
   categoryMap: Record<number, string>;
 }) {
-  const { cost: unitCost, label: costLabel } = getIngredientUnitCost(staged, suppliers);
+  const unitCost = staged.unitPrice;
   const categoryName = staged.ingredient.category_id ? categoryMap[staged.ingredient.category_id] : null;
 
   return (
@@ -444,7 +446,7 @@ function StagedIngredientListItem({
           )}
           <span className="text-zinc-300 dark:text-zinc-600 text-xs">·</span>
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            {unitCost != null ? `${costLabel} $${unitCost.toFixed(2)}` : 'No pricing'}
+            {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.unit}` : 'No pricing'}
           </span>
         </div>
       </div>
@@ -1424,13 +1426,27 @@ function CanvasContent({
                 {formatCurrency(canvasCost / metadata.yield_quantity)}/{metadata.yield_unit}
               </span>
             )}
-            {canvasCost > 0 && metadata.yield_quantity > 0 && metadata.profit_margin > 0 && (
-              <span className="text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full px-2.5 py-1 tabular-nums">
-                Sell {formatCurrency(
-                  (canvasCost / metadata.yield_quantity) * (100 + metadata.profit_margin) / 100
-                )}
+            {metadata.selling_price > 0 && (
+              <span className="text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full px-2.5 py-1 tabular-nums">
+                Sell {formatCurrency(metadata.selling_price)}
               </span>
             )}
+            {canvasCost > 0 && metadata.yield_quantity > 0 && metadata.selling_price > 0 && (() => {
+              const costPerPortion = canvasCost / metadata.yield_quantity;
+              const profitPerPortion = metadata.selling_price - costPerPortion;
+              const isProfit = profitPerPortion > 0.005;
+              const isLoss = profitPerPortion < -0.005;
+              return (
+                <span className={cn(
+                  'text-xs font-medium rounded-full px-2.5 py-1 tabular-nums',
+                  isProfit && 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                  isLoss && 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+                  !isProfit && !isLoss && 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                )}>
+                  {isProfit ? '+' : ''}{formatCurrency(profitPerPortion)}/{metadata.yield_unit}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Toggle details */}
@@ -1487,21 +1503,21 @@ function CanvasContent({
               />
             </div>
 
-            {/* Cost Margin */}
+            {/* Selling Price */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Margin %</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Selling Price</label>
               <div className="flex items-center gap-1">
+                <span className="text-xs text-zinc-400">$</span>
                 <Input
                   type="number"
-                  value={metadata.profit_margin}
+                  value={metadata.selling_price}
                   onChange={(e) =>
-                    onMetadataChange({ profit_margin: Math.max(0, parseFloat(e.target.value) || 0) })
+                    onMetadataChange({ selling_price: Math.max(0, parseFloat(e.target.value) || 0) })
                   }
-                  className="w-16 h-8 text-sm"
+                  className="w-20 h-8 text-sm"
                   min="0"
-                  step="0.1"
+                  step="0.01"
                 />
-                <span className="text-xs text-zinc-400">%</span>
               </div>
             </div>
 
@@ -1676,19 +1692,15 @@ function calculateCanvasCost(
   stagedIngredients: StagedIngredient[],
   stagedRecipes: StagedRecipe[],
   allRecipes?: Recipe[],
-  supplierMap?: Record<number, SupplierIngredient[]>,
 ) {
   let totalCost = 0;
 
   for (const staged of stagedIngredients) {
-    const suppliers = supplierMap?.[staged.ingredient.id] ?? [];
-    const { cost: unitCost } = getIngredientUnitCost(staged, suppliers);
-
-    if (unitCost != null) {
+    if (staged.unitPrice != null) {
       const wastageMultiplier = staged.wastage_percentage > 0
         ? 1 / (1 - staged.wastage_percentage / 100)
         : 1;
-      totalCost += staged.quantity * unitCost * wastageMultiplier;
+      totalCost += staged.quantity * staged.unitPrice * wastageMultiplier;
     }
   }
 
@@ -1711,6 +1723,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const { userId, selectedRecipeId, userType, isDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipesData } = useRecipes({ page_size: 30 });
   const recipes = recipesData?.items;
+  const { data: selectedRecipeData } = useRecipe(selectedRecipeId);
   const { data: ingredientsData } = useIngredients({ page_size: 30 });
   const ingredients = ingredientsData?.items;
   const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId);
@@ -1830,8 +1843,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
   // Calculate total cost from staged items
   const canvasCost = useMemo(() => {
-    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes, supplierMap);
-  }, [stagedIngredients, stagedRecipes, recipes, supplierMap]);
+    return calculateCanvasCost(stagedIngredients, stagedRecipes, recipes);
+  }, [stagedIngredients, stagedRecipes, recipes]);
 
   // Handle custom events from RightPanel "Add" buttons
   useEffect(() => {
@@ -1861,6 +1874,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           ingredient,
           quantity: 1,
           unit: ingredient.base_unit,
+          unitPrice: ingredient.cost_per_base_unit ?? null,
           wastage_percentage: 0,
           selectedSupplierId: null,
           x: 0,
@@ -1938,10 +1952,10 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     }
 
     if (loadedRecipeId === selectedRecipeId) return;
-    if (!recipeIngredients || !subRecipes || !recipes) return;
+    if (!recipeIngredients || !subRecipes) return;
 
     // Load recipe metadata from selected recipe
-    const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
+    const selectedRecipe = selectedRecipeData ?? recipes?.find((r) => r.id === selectedRecipeId);
     const loadedMetadata: RecipeMetadata = selectedRecipe
       ? {
         name: selectedRecipe.name,
@@ -1949,33 +1963,42 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         yield_unit: selectedRecipe.yield_unit,
         status: selectedRecipe.status,
         is_public: selectedRecipe.is_public,
-        profit_margin: 0,
+        selling_price: selectedRecipe.selling_price_est ?? 0,
       }
       : DEFAULT_METADATA;
 
     setMetadata(loadedMetadata);
 
     // Load ingredients onto canvas
-    const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri) => ({
-      id: `existing-ing-${ri.id}`,
-      ingredient: ri.ingredient || {
-        id: ri.ingredient_id,
-        name: `Ingredient #${ri.ingredient_id}`,
-        base_unit: ri.unit,
-        cost_per_base_unit: ri.unit_price,
-        is_active: true,
-        is_halal: false,
-        category_id: null,
-        created_at: '',
-        updated_at: '',
-      },
-      quantity: ri.quantity,
-      unit: ri.unit,
-      wastage_percentage: ri.wastage_percentage,
-      selectedSupplierId: ri.supplier_id ?? null,
-      x: 0,
-      y: 0,
-    }));
+    const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri) => {
+      // Convert unit_price from base_unit to display unit if they differ
+      const baseUnit = ri.base_unit || ri.unit;
+      const rawPrice = ri.unit_price;
+      const displayPrice = rawPrice != null && baseUnit !== ri.unit
+        ? (convertUnitPrice(rawPrice, baseUnit, ri.unit) ?? rawPrice)
+        : rawPrice;
+      return {
+        id: `existing-ing-${ri.id}`,
+        ingredient: ri.ingredient || {
+          id: ri.ingredient_id,
+          name: `Ingredient #${ri.ingredient_id}`,
+          base_unit: ri.unit,
+          cost_per_base_unit: ri.unit_price,
+          is_active: true,
+          is_halal: false,
+          category_id: null,
+          created_at: '',
+          updated_at: '',
+        },
+        quantity: ri.quantity,
+        unit: ri.unit,
+        unitPrice: displayPrice ?? null,
+        wastage_percentage: ri.wastage_percentage,
+        selectedSupplierId: ri.supplier_id ?? null,
+        x: 0,
+        y: 0,
+      };
+    });
 
     // Fetch suppliers for all loaded ingredients
     for (const ri of recipeIngredients) {
@@ -1984,7 +2007,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
     // Load sub-recipes onto canvas
     const loadedSubRecipes: StagedRecipe[] = subRecipes.map((sr) => {
-      const childRecipe = recipes!.find((r) => r.id === sr.child_recipe_id);
+      const childRecipe = recipes?.find((r) => r.id === sr.child_recipe_id);
       return {
         id: `existing-rec-${sr.id}`,
         recipe: childRecipe || ({
@@ -2039,7 +2062,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       recipeQuantities,
       metadata: loadedMetadata,
     });
-  }, [selectedRecipeId, recipeIngredients, subRecipes, recipes, loadedRecipeId, fetchSuppliersForIngredient]);
+  }, [selectedRecipeId, selectedRecipeData, recipeIngredients, subRecipes, recipes, loadedRecipeId, fetchSuppliersForIngredient]);
 
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -2098,6 +2121,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             ingredient: dragItem.ingredient,
             quantity: 1,
             unit: dragItem.ingredient.base_unit,
+            unitPrice: dragItem.ingredient.cost_per_base_unit ?? null,
             wastage_percentage: 0,
             selectedSupplierId: null,
             x: 0, // Placeholder - will be set by position recalculation effect
@@ -2167,10 +2191,14 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       prev.map((item) => {
         if (item.id !== id) return item;
         const converted = convertUnit(item.quantity, item.unit, newUnit);
+        const convertedPrice = item.unitPrice != null
+          ? convertUnitPrice(item.unitPrice, item.unit, newUnit)
+          : null;
         return {
           ...item,
           unit: newUnit,
           quantity: converted != null ? parseFloat(converted.toPrecision(6)) : item.quantity,
+          unitPrice: convertedPrice ?? item.unitPrice,
         };
       })
     );
@@ -2178,9 +2206,47 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
   const handleSupplierSelect = useCallback((id: string, supplierId: number | null) => {
     setStagedIngredients((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, selectedSupplierId: supplierId } : item))
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const suppliers = supplierMap[item.ingredient.id] ?? [];
+        // Compute base cost from the new supplier selection
+        const updatedStaged = { ...item, selectedSupplierId: supplierId };
+        const { cost: baseCost } = getIngredientUnitCost(updatedStaged, suppliers);
+        // Convert from supplier's pack_unit (or ingredient base_unit) to the current display unit
+        const baseUnit = supplierId != null
+          ? (suppliers.find((s) => s.supplier_id === supplierId)?.pack_unit ?? item.ingredient.base_unit)
+          : item.ingredient.base_unit;
+        const convertedPrice = baseCost != null
+          ? (convertUnitPrice(baseCost, baseUnit, item.unit) ?? baseCost)
+          : null;
+        return { ...updatedStaged, unitPrice: convertedPrice };
+      })
     );
-  }, []);
+  }, [supplierMap]);
+
+  // When suppliers load asynchronously, update unitPrice for staged ingredients that don't have
+  // a user-selected supplier (so they pick up the median price)
+  useEffect(() => {
+    setStagedIngredients((prev) => {
+      let changed = false;
+      const updated = prev.map((item) => {
+        // Only auto-update if no supplier is explicitly selected
+        if (item.selectedSupplierId != null) return item;
+        const suppliers = supplierMap[item.ingredient.id];
+        if (!suppliers || suppliers.length === 0) return item;
+        // Compute median supplier cost
+        const { cost: baseCost } = getIngredientUnitCost(item, suppliers);
+        if (baseCost == null) return item;
+        // Convert from ingredient base_unit to current display unit
+        const convertedPrice = convertUnitPrice(baseCost, item.ingredient.base_unit, item.unit) ?? baseCost;
+        // Only update if the price actually changed
+        if (item.unitPrice != null && Math.abs(item.unitPrice - convertedPrice) < 0.0001) return item;
+        changed = true;
+        return { ...item, unitPrice: convertedPrice };
+      });
+      return changed ? updated : prev;
+    });
+  }, [supplierMap]);
 
   const handleRecipeQuantityChange = useCallback((id: string, quantity: number) => {
     setStagedRecipes((prev) =>
@@ -2289,6 +2355,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             ingredient,
             quantity,
             unit: ingredient.base_unit,
+            unitPrice: ingredient.cost_per_base_unit ?? null,
             wastage_percentage: 0,
             selectedSupplierId: null,
             x: 0,
@@ -2339,26 +2406,34 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
     // Restore ingredients based on initial state
     if (selectedRecipeId && recipeIngredients && initialState.ingredientIds.length > 0) {
-      const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri, index) => ({
-        id: `existing-ing-${ri.id}`,
-        ingredient: ri.ingredient || {
-          id: ri.ingredient_id,
-          name: `Ingredient #${ri.ingredient_id}`,
-          base_unit: ri.unit,
-          cost_per_base_unit: ri.unit_price,
-          is_active: true,
-          is_halal: false,
-          category_id: null,
-          created_at: '',
-          updated_at: '',
-        },
-        quantity: ri.quantity,
-        unit: ri.unit,
-        wastage_percentage: ri.wastage_percentage,
-        selectedSupplierId: ri.supplier_id ?? null,
-        x: 20 + (index % 3) * 220,
-        y: 20 + Math.floor(index / 3) * 100,
-      }));
+      const loadedIngredients: StagedIngredient[] = recipeIngredients.map((ri, index) => {
+        const baseUnit = ri.base_unit || ri.unit;
+        const rawPrice = ri.unit_price;
+        const displayPrice = rawPrice != null && baseUnit !== ri.unit
+          ? (convertUnitPrice(rawPrice, baseUnit, ri.unit) ?? rawPrice)
+          : rawPrice;
+        return {
+          id: `existing-ing-${ri.id}`,
+          ingredient: ri.ingredient || {
+            id: ri.ingredient_id,
+            name: `Ingredient #${ri.ingredient_id}`,
+            base_unit: ri.unit,
+            cost_per_base_unit: ri.unit_price,
+            is_active: true,
+            is_halal: false,
+            category_id: null,
+            created_at: '',
+            updated_at: '',
+          },
+          quantity: ri.quantity,
+          unit: ri.unit,
+          unitPrice: displayPrice ?? null,
+          wastage_percentage: ri.wastage_percentage,
+          selectedSupplierId: ri.supplier_id ?? null,
+          x: 20 + (index % 3) * 220,
+          y: 20 + Math.floor(index / 3) * 100,
+        };
+      });
       setStagedIngredients(loadedIngredients);
     } else {
       setStagedIngredients([]);
@@ -2449,6 +2524,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         name: `${metadata.name} (Fork)`,
         yield_quantity: metadata.yield_quantity,
         yield_unit: metadata.yield_unit,
+        selling_price_est: metadata.selling_price || null,
         status: metadata.status,
         created_by: userId || undefined,
         is_public: metadata.is_public,
@@ -2459,22 +2535,15 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
       // Add all staged ingredients to the new recipe
       for (const staged of stagedIngredients) {
-        const suppliers = supplierMap[staged.ingredient.id] ?? [];
-        const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
-        const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
-        const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
-        const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
-        const supplier_id = supplierId;
-
         await addIngredient.mutateAsync({
           recipeId: newRecipe.id,
           data: {
             ingredient_id: staged.ingredient.id,
             quantity: staged.quantity,
             unit: staged.unit,
-            base_unit,
-            unit_price,
-            supplier_id,
+            base_unit: staged.unit,
+            unit_price: staged.unitPrice ?? staged.ingredient.cost_per_base_unit ?? 0,
+            supplier_id: staged.selectedSupplierId,
             wastage_percentage: staged.wastage_percentage,
           },
         });
@@ -2505,7 +2574,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     } finally {
       setIsForking(false);
     }
-  }, [selectedRecipeId, recipes, metadata, stagedIngredients, stagedRecipes, createRecipe, addIngredient, addSubRecipe, userId, router, supplierMap]);
+  }, [selectedRecipeId, recipes, metadata, stagedIngredients, stagedRecipes, createRecipe, addIngredient, addSubRecipe, userId, router]);
 
   const handleSubmitClick = useCallback(() => {
     if (stagedIngredients.length === 0 && stagedRecipes.length === 0) {
@@ -2551,6 +2620,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             status: metadata.status,
             is_public: metadata.is_public,
             cost_price: canvasCost,
+            selling_price_est: metadata.selling_price || null,
           },
         });
 
@@ -2594,12 +2664,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
         // Add or update ingredients
         for (const staged of stagedIngredients) {
-          const suppliers = supplierMap[staged.ingredient.id] ?? [];
-          const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
-          const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
-          const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
-          const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
-          const supplier_id = supplierId;
+          const unit_price = staged.unitPrice ?? staged.ingredient.cost_per_base_unit ?? 0;
 
           const existingRi = serverIngredientMap.get(staged.ingredient.id);
           if (existingRi) {
@@ -2610,9 +2675,9 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
               data: {
                 quantity: staged.quantity,
                 unit: staged.unit,
-                base_unit,
+                base_unit: staged.unit,
                 unit_price,
-                supplier_id,
+                supplier_id: staged.selectedSupplierId,
                 wastage_percentage: staged.wastage_percentage,
               },
             });
@@ -2624,9 +2689,9 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                 ingredient_id: staged.ingredient.id,
                 quantity: staged.quantity,
                 unit: staged.unit,
-                base_unit,
+                base_unit: staged.unit,
                 unit_price,
-                supplier_id,
+                supplier_id: staged.selectedSupplierId,
                 wastage_percentage: staged.wastage_percentage,
               },
             });
@@ -2682,6 +2747,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           yield_quantity: metadata.yield_quantity,
           yield_unit: metadata.yield_unit,
           cost_price: canvasCost,
+          selling_price_est: metadata.selling_price || null,
           status: metadata.status,
           created_by: userId || undefined,
           is_public: metadata.is_public,
@@ -2692,22 +2758,15 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
         // Add all staged ingredients
         for (const staged of stagedIngredients) {
-          const suppliers = supplierMap[staged.ingredient.id] ?? [];
-          const { cost: unitCost, supplierId } = getIngredientUnitCost(staged, suppliers);
-          const selectedSupplier = supplierId != null ? suppliers.find((s) => s.supplier_id === supplierId) : null;
-          const base_unit = selectedSupplier?.pack_unit ?? staged.ingredient.base_unit;
-          const unit_price = unitCost ?? staged.ingredient.cost_per_base_unit ?? 0;
-          const supplier_id = supplierId;
-
           await addIngredient.mutateAsync({
             recipeId: newRecipe.id,
             data: {
               ingredient_id: staged.ingredient.id,
               quantity: staged.quantity,
               unit: staged.unit,
-              base_unit,
-              unit_price,
-              supplier_id,
+              base_unit: staged.unit,
+              unit_price: staged.unitPrice ?? staged.ingredient.cost_per_base_unit ?? 0,
+              supplier_id: staged.selectedSupplierId,
               wastage_percentage: staged.wastage_percentage,
             },
           });
@@ -3013,6 +3072,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                       ingredient: matchedIngredient,
                       quantity: parsed.quantity,
                       unit: matchedIngredient.base_unit,
+                      unitPrice: matchedIngredient.cost_per_base_unit ?? null,
                       wastage_percentage: 0,
                       selectedSupplierId: null,
                       x: 0,

@@ -25,6 +25,7 @@ import { RecipeIngredientRow } from './RecipeIngredientRow';
 import { Skeleton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { convertUnitPrice } from '@/lib/unitConversion';
 
 interface RecipeIngredientsListProps {
   recipeId: number;
@@ -53,9 +54,21 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
   );
 
   const handleUnitChange = useCallback(
-    (ingredientId: number, unit: string) => {
+    (ingredientId: number, newUnit: string, oldUnit: string, currentUnitPrice: number | null, currentBaseUnit: string | null) => {
+      const data: Record<string, unknown> = { unit: newUnit };
+
+      // Recalculate unit price when unit changes
+      if (currentUnitPrice != null) {
+        const fromUnit = currentBaseUnit || oldUnit;
+        const converted = convertUnitPrice(currentUnitPrice, fromUnit, newUnit);
+        if (converted != null) {
+          data.unit_price = parseFloat(converted.toPrecision(6));
+          data.base_unit = newUnit;
+        }
+      }
+
       updateIngredient.mutate(
-        { recipeId, ingredientId, data: { unit } },
+        { recipeId, ingredientId, data },
         { onError: () => toast.error('Failed to update unit') }
       );
     },
@@ -176,7 +189,7 @@ export function RecipeIngredientsList({ recipeId, canEdit }: RecipeIngredientsLi
                 ingredient={ingredient}
                 canEdit={canEdit}
                 onQuantityChange={(qty) => handleQuantityChange(ingredient.id, qty)}
-                onUnitChange={(unit) => handleUnitChange(ingredient.id, unit)}
+                onUnitChange={(unit) => handleUnitChange(ingredient.id, unit, ingredient.unit, ingredient.unit_price, ingredient.base_unit)}
                 onUnitPriceChange={(unitPrice, baseUnit) =>
                   handleUnitPriceChange(ingredient.id, unitPrice, baseUnit)
                 }

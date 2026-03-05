@@ -128,6 +128,7 @@ export interface CreateRecipeRequest {
   yield_quantity?: number;
   yield_unit?: string;
   cost_price?: number | null;
+  selling_price_est?: number | null;
   status?: RecipeStatus;
   created_by?: string;
   is_public?: boolean;

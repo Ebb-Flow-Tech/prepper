@@ -70,6 +70,31 @@ export function convertUnit(quantity: number, fromUnit: string, toUnit: string):
 }
 
 /**
+ * Convert a unit price from one unit to another (inverse of quantity conversion).
+ * E.g. $0.01/g → $10.00/kg (price goes up as unit gets larger).
+ * Returns null if units are incompatible (different categories).
+ */
+export function convertUnitPrice(price: number, fromUnit: string, toUnit: string): number | null {
+  const fromLower = fromUnit.toLowerCase();
+  const toLower = toUnit.toLowerCase();
+
+  if (fromLower === toLower) return price;
+
+  const fromCategory = getUnitCategory(fromLower);
+  const toCategory = getUnitCategory(toLower);
+
+  if (fromCategory === null || toCategory === null) return price;
+  if (fromCategory !== toCategory) return null;
+
+  const conversions = getConversionsForCategory(fromCategory);
+  const fromFactor = conversions[fromLower] ?? 1;
+  const toFactor = conversions[toLower] ?? 1;
+
+  // Inverse of quantity: larger unit = higher price per unit
+  return price * (toFactor / fromFactor);
+}
+
+/**
  * Get all units compatible with the given unit (same category).
  */
 export function getCompatibleUnits(unit: string): string[] {

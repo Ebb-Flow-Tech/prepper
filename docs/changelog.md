@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
-- **0.0.21** (2026-03-05) - Participant-Only Feedback: Restrict Tasting Note Mutations to Session Participants & Creator-Only Edit/Delete
+- **0.0.21** (2026-03-05) - Participant-Only Feedback, Canvas Unit Price Auto-Conversion & Recipe Loading Fix
 - **0.0.20** (2026-03-04) - Server-Side Pagination & Performance: Paginated List Endpoints, Server-Side Search/Filtering, Database Indexes, Connection Pooling & Next.js Optimization
 - **0.0.19** (2026-03-03) - Outlet-Scoped Supplier Ingredients: Per-Outlet Pricing, Hierarchical Access Control & Outlet Selector UI
 - **0.0.18** (2026-03-02) - Supplier-Ingredient Normalization & UX Improvements: JSONB-to-Join-Table Refactor, Canvas Supplier Selection, Costing Integration, Session Creator Tracking, ID-Based Participants & Quick-Add Ingredients
@@ -50,6 +50,41 @@ Tasting note creation, editing, and deletion are now restricted to session parti
 - `test_tastings.py` — Updated session creation to include `participant_ids`; added participant/non-participant/admin-non-participant feedback tests
 - `test_ingredient_tasting_notes.py` — Added participant-only feedback tests; nonexistent session now returns 403
 - `test_tasting_note_images.py` — Updated fixtures; added admin non-participant tests
+
+#### Canvas Unit Price Auto-Conversion
+
+Staged ingredients on the recipe canvas now store a `unitPrice` that auto-converts when the user changes units. Previously, unit cost was computed on-the-fly from suppliers each render and never adjusted for the display unit.
+
+**Behavior**:
+- When an ingredient is added → `unitPrice` initialized from `ingredient.cost_per_base_unit`
+- When the user changes unit (e.g. g → kg) → `unitPrice` auto-converts via `convertUnitPrice()`
+- When the user changes supplier → `unitPrice` recalculates from new supplier cost, converted to current display unit
+- When suppliers load asynchronously → `unitPrice` updates to median supplier cost
+- On save → `unitPrice` sent directly as `unit_price` with `base_unit` set to the display unit
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Added `unitPrice` to `StagedIngredient`; updated all creation sites, unit change handler, supplier change handler, cost display, submission logic, and `calculateCanvasCost`
+- `frontend/src/lib/unitConversion.ts` — Added `convertUnitPrice()` utility (inverse of quantity conversion)
+- `frontend/src/components/recipe/RecipeIngredientsList.tsx` — Unit change handler now recalculates `unit_price` via `convertUnitPrice()` and persists to backend
+
+#### Selling Price Replaces Profit Margin
+
+Canvas metadata `profit_margin` (percentage) replaced with `selling_price` (absolute dollar amount). Profit/loss per portion now computed as `selling_price - cost_per_portion` and displayed with color-coded badges (green for profit, red for loss).
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — `RecipeMetadata.selling_price` replaces `profit_margin`; selling price input and profit/loss display
+- `frontend/src/types/index.ts` — Added `selling_price_est` to `CreateRecipeRequest`
+
+### Fixed
+
+#### Recipe Canvas Not Loading Existing Recipes
+
+The canvas loading effect required the full `useRecipes()` paginated list to resolve before loading a selected recipe's ingredients. If the recipes list query was slow or failed, the canvas would appear empty even though the individual recipe data was available.
+
+**Fix**: Added `useRecipe(selectedRecipeId)` to fetch the selected recipe directly. The loading effect no longer gates on the full recipes list — it proceeds as soon as `recipeIngredients` and `subRecipes` are available, using the single-recipe query for metadata.
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Added `useRecipe` hook; removed `recipes` from loading gate; used `selectedRecipeData` for metadata with `recipes` list as fallback
 
 ---
 

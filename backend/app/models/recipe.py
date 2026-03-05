@@ -82,6 +82,7 @@ class RecipeCreate(RecipeBase):
     """Schema for creating a new recipe."""
 
     cost_price: float | None = None
+    selling_price_est: float | None = None
     status: RecipeStatus = RecipeStatus.DRAFT
     is_public: bool = False
     created_by: str | None = None
