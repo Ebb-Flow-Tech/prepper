@@ -243,10 +243,9 @@ interface FeedbackNoteCardProps {
   onUpdate: (noteId: number, data: Partial<IngredientTastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
   currentUserId: string | null;
-  isAdmin: boolean;
 }
 
-function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useIngredientTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -282,7 +281,7 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId, isAdmin }: 
     setIsEditing(false);
   };
 
-  const canEdit = isAdmin || note.user_id === null || note.user_id === currentUserId;
+  const canEdit = note.user_id !== null && note.user_id === currentUserId;
 
   return (
     <Card className="mb-4">
@@ -424,7 +423,7 @@ export default function IngredientTastingPage() {
   const sessionId = params.id ? Number(params.id) : null;
   const ingredientId = params.ingredientId ? Number(params.ingredientId) : null;
 
-  const { userId, username, userType } = useAppState();
+  const { userId, username } = useAppState();
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
   const { data: ingredient, isLoading: ingredientLoading } = useIngredient(ingredientId);
   const { data: allNotes } = useIngredientNotes(sessionId);
@@ -438,9 +437,7 @@ export default function IngredientTastingPage() {
   const ingredientNotes = allNotes?.filter((n) => n.ingredient_id === ingredientId) || [];
 
   // Invitation gate
-  const isInvited = userType === 'admin' ||
-    (userId && session?.creator_id === userId) ||
-    (userId && (session?.participants?.some(p => p.user_id === userId) ?? false));
+  const isInvited = userId && (session?.participants?.some(p => p.user_id === userId) ?? false);
 
   // For new notes
   const [showAddForm, setShowAddForm] = useState(false);
@@ -636,7 +633,6 @@ export default function IngredientTastingPage() {
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
                 currentUserId={userId}
-                isAdmin={userType === 'admin'}
               />
             ))}
           </div>

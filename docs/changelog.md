@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.21** (2026-03-05) - Participant-Only Feedback: Restrict Tasting Note Mutations to Session Participants & Creator-Only Edit/Delete
 - **0.0.20** (2026-03-04) - Server-Side Pagination & Performance: Paginated List Endpoints, Server-Side Search/Filtering, Database Indexes, Connection Pooling & Next.js Optimization
 - **0.0.19** (2026-03-03) - Outlet-Scoped Supplier Ingredients: Per-Outlet Pricing, Hierarchical Access Control & Outlet Selector UI
 - **0.0.18** (2026-03-02) - Supplier-Ingredient Normalization & UX Improvements: JSONB-to-Join-Table Refactor, Canvas Supplier Selection, Costing Integration, Session Creator Tracking, ID-Based Participants & Quick-Add Ingredients
@@ -26,6 +27,30 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.21] - 2026-03-05
+
+### Changed
+
+#### Participant-Only Feedback Enforcement
+
+Tasting note creation, editing, and deletion are now restricted to session participants only. Admins no longer bypass participant checks for feedback operations.
+
+**Backend**:
+- `tasting_notes.py` — Added `get_current_user` dependency to create, update, and delete note endpoints; only participants can add notes (403), only the original creator can edit/delete (403)
+- `ingredient_tasting_notes.py` — Added participant check to create ingredient note endpoint
+- `conftest.py` — Test fixtures now persist mock users in DB (required for participant lookups via `TastingUser` join)
+
+**Frontend**:
+- `tastings/[id]/r/[recipeId]/page.tsx` — Removed admin bypass from `isInvited`; removed `isAdmin` prop from `FeedbackNoteCard`; edit/delete buttons only shown for original poster
+- `tastings/[id]/i/[ingredientId]/page.tsx` — Same participant-only and creator-only simplifications
+
+**Tests**:
+- `test_tastings.py` — Updated session creation to include `participant_ids`; added participant/non-participant/admin-non-participant feedback tests
+- `test_ingredient_tasting_notes.py` — Added participant-only feedback tests; nonexistent session now returns 403
+- `test_tasting_note_images.py` — Updated fixtures; added admin non-participant tests
+
 ---
 
 ## [0.0.20] - 2026-03-04

@@ -33,7 +33,7 @@ def client_fixture(session: Session):
     def get_session_override():
         return session
 
-    # Create a mock admin user for testing
+    # Create a mock admin user for testing and persist in DB
     mock_admin_user = User(
         id="test-admin-user",
         email="admin@test.com",
@@ -41,6 +41,9 @@ def client_fixture(session: Session):
         user_type=UserType.ADMIN,
         outlet_id=None,
     )
+    session.add(mock_admin_user)
+    session.commit()
+    session.refresh(mock_admin_user)
 
     def get_current_user_override():
         return mock_admin_user
@@ -110,7 +113,7 @@ def client_with_storage(session: Session, mock_storage):
     def get_session_override():
         return session
 
-    # Create a mock admin user for testing
+    # Create a mock admin user for testing and persist in DB
     mock_admin_user = User(
         id="test-admin-user",
         email="admin@test.com",
@@ -118,6 +121,12 @@ def client_with_storage(session: Session, mock_storage):
         user_type=UserType.ADMIN,
         outlet_id=None,
     )
+    from sqlmodel import select as sql_select
+    existing = session.exec(sql_select(User).where(User.id == "test-admin-user")).first()
+    if not existing:
+        session.add(mock_admin_user)
+        session.commit()
+        session.refresh(mock_admin_user)
 
     def get_current_user_override():
         return mock_admin_user
@@ -137,7 +146,7 @@ def normal_user_client(session: Session):
     def get_session_override():
         return session
 
-    # Create a mock normal user for testing
+    # Create a mock normal user for testing and persist in DB
     mock_normal_user = User(
         id="test-normal-user",
         email="user@test.com",
@@ -145,6 +154,13 @@ def normal_user_client(session: Session):
         user_type=UserType.NORMAL,
         outlet_id=None,
     )
+    # Only add if not already in DB (shared session fixture)
+    from sqlmodel import select as sql_select
+    existing = session.exec(sql_select(User).where(User.id == "test-normal-user")).first()
+    if not existing:
+        session.add(mock_normal_user)
+        session.commit()
+        session.refresh(mock_normal_user)
 
     def get_current_user_override():
         return mock_normal_user

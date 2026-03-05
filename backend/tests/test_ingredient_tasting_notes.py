@@ -2,6 +2,9 @@
 
 from datetime import datetime
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.models import User, UserType
 
 
 def test_create_ingredient_tasting_note(client: TestClient):
@@ -15,7 +18,7 @@ def test_create_ingredient_tasting_note(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Ingredient Tasting", "date": "2024-12-15T10:00:00"},
+        json={"name": "Ingredient Tasting", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -47,7 +50,7 @@ def test_create_note_for_nonexistent_ingredient(client: TestClient):
     """Test creating a note for an ingredient that doesn't exist."""
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -63,7 +66,7 @@ def test_create_note_for_nonexistent_ingredient(client: TestClient):
 
 
 def test_create_note_for_nonexistent_session(client: TestClient):
-    """Test creating a note for a session that doesn't exist."""
+    """Test creating a note for a session that doesn't exist returns 403 (not a participant)."""
     ingredient_response = client.post(
         "/api/v1/ingredients",
         json={"name": "Test Ingredient", "base_unit": "g"},
@@ -78,7 +81,8 @@ def test_create_note_for_nonexistent_session(client: TestClient):
             "overall_rating": 5,
         },
     )
-    assert response.status_code == 400
+    # Participant check runs first — no participant row for nonexistent session
+    assert response.status_code == 403
 
 
 def test_get_session_ingredient_notes(client: TestClient):
@@ -95,7 +99,7 @@ def test_get_session_ingredient_notes(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Ingredient Tasting", "date": "2024-12-15T10:00:00"},
+        json={"name": "Ingredient Tasting", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -149,7 +153,7 @@ def test_get_single_ingredient_note(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -196,7 +200,7 @@ def test_update_ingredient_tasting_note(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -255,7 +259,7 @@ def test_delete_ingredient_tasting_note(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -301,7 +305,7 @@ def test_rating_validations(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -338,7 +342,7 @@ def test_decision_enum_validation(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -365,7 +369,7 @@ def test_multiple_tasters_per_ingredient(client: TestClient):
 
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -400,3 +404,92 @@ def test_multiple_tasters_per_ingredient(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
+
+
+# ============================================================================
+# Participant-Only Feedback Tests
+# ============================================================================
+
+
+def test_participant_can_add_ingredient_note(client: TestClient):
+    """Participant of a session can add an ingredient tasting note."""
+    ingredient_resp = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Test Ingredient", "base_unit": "g"},
+    )
+    ingredient_id = ingredient_resp.json()["id"]
+
+    session_resp = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Tasting",
+            "date": "2024-12-15T10:00:00",
+            "participant_ids": ["test-admin-user"],
+        },
+    )
+    session_id = session_resp.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredient-notes",
+        json={"ingredient_id": ingredient_id, "overall_rating": 4},
+    )
+    assert response.status_code == 201
+
+
+def test_nonparticipant_cannot_add_ingredient_note(
+    session: Session, normal_user_client: TestClient
+):
+    """Non-participant cannot add an ingredient tasting note."""
+    from app.models import TastingSession, Ingredient
+
+    ingredient = Ingredient(name="Test Ingredient", base_unit="g")
+    session.add(ingredient)
+    session.commit()
+    session.refresh(ingredient)
+
+    ts = TastingSession(
+        name="Tasting",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Normal user is NOT a participant → 403
+    response = normal_user_client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/ingredient-notes",
+        json={"ingredient_id": ingredient.id, "overall_rating": 4},
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()
+
+
+def test_admin_nonparticipant_cannot_add_ingredient_note(
+    client: TestClient, session: Session
+):
+    """Admin who is not a participant cannot add an ingredient tasting note."""
+    from app.models import TastingSession, Ingredient
+
+    ingredient = Ingredient(name="Test Ingredient", base_unit="g")
+    session.add(ingredient)
+    session.commit()
+    session.refresh(ingredient)
+
+    # Session with no participants — admin is NOT added
+    ts = TastingSession(
+        name="Tasting",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Admin tries to add note but is not a participant → 403
+    response = client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/ingredient-notes",
+        json={"ingredient_id": ingredient.id, "overall_rating": 5},
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()

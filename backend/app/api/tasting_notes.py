@@ -3,13 +3,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from sqlmodel import select as sql_select
+
+from app.api.deps import get_current_user, get_session
 from app.domain import TastingNoteService, TastingSessionService
 from app.models import (
     TastingNoteCreate,
     TastingNoteRead,
     TastingNoteUpdate,
 )
+from app.models.tasting import TastingUser
+from app.models.user import User
 
 
 router = APIRouter()
@@ -46,8 +50,22 @@ def add_note_to_session(
     session_id: int,
     data: TastingNoteCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Add a tasting note to a session."""
+    """Add a tasting note to a session. Only participants can add notes."""
+    # Verify the user is a participant of this session
+    participant = session.exec(
+        sql_select(TastingUser).where(
+            TastingUser.tasting_session_id == session_id,
+            TastingUser.user_id == current_user.id,
+        )
+    ).first()
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only session participants can add feedback",
+        )
+
     service = TastingNoteService(session)
     note = service.add(session_id, data)
     if not note:
@@ -81,14 +99,20 @@ def update_tasting_note(
     note_id: int,
     data: TastingNoteUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a tasting note. Ownership check is done on the frontend."""
+    """Update a tasting note. Only the original creator can edit."""
     service = TastingNoteService(session)
     note = service.get(note_id)
     if not note or note.session_id != session_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting note not found",
+        )
+    if note.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the original poster can edit this feedback",
         )
     updated_note = service.update(note_id, data)
     return updated_note
@@ -99,14 +123,20 @@ def delete_tasting_note(
     session_id: int,
     note_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a tasting note from a session."""
+    """Delete a tasting note from a session. Only the original creator can delete."""
     service = TastingNoteService(session)
     note = service.get(note_id)
     if not note or note.session_id != session_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting note not found",
+        )
+    if note.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the original poster can delete this feedback",
         )
     service.delete(note_id)
     return None

@@ -14,12 +14,13 @@ def sample_tasting_note(client_with_storage: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create a tasting session
+    # Create a tasting session with admin as participant
     session_response = client_with_storage.post(
         "/api/v1/tasting-sessions",
         json={
             "name": "Test Session",
             "date": "2024-12-15T10:00:00",
+            "participant_ids": ["test-admin-user"],
         },
     )
     session_id = session_response.json()["id"]
@@ -285,12 +286,13 @@ def sample_ingredient_tasting_note(client_with_storage: TestClient):
     )
     ingredient_id = ingredient_response.json()["id"]
 
-    # Create a tasting session
+    # Create a tasting session with admin as participant
     session_response = client_with_storage.post(
         "/api/v1/tasting-sessions",
         json={
             "name": "Test Session",
             "date": "2024-12-15T10:00:00",
+            "participant_ids": ["test-admin-user"],
         },
     )
     session_id = session_response.json()["id"]
@@ -369,3 +371,60 @@ def test_sync_ingredient_images_nonexistent(client_with_storage: TestClient):
 
     assert response.status_code == 404
     assert "Ingredient tasting note not found" in response.json()["detail"]
+
+
+# ========== Admin Non-Participant Tests ==========
+
+
+def test_admin_nonparticipant_cannot_create_recipe_note(client_with_storage: TestClient):
+    """Admin who is not a session participant cannot create a recipe tasting note."""
+    recipe_response = client_with_storage.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_response.json()["id"]
+
+    # Create session WITHOUT admin as participant
+    session_response = client_with_storage.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = client_with_storage.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={
+            "recipe_id": recipe_id,
+            "taste_rating": 4,
+            "feedback": "Good flavor",
+        },
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()
+
+
+def test_admin_nonparticipant_cannot_create_ingredient_note(client_with_storage: TestClient):
+    """Admin who is not a session participant cannot create an ingredient tasting note."""
+    ingredient_response = client_with_storage.post(
+        "/api/v1/ingredients",
+        json={"name": "Test Ingredient", "base_unit": "kg"},
+    )
+    ingredient_id = ingredient_response.json()["id"]
+
+    # Create session WITHOUT admin as participant
+    session_response = client_with_storage.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = client_with_storage.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredient-notes",
+        json={
+            "ingredient_id": ingredient_id,
+            "taste_rating": 4,
+            "feedback": "Good flavor",
+        },
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()

@@ -115,10 +115,10 @@ def test_add_note_to_session(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Menu Tasting", "date": "2024-12-15T10:00:00"},
+        json={"name": "Menu Tasting", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -135,7 +135,7 @@ def test_add_note_to_session(client: TestClient):
             "action_items": "Add more black pepper",
             "decision": "approved",
             "taster_name": "Chef Marco",
-            "user_id": "test-user-123",
+            "user_id": "test-admin-user",
         },
     )
     assert response.status_code == 201
@@ -143,7 +143,7 @@ def test_add_note_to_session(client: TestClient):
     assert data["recipe_id"] == recipe_id
     assert data["taste_rating"] == 5
     assert data["decision"] == "approved"
-    assert data["user_id"] == "test-user-123"
+    assert data["user_id"] == "test-admin-user"
 
 
 def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
@@ -155,10 +155,10 @@ def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -169,19 +169,17 @@ def test_multiple_notes_for_same_recipe_allowed(client: TestClient):
             "recipe_id": recipe_id,
             "overall_rating": 4,
             "taster_name": "Chef Marco",
-            "user_id": "user-marco",
         },
     )
     assert response1.status_code == 201
 
-    # Add note second time with different taster - should also succeed
+    # Add note second time - should also succeed
     response2 = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
         json={
             "recipe_id": recipe_id,
             "overall_rating": 5,
             "taster_name": "Chef Sarah",
-            "user_id": "user-sarah",
         },
     )
     assert response2.status_code == 201
@@ -203,10 +201,10 @@ def test_list_session_notes(client: TestClient):
         json={"name": "Recipe 2", "yield_quantity": 1, "yield_unit": "portion"},
     ).json()
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -217,7 +215,6 @@ def test_list_session_notes(client: TestClient):
             "recipe_id": recipe1["id"],
             "overall_rating": 4,
             "decision": "approved",
-            "user_id": "user-1",
         },
     )
     client.post(
@@ -226,7 +223,6 @@ def test_list_session_notes(client: TestClient):
             "recipe_id": recipe2["id"],
             "overall_rating": 3,
             "decision": "needs_work",
-            "user_id": "user-2",
         },
     )
 
@@ -235,9 +231,6 @@ def test_list_session_notes(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
-    # Verify user_id is present in responses
-    assert data[0]["user_id"] is not None
-    assert data[1]["user_id"] is not None
 
 
 def test_update_tasting_note(client: TestClient):
@@ -249,25 +242,25 @@ def test_update_tasting_note(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
-    # Add note
+    # Add note (user_id matches current user so we can update it)
     note_response = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
         json={
             "recipe_id": recipe_id,
             "overall_rating": 3,
             "decision": "needs_work",
-            "user_id": "user-123",
+            "user_id": "test-admin-user",
         },
     )
     note_id = note_response.json()["id"]
-    assert note_response.json()["user_id"] == "user-123"
+    assert note_response.json()["user_id"] == "test-admin-user"
 
     # Update note
     response = client.patch(
@@ -279,8 +272,7 @@ def test_update_tasting_note(client: TestClient):
     assert data["overall_rating"] == 5
     assert data["decision"] == "approved"
     assert data["feedback"] == "Much better!"
-    # user_id should still be present
-    assert data["user_id"] == "user-123"
+    assert data["user_id"] == "test-admin-user"
 
 
 def test_delete_tasting_note(client: TestClient):
@@ -292,20 +284,20 @@ def test_delete_tasting_note(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
-    # Add note
+    # Add note (user_id matches current user so we can delete it)
     note_response = client.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
-        json={"recipe_id": recipe_id, "overall_rating": 4, "user_id": "user-456"},
+        json={"recipe_id": recipe_id, "overall_rating": 4, "user_id": "test-admin-user"},
     )
     note_id = note_response.json()["id"]
-    assert note_response.json()["user_id"] == "user-456"
+    assert note_response.json()["user_id"] == "test-admin-user"
 
     # Delete note
     response = client.delete(f"/api/v1/tasting-sessions/{session_id}/notes/{note_id}")
@@ -332,10 +324,10 @@ def test_session_stats(client: TestClient):
         json={"name": "Recipe 3", "yield_quantity": 1, "yield_unit": "portion"},
     ).json()
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -375,11 +367,11 @@ def test_recipe_tasting_notes(client: TestClient):
     # Create two sessions with notes for the same recipe
     session1 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 1", "date": "2024-12-10T09:00:00"},
+        json={"name": "Session 1", "date": "2024-12-10T09:00:00", "participant_ids": ["test-admin-user"]},
     ).json()
     session2 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 2", "date": "2024-12-15T14:00:00"},
+        json={"name": "Session 2", "date": "2024-12-15T14:00:00", "participant_ids": ["test-admin-user"]},
     ).json()
 
     client.post(
@@ -413,11 +405,11 @@ def test_recipe_tasting_summary(client: TestClient):
     # Create sessions with notes
     session1 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 1", "date": "2024-12-10T09:00:00"},
+        json={"name": "Session 1", "date": "2024-12-10T09:00:00", "participant_ids": ["test-admin-user"]},
     ).json()
     session2 = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Session 2", "date": "2024-12-15T14:00:00"},
+        json={"name": "Session 2", "date": "2024-12-15T14:00:00", "participant_ids": ["test-admin-user"]},
     ).json()
 
     client.post(
@@ -479,10 +471,10 @@ def test_create_note_with_action_items_done(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -511,10 +503,10 @@ def test_create_note_action_items_done_defaults_to_false(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -542,10 +534,10 @@ def test_update_action_items_done(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -556,6 +548,7 @@ def test_update_action_items_done(client: TestClient):
             "recipe_id": recipe_id,
             "overall_rating": 3,
             "action_items": "Improve plating",
+            "user_id": "test-admin-user",
         },
     )
     note_id = note_response.json()["id"]
@@ -590,7 +583,7 @@ def test_cascade_delete_session_notes(client: TestClient):
     # Create session with note
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -620,10 +613,10 @@ def test_add_note_requires_user_id(client: TestClient):
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session
+    # Create session with admin as participant
     session_response = client.post(
         "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
+        json={"name": "Test Session", "date": "2024-12-15T10:00:00", "participant_ids": ["test-admin-user"]},
     )
     session_id = session_response.json()["id"]
 
@@ -634,12 +627,12 @@ def test_add_note_requires_user_id(client: TestClient):
             "recipe_id": recipe_id,
             "overall_rating": 4,
             "taster_name": "Chef",
-            "user_id": "current-user-id",
+            "user_id": "test-admin-user",
         },
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["user_id"] == "current-user-id"
+    assert data["user_id"] == "test-admin-user"
 
 
 # ============================================================================
@@ -1103,3 +1096,92 @@ def test_creator_can_add_and_remove_ingredient(client: TestClient):
         f"/api/v1/tasting-sessions/{session_id}/ingredients/{ingredient_id}",
     )
     assert del_resp.status_code == 204
+
+
+# ============================================================================
+# Participant-Only Feedback Tests
+# ============================================================================
+
+
+def test_participant_can_add_recipe_note(client: TestClient):
+    """Participant of a session can add a tasting note."""
+    recipe_resp = client.post(
+        "/api/v1/recipes",
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    )
+    recipe_id = recipe_resp.json()["id"]
+
+    session_resp = client.post(
+        "/api/v1/tasting-sessions",
+        json={
+            "name": "Tasting",
+            "date": "2024-12-15T10:00:00",
+            "participant_ids": ["test-admin-user"],
+        },
+    )
+    session_id = session_resp.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/notes",
+        json={"recipe_id": recipe_id, "overall_rating": 4},
+    )
+    assert response.status_code == 201
+
+
+def test_nonparticipant_cannot_add_recipe_note(
+    session: Session, normal_user_client: TestClient
+):
+    """Non-participant cannot add a tasting note."""
+    from app.models import TastingSession, Recipe
+
+    recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
+    session.add(recipe)
+    session.commit()
+    session.refresh(recipe)
+
+    ts = TastingSession(
+        name="Tasting",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Normal user is NOT a participant → 403
+    response = normal_user_client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/notes",
+        json={"recipe_id": recipe.id, "overall_rating": 4},
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()
+
+
+def test_admin_nonparticipant_cannot_add_recipe_note(
+    client: TestClient, session: Session
+):
+    """Admin who is not a participant cannot add a tasting note."""
+    from app.models import TastingSession, Recipe
+
+    recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
+    session.add(recipe)
+    session.commit()
+    session.refresh(recipe)
+
+    # Session with no participants — admin is NOT added
+    ts = TastingSession(
+        name="Tasting",
+        date=datetime(2024, 12, 15, 10, 0, 0),
+        creator_id="someone-else",
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+
+    # Admin tries to add note but is not a participant → 403
+    response = client.post(
+        f"/api/v1/tasting-sessions/{ts.id}/notes",
+        json={"recipe_id": recipe.id, "overall_rating": 5},
+    )
+    assert response.status_code == 403
+    assert "participants" in response.json()["detail"].lower()

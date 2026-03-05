@@ -2,14 +2,17 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
+from sqlmodel import select as sql_select
 
-from app.api.deps import get_session
+from app.api.deps import get_current_user, get_session
 from app.models import (
     IngredientTastingNoteCreate,
     IngredientTastingNoteUpdate,
     IngredientTastingNoteRead,
     IngredientTastingNoteWithDetails,
 )
+from app.models.tasting import TastingUser
+from app.models.user import User
 from app.domain import TastingSessionService, IngredientTastingNoteService
 
 
@@ -42,8 +45,22 @@ def add_ingredient_note_to_session(
     session_id: int,
     data: IngredientTastingNoteCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Add an ingredient tasting note to a session."""
+    """Add an ingredient tasting note to a session. Only participants can add notes."""
+    # Verify the user is a participant of this session
+    participant = session.exec(
+        sql_select(TastingUser).where(
+            TastingUser.tasting_session_id == session_id,
+            TastingUser.user_id == current_user.id,
+        )
+    ).first()
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only session participants can add feedback",
+        )
+
     service = IngredientTastingNoteService(session)
     note = service.add(session_id, data)
     if not note:

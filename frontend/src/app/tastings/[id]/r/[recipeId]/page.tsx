@@ -244,12 +244,11 @@ function FeedbackForm({
 interface FeedbackNoteCardProps {
   note: TastingNote;
   currentUserId: string | null;
-  isAdmin: boolean;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
 }
 
-function FeedbackNoteCard({ note, currentUserId, isAdmin, onUpdate, onDelete }: FeedbackNoteCardProps) {
+function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -305,7 +304,7 @@ function FeedbackNoteCard({ note, currentUserId, isAdmin, onUpdate, onDelete }: 
             )}
           </div>
         </div>
-        {(isAdmin || note.user_id === null || note.user_id === currentUserId) && (
+        {(note.user_id !== null && note.user_id === currentUserId) && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
@@ -427,12 +426,10 @@ export default function RecipeTastingPage() {
   const sessionId = params.id ? Number(params.id) : null;
   const recipeId = params.recipeId ? Number(params.recipeId) : null;
 
-  const { userId, username, email, userType } = useAppState();
+  const { userId, username } = useAppState();
 
   const { data: session, isLoading: sessionLoading } = useTastingSession(sessionId);
-  const isInvited = userType === 'admin' ||
-    (userId && session?.creator_id === userId) ||
-    (userId && session?.participants?.some((p) => p.user_id === userId) === true);
+  const isInvited = userId && session?.participants?.some((p) => p.user_id === userId) === true;
   const { data: recipe, isLoading: recipeLoading } = useRecipeForTasting(recipeId);
   const { data: allergens = [] } = useRecipeAllergens(recipeId);
   const { data: allNotes } = useSessionNotes(sessionId);
@@ -631,7 +628,6 @@ export default function RecipeTastingPage() {
                 key={note.id}
                 note={note}
                 currentUserId={userId}
-                isAdmin={userType === 'admin'}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
               />
