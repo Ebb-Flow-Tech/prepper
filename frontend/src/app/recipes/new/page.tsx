@@ -14,5 +14,5 @@ export default function NewRecipePage() {
     }
   }, [selectedRecipeId, selectRecipe]);
 
-  return <CanvasLayout showBackLink={true} showTabs={false} />;
+  return <CanvasLayout showBackLink={true} showTabs={true} />;
 }

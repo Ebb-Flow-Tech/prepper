@@ -5,7 +5,7 @@ import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight, Loa
 import { useDraggable } from '@dnd-kit/core';
 import { useIngredients, useCreateIngredient, useRecipes, useCategories, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
-import { Button, Input, Select, Skeleton } from '@/components/ui';
+import { Button, Input, Select, Skeleton, Switch } from '@/components/ui';
 import Image from 'next/image';
 import { formatCurrency, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -302,6 +302,7 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ outlets }: RightPanelProps) {
+  const { isDragDropEnabled, setIsDragDropEnabled } = useAppState();
   const { data: ingredientsData, isLoading: ingredientsLoading, error: ingredientsError } = useIngredients({ page_size: 30 });
   const ingredients = ingredientsData?.items;
   const { data: recipesData, isLoading: recipesLoading, error: recipesError } = useRecipes({ page_size: 30 });
@@ -460,6 +461,13 @@ export function RightPanel({ outlets }: RightPanelProps) {
         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Library</h2>
           <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 mr-1">
+              <Switch
+                checked={isDragDropEnabled}
+                onChange={(e) => setIsDragDropEnabled(e.currentTarget.checked)}
+              />
+              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Drag and Drop</span>
+            </div>
             <button
               onClick={() => setShowForm(true)}
               disabled={showForm}

@@ -13,7 +13,7 @@ import { GripVertical, X, ChevronDown, ChevronUp, ImagePlus, Minus, Plus, Grid3x
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useAppState } from '@/lib/store';
+import { useAppState, setCanvasSaveHandler } from '@/lib/store';
 import {
   useRecipes,
   useIngredients,
@@ -32,19 +32,21 @@ import {
   useAllRecipeRecipeCategories,
   useRecipeOutletsBatch,
 } from '@/lib/hooks';
-import { Button, Input, Select, ConfirmModal, Switch, Modal, Checkbox } from '@/components/ui';
+import { Button, Input, Select, ConfirmModal, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus, Outlet, SupplierIngredient } from '@/types';
 import { RightPanel } from '../RightPanel';
 import { formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
 import { getIngredientSuppliers } from '@/lib/api';
+import { convertUnit, getCompatibleUnits } from '@/lib/unitConversion';
 
 // Staged item with position on canvas
 interface StagedIngredient {
   id: string; // unique id for this staged item
   ingredient: Ingredient;
   quantity: number;
+  unit: string; // display/recipe unit (may differ from base_unit after conversion)
   wastage_percentage: number;
   selectedSupplierId: number | null; // user-selected supplier from the map
   x: number;
@@ -151,7 +153,7 @@ function DragOverlayContent({
           </div>
         </div>
         <div className="game-card-body py-2">
-          <span className="game-card-stat game-card-stat-ingredient">{staged.ingredient.base_unit}</span>
+          <span className="game-card-stat game-card-stat-ingredient">{staged.unit}</span>
         </div>
       </div>
     );
@@ -192,6 +194,7 @@ function StagedIngredientCard({
   onRemove,
   onQuantityChange,
   onWastageChange,
+  onUnitChange,
   onSupplierSelect,
   suppliers,
   categoryMap,
@@ -200,6 +203,7 @@ function StagedIngredientCard({
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   onWastageChange: (wastage: number) => void;
+  onUnitChange: (unit: string) => void;
   onSupplierSelect: (supplierId: number | null) => void;
   suppliers: SupplierIngredient[];
   categoryMap: Record<number, string>;
@@ -291,7 +295,16 @@ function StagedIngredientCard({
               min="0"
               step="0.1"
             />
-            <span className="game-card-stat game-card-stat-ingredient">{staged.ingredient.base_unit}</span>
+            <select
+              value={staged.unit}
+              onChange={(e) => { e.stopPropagation(); onUnitChange(e.target.value); }}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded bg-black/30 border border-blue-400/30 px-1 py-0.5 text-sm text-blue-100 focus:border-blue-400 focus:outline-none"
+            >
+              {getCompatibleUnits(staged.unit).map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
           </div>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
@@ -304,7 +317,7 @@ function StagedIngredientCard({
         {/* Cost display */}
         <div className="text-sm text-blue-200/80">
           {unitCost != null ? (
-            <span>{costLabel} • ${unitCost.toFixed(2)}/{staged.ingredient.base_unit}</span>
+            <span>{costLabel} • ${unitCost.toFixed(2)}/{staged.unit}</span>
           ) : (
             <span className="text-blue-300/50">No pricing</span>
           )}
@@ -335,7 +348,7 @@ function StagedIngredientCard({
             <div className="flex justify-between">
               <span className="text-blue-300/60">Unit Cost</span>
               <span className="text-blue-100 font-medium">
-                {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.ingredient.base_unit}` : 'N/A'}
+                {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.unit}` : 'N/A'}
               </span>
             </div>
             <div>
@@ -396,6 +409,7 @@ function StagedIngredientListItem({
   onRemove,
   onQuantityChange,
   onWastageChange,
+  onUnitChange,
   onSupplierSelect,
   suppliers,
   categoryMap,
@@ -404,6 +418,7 @@ function StagedIngredientListItem({
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   onWastageChange: (wastage: number) => void;
+  onUnitChange: (unit: string) => void;
   onSupplierSelect: (supplierId: number | null) => void;
   suppliers: SupplierIngredient[];
   categoryMap: Record<number, string>;
@@ -420,7 +435,7 @@ function StagedIngredientListItem({
       <div className="flex-1 min-w-0">
         <h4 className="font-medium text-sm text-zinc-900 dark:text-white truncate">{staged.ingredient.name}</h4>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">{staged.ingredient.base_unit}</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{staged.unit}</span>
           {categoryName && (
             <>
               <span className="text-zinc-300 dark:text-zinc-600 text-xs">·</span>
@@ -468,7 +483,16 @@ function StagedIngredientListItem({
           min="0"
           step="0.1"
         />
-        <span className="text-xs text-zinc-400 w-6">{staged.ingredient.base_unit}</span>
+        <select
+          value={staged.unit}
+          onChange={(e) => { e.stopPropagation(); onUnitChange(e.target.value); }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-14 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1 py-1 text-xs text-zinc-700 dark:text-zinc-300 focus:border-blue-400 focus:outline-none"
+        >
+          {getCompatibleUnits(staged.unit).map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
       </div>
 
       {/* Wastage */}
@@ -965,6 +989,7 @@ function CanvasTable({
   onRemoveRecipe,
   onIngredientQuantityChange,
   onIngredientWastageChange,
+  onIngredientUnitChange,
   onRecipeQuantityChange,
   onIngredientSelect,
   onRecipeSelect,
@@ -978,6 +1003,7 @@ function CanvasTable({
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
+  onIngredientUnitChange: (id: string, unit: string) => void;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
   onIngredientSelect: (id: string, ingredientOrRecipe: Ingredient | Recipe) => void;
   onRecipeSelect: (id: string, recipeOrIngredient: Recipe | Ingredient) => void;
@@ -1027,7 +1053,18 @@ function CanvasTable({
                   </button>
                 </div>
               </td>
-              <td className="px-4 py-2.5 text-sm text-zinc-600 dark:text-zinc-400">{staged.ingredient.base_unit}</td>
+              <td className="px-4 py-2.5">
+                <select
+                  value={staged.unit}
+                  onChange={(e) => { e.stopPropagation(); onIngredientUnitChange(staged.id, e.target.value); }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-1 text-sm text-zinc-700 dark:text-zinc-300 focus:border-blue-400 focus:outline-none"
+                >
+                  {getCompatibleUnits(staged.unit).map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </td>
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-1">
                   <input
@@ -1132,6 +1169,7 @@ function CanvasDropZone({
   onRemoveRecipe,
   onIngredientQuantityChange,
   onIngredientWastageChange,
+  onIngredientUnitChange,
   onSupplierSelect,
   supplierMap,
   onRecipeQuantityChange,
@@ -1151,6 +1189,7 @@ function CanvasDropZone({
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
+  onIngredientUnitChange: (id: string, unit: string) => void;
   onSupplierSelect: (id: string, supplierId: number | null) => void;
   supplierMap: Record<number, SupplierIngredient[]>;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
@@ -1213,6 +1252,7 @@ function CanvasDropZone({
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
               onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              onUnitChange={(u) => onIngredientUnitChange(staged.id, u)}
               onSupplierSelect={(sid) => onSupplierSelect(staged.id, sid)}
               suppliers={supplierMap[staged.ingredient.id] ?? []}
               categoryMap={categoryMap}
@@ -1238,6 +1278,7 @@ function CanvasDropZone({
           onRemoveRecipe={onRemoveRecipe}
           onIngredientQuantityChange={onIngredientQuantityChange}
           onIngredientWastageChange={onIngredientWastageChange}
+          onIngredientUnitChange={onIngredientUnitChange}
           onRecipeQuantityChange={onRecipeQuantityChange}
           onIngredientSelect={onIngredientSelect}
           onRecipeSelect={onRecipeSelect}
@@ -1254,6 +1295,7 @@ function CanvasDropZone({
               onRemove={() => onRemoveIngredient(staged.id)}
               onQuantityChange={(q) => onIngredientQuantityChange(staged.id, q)}
               onWastageChange={(w) => onIngredientWastageChange(staged.id, w)}
+              onUnitChange={(u) => onIngredientUnitChange(staged.id, u)}
               onSupplierSelect={(sid) => onSupplierSelect(staged.id, sid)}
               suppliers={supplierMap[staged.ingredient.id] ?? []}
               categoryMap={categoryMap}
@@ -1291,6 +1333,7 @@ function CanvasContent({
   onRemoveRecipe,
   onIngredientQuantityChange,
   onIngredientWastageChange,
+  onIngredientUnitChange,
   onSupplierSelect,
   supplierMap,
   onRecipeQuantityChange,
@@ -1310,12 +1353,9 @@ function CanvasContent({
   hasUnsavedChanges,
   hasSelectedRecipe,
   isOwner,
-  isDragDropEnabled,
-  onDragDropEnabledChange,
   viewMode,
   onViewModeChange,
   categoryMap,
-  selectedRecipe,
   canvasCost,
   getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
@@ -1329,6 +1369,7 @@ function CanvasContent({
   onRemoveRecipe: (id: string) => void;
   onIngredientQuantityChange: (id: string, quantity: number) => void;
   onIngredientWastageChange: (id: string, wastage: number) => void;
+  onIngredientUnitChange: (id: string, unit: string) => void;
   onSupplierSelect: (id: string, supplierId: number | null) => void;
   supplierMap: Record<number, SupplierIngredient[]>;
   onRecipeQuantityChange: (id: string, quantity: number) => void;
@@ -1348,19 +1389,16 @@ function CanvasContent({
   hasUnsavedChanges: boolean;
   hasSelectedRecipe: boolean;
   isOwner: boolean;
-  isDragDropEnabled: boolean;
-  onDragDropEnabledChange: (enabled: boolean) => void;
   viewMode: 'grid' | 'list' | 'table';
   onViewModeChange: (mode: 'grid' | 'list' | 'table') => void;
   categoryMap: Record<number, string>;
-  selectedRecipe?: Recipe | null;
   canvasCost: number;
   getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
   onShowAddIngredientsModal: () => void;
 }) {
   const hasItems = stagedIngredients.length > 0 || stagedRecipes.length > 0;
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
@@ -1476,13 +1514,6 @@ function CanvasContent({
                   onChange={(e) => onMetadataChange({ is_public: e.target.checked })}
                   label="Public"
                 />
-                <div className="flex items-center gap-1.5">
-                  <Switch
-                    checked={isDragDropEnabled}
-                    onChange={(e) => onDragDropEnabledChange(e.currentTarget.checked)}
-                  />
-                  <span className="text-xs text-zinc-500">D&D</span>
-                </div>
               </div>
             </div>
 
@@ -1538,6 +1569,7 @@ function CanvasContent({
           onRemoveRecipe={onRemoveRecipe}
           onIngredientQuantityChange={onIngredientQuantityChange}
           onIngredientWastageChange={onIngredientWastageChange}
+          onIngredientUnitChange={onIngredientUnitChange}
           onSupplierSelect={onSupplierSelect}
           supplierMap={supplierMap}
           onRecipeQuantityChange={onRecipeQuantityChange}
@@ -1676,7 +1708,7 @@ interface CanvasTabProps {
 
 export function CanvasTab({ outlets }: CanvasTabProps) {
   const router = useRouter();
-  const { userId, selectedRecipeId, userType, isDragDropEnabled, setIsDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
+  const { userId, selectedRecipeId, userType, isDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipesData } = useRecipes({ page_size: 30 });
   const recipes = recipesData?.items;
   const { data: ingredientsData } = useIngredients({ page_size: 30 });
@@ -1828,6 +1860,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           id: `ing-${Date.now()}-${Math.random()}`,
           ingredient,
           quantity: 1,
+          unit: ingredient.base_unit,
           wastage_percentage: 0,
           selectedSupplierId: null,
           x: 0,
@@ -1905,7 +1938,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     }
 
     if (loadedRecipeId === selectedRecipeId) return;
-    if (!recipeIngredients || !subRecipes) return;
+    if (!recipeIngredients || !subRecipes || !recipes) return;
 
     // Load recipe metadata from selected recipe
     const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
@@ -1937,6 +1970,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         updated_at: '',
       },
       quantity: ri.quantity,
+      unit: ri.unit,
       wastage_percentage: ri.wastage_percentage,
       selectedSupplierId: ri.supplier_id ?? null,
       x: 0,
@@ -2063,6 +2097,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             id: `ing-${Date.now()}-${Math.random()}`,
             ingredient: dragItem.ingredient,
             quantity: 1,
+            unit: dragItem.ingredient.base_unit,
             wastage_percentage: 0,
             selectedSupplierId: null,
             x: 0, // Placeholder - will be set by position recalculation effect
@@ -2124,6 +2159,20 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const handleIngredientWastageChange = useCallback((id: string, wastage_percentage: number) => {
     setStagedIngredients((prev) =>
       prev.map((item) => (item.id === id ? { ...item, wastage_percentage } : item))
+    );
+  }, []);
+
+  const handleIngredientUnitChange = useCallback((id: string, newUnit: string) => {
+    setStagedIngredients((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const converted = convertUnit(item.quantity, item.unit, newUnit);
+        return {
+          ...item,
+          unit: newUnit,
+          quantity: converted != null ? parseFloat(converted.toPrecision(6)) : item.quantity,
+        };
+      })
     );
   }, []);
 
@@ -2198,8 +2247,8 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             .filter((item) => item.id !== id);
         }
 
-        // No duplicate found, just update the ingredient
-        return prev.map((item) => (item.id === id ? { ...item, ingredient } : item));
+        // No duplicate found, just update the ingredient (reset unit to match new ingredient)
+        return prev.map((item) => (item.id === id ? { ...item, ingredient, unit: ingredient.base_unit } : item));
       });
     }
   }, []);
@@ -2239,6 +2288,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             id,
             ingredient,
             quantity,
+            unit: ingredient.base_unit,
             wastage_percentage: 0,
             selectedSupplierId: null,
             x: 0,
@@ -2303,6 +2353,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           updated_at: '',
         },
         quantity: ri.quantity,
+        unit: ri.unit,
         wastage_percentage: ri.wastage_percentage,
         selectedSupplierId: ri.supplier_id ?? null,
         x: 20 + (index % 3) * 220,
@@ -2420,7 +2471,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           data: {
             ingredient_id: staged.ingredient.id,
             quantity: staged.quantity,
-            unit: base_unit,
+            unit: staged.unit,
             base_unit,
             unit_price,
             supplier_id,
@@ -2558,7 +2609,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
               ingredientId: existingRi.id,
               data: {
                 quantity: staged.quantity,
-                unit: base_unit,
+                unit: staged.unit,
                 base_unit,
                 unit_price,
                 supplier_id,
@@ -2572,7 +2623,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
               data: {
                 ingredient_id: staged.ingredient.id,
                 quantity: staged.quantity,
-                unit: base_unit,
+                unit: staged.unit,
                 base_unit,
                 unit_price,
                 supplier_id,
@@ -2653,7 +2704,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
             data: {
               ingredient_id: staged.ingredient.id,
               quantity: staged.quantity,
-              unit: base_unit,
+              unit: staged.unit,
               base_unit,
               unit_price,
               supplier_id,
@@ -2783,6 +2834,14 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
     setCanvasHasUnsavedChanges(hasUnsavedChanges);
   }, [hasUnsavedChanges, setCanvasHasUnsavedChanges]);
 
+  // Register save handler for "Save & Leave" modal — module-level to avoid re-render loops
+  const handleSubmitConfirmRef = useRef(handleSubmitConfirm);
+  handleSubmitConfirmRef.current = handleSubmitConfirm;
+  useEffect(() => {
+    setCanvasSaveHandler(() => handleSubmitConfirmRef.current());
+    return () => setCanvasSaveHandler(null);
+  }, []);
+
   const canvasContent = (
     <CanvasContent
       stagedIngredients={stagedIngredients}
@@ -2793,6 +2852,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       onRemoveRecipe={handleRemoveRecipe}
       onIngredientQuantityChange={handleIngredientQuantityChange}
       onIngredientWastageChange={handleIngredientWastageChange}
+      onIngredientUnitChange={handleIngredientUnitChange}
       onSupplierSelect={handleSupplierSelect}
       supplierMap={supplierMap}
       onRecipeQuantityChange={handleRecipeQuantityChange}
@@ -2824,12 +2884,9 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
         const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
         return selectedRecipe?.owner_id === userId;
       })()}
-      isDragDropEnabled={isDragDropEnabled}
-      onDragDropEnabledChange={setIsDragDropEnabled}
       viewMode={canvasViewMode}
       onViewModeChange={setCanvasViewMode}
       categoryMap={categoryMap}
-      selectedRecipe={selectedRecipeId ? recipes?.find((r) => r.id === selectedRecipeId) : null}
       canvasCost={canvasCost}
       getOutletNamesForRecipe={getOutletNamesForRecipe}
       getCategoryNamesForRecipe={getCategoryNamesForRecipe}
@@ -2955,6 +3012,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                       id: `ing-${Date.now()}-${Math.random()}`,
                       ingredient: matchedIngredient,
                       quantity: parsed.quantity,
+                      unit: matchedIngredient.base_unit,
                       wastage_percentage: 0,
                       selectedSupplierId: null,
                       x: 0,

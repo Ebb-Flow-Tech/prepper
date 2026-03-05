@@ -5,6 +5,15 @@ import { registerLogoutCallback } from '@/lib/auth-interceptor';
 
 const AUTH_STORAGE_KEY = 'prepper_auth';
 
+// Module-level save handler — kept outside React to avoid re-render loops
+let _canvasSaveHandler: (() => Promise<void>) | null = null;
+export function setCanvasSaveHandler(handler: (() => Promise<void>) | null) {
+  _canvasSaveHandler = handler;
+}
+export function getCanvasSaveHandler(): (() => Promise<void>) | null {
+  return _canvasSaveHandler;
+}
+
 interface StoredAuth {
   userId: string | null;
   jwt: string | null;
@@ -179,7 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setCanvasHasUnsavedChanges = useCallback((hasChanges: boolean) => {
-    setState((prev) => ({ ...prev, canvasHasUnsavedChanges: hasChanges }));
+    setState((prev) => prev.canvasHasUnsavedChanges === hasChanges ? prev : { ...prev, canvasHasUnsavedChanges: hasChanges });
   }, []);
 
   const setIsDragDropEnabled = useCallback((enabled: boolean) => {

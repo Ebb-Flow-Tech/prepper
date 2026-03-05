@@ -287,14 +287,14 @@ export function OverviewTab() {
               </CardContent>
             </Card>
 
-            {/* Tags Section */}
+            {/* Category Section */}
             <Card className="mb-6">
               <CardContent className="p-6">
                 <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
-                  Tags
+                  Category
                 </h2>
                 <div className="space-y-4">
-                  {/* Current Tags */}
+                  {/* Current Categories */}
                   <div className="flex flex-wrap items-center gap-2">
                     {categoryLinks.length > 0 ? (
                       categoryLinks.map((link) => {
@@ -319,7 +319,7 @@ export function OverviewTab() {
                               }}
                               disabled={!canEditRecipe || isRemovingTag}
                               className="ml-1 text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.7)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              title="Remove tag"
+                              title="Remove category"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -328,12 +328,12 @@ export function OverviewTab() {
                       })
                     ) : (
                       <p className="text-sm text-zinc-400 dark:text-zinc-500 italic">
-                        No tags added yet
+                        No categories added yet
                       </p>
                     )}
                   </div>
 
-                  {/* Add Tag Button */}
+                  {/* Add Category Button */}
                   {canEditRecipe && (
                     <div className="relative" ref={tagDropdownRef}>
                       <button
@@ -342,7 +342,7 @@ export function OverviewTab() {
                         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.2)] hover:bg-[hsl(var(--primary)/0.15)] dark:hover:bg-[hsl(var(--primary)/0.25)] text-[hsl(var(--primary))] text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="h-4 w-4" />
-                        Add Tag
+                        Add Category
                       </button>
 
                       {/* Dropdown Menu */}
@@ -354,7 +354,7 @@ export function OverviewTab() {
                               <div className="p-2 border-b border-[hsl(var(--border))]">
                                 <input
                                   type="text"
-                                  placeholder="Search tags..."
+                                  placeholder="Search categories..."
                                   value={tagSearchFilter}
                                   onChange={(e) => setTagSearchFilter(e.target.value)}
                                   autoFocus
@@ -390,14 +390,14 @@ export function OverviewTab() {
                                   ))}
                                 {allCategories.filter((cat) => !categoryLinks.some((link) => link.category_id === cat.id) && cat.name.toLowerCase().includes(tagSearchFilter.toLowerCase())).length === 0 && (
                                   <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                                    {tagSearchFilter ? 'No matching tags' : 'All tags added'}
+                                    {tagSearchFilter ? 'No matching categories' : 'All categories added'}
                                   </div>
                                 )}
                               </div>
                             </>
                           ) : (
                             <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                              No tags available
+                              No categories available
                             </div>
                           )}
                         </div>
