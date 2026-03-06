@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
 - **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
 - **0.0.21** (2026-03-05) - Participant-Only Feedback, Canvas Unit Price Auto-Conversion & Recipe Loading Fix
 - **0.0.20** (2026-03-04) - Server-Side Pagination & Performance: Paginated List Endpoints, Server-Side Search/Filtering, Database Indexes, Connection Pooling & Next.js Optimization
@@ -28,6 +29,128 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.23] - 2026-03-06
+
+### Performance
+
+#### P0: Singleton Supabase Client + Local JWT Verification
+
+Every authenticated request previously created a new Supabase client (TCP + TLS handshake) and made a synchronous network round-trip to Supabase to verify the JWT. This added 50–300ms of unpredictable latency per request. The `register` endpoint created 3 separate clients.
+
+**Fix**:
+- Supabase client created once via `@lru_cache` singleton (`_get_supabase_client()`) and reused across all requests
+- `SupabaseAuthService` itself cached as module-level singleton via `get_auth_service()`
+- JWT tokens verified locally using `PyJWT` when `SUPABASE_JWT_SECRET` is configured, eliminating the network round-trip entirely
+- Falls back to remote Supabase verification if JWT secret is not set
+- `auth.py` `/me` endpoint simplified to use `get_current_user` dependency (was duplicating auth logic manually)
+
+**Files Modified**:
+- `backend/app/domain/supabase_auth_service.py` — Singleton client, local JWT verification, `get_auth_service()` factory
+- `backend/app/api/auth.py` — Use `get_auth_service()`, simplify `/me` endpoint
+- `backend/app/api/deps.py` — Use `get_auth_service()` in `get_current_user`
+- `backend/app/config.py` — Added `supabase_jwt_secret` setting
+- `backend/pyproject.toml` — Added `PyJWT>=2.8.0` dependency
+- `backend/tests/test_auth.py` — Clear singleton caches in fixtures, `auth_client` fixture for real auth flow
+
+#### P1: Fix Async/Sync Mismatch
+
+Several `async def` endpoints performed synchronous database calls, blocking the asyncio event loop. While one endpoint waited for a DB response, all other concurrent async operations stalled.
+
+**Fix**: Wrapped synchronous DB calls with `asyncio.to_thread()` in async image upload/delete/sync endpoints.
+
+**Files Modified**:
+- `backend/app/api/recipe_images.py` — `to_thread` for `get_recipe` and `add_image`
+- `backend/app/api/tasting_note_images.py` — `to_thread` for all sync DB calls in delete and sync endpoints
+
+#### P1: Batch-Fetch N+1 Elimination
+
+N+1 query patterns in cycle detection and batch add operations caused linear query growth. A recipe with 20 sub-recipes triggered 20+ individual SELECT queries.
+
+**Fix**:
+- `can_add_subrecipe()`: Fetch all `RecipeRecipe` links in one query, build adjacency map, BFS in memory
+- `add_recipes_to_session()`: Batch-fetch all valid recipes + existing links in 2 queries upfront
+- `add_ingredients_to_session()`: Same batch-fetch pattern
+- `reorder_sub_recipes()`: Batch-fetch all links by IDs in one query
+
+**Files Modified**:
+- `backend/app/domain/subrecipe_service.py` — Batch-fetch links for cycle detection and reorder
+- `backend/app/domain/recipe_tasting_service.py` — Batch-fetch recipes + existing links
+- `backend/app/domain/ingredient_tasting_service.py` — Batch-fetch ingredients + existing links
+
+#### P1/P3: Centralize & Deduplicate Outlet Hierarchy
+
+Outlet hierarchy traversal logic was duplicated across 5+ files. Each copy did full table scans with recursive per-query walking.
+
+**Fix**: Consolidated into `OutletService.get_accessible_outlet_ids()`. All callers now use this single method. Removed `get_accessible_outlet_ids()` standalone function from `ingredient_service.py`.
+
+**Files Modified**:
+- `backend/app/domain/outlet_service.py` — New `get_accessible_outlet_ids()` + `list_paginated_with_count()`
+- `backend/app/domain/ingredient_service.py` — Removed standalone function, uses `OutletService`
+- `backend/app/domain/menu_service.py` — Replaced 20-line hierarchy walk with single `OutletService` call
+- `backend/app/domain/supplier_service.py` — Uses `OutletService`
+- `backend/app/api/outlets.py` — Uses `OutletService.get_accessible_outlet_ids()`, moved cycle check into service
+
+#### P2: Eliminate Redundant DB Fetches in Tasting Endpoints
+
+Tasting session endpoints loaded the full session (with participants) 2-3 times per request — once for access control, once for the operation.
+
+**Fix**:
+- `get_raw()`: Lightweight session fetch without participant loading
+- `is_participant()`: Single-column EXISTS query for access checks
+- `_check_session_access_raw()`: Access check using raw session + lightweight participant check
+- `update()` and `delete()` accept optional pre-loaded `existing` session to avoid re-fetching
+
+**Files Modified**:
+- `backend/app/domain/tasting_session_service.py` — `get_raw()`, `is_participant()`, `list_paginated_with_count()`, optional `existing` param
+- `backend/app/api/tastings.py` — `_check_session_access_raw()`, pass pre-loaded session to update/delete
+
+#### P2: Combined Paginated List + Count Query
+
+Paginated endpoints issued two separate queries with the same filters — one for items, one for count. The base filter was built twice.
+
+**Fix**: Added `list_paginated_with_count()` to each service that builds the base query once, then derives both count and paginated items from it.
+
+**Files Modified**:
+- `backend/app/domain/recipe_service.py` — `list_paginated_with_count()`
+- `backend/app/domain/ingredient_service.py` — `list_paginated_with_count()`
+- `backend/app/domain/tasting_session_service.py` — `list_paginated_with_count()`
+- `backend/app/domain/outlet_service.py` — `list_paginated_with_count()`
+- `backend/app/api/recipes.py` — Use combined method
+- `backend/app/api/ingredients.py` — Use combined method
+- `backend/app/api/tastings.py` — Use combined method
+- `backend/app/api/outlets.py` — Use combined method
+
+#### P2: Shared httpx Client for Storage
+
+Each storage upload/delete created a new `httpx.AsyncClient`, establishing a fresh TCP connection per operation.
+
+**Fix**: Module-level singleton `httpx.AsyncClient` via `get_http_client()`, reused across all `StorageService` instances. Client closed during app shutdown via `close_http_client()`.
+
+**Files Modified**:
+- `backend/app/domain/storage_service.py` — `get_http_client()`, `close_http_client()`, reuse client in upload/delete
+- `backend/app/main.py` — Call `close_http_client()` during app shutdown
+
+#### P2: Reduce Commits in Menu Fork/Update
+
+Menu fork issued 10+ individual `session.commit()` calls — one per section, one per item batch, one per outlet link.
+
+**Fix**: Replaced intermediate `session.commit()` with `session.flush()` to get auto-generated IDs. Single `session.commit()` at the end of the operation.
+
+**Files Modified**:
+- `backend/app/domain/menu_service.py` — `flush()` for intermediate operations, single final `commit()`
+
+#### P2: Bounded Costing Cache
+
+The costing cache was an unbounded `dict` that grew without limit, risking memory exhaustion in long-running processes.
+
+**Fix**: Replaced with `cachetools.TTLCache(maxsize=256, ttl=300)` — automatic eviction at 256 entries, 5-minute TTL.
+
+**Files Modified**:
+- `backend/app/api/costing.py` — `TTLCache` replaces manual dict + timestamp logic
+- `backend/pyproject.toml` — Added `cachetools>=5.3.0` dependency
+
 ---
 
 ## [0.0.22] - 2026-03-06
