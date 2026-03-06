@@ -11,6 +11,9 @@ import {
   ChefHat,
   X,
   Clock,
+  Copy,
+  Check,
+  CheckCircle,
 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
@@ -27,6 +30,7 @@ import {
   useRemoveIngredientFromSession,
   useInfiniteRecipes,
   useInfiniteIngredients,
+  useSessionNotes,
 } from '@/lib/hooks';
 import {
   Button,
@@ -41,6 +45,7 @@ import { ParticipantPicker } from '@/components/tasting/ParticipantPicker';
 import type { Recipe, RecipeTasting, Ingredient, IngredientTasting, User, UpdateTastingSessionRequest } from '@/types';
 import { useAppState } from '@/lib/store';
 import { ApiError } from '@/lib/api';
+import { toast } from 'sonner';
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-GB', {
@@ -65,6 +70,7 @@ interface SessionRecipesSectionProps {
   isLoadingMoreRecipes: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  reviewedRecipeIds: Set<number>;
 }
 
 function SessionRecipesSection({
@@ -80,6 +86,7 @@ function SessionRecipesSection({
   isLoadingMoreRecipes,
   searchQuery,
   onSearchChange,
+  reviewedRecipeIds,
 }: SessionRecipesSectionProps) {
   const [showAddRecipe, setShowAddRecipe] = useState(false);
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<number>>(new Set());
@@ -113,6 +120,11 @@ function SessionRecipesSection({
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 min-w-0">
           <ChefHat className="h-5 w-5 text-purple-500 shrink-0" />
           <span className="truncate">Session Recipes</span>
+          {sessionRecipes.length > 0 && (
+            <Badge variant="secondary" className="text-xs shrink-0">
+              {sessionRecipes.filter((sr) => reviewedRecipeIds.has(sr.recipe_id)).length}/{sessionRecipes.length} reviewed
+            </Badge>
+          )}
         </h2>
         {isCreator && !showAddRecipe && (
           <Button
@@ -248,8 +260,13 @@ function SessionRecipesSection({
               >
                 <Link
                   href={`/tastings/${sessionId}/r/${sr.recipe_id}`}
-                  className="font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+                  className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
                 >
+                  {reviewedRecipeIds.has(sr.recipe_id) ? (
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                  ) : (
+                    <div className="h-4 w-4 rounded-full border-2 border-zinc-300 dark:border-zinc-600 shrink-0" />
+                  )}
                   {sr.recipe_name || `Recipe #${sr.recipe_id}`}
                 </Link>
                 {isCreator && (
@@ -532,6 +549,18 @@ export default function TastingSessionDetailPage() {
   const { userId, userType } = useAppState();
   const { data: session, isLoading: sessionLoading, error: sessionError } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
+  const { data: sessionNotes } = useSessionNotes(sessionId);
+
+  const reviewedRecipeIds = useMemo(
+    () => new Set(
+      (sessionNotes || [])
+        .filter((n: { user_id: string | null }) => n.user_id === userId)
+        .map((n: { recipe_id: number }) => n.recipe_id)
+    ),
+    [sessionNotes, userId]
+  );
+
+  const [copied, setCopied] = useState(false);
 
   // Search state lifted from child sections so we can pass it to the API hooks
   const [recipeSearch, setRecipeSearch] = useState('');
@@ -925,6 +954,32 @@ export default function TastingSessionDetailPage() {
             )}
           </div>
 
+          {/* Copy Invite Link */}
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const inviteUrl = `${window.location.origin}/tastings/invite/${sessionId}`;
+                  await navigator.clipboard.writeText(inviteUrl);
+                  setCopied(true);
+                  toast.success('Invite link copied to clipboard');
+                  setTimeout(() => setCopied(false), 2000);
+                } catch {
+                  toast.error('Failed to copy link');
+                }
+              }}
+            >
+              {copied ? (
+                <Check className="h-4 w-4 mr-1.5 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4 mr-1.5" />
+              )}
+              {copied ? 'Copied!' : 'Copy Invite Link'}
+            </Button>
+          </div>
+
           {session.notes && (
             <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400 italic">{session.notes}</p>
           )}
@@ -945,6 +1000,7 @@ export default function TastingSessionDetailPage() {
             isLoadingMoreRecipes={isLoadingMoreRecipes}
             searchQuery={recipeSearch}
             onSearchChange={setRecipeSearch}
+            reviewedRecipeIds={reviewedRecipeIds}
           />
         )}
 

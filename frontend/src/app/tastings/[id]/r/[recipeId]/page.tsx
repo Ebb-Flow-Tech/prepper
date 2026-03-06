@@ -18,6 +18,7 @@ import {
   Plus,
   Edit,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import {
   useTastingSession,
@@ -150,6 +151,18 @@ function FeedbackForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedImages, setSelectedImages] = useState<ImageWithId[]>([]);
 
+  const resetForm = () => {
+    setTasterName(initialData?.taster_name || '');
+    setDecision(initialData?.decision || '');
+    setFeedback(initialData?.feedback || '');
+    setActionItems(initialData?.action_items || '');
+    setTasteRating(initialData?.taste_rating ?? null);
+    setPresentationRating(initialData?.presentation_rating ?? null);
+    setTextureRating(initialData?.texture_rating ?? null);
+    setOverallRating(initialData?.overall_rating ?? null);
+    setSelectedImages([]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -169,6 +182,7 @@ function FeedbackForm({
         },
         selectedImages
       );
+      resetForm();
     } finally {
       setIsSubmitting(false);
     }
@@ -231,7 +245,8 @@ function FeedbackForm({
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={isSubmitting}>
-          {submitLabel}
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+          {isSubmitting ? 'Saving...' : submitLabel}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
@@ -580,6 +595,11 @@ export default function RecipeTastingPage() {
               ))}
             </div>
           )}
+
+          {/* Recipe Description */}
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            {recipe.description?.trim() || 'No description'}
+          </p>
         </div>
 
         {/* Feedback Section */}

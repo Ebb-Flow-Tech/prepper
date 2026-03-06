@@ -37,6 +37,7 @@ export function ImageUploadPreview({
     }))
   );
   const [removingImageId, setRemovingImageId] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Update selectedImages when uploadedImages prop changes (e.g., after query loads)
   useEffect(() => {
@@ -61,39 +62,44 @@ export function ImageUploadPreview({
     const files = e.currentTarget.files;
     if (!files) return;
 
-    const newBase64Images: ImageWithId[] = [];
+    setIsProcessing(true);
+    try {
+      const newBase64Images: ImageWithId[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
 
-      if (file.size > MAX_FILE_SIZE) {
-        alert(`"${file.name}" exceeds 5MB limit and was skipped.`);
-        continue;
+        if (file.size > MAX_FILE_SIZE) {
+          alert(`"${file.name}" exceeds 5MB limit and was skipped.`);
+          continue;
+        }
+        const reader = new FileReader();
+
+        await new Promise<void>((resolve) => {
+          reader.onload = () => {
+            const base64 = reader.result as string;
+            // Remove the data:image/...;base64, prefix
+            const base64Data = base64.split(',')[1];
+            newBase64Images.push({
+              id: null,
+              data: base64Data,
+            });
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        });
       }
-      const reader = new FileReader();
 
-      await new Promise<void>((resolve) => {
-        reader.onload = () => {
-          const base64 = reader.result as string;
-          // Remove the data:image/...;base64, prefix
-          const base64Data = base64.split(',')[1];
-          newBase64Images.push({
-            id: null,
-            data: base64Data,
-          });
-          resolve();
-        };
-        reader.readAsDataURL(file);
-      });
-    }
+      const updated = [...selectedImages, ...newBase64Images];
+      setSelectedImages(updated);
+      onImagesSelected(updated);
 
-    const updated = [...selectedImages, ...newBase64Images];
-    setSelectedImages(updated);
-    onImagesSelected(updated);
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -128,17 +134,21 @@ export function ImageUploadPreview({
             accept="image/*"
             onChange={handleFileSelect}
             className="hidden"
-            disabled={isLoading}
+            disabled={isProcessing || isLoading}
           />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
+            disabled={isProcessing || isLoading}
             className="w-full border-2 border-dashed border-zinc-300 dark:border-zinc-600 rounded-lg p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload className="h-6 w-6 text-zinc-400 mx-auto mb-2" />
+            {isProcessing ? (
+              <Loader2 className="h-6 w-6 text-purple-500 mx-auto mb-2 animate-spin" />
+            ) : (
+              <Upload className="h-6 w-6 text-zinc-400 mx-auto mb-2" />
+            )}
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {isLoading ? 'Uploading...' : 'Click to select images or drag and drop'}
+              {isProcessing ? 'Processing images...' : 'Click to select images or drag and drop'}
             </p>
           </button>
         </div>
