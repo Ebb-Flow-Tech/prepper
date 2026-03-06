@@ -76,11 +76,17 @@ from app.models.supplier_ingredient import (
 )
 from app.models.recipe_tasting import (
     RecipeTasting,
+    RecipeTastingRead,
     RecipeTastingCreate,
+    RecipeTastingBatchCreate,
+    RecipeTastingBatchResult,
 )
 from app.models.ingredient_tasting import (
     IngredientTasting,
     IngredientTastingCreate,
+    IngredientTastingBatchCreate,
+    IngredientTastingBatchResult,
+    IngredientTastingRead,
     IngredientTastingNote,
     IngredientTastingNoteCreate,
     IngredientTastingNoteUpdate,
@@ -222,10 +228,16 @@ __all__ = [
     "SupplierIngredientRead",
     # RecipeTasting
     "RecipeTasting",
+    "RecipeTastingRead",
     "RecipeTastingCreate",
+    "RecipeTastingBatchCreate",
+    "RecipeTastingBatchResult",
     # IngredientTasting
     "IngredientTasting",
     "IngredientTastingCreate",
+    "IngredientTastingBatchCreate",
+    "IngredientTastingBatchResult",
+    "IngredientTastingRead",
     "IngredientTastingNote",
     "IngredientTastingNoteCreate",
     "IngredientTastingNoteUpdate",

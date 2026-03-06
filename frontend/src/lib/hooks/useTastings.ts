@@ -8,6 +8,7 @@ import type {
   CreateTastingNoteRequest,
   UpdateTastingNoteRequest,
   AddRecipeToSessionRequest,
+  AddRecipesToSessionRequest,
 } from '@/types';
 import type { ListParams } from '@/lib/api';
 
@@ -220,6 +221,28 @@ export function useAddRecipeToSession() {
       sessionId: number;
       data: AddRecipeToSessionRequest;
     }) => api.addRecipeToSession(sessionId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'recipes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'stats'],
+      });
+    },
+  });
+}
+
+export function useAddRecipesToSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      data,
+    }: {
+      sessionId: number;
+      data: AddRecipesToSessionRequest;
+    }) => api.addRecipesToSession(sessionId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['tasting-session', variables.sessionId, 'recipes'],

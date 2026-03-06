@@ -25,6 +25,8 @@ import type {
   UpdateTastingNoteRequest,
   RecipeTasting,
   AddRecipeToSessionRequest,
+  AddRecipesToSessionRequest,
+  BatchAddResult,
   IngredientTasting,
   IngredientTastingNote,
   IngredientTastingNoteWithDetails,
@@ -32,6 +34,7 @@ import type {
   CreateIngredientTastingNoteRequest,
   UpdateIngredientTastingNoteRequest,
   AddIngredientToSessionRequest,
+  AddIngredientsToSessionRequest,
   Supplier,
   CreateSupplierRequest,
   UpdateSupplierRequest,
@@ -590,6 +593,16 @@ export async function addRecipeToSession(
   });
 }
 
+export async function addRecipesToSession(
+  sessionId: number,
+  data: AddRecipesToSessionRequest
+): Promise<BatchAddResult> {
+  return fetchApi<BatchAddResult>(`/tasting-sessions/${sessionId}/recipes/batch`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function removeRecipeFromSession(
   sessionId: number,
   recipeId: number
@@ -612,6 +625,16 @@ export async function addIngredientToSession(
   data: AddIngredientToSessionRequest
 ): Promise<IngredientTasting> {
   return fetchApi<IngredientTasting>(`/tasting-sessions/${sessionId}/ingredients`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function addIngredientsToSession(
+  sessionId: number,
+  data: AddIngredientsToSessionRequest
+): Promise<BatchAddResult> {
+  return fetchApi<BatchAddResult>(`/tasting-sessions/${sessionId}/ingredients/batch`, {
     method: 'POST',
     body: JSON.stringify(data),
   });

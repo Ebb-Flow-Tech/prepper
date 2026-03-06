@@ -16,7 +16,7 @@ export function useRecipes(params?: RecipeListParams) {
 
 export function useInfiniteRecipes(params?: Omit<RecipeListParams, 'page_number'>) {
   return useInfiniteQuery({
-    queryKey: ['recipes', params],
+    queryKey: ['recipes', 'infinite', params],
     queryFn: ({ pageParam = 1 }) => api.getRecipes({ ...params, page_number: pageParam }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
@@ -50,7 +50,10 @@ export function useCreateRecipe() {
 
   return useMutation({
     mutationFn: (data: CreateRecipeRequest) => api.createRecipe(data),
-    onSuccess: () => {
+    onSuccess: (newRecipe) => {
+      // Seed the individual recipe cache so useRecipe(newRecipe.id)
+      // returns data immediately on navigation
+      queryClient.setQueryData(['recipe', newRecipe.id], newRecipe);
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
   });

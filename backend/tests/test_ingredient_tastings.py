@@ -213,6 +213,128 @@ def test_get_session_ingredients(client: TestClient):
     assert ingredient2["id"] in ingredient_ids
 
 
+def test_batch_add_ingredients_to_session(client: TestClient):
+    """Test adding multiple ingredients to a session in one call."""
+    ingredient1 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Batch Ingredient 1", "base_unit": "g"},
+    ).json()
+    ingredient2 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Batch Ingredient 2", "base_unit": "ml"},
+    ).json()
+    ingredient3 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Batch Ingredient 3", "base_unit": "kg"},
+    ).json()
+
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Batch Tasting", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients/batch",
+        json={"ingredient_ids": [ingredient1["id"], ingredient2["id"], ingredient3["id"]]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["added"]) == 3
+    assert len(data["skipped"]) == 0
+    assert ingredient1["id"] in data["added"]
+    assert ingredient2["id"] in data["added"]
+    assert ingredient3["id"] in data["added"]
+
+    # Verify all ingredients are in session
+    get_response = client.get(f"/api/v1/tasting-sessions/{session_id}/ingredients")
+    assert len(get_response.json()) == 3
+
+
+def test_batch_add_ingredients_skips_duplicates(client: TestClient):
+    """Test that batch add skips already-added ingredients."""
+    ingredient1 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Existing Ingredient", "base_unit": "g"},
+    ).json()
+    ingredient2 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "New Ingredient", "base_unit": "ml"},
+    ).json()
+
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    # Add ingredient1 individually first
+    client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients",
+        json={"ingredient_id": ingredient1["id"]},
+    )
+
+    # Batch add both - ingredient1 should be skipped
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients/batch",
+        json={"ingredient_ids": [ingredient1["id"], ingredient2["id"]]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["added"] == [ingredient2["id"]]
+    assert data["skipped"] == [ingredient1["id"]]
+
+
+def test_batch_add_ingredients_skips_nonexistent(client: TestClient):
+    """Test that batch add skips nonexistent ingredient IDs."""
+    ingredient1 = client.post(
+        "/api/v1/ingredients",
+        json={"name": "Valid Ingredient", "base_unit": "g"},
+    ).json()
+
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients/batch",
+        json={"ingredient_ids": [ingredient1["id"], 9999]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["added"] == [ingredient1["id"]]
+    assert data["skipped"] == [9999]
+
+
+def test_batch_add_ingredients_nonexistent_session(client: TestClient):
+    """Test batch add to a nonexistent session returns 404."""
+    response = client.post(
+        "/api/v1/tasting-sessions/9999/ingredients/batch",
+        json={"ingredient_ids": [1, 2]},
+    )
+    assert response.status_code == 404
+
+
+def test_batch_add_ingredients_empty_list(client: TestClient):
+    """Test batch add with empty list returns empty result."""
+    session_response = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": "Test Session", "date": "2024-12-15"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/tasting-sessions/{session_id}/ingredients/batch",
+        json={"ingredient_ids": []},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["added"] == []
+    assert data["skipped"] == []
+
+
 def test_get_session_ingredients_empty(client: TestClient):
     """Test getting ingredients from a session with no ingredients."""
     # Create a tasting session

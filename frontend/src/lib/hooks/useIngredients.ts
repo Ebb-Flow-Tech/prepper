@@ -21,7 +21,7 @@ export function useIngredients(params?: IngredientListParams) {
 
 export function useInfiniteIngredients(params?: Omit<IngredientListParams, 'page_number'>) {
   return useInfiniteQuery({
-    queryKey: ['ingredients', params],
+    queryKey: ['ingredients', 'infinite', params],
     queryFn: ({ pageParam = 1 }) => api.getIngredients({ ...params, page_number: pageParam }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {

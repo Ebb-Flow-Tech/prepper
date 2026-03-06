@@ -22,10 +22,33 @@ class IngredientTasting(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class IngredientTastingRead(SQLModel):
+    """IngredientTasting for API response (includes ingredient name)."""
+
+    id: int
+    ingredient_id: int
+    tasting_session_id: int
+    ingredient_name: Optional[str] = None
+    created_at: datetime
+
+
 class IngredientTastingCreate(SQLModel):
     """Schema for adding an ingredient to a tasting session."""
 
     ingredient_id: int
+
+
+class IngredientTastingBatchCreate(SQLModel):
+    """Schema for adding multiple ingredients to a tasting session."""
+
+    ingredient_ids: list[int]
+
+
+class IngredientTastingBatchResult(SQLModel):
+    """Result of a batch add operation."""
+
+    added: list[int]
+    skipped: list[int]
 
 
 # =====================================================================

@@ -5,14 +5,15 @@ import { useAppState } from '@/lib/store';
 import { CanvasLayout } from '@/components/layout';
 
 export default function NewRecipePage() {
-  const { selectedRecipeId, selectRecipe } = useAppState();
+  const { selectedRecipeId, selectRecipe, setCanvasTab } = useAppState();
 
-  // Ensure no recipe is selected when creating a new one
+  // Ensure no recipe is selected and canvas tab is active when creating a new one
   useEffect(() => {
+    setCanvasTab('canvas');
     if (selectedRecipeId !== null) {
       selectRecipe(null);
     }
-  }, [selectedRecipeId, selectRecipe]);
+  }, [selectedRecipeId, selectRecipe, setCanvasTab]);
 
   return <CanvasLayout showBackLink={true} showTabs={true} />;
 }

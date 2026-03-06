@@ -7,7 +7,10 @@ from sqlmodel import Session, select
 from app.models import (
     Recipe,
     RecipeTasting,
+    RecipeTastingRead,
     RecipeTastingCreate,
+    RecipeTastingBatchCreate,
+    RecipeTastingBatchResult,
     TastingSession,
 )
 
@@ -52,6 +55,45 @@ class RecipeTastingService:
         self.session.refresh(recipe_tasting)
         return recipe_tasting
 
+    def add_recipes_to_session(
+        self, session_id: int, data: RecipeTastingBatchCreate
+    ) -> Optional[RecipeTastingBatchResult]:
+        """Add multiple recipes to a tasting session. Skips duplicates and invalid IDs."""
+        tasting_session = self.session.get(TastingSession, session_id)
+        if not tasting_session:
+            return None
+
+        added: list[int] = []
+        skipped: list[int] = []
+
+        for recipe_id in data.recipe_ids:
+            recipe = self.session.get(Recipe, recipe_id)
+            if not recipe:
+                skipped.append(recipe_id)
+                continue
+
+            existing = self.session.exec(
+                select(RecipeTasting).where(
+                    RecipeTasting.tasting_session_id == session_id,
+                    RecipeTasting.recipe_id == recipe_id,
+                )
+            ).first()
+            if existing:
+                skipped.append(recipe_id)
+                continue
+
+            recipe_tasting = RecipeTasting(
+                tasting_session_id=session_id,
+                recipe_id=recipe_id,
+            )
+            self.session.add(recipe_tasting)
+            added.append(recipe_id)
+
+        if added:
+            self.session.commit()
+
+        return RecipeTastingBatchResult(added=added, skipped=skipped)
+
     def remove_recipe_from_session(self, session_id: int, recipe_id: int) -> bool:
         """Remove a recipe from a tasting session."""
         recipe_tasting = self.session.exec(
@@ -68,11 +110,22 @@ class RecipeTastingService:
         self.session.commit()
         return True
 
-    def get_recipes_for_session(self, session_id: int) -> list[RecipeTasting]:
-        """Get all recipe-tasting links for a session."""
+    def get_recipes_for_session(self, session_id: int) -> list[RecipeTastingRead]:
+        """Get all recipe-tasting links for a session, with recipe names."""
         statement = (
-            select(RecipeTasting)
+            select(RecipeTasting, Recipe.name)
+            .join(Recipe, RecipeTasting.recipe_id == Recipe.id)
             .where(RecipeTasting.tasting_session_id == session_id)
             .order_by(RecipeTasting.id)
         )
-        return list(self.session.exec(statement).all())
+        results = self.session.exec(statement).all()
+        return [
+            RecipeTastingRead(
+                id=rt.id,
+                recipe_id=rt.recipe_id,
+                tasting_session_id=rt.tasting_session_id,
+                recipe_name=name,
+                created_at=rt.created_at,
+            )
+            for rt, name in results
+        ]

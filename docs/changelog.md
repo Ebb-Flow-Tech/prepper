@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
 - **0.0.21** (2026-03-05) - Participant-Only Feedback, Canvas Unit Price Auto-Conversion & Recipe Loading Fix
 - **0.0.20** (2026-03-04) - Server-Side Pagination & Performance: Paginated List Endpoints, Server-Side Search/Filtering, Database Indexes, Connection Pooling & Next.js Optimization
 - **0.0.19** (2026-03-03) - Outlet-Scoped Supplier Ingredients: Per-Outlet Pricing, Hierarchical Access Control & Outlet Selector UI
@@ -27,6 +28,99 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.22] - 2026-03-06
+
+### Fixed
+
+#### `/recipes/new` — Canvas Not Showing Up
+
+When navigating to `/recipes/new` from a non-canvas tab (e.g., Overview), the `canvasTab` state retained its previous value. The canvas editor never rendered because `TabContent` dispatched to the stale tab.
+
+**Fix**: Added `setCanvasTab('canvas')` in the `useEffect` of `recipes/new/page.tsx` to force the canvas tab active on mount.
+
+**Files Modified**:
+- `frontend/src/app/recipes/new/page.tsx` — Force canvas tab on mount
+
+#### Client-Side Exception After Creating a Recipe
+
+After `createRecipe` returned and `router.push` fired, the new page called `useRecipe(newId)` but there was no cache entry yet. Also, metadata was reset to defaults before navigation, causing a flash of stale data while the component was still mounted.
+
+**Fix**:
+- Seed the individual recipe cache in `useCreateRecipe.onSuccess` so `useRecipe(newId)` returns data immediately on navigation
+- Removed premature state reset (`setStagedIngredients`, `setStagedRecipes`, `setMetadata(DEFAULT_METADATA)`) before `router.push` — the component unmounts during navigation anyway
+
+**Files Modified**:
+- `frontend/src/lib/hooks/useRecipes.ts` — Seed `['recipe', newRecipe.id]` cache in `onSuccess`
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Removed premature state reset before navigation
+
+#### Existing Recipe Shows "Untitled Recipe" on Load
+
+Metadata initialized to `DEFAULT_METADATA` (name: "Untitled Recipe"). The loading effect waited for ALL three queries (recipe + ingredients + subrecipes) before setting metadata. Recipe data loaded faster, but name stayed wrong until ingredients/subrecipes finished.
+
+**Fix**: Added a separate eager `useEffect` that sets metadata from recipe data as soon as it's available, without waiting for ingredients/subrecipes.
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Eager metadata load from recipe data
+
+#### Submit Button Enable/Disable Logic
+
+The Submit/Save button had incorrect enable/disable logic: it required ingredients to exist (`hasItems`) even for metadata-only saves, and it didn't track whether there were unsaved changes on existing recipes.
+
+**Fix**: Submit button now disabled when name is empty, when no unsaved changes exist on an existing recipe, or when user is not the owner. No longer requires ingredients/subrecipes to exist.
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/CanvasTab.tsx` — Improved submit button disabled conditions
+
+#### Tasting Session — Already-Added Recipes/Ingredients Hidden
+
+`SessionRecipesSection` and `SessionIngredientsSection` filtered out already-added items entirely via `.filter()`. Users wanted them visible but disabled so they can see what's already been added.
+
+**Fix**: Show all recipes/ingredients in the dropdown. Already-added ones get `disabled` attribute, grayed-out styling, and an "Added" badge. Prevent selection via `onClick` guard. Also applied the same pattern to ingredients section.
+
+**Files Modified**:
+- `frontend/src/app/tastings/[id]/page.tsx` — Show already-added items as disabled with "Added" badge
+
+#### Ingredient Tasting Endpoint Missing Ingredient Names
+
+The `GET /{session_id}/ingredients` endpoint returned raw `IngredientTasting` models without ingredient names, forcing the frontend to cross-reference a separate ingredients list.
+
+**Fix**: Created `IngredientTastingRead` DTO with `ingredient_name` field. Service layer now JOINs `Ingredient` table to populate names. Frontend uses `si.ingredient_name` directly instead of looking up from a separate list.
+
+**Files Modified**:
+- `backend/app/models/ingredient_tasting.py` — Added `IngredientTastingRead` DTO
+- `backend/app/models/__init__.py` — Export `IngredientTastingRead`
+- `backend/app/domain/ingredient_tasting_service.py` — JOIN query to include ingredient name
+- `backend/app/api/ingredient_tastings.py` — Use `IngredientTastingRead` response model
+- `frontend/src/types/index.ts` — Added `ingredient_name` to `IngredientTasting` type
+- `frontend/src/app/tastings/[id]/page.tsx` — Use `si.ingredient_name` directly
+
+#### Recipe Tasting Endpoint Missing Recipe Names
+
+The `GET /{session_id}/recipes` endpoint returned raw `RecipeTasting` models without recipe names, forcing the frontend to cross-reference a separately-loaded paginated recipe list. Recipe names showed as "Recipe #ID" until the list finished loading.
+
+**Fix**: Created `RecipeTastingRead` DTO with `recipe_name` field. Service layer now JOINs `Recipe` table to populate names. Frontend uses `sr.recipe_name` directly instead of looking up from `availableRecipes`.
+
+**Files Modified**:
+- `backend/app/models/recipe_tasting.py` — Added `RecipeTastingRead` DTO
+- `backend/app/models/__init__.py` — Export `RecipeTastingRead`
+- `backend/app/domain/recipe_tasting_service.py` — JOIN query to include recipe name
+- `backend/app/api/recipe_tastings.py` — Use `RecipeTastingRead` response model
+- `frontend/src/types/index.ts` — Added `recipe_name` to `RecipeTasting` type
+- `frontend/src/app/tastings/[id]/page.tsx` — Use `sr.recipe_name` directly
+
+### Changed
+
+#### Tasting Session — Server-Side Search with Infinite Scrolling
+
+Replaced client-side filtering (loading 30 recipes/ingredients upfront) with server-side search using `useInfiniteRecipes` and `useInfiniteIngredients`. Search is debounced (300ms) and results load incrementally via "Load more" button.
+
+**Files Modified**:
+- `frontend/src/app/tastings/[id]/page.tsx` — Lifted search state, debounced API calls, infinite scroll pagination
+- `frontend/src/lib/hooks/useRecipes.ts` — Fixed infinite query key to `['recipes', 'infinite', params]` to avoid cache collisions
+- `frontend/src/lib/hooks/useIngredients.ts` — Fixed infinite query key to `['ingredients', 'infinite', params]` to avoid cache collisions
+
 ---
 
 ## [0.0.21] - 2026-03-05

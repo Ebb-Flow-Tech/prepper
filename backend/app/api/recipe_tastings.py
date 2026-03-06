@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.api.deps import get_session, get_current_user
-from app.models import Recipe, RecipeTasting, RecipeTastingCreate, User
+from app.models import Recipe, RecipeTasting, RecipeTastingRead, RecipeTastingCreate, RecipeTastingBatchCreate, RecipeTastingBatchResult, User
 from app.domain import RecipeTastingService, TastingSessionService
 from app.api.tastings import _check_creator_only
 
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get(
     "/{session_id}/recipes",
-    response_model=list[RecipeTasting],
+    response_model=list[RecipeTastingRead],
 )
 def get_session_recipes(
     session_id: int,
@@ -71,6 +71,31 @@ def add_recipe_to_session(
             detail="Could not add recipe. Session or recipe not found, or recipe already in session.",
         )
     return recipe_tasting
+
+
+@router.post(
+    "/{session_id}/recipes/batch",
+    response_model=RecipeTastingBatchResult,
+    status_code=status.HTTP_200_OK,
+)
+def add_recipes_to_session_batch(
+    session_id: int,
+    data: RecipeTastingBatchCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Add multiple recipes to a tasting session. Only the session creator can do this."""
+    tasting_service = TastingSessionService(session)
+    tasting_session = tasting_service.get(session_id)
+    if not tasting_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    _check_creator_only(tasting_session, current_user)
+
+    service = RecipeTastingService(session)
+    result = service.add_recipes_to_session(session_id, data)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tasting session not found")
+    return result
 
 
 @router.delete(

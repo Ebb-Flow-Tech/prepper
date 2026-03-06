@@ -327,11 +327,21 @@ export interface RecipeTasting {
   id: number;
   recipe_id: number;
   tasting_session_id: number;
+  recipe_name?: string | null;
   created_at: string;
 }
 
 export interface AddRecipeToSessionRequest {
   recipe_id: number;
+}
+
+export interface AddRecipesToSessionRequest {
+  recipe_ids: number[];
+}
+
+export interface BatchAddResult {
+  added: number[];
+  skipped: number[];
 }
 
 // ============ Ingredient-Tasting Session Types ============
@@ -340,6 +350,7 @@ export interface IngredientTasting {
   id: number;
   ingredient_id: number;
   tasting_session_id: number;
+  ingredient_name?: string | null;
   created_at: string;
 }
 
@@ -402,6 +413,10 @@ export interface UpdateIngredientTastingNoteRequest {
 
 export interface AddIngredientToSessionRequest {
   ingredient_id: number;
+}
+
+export interface AddIngredientsToSessionRequest {
+  ingredient_ids: number[];
 }
 
 // ============ Supplier Types ============

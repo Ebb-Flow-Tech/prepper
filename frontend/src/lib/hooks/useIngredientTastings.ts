@@ -6,6 +6,7 @@ import type {
   CreateIngredientTastingNoteRequest,
   UpdateIngredientTastingNoteRequest,
   AddIngredientToSessionRequest,
+  AddIngredientsToSessionRequest,
 } from '@/types';
 
 // ============ Session Ingredients ============
@@ -29,6 +30,25 @@ export function useAddIngredientToSession() {
       sessionId: number;
       data: AddIngredientToSessionRequest;
     }) => api.addIngredientToSession(sessionId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tasting-session', variables.sessionId, 'ingredients'],
+      });
+    },
+  });
+}
+
+export function useAddIngredientsToSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      data,
+    }: {
+      sessionId: number;
+      data: AddIngredientsToSessionRequest;
+    }) => api.addIngredientsToSession(sessionId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['tasting-session', variables.sessionId, 'ingredients'],

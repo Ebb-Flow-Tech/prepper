@@ -1645,7 +1645,12 @@ function CanvasContent({
             >
               + Ingredients
             </Button>
-            <Button size="sm" onClick={onSubmit} disabled={!hasItems || isSubmitting || (hasSelectedRecipe && !isOwner)}>
+            <Button size="sm" onClick={onSubmit} disabled={
+              isSubmitting ||
+              !metadata.name.trim() ||
+              (hasSelectedRecipe && !isOwner) ||
+              (hasSelectedRecipe && !hasUnsavedChanges)
+            }>
               {isSubmitting
                 ? hasSelectedRecipe ? 'Saving...' : 'Creating...'
                 : hasSelectedRecipe ? 'Save' : 'Create'}
@@ -1931,6 +1936,24 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
   const handleMetadataChange = useCallback((updates: Partial<RecipeMetadata>) => {
     setMetadata((prev) => ({ ...prev, ...updates }));
   }, []);
+
+  // Eagerly load recipe metadata (name, yield, status) as soon as the recipe
+  // data is available, without waiting for ingredients/subRecipes to load.
+  // This prevents a flash of "Untitled Recipe" on initial page load.
+  useEffect(() => {
+    if (selectedRecipeId === null) return;
+    if (!selectedRecipeData) return;
+    if (loadedRecipeId === selectedRecipeId) return;
+
+    setMetadata({
+      name: selectedRecipeData.name,
+      yield_quantity: selectedRecipeData.yield_quantity,
+      yield_unit: selectedRecipeData.yield_unit,
+      status: selectedRecipeData.status,
+      is_public: selectedRecipeData.is_public,
+      selling_price: selectedRecipeData.selling_price_est ?? 0,
+    });
+  }, [selectedRecipeId, selectedRecipeData, loadedRecipeId]);
 
   // Load existing recipe data when a recipe is selected
   useEffect(() => {
@@ -2783,14 +2806,11 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
           });
         }
 
-        // Clear the canvas
-        setStagedIngredients([]);
-        setStagedRecipes([]);
-        setMetadata(DEFAULT_METADATA);
-
         toast.success('Recipe created successfully!');
 
-        // Redirect to the new recipe
+        // Navigate to the new recipe page. The destination page's load effect
+        // handles state initialization. No need to reset local state here since
+        // the component unmounts during navigation.
         router.push(`/recipes/${newRecipe.id}`);
       }
     } catch {

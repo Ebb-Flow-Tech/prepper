@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -20,14 +20,14 @@ import {
   useUpdateTastingSession,
   useDeleteTastingSession,
   useSessionRecipes,
-  useAddRecipeToSession,
+  useAddRecipesToSession,
   useRemoveRecipeFromSession,
   useSessionIngredients,
-  useAddIngredientToSession,
+  useAddIngredientsToSession,
   useRemoveIngredientFromSession,
-  useRecipes,
+  useInfiniteRecipes,
+  useInfiniteIngredients,
 } from '@/lib/hooks';
-import { useIngredients } from '@/lib/hooks';
 import {
   Button,
   Skeleton,
@@ -58,8 +58,13 @@ interface SessionRecipesSectionProps {
   availableRecipes: Recipe[];
   isLoading: boolean;
   isCreator: boolean;
-  onAddRecipe: (recipeId: number) => void;
+  onAddRecipes: (recipeIds: number[]) => void;
   onRemoveRecipe: (recipeId: number) => void;
+  hasMoreRecipes: boolean;
+  onLoadMoreRecipes: () => void;
+  isLoadingMoreRecipes: boolean;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 function SessionRecipesSection({
@@ -68,35 +73,38 @@ function SessionRecipesSection({
   availableRecipes,
   isLoading,
   isCreator,
-  onAddRecipe,
+  onAddRecipes,
   onRemoveRecipe,
+  hasMoreRecipes,
+  onLoadMoreRecipes,
+  isLoadingMoreRecipes,
+  searchQuery,
+  onSearchChange,
 }: SessionRecipesSectionProps) {
   const [showAddRecipe, setShowAddRecipe] = useState(false);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<number>>(new Set());
 
-  const linkedRecipeIds = sessionRecipes.map((sr) => sr.recipe_id);
-  const filteredAvailableRecipes = availableRecipes.filter(
-    (r) => !linkedRecipeIds.includes(r.id)
-  );
+  const linkedRecipeIds = new Set(sessionRecipes.map((sr) => sr.recipe_id));
 
-  // Filter recipes based on search query
-  const filteredRecipes = searchQuery
-    ? filteredAvailableRecipes.filter((r) =>
-        r.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : filteredAvailableRecipes;
-
-  const handleAddRecipe = () => {
-    if (!selectedRecipeId) return;
-    onAddRecipe(selectedRecipeId);
-    setSelectedRecipeId(null);
-    setSearchQuery('');
+  const handleAddRecipes = () => {
+    if (selectedRecipeIds.size === 0) return;
+    onAddRecipes(Array.from(selectedRecipeIds));
+    setSelectedRecipeIds(new Set());
+    onSearchChange('');
     setShowAddRecipe(false);
   };
 
-  const handleSelectRecipe = (recipeId: number) => {
-    setSelectedRecipeId(recipeId);
+  const handleToggleRecipe = (recipeId: number) => {
+    if (linkedRecipeIds.has(recipeId)) return;
+    setSelectedRecipeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(recipeId)) {
+        next.delete(recipeId);
+      } else {
+        next.add(recipeId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -113,7 +121,7 @@ function SessionRecipesSection({
             onClick={() => setShowAddRecipe(true)}
           >
             <Plus className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Add Recipe</span>
+            <span className="hidden sm:inline">Add Recipes</span>
             <span className="sm:hidden">Add</span>
           </Button>
         )}
@@ -129,51 +137,82 @@ function SessionRecipesSection({
                 </label>
                 <SearchInput
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onClear={() => setSearchQuery('')}
-                  placeholder="Type to filter recipes..."
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onClear={() => onSearchChange('')}
+                  placeholder="Type to search recipes..."
                   className="w-full"
                 />
               </div>
               <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-700 rounded-md">
-                {filteredRecipes.length === 0 ? (
+                {availableRecipes.length === 0 ? (
                   <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400 text-center">
                     {searchQuery ? 'No recipes match your search' : 'No recipes available'}
                   </div>
                 ) : (
-                  filteredRecipes.map((recipe) => (
-                    <button
-                      key={recipe.id}
-                      type="button"
-                      onClick={() => handleSelectRecipe(recipe.id)}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 ${
-                        selectedRecipeId === recipe.id
-                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
-                          : 'text-zinc-900 dark:text-zinc-100'
-                      }`}
-                    >
-                      {recipe.name}
-                    </button>
-                  ))
+                  availableRecipes.map((recipe) => {
+                    const isAlreadyAdded = linkedRecipeIds.has(recipe.id);
+                    const isSelected = selectedRecipeIds.has(recipe.id);
+                    return (
+                      <button
+                        key={recipe.id}
+                        type="button"
+                        onClick={() => handleToggleRecipe(recipe.id)}
+                        disabled={isAlreadyAdded}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 flex items-center justify-between ${
+                          isAlreadyAdded
+                            ? 'opacity-50 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800/30 text-zinc-400 dark:text-zinc-500'
+                            : isSelected
+                              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                              : 'text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                            isAlreadyAdded
+                              ? 'border-zinc-300 dark:border-zinc-600'
+                              : isSelected
+                                ? 'bg-purple-600 border-purple-600 text-white'
+                                : 'border-zinc-300 dark:border-zinc-600'
+                          }`}>
+                            {isSelected && <span className="text-xs">&#10003;</span>}
+                          </span>
+                          {recipe.name}
+                        </span>
+                        {isAlreadyAdded && (
+                          <Badge variant="secondary" className="text-xs ml-2 shrink-0">Added</Badge>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+                {hasMoreRecipes && (
+                  <button
+                    type="button"
+                    onClick={onLoadMoreRecipes}
+                    disabled={isLoadingMoreRecipes}
+                    className="w-full px-3 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 font-medium disabled:opacity-50"
+                  >
+                    {isLoadingMoreRecipes ? 'Loading...' : 'Load more recipes'}
+                  </button>
                 )}
               </div>
               <div className="flex items-center gap-3 pt-2">
-                <Button onClick={handleAddRecipe} disabled={!selectedRecipeId}>
-                  Add
+                <Button onClick={handleAddRecipes} disabled={selectedRecipeIds.size === 0}>
+                  Add{selectedRecipeIds.size > 0 ? ` (${selectedRecipeIds.size})` : ''}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
                     setShowAddRecipe(false);
-                    setSearchQuery('');
-                    setSelectedRecipeId(null);
+                    onSearchChange('');
+                    setSelectedRecipeIds(new Set());
                   }}
                 >
                   Cancel
                 </Button>
-                {selectedRecipeId && (
+                {selectedRecipeIds.size > 0 && (
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Selected: {filteredAvailableRecipes.find((r) => r.id === selectedRecipeId)?.name}
+                    {selectedRecipeIds.size} recipe{selectedRecipeIds.size !== 1 ? 's' : ''} selected
                   </span>
                 )}
               </div>
@@ -202,7 +241,6 @@ function SessionRecipesSection({
       {!isLoading && sessionRecipes.length > 0 && (
         <div className="space-y-2">
           {sessionRecipes.map((sr) => {
-            const recipe = availableRecipes.find((r) => r.id === sr.recipe_id);
             return (
               <div
                 key={sr.id}
@@ -212,17 +250,17 @@ function SessionRecipesSection({
                   href={`/tastings/${sessionId}/r/${sr.recipe_id}`}
                   className="font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
                 >
-                  {recipe?.name || `Recipe #${sr.recipe_id}`}
+                  {sr.recipe_name || `Recipe #${sr.recipe_id}`}
                 </Link>
                 {isCreator && (
-                <button
+                  <button
                     onClick={() => onRemoveRecipe(sr.recipe_id)}
                     className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-400 hover:text-red-600"
                     title="Remove from session"
                   >
                     <X className="h-4 w-4" />
                   </button>
-              )}
+                )}
               </div>
             );
           })}
@@ -238,8 +276,13 @@ interface SessionIngredientsSectionProps {
   allIngredients: Ingredient[];
   isLoading: boolean;
   isCreator: boolean;
-  onAddIngredient: (ingredientId: number) => void;
+  onAddIngredients: (ingredientIds: number[]) => void;
   onRemoveIngredient: (ingredientId: number) => void;
+  hasMoreIngredients: boolean;
+  onLoadMoreIngredients: () => void;
+  isLoadingMoreIngredients: boolean;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 function SessionIngredientsSection({
@@ -248,34 +291,38 @@ function SessionIngredientsSection({
   allIngredients,
   isLoading,
   isCreator,
-  onAddIngredient,
+  onAddIngredients,
   onRemoveIngredient,
+  hasMoreIngredients,
+  onLoadMoreIngredients,
+  isLoadingMoreIngredients,
+  searchQuery,
+  onSearchChange,
 }: SessionIngredientsSectionProps) {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
-  const [selectedIngredientId, setSelectedIngredientId] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIngredientIds, setSelectedIngredientIds] = useState<Set<number>>(new Set());
 
-  const linkedIngredientIds = sessionIngredients.map((si) => si.ingredient_id);
-  const availableIngredients = allIngredients.filter(
-    (i) => !linkedIngredientIds.includes(i.id)
-  );
+  const linkedIngredientIds = new Set(sessionIngredients.map((si) => si.ingredient_id));
 
-  const filteredIngredients = searchQuery
-    ? availableIngredients.filter((i) =>
-        i.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : availableIngredients;
-
-  const handleAddIngredient = () => {
-    if (!selectedIngredientId) return;
-    onAddIngredient(selectedIngredientId);
-    setSelectedIngredientId(null);
-    setSearchQuery('');
+  const handleAddIngredients = () => {
+    if (selectedIngredientIds.size === 0) return;
+    onAddIngredients(Array.from(selectedIngredientIds));
+    setSelectedIngredientIds(new Set());
+    onSearchChange('');
     setShowAddIngredient(false);
   };
 
-  const handleSelectIngredient = (ingredientId: number) => {
-    setSelectedIngredientId(ingredientId);
+  const handleToggleIngredient = (ingredientId: number) => {
+    if (linkedIngredientIds.has(ingredientId)) return;
+    setSelectedIngredientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ingredientId)) {
+        next.delete(ingredientId);
+      } else {
+        next.add(ingredientId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -292,7 +339,7 @@ function SessionIngredientsSection({
             onClick={() => setShowAddIngredient(true)}
           >
             <Plus className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Add Ingredient</span>
+            <span className="hidden sm:inline">Add Ingredients</span>
             <span className="sm:hidden">Add</span>
           </Button>
         )}
@@ -308,61 +355,95 @@ function SessionIngredientsSection({
                 </label>
                 <SearchInput
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onClear={() => setSearchQuery('')}
-                  placeholder="Type to filter ingredients..."
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onClear={() => onSearchChange('')}
+                  placeholder="Type to search ingredients..."
                   className="w-full"
                 />
               </div>
               <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-700 rounded-md">
-                {filteredIngredients.length === 0 ? (
+                {allIngredients.length === 0 ? (
                   <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400 text-center">
                     {searchQuery ? 'No ingredients match your search' : 'No ingredients available'}
                   </div>
                 ) : (
-                  filteredIngredients.map((ingredient) => (
-                    <button
-                      key={ingredient.id}
-                      type="button"
-                      onClick={() => handleSelectIngredient(ingredient.id)}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 flex items-center justify-between ${
-                        selectedIngredientId === ingredient.id
-                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100'
-                          : 'text-zinc-900 dark:text-zinc-100'
-                      }`}
-                    >
-                      <span>{ingredient.name}</span>
-                      <div className="flex items-center gap-1 text-xs">
-                        {ingredient.base_unit && (
-                          <Badge variant="secondary" className="text-xs">{ingredient.base_unit}</Badge>
-                        )}
-                        {ingredient.is_halal ? (
-                          <Badge variant="success" className="text-xs">Halal</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs">Non-Halal</Badge>
-                        )}
-                      </div>
-                    </button>
-                  ))
+                  allIngredients.map((ingredient) => {
+                    const isAlreadyAdded = linkedIngredientIds.has(ingredient.id);
+                    const isSelected = selectedIngredientIds.has(ingredient.id);
+                    return (
+                      <button
+                        key={ingredient.id}
+                        type="button"
+                        onClick={() => handleToggleIngredient(ingredient.id)}
+                        disabled={isAlreadyAdded}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 flex items-center justify-between ${
+                          isAlreadyAdded
+                            ? 'opacity-50 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800/30 text-zinc-400 dark:text-zinc-500'
+                            : isSelected
+                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100'
+                              : 'text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                            isAlreadyAdded
+                              ? 'border-zinc-300 dark:border-zinc-600'
+                              : isSelected
+                                ? 'bg-amber-600 border-amber-600 text-white'
+                                : 'border-zinc-300 dark:border-zinc-600'
+                          }`}>
+                            {isSelected && <span className="text-xs">&#10003;</span>}
+                          </span>
+                          {ingredient.name}
+                        </span>
+                        <div className="flex items-center gap-1 text-xs">
+                          {isAlreadyAdded ? (
+                            <Badge variant="secondary" className="text-xs">Added</Badge>
+                          ) : (
+                            <>
+                              {ingredient.base_unit && (
+                                <Badge variant="secondary" className="text-xs">{ingredient.base_unit}</Badge>
+                              )}
+                              {ingredient.is_halal ? (
+                                <Badge variant="success" className="text-xs">Halal</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">Non-Halal</Badge>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+                {hasMoreIngredients && (
+                  <button
+                    type="button"
+                    onClick={onLoadMoreIngredients}
+                    disabled={isLoadingMoreIngredients}
+                    className="w-full px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 font-medium disabled:opacity-50"
+                  >
+                    {isLoadingMoreIngredients ? 'Loading...' : 'Load more ingredients'}
+                  </button>
                 )}
               </div>
               <div className="flex items-center gap-3 pt-2">
-                <Button onClick={handleAddIngredient} disabled={!selectedIngredientId}>
-                  Add
+                <Button onClick={handleAddIngredients} disabled={selectedIngredientIds.size === 0}>
+                  Add{selectedIngredientIds.size > 0 ? ` (${selectedIngredientIds.size})` : ''}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
                     setShowAddIngredient(false);
-                    setSearchQuery('');
-                    setSelectedIngredientId(null);
+                    onSearchChange('');
+                    setSelectedIngredientIds(new Set());
                   }}
                 >
                   Cancel
                 </Button>
-                {selectedIngredientId && (
+                {selectedIngredientIds.size > 0 && (
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Selected: {availableIngredients.find((i) => i.id === selectedIngredientId)?.name}
+                    {selectedIngredientIds.size} ingredient{selectedIngredientIds.size !== 1 ? 's' : ''} selected
                   </span>
                 )}
               </div>
@@ -391,7 +472,6 @@ function SessionIngredientsSection({
       {!isLoading && sessionIngredients.length > 0 && (
         <div className="space-y-2">
           {sessionIngredients.map((si) => {
-            const ingredient = allIngredients.find((i) => i.id === si.ingredient_id);
             return (
               <div
                 key={si.id}
@@ -401,7 +481,7 @@ function SessionIngredientsSection({
                   href={`/tastings/${sessionId}/i/${si.ingredient_id}`}
                   className="font-medium text-zinc-900 dark:text-zinc-100 hover:text-amber-600 dark:hover:text-amber-400"
                 >
-                  {ingredient?.name || `Ingredient #${si.ingredient_id}`}
+                  {si.ingredient_name || `Ingredient #${si.ingredient_id}`}
                 </Link>
                 {isCreator && (
                   <button
@@ -452,17 +532,51 @@ export default function TastingSessionDetailPage() {
   const { userId, userType } = useAppState();
   const { data: session, isLoading: sessionLoading, error: sessionError } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
-  const { data: availableRecipesData } = useRecipes({ page_size: 30 });
-  const availableRecipes = availableRecipesData?.items;
+
+  // Search state lifted from child sections so we can pass it to the API hooks
+  const [recipeSearch, setRecipeSearch] = useState('');
+  const [ingredientSearch, setIngredientSearch] = useState('');
+  // Debounced search values to avoid excessive API calls
+  const [debouncedRecipeSearch, setDebouncedRecipeSearch] = useState('');
+  const [debouncedIngredientSearch, setDebouncedIngredientSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedRecipeSearch(recipeSearch), 300);
+    return () => clearTimeout(timer);
+  }, [recipeSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedIngredientSearch(ingredientSearch), 300);
+    return () => clearTimeout(timer);
+  }, [ingredientSearch]);
+
+  const {
+    data: recipesPages,
+    fetchNextPage: fetchNextRecipesPage,
+    hasNextPage: hasMoreRecipes,
+    isFetchingNextPage: isLoadingMoreRecipes,
+  } = useInfiniteRecipes({ page_size: 30, search: debouncedRecipeSearch || undefined });
+  const availableRecipes = useMemo(
+    () => recipesPages?.pages.flatMap((p) => p.items) ?? [],
+    [recipesPages]
+  );
   const { data: sessionIngredients, isLoading: ingredientsLoading } = useSessionIngredients(sessionId);
-  const { data: ingredientsData } = useIngredients({ page_size: 30 });
-  const ingredients = ingredientsData?.items;
+  const {
+    data: ingredientsPages,
+    fetchNextPage: fetchNextIngredientsPage,
+    hasNextPage: hasMoreIngredients,
+    isFetchingNextPage: isLoadingMoreIngredients,
+  } = useInfiniteIngredients({ page_size: 30, search: debouncedIngredientSearch || undefined });
+  const ingredients = useMemo(
+    () => ingredientsPages?.pages.flatMap((p) => p.items) ?? [],
+    [ingredientsPages]
+  );
 
   const deleteSession = useDeleteTastingSession();
   const updateSession = useUpdateTastingSession();
-  const addRecipeToSession = useAddRecipeToSession();
+  const addRecipesToSession = useAddRecipesToSession();
   const removeRecipeFromSession = useRemoveRecipeFromSession();
-  const addIngredientToSession = useAddIngredientToSession();
+  const addIngredientsToSession = useAddIngredientsToSession();
   const removeIngredientFromSession = useRemoveIngredientFromSession();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -538,15 +652,15 @@ export default function TastingSessionDetailPage() {
     setShowCalendar(false);
   };
 
-  const handleAddRecipeToSession = async (recipeId: number) => {
+  const handleAddRecipesToSession = async (recipeIds: number[]) => {
     if (!sessionId) return;
     try {
-      await addRecipeToSession.mutateAsync({
+      await addRecipesToSession.mutateAsync({
         sessionId,
-        data: { recipe_id: recipeId },
+        data: { recipe_ids: recipeIds },
       });
     } catch (error) {
-      console.error('Failed to add recipe to session:', error);
+      console.error('Failed to add recipes to session:', error);
     }
   };
 
@@ -560,15 +674,15 @@ export default function TastingSessionDetailPage() {
     }
   };
 
-  const handleAddIngredientToSession = async (ingredientId: number) => {
+  const handleAddIngredientsToSession = async (ingredientIds: number[]) => {
     if (!sessionId) return;
     try {
-      await addIngredientToSession.mutateAsync({
+      await addIngredientsToSession.mutateAsync({
         sessionId,
-        data: { ingredient_id: ingredientId },
+        data: { ingredient_ids: ingredientIds },
       });
     } catch (error) {
-      console.error('Failed to add ingredient to session:', error);
+      console.error('Failed to add ingredients to session:', error);
     }
   };
 
@@ -817,28 +931,38 @@ export default function TastingSessionDetailPage() {
         </div>
 
         {/* Session Recipes Section */}
-        {availableRecipes && sessionId && (
+        {sessionId && (
           <SessionRecipesSection
             sessionId={sessionId}
             sessionRecipes={sessionRecipes || []}
             availableRecipes={availableRecipes}
             isLoading={recipesLoading}
             isCreator={isCreator}
-            onAddRecipe={handleAddRecipeToSession}
+            onAddRecipes={handleAddRecipesToSession}
             onRemoveRecipe={handleRemoveRecipeFromSession}
+            hasMoreRecipes={!!hasMoreRecipes}
+            onLoadMoreRecipes={() => fetchNextRecipesPage()}
+            isLoadingMoreRecipes={isLoadingMoreRecipes}
+            searchQuery={recipeSearch}
+            onSearchChange={setRecipeSearch}
           />
         )}
 
         {/* Session Ingredients Section */}
-        {ingredients && sessionId && (
+        {sessionId && (
           <SessionIngredientsSection
             sessionId={sessionId}
             sessionIngredients={sessionIngredients || []}
             allIngredients={ingredients}
             isLoading={ingredientsLoading}
             isCreator={isCreator}
-            onAddIngredient={handleAddIngredientToSession}
+            onAddIngredients={handleAddIngredientsToSession}
             onRemoveIngredient={handleRemoveIngredientFromSession}
+            hasMoreIngredients={!!hasMoreIngredients}
+            onLoadMoreIngredients={() => fetchNextIngredientsPage()}
+            isLoadingMoreIngredients={isLoadingMoreIngredients}
+            searchQuery={ingredientSearch}
+            onSearchChange={setIngredientSearch}
           />
         )}
 
