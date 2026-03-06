@@ -1,6 +1,6 @@
 """Costing API routes."""
 
-import time
+from cachetools import TTLCache
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -11,24 +11,8 @@ from app.domain import CostingService
 
 router = APIRouter()
 
-# Simple TTL cache for costing results (recipe_id -> (result, timestamp))
-_costing_cache: dict[int, tuple[CostingResult, float]] = {}
-_COSTING_TTL = 5 * 60  # 5 minutes
-
-
-def _get_cached_costing(recipe_id: int) -> CostingResult | None:
-    entry = _costing_cache.get(recipe_id)
-    if entry and (time.monotonic() - entry[1]) < _COSTING_TTL:
-        return entry[0]
-    return None
-
-
-def _set_cached_costing(recipe_id: int, result: CostingResult) -> None:
-    _costing_cache[recipe_id] = (result, time.monotonic())
-
-
-def _invalidate_costing_cache(recipe_id: int) -> None:
-    _costing_cache.pop(recipe_id, None)
+# Bounded TTL cache for costing results (max 256 entries, 5-minute expiry)
+_costing_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
 
 
 @router.get("/{recipe_id}/costing", response_model=CostingResult)
@@ -37,7 +21,7 @@ def get_recipe_costing(
     session: Session = Depends(get_session),
 ):
     """Get the cost breakdown for a recipe."""
-    cached = _get_cached_costing(recipe_id)
+    cached = _costing_cache.get(recipe_id)
     if cached:
         return cached
 
@@ -49,7 +33,7 @@ def get_recipe_costing(
             detail="Recipe not found",
         )
 
-    _set_cached_costing(recipe_id, result)
+    _costing_cache[recipe_id] = result
     return result
 
 
@@ -59,7 +43,7 @@ def recompute_recipe_cost(
     session: Session = Depends(get_session),
 ):
     """Recompute and persist the cost for a recipe."""
-    _invalidate_costing_cache(recipe_id)
+    _costing_cache.pop(recipe_id, None)
 
     service = CostingService(session)
     recipe = service.persist_cost_snapshot(recipe_id)

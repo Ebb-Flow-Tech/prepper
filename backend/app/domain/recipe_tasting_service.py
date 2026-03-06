@@ -63,22 +63,30 @@ class RecipeTastingService:
         if not tasting_session:
             return None
 
+        recipe_ids = data.recipe_ids
+
+        # Batch fetch: all valid recipes in one query
+        valid_recipes = set(
+            self.session.exec(
+                select(Recipe.id).where(Recipe.id.in_(recipe_ids))
+            ).all()
+        )
+
+        # Batch fetch: all existing links in one query
+        existing_links = set(
+            self.session.exec(
+                select(RecipeTasting.recipe_id).where(
+                    RecipeTasting.tasting_session_id == session_id,
+                    RecipeTasting.recipe_id.in_(recipe_ids),
+                )
+            ).all()
+        )
+
         added: list[int] = []
         skipped: list[int] = []
 
-        for recipe_id in data.recipe_ids:
-            recipe = self.session.get(Recipe, recipe_id)
-            if not recipe:
-                skipped.append(recipe_id)
-                continue
-
-            existing = self.session.exec(
-                select(RecipeTasting).where(
-                    RecipeTasting.tasting_session_id == session_id,
-                    RecipeTasting.recipe_id == recipe_id,
-                )
-            ).first()
-            if existing:
+        for recipe_id in recipe_ids:
+            if recipe_id not in valid_recipes or recipe_id in existing_links:
                 skipped.append(recipe_id)
                 continue
 

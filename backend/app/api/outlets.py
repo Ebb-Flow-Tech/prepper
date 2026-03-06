@@ -36,20 +36,9 @@ def _is_user_outlet_accessible(
     """Check if a user's outlet can access a target outlet.
 
     A normal user can access their own outlet and all child outlets.
+    Uses centralized outlet hierarchy resolution (single query).
     """
-    if user_outlet_id == target_outlet_id:
-        return True
-
-    # Check if target is a child of user's outlet
-    accessible_ids = {user_outlet_id}
-
-    def add_children(outlet_id: int):
-        children = service.get_child_outlets(outlet_id)
-        for child in children:
-            accessible_ids.add(child.id)
-            add_children(child.id)
-
-    add_children(user_outlet_id)
+    accessible_ids = service.get_accessible_outlet_ids(user_outlet_id)
     return target_outlet_id in accessible_ids
 
 
@@ -104,17 +93,10 @@ def list_outlets(
     if current_user.user_type != UserType.ADMIN:
         if not current_user.outlet_id:
             return PaginatedResponse.create(items=[], total_count=0, page_number=page_number, page_size=page_size)
-        accessible_ids = {current_user.outlet_id}
-        def add_children(outlet_id: int):
-            children = service.get_child_outlets(outlet_id)
-            for child in children:
-                accessible_ids.add(child.id)
-                add_children(child.id)
-        add_children(current_user.outlet_id)
+        accessible_ids = service.get_accessible_outlet_ids(current_user.outlet_id)
 
     offset = (page_number - 1) * page_size
-    items = service.list_paginated(offset=offset, limit=page_size, is_active=is_active, search=search, accessible_ids=accessible_ids)
-    total = service.count(is_active=is_active, search=search, accessible_ids=accessible_ids)
+    items, total = service.list_paginated_with_count(offset=offset, limit=page_size, is_active=is_active, search=search, accessible_ids=accessible_ids)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
@@ -168,19 +150,19 @@ def update_outlet(
         )
 
     service = OutletService(session)
-
-    # Check for cycle before updating
-    if data.parent_outlet_id is not None and service._would_create_cycle(outlet_id, data.parent_outlet_id):
+    outlet = service.update_outlet(outlet_id, data)
+    if not outlet:
+        # update_outlet returns None for both not-found and cycle detection
+        # Check if outlet exists to differentiate
+        existing = service.get_outlet(outlet_id)
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Outlet not found",
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create circular parent-child relationship. This would form a cycle in the outlet hierarchy.",
-        )
-
-    outlet = service.update_outlet(outlet_id, data)
-    if not outlet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Outlet not found",
         )
     return outlet
 

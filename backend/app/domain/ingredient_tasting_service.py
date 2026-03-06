@@ -63,22 +63,30 @@ class IngredientTastingService:
         if not tasting_session:
             return None
 
+        ingredient_ids = data.ingredient_ids
+
+        # Batch fetch: all valid ingredients in one query
+        valid_ingredients = set(
+            self.session.exec(
+                select(Ingredient.id).where(Ingredient.id.in_(ingredient_ids))
+            ).all()
+        )
+
+        # Batch fetch: all existing links in one query
+        existing_links = set(
+            self.session.exec(
+                select(IngredientTasting.ingredient_id).where(
+                    IngredientTasting.tasting_session_id == session_id,
+                    IngredientTasting.ingredient_id.in_(ingredient_ids),
+                )
+            ).all()
+        )
+
         added: list[int] = []
         skipped: list[int] = []
 
-        for ingredient_id in data.ingredient_ids:
-            ingredient = self.session.get(Ingredient, ingredient_id)
-            if not ingredient:
-                skipped.append(ingredient_id)
-                continue
-
-            existing = self.session.exec(
-                select(IngredientTasting).where(
-                    IngredientTasting.tasting_session_id == session_id,
-                    IngredientTasting.ingredient_id == ingredient_id,
-                )
-            ).first()
-            if existing:
+        for ingredient_id in ingredient_ids:
+            if ingredient_id not in valid_ingredients or ingredient_id in existing_links:
                 skipped.append(ingredient_id)
                 continue
 

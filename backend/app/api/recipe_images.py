@@ -1,5 +1,7 @@
 """Recipe images API routes."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -39,7 +41,7 @@ async def add_recipe_image(
     """
     # Verify recipe exists
     recipe_service = RecipeService(session)
-    recipe = recipe_service.get_recipe(recipe_id)
+    recipe = await asyncio.to_thread(recipe_service.get_recipe, recipe_id)
     if not recipe:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -67,7 +69,7 @@ async def add_recipe_image(
 
     # Create database record
     image_service = RecipeImageService(session)
-    image = image_service.add_image(recipe_id, image_url)
+    image = await asyncio.to_thread(image_service.add_image, recipe_id, image_url)
     return image
 
 

@@ -1,5 +1,6 @@
 """Outlet management for multi-brand operations."""
 
+from collections import deque
 from datetime import datetime
 
 from sqlmodel import Session, select
@@ -60,6 +61,16 @@ class OutletService:
             statement = statement.where(Outlet.id.in_(accessible_ids))
         count_stmt = select(func.count()).select_from(statement.subquery())
         return self.session.exec(count_stmt).one()
+
+    def list_paginated_with_count(self, offset: int, limit: int, is_active=None, search=None, accessible_ids: set[int] | None = None) -> tuple[list[Outlet], int]:
+        """Return paginated items and total count, reusing the same base filter."""
+        from sqlalchemy import func
+        base = self._build_list_query(is_active=is_active, search=search)
+        if accessible_ids is not None:
+            base = base.where(Outlet.id.in_(accessible_ids))
+        total = self.session.exec(select(func.count()).select_from(base.subquery())).one()
+        items = list(self.session.exec(base.offset(offset).limit(limit)).all())
+        return items, total
 
     def get_outlet(self, outlet_id: int) -> Outlet | None:
         """Get an outlet by ID."""
@@ -274,6 +285,38 @@ class OutletService:
         return False
 
     # --- Hierarchical Outlet Methods ---
+
+    def get_accessible_outlet_ids(self, user_outlet_id: int) -> set[int]:
+        """Get all outlet IDs accessible to a user based on their outlet assignment.
+
+        Fetches all outlets in one query, walks up to root, then BFS down
+        to collect all IDs in the user's hierarchy subtree.
+        """
+        all_outlets = list(self.session.exec(select(Outlet)).all())
+        by_id = {o.id: o for o in all_outlets}
+
+        if user_outlet_id not in by_id:
+            return set()
+
+        # Walk up to find the root of this hierarchy
+        current = user_outlet_id
+        while current in by_id and by_id[current].parent_outlet_id is not None:
+            current = by_id[current].parent_outlet_id
+
+        # BFS down from root to collect all accessible IDs
+        children_map: dict[int, list[int]] = {}
+        for o in all_outlets:
+            if o.parent_outlet_id is not None:
+                children_map.setdefault(o.parent_outlet_id, []).append(o.id)
+
+        accessible: set[int] = set()
+        queue = deque([current])
+        while queue:
+            oid = queue.popleft()
+            accessible.add(oid)
+            queue.extend(children_map.get(oid, []))
+
+        return accessible
 
     def get_child_outlets(self, outlet_id: int) -> list[Outlet]:
         """Get all direct child outlets of a parent outlet."""

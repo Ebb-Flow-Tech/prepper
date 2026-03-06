@@ -7,8 +7,8 @@ Orchestrates between SupabaseAuthService and UserService.
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session
-from app.domain.supabase_auth_service import SupabaseAuthService
+from app.api.deps import get_current_user, get_session
+from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
 from app.models import (
     LoginRequest,
@@ -16,6 +16,7 @@ from app.models import (
     RegisterRequest,
     TokenRequest,
     RefreshTokenResponse,
+    User,
     UserCreate,
     UserRead,
     UserType,
@@ -36,7 +37,7 @@ def login(
         User info and access/refresh tokens
     """
     try:
-        auth_service = SupabaseAuthService()
+        auth_service = get_auth_service()
     except (RuntimeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -89,7 +90,7 @@ def register(
         User info and access/refresh tokens
     """
     try:
-        auth_service = SupabaseAuthService()
+        auth_service = get_auth_service()
     except (RuntimeError, ValueError) as e:
         print("/register | e", e)
         raise HTTPException(
@@ -169,7 +170,7 @@ def refresh_token(data: TokenRequest) -> RefreshTokenResponse:
         New access and refresh tokens
     """
     try:
-        auth_service = SupabaseAuthService()
+        auth_service = get_auth_service()
         result = auth_service.refresh_token(data.refresh_token)
     except ValueError:
         raise HTTPException(
@@ -205,7 +206,7 @@ def logout(authorization: str | None = Header(None)) -> None:
     token = authorization.replace("Bearer ", "")
 
     try:
-        auth_service = SupabaseAuthService()
+        auth_service = get_auth_service()
         auth_service.logout(token)
     except ValueError:
         raise HTTPException(
@@ -222,46 +223,11 @@ def logout(authorization: str | None = Header(None)) -> None:
 
 @router.get("/me", response_model=UserRead)
 def get_me(
-    authorization: str | None = Header(None),
-    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> UserRead:
     """
     Get current authenticated user's information.
 
     Requires JWT in Authorization header.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = authorization.replace("Bearer ", "")
-
-    try:
-        auth_service = SupabaseAuthService()
-    except (RuntimeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        )
-
-    user_service = UserService(session)
-
-    # Verify token and get user ID
-    user_id = auth_service.verify_token(token)
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    # Get user from database
-    user = user_service.get_user(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    return UserRead.model_validate(user)
+    return UserRead.model_validate(current_user)

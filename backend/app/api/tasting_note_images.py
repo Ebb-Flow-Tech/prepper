@@ -61,7 +61,7 @@ async def delete_tasting_note_image(
 ):
     """Delete a tasting note image from both storage and database."""
     service = TastingNoteImageService(session)
-    image = service.get_image(image_id)
+    image = await asyncio.to_thread(service.get_image, image_id)
     if not image:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -80,7 +80,7 @@ async def delete_tasting_note_image(
             )
 
     # Then delete from database
-    service.delete_image(image_id)
+    await asyncio.to_thread(service.delete_image, image_id)
 
 
 @router.post("/sync/recipe/{tasting_note_id}", response_model=list[TastingNoteImage], status_code=status.HTTP_200_OK)
@@ -99,7 +99,7 @@ async def sync_tasting_note_images(
     """
     # Verify tasting note exists
     tasting_note_service = TastingNoteService(session)
-    tasting_note = tasting_note_service.get(tasting_note_id)
+    tasting_note = await asyncio.to_thread(tasting_note_service.get, tasting_note_id)
     if not tasting_note:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -114,7 +114,7 @@ async def sync_tasting_note_images(
     if image_ids_to_delete:
         try:
             # Fetch all images in batch
-            images_to_delete = image_service.get_images_by_ids(image_ids_to_delete)
+            images_to_delete = await asyncio.to_thread(image_service.get_images_by_ids, image_ids_to_delete)
 
             # Delete from storage in parallel (if configured)
             if is_storage_configured():
@@ -125,7 +125,7 @@ async def sync_tasting_note_images(
                 await asyncio.gather(*delete_tasks, return_exceptions=True)
 
             # Delete from database in batch
-            image_service.delete_images_by_ids(image_ids_to_delete)
+            await asyncio.to_thread(image_service.delete_images_by_ids, image_ids_to_delete)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -168,7 +168,7 @@ async def sync_tasting_note_images(
                 raise StorageError(f"Failed to upload {len(failed_uploads)} image(s)")
 
             # Add all uploaded images to database in batch
-            image_service.add_images(tasting_note_id=tasting_note_id, image_urls=image_urls)
+            await asyncio.to_thread(image_service.add_images, tasting_note_id=tasting_note_id, image_urls=image_urls)
         except (StorageError, Exception) as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -176,7 +176,7 @@ async def sync_tasting_note_images(
             )
 
     # Return all current images for this note
-    all_images = image_service.get_tasting_note_images(tasting_note_id)
+    all_images = await asyncio.to_thread(image_service.get_tasting_note_images, tasting_note_id)
     return all_images
 
 
@@ -196,7 +196,7 @@ async def sync_ingredient_tasting_note_images(
     """
     # Verify ingredient tasting note exists
     ingredient_tasting_service = IngredientTastingNoteService(session)
-    ingredient_tasting_note = ingredient_tasting_service.get(ingredient_tasting_note_id)
+    ingredient_tasting_note = await asyncio.to_thread(ingredient_tasting_service.get, ingredient_tasting_note_id)
     if not ingredient_tasting_note:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -211,7 +211,7 @@ async def sync_ingredient_tasting_note_images(
     if image_ids_to_delete:
         try:
             # Fetch all images in batch
-            images_to_delete = image_service.get_images_by_ids(image_ids_to_delete)
+            images_to_delete = await asyncio.to_thread(image_service.get_images_by_ids, image_ids_to_delete)
 
             # Delete from storage in parallel (if configured)
             if is_storage_configured():
@@ -222,7 +222,7 @@ async def sync_ingredient_tasting_note_images(
                 await asyncio.gather(*delete_tasks, return_exceptions=True)
 
             # Delete from database in batch
-            image_service.delete_images_by_ids(image_ids_to_delete)
+            await asyncio.to_thread(image_service.delete_images_by_ids, image_ids_to_delete)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -265,14 +265,13 @@ async def sync_ingredient_tasting_note_images(
                 raise StorageError(f"Failed to upload {len(failed_uploads)} image(s)")
 
             # Add all uploaded images to database in batch
-            image_service.add_images(ingredient_tasting_note_id=ingredient_tasting_note_id, image_urls=image_urls)
+            await asyncio.to_thread(image_service.add_images, ingredient_tasting_note_id=ingredient_tasting_note_id, image_urls=image_urls)
         except (StorageError, Exception) as e:
-            print("E",e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to upload images: {str(e)}",
             )
 
     # Return all current images for this ingredient tasting note
-    all_images = image_service.get_ingredient_tasting_note_images(ingredient_tasting_note_id)
+    all_images = await asyncio.to_thread(image_service.get_ingredient_tasting_note_images, ingredient_tasting_note_id)
     return all_images

@@ -2,25 +2,37 @@
 
 Handles all Supabase auth operations (login, register, logout, token refresh).
 Does NOT touch the database.
+
+Uses a singleton Supabase client to avoid re-creating HTTP connections per request.
+Supports local JWT verification to eliminate network round-trips on every auth check.
 """
 
+from functools import lru_cache
+
+import jwt
 from supabase import create_client
 
 from app.config import get_settings
+
+
+@lru_cache
+def _get_supabase_client():
+    """Create and cache a singleton Supabase client."""
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_key:
+        raise ValueError("Supabase credentials not configured")
+    return create_client(settings.supabase_url, settings.supabase_key)
 
 
 class SupabaseAuthService:
     """Service for Supabase authentication operations."""
 
     def __init__(self) -> None:
-        """Initialize Supabase client."""
+        """Initialize with cached Supabase client."""
+        self.client = _get_supabase_client()
         settings = get_settings()
-
-        if not settings.supabase_url or not settings.supabase_key:
-            raise ValueError("Supabase credentials not configured")
-
-        self.client = create_client(settings.supabase_url, settings.supabase_key)
         self.service_role_key = settings.supabase_key
+        self._jwt_secret = settings.supabase_jwt_secret
 
     def login(self, email: str, password: str) -> dict:
         """
@@ -64,11 +76,7 @@ class SupabaseAuthService:
             raise RuntimeError("Supabase service role key not configured")
 
         try:
-            # Create service client with service role key for admin operations
-            admin_client = create_client(
-                str(self.client.supabase_url), self.service_role_key
-            )
-            response = admin_client.auth.admin.create_user(
+            response = self.client.auth.admin.create_user(
                 {
                     "email": email,
                     "password": password,
@@ -140,18 +148,44 @@ class SupabaseAuthService:
         """
         Verify JWT token and return user ID if valid.
 
+        Uses local JWT verification when SUPABASE_JWT_SECRET is configured,
+        eliminating the network round-trip to Supabase on every request.
+        Falls back to remote verification if local verification is not configured.
+
         Args:
             token: JWT access token
 
         Returns:
             User ID if token is valid, None if invalid or expired
-
-        Raises:
-            RuntimeError: If Supabase service is unavailable
         """
+        # Try local JWT verification first (no network call)
+        if self._jwt_secret:
+            try:
+                payload = jwt.decode(
+                    token,
+                    self._jwt_secret,
+                    algorithms=["HS256"],
+                    audience="authenticated",
+                )
+                return payload.get("sub")
+            except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+                return None
+
+        # Fall back to remote verification
         try:
             user = self.client.auth.get_user(token)
             return user.user.id if user and user.user else None
         except Exception:
-            # Token is invalid or expired
             return None
+
+
+# Module-level singleton for use in deps.py and auth.py
+_auth_service: SupabaseAuthService | None = None
+
+
+def get_auth_service() -> SupabaseAuthService:
+    """Get or create the singleton SupabaseAuthService instance."""
+    global _auth_service
+    if _auth_service is None:
+        _auth_service = SupabaseAuthService()
+    return _auth_service

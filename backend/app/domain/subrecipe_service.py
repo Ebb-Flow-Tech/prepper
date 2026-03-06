@@ -38,14 +38,21 @@ class SubRecipeService:
         Check if adding child as sub-recipe would create a cycle.
 
         Uses BFS to check if parent is reachable from child's descendants.
-        If parent_id appears anywhere in child's sub-recipe tree, adding
-        would create a cycle: parent → child → ... → parent
+        Fetches all links in a single query and traverses in memory.
 
         Returns True if safe to add, False if would create cycle.
         """
         # Self-reference is never allowed
         if parent_id == child_id:
             return False
+
+        # Fetch all links in one query and build adjacency map in memory
+        all_links = self.session.exec(
+            select(RecipeRecipe.parent_recipe_id, RecipeRecipe.child_recipe_id)
+        ).all()
+        children_map: dict[int, list[int]] = {}
+        for p_id, c_id in all_links:
+            children_map.setdefault(p_id, []).append(c_id)
 
         # BFS from child to find if parent is reachable
         visited: set[int] = set()
@@ -57,10 +64,7 @@ class SubRecipeService:
                 continue
             visited.add(current)
 
-            # Get all sub-recipes of current
-            sub_recipe_ids = self._get_child_recipe_ids(current)
-
-            # If parent is in the sub-recipes, we'd create a cycle
+            sub_recipe_ids = children_map.get(current, [])
             if parent_id in sub_recipe_ids:
                 return False
 
@@ -180,8 +184,16 @@ class SubRecipeService:
         self, parent_recipe_id: int, ordered_ids: list[int]
     ) -> list[RecipeRecipe]:
         """Reorder sub-recipes based on provided link ID order."""
+        # Batch fetch all links in one query
+        links = list(
+            self.session.exec(
+                select(RecipeRecipe).where(RecipeRecipe.id.in_(ordered_ids))
+            ).all()
+        )
+        links_by_id = {rr.id: rr for rr in links}
+
         for index, link_id in enumerate(ordered_ids):
-            rr = self.session.get(RecipeRecipe, link_id)
+            rr = links_by_id.get(link_id)
             if rr and rr.parent_recipe_id == parent_recipe_id:
                 rr.position = index
                 self.session.add(rr)

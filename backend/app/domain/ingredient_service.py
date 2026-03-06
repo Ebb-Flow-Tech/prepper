@@ -1,6 +1,5 @@
 """Ingredient domain operations."""
 
-from collections import deque
 from datetime import datetime
 
 from sqlmodel import Session, select
@@ -12,45 +11,12 @@ from app.models import (
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
-    Outlet,
     SupplierIngredient,
     SupplierIngredientCreate,
     SupplierIngredientUpdate,
     SupplierIngredientRead,
 )
 from app.models.supplier import Supplier
-
-
-def get_accessible_outlet_ids(session: Session, user_outlet_id: int) -> set[int]:
-    """Return all outlet IDs in the same tree as `user_outlet_id`.
-
-    Walks up to the root, then BFS down to collect every descendant.
-    """
-    outlets = list(session.exec(select(Outlet)).all())
-    by_id = {o.id: o for o in outlets}
-
-    # Walk up to find the root
-    current = user_outlet_id
-    while current in by_id and by_id[current].parent_outlet_id is not None:
-        current = by_id[current].parent_outlet_id
-    root_id = current
-
-    # BFS down from root
-    children_map: dict[int, list[int]] = {}
-    for o in outlets:
-        parent = o.parent_outlet_id
-        if parent is not None:
-            children_map.setdefault(parent, []).append(o.id)
-
-    result: set[int] = set()
-    queue: deque[int] = deque([root_id])
-    while queue:
-        nid = queue.popleft()
-        result.add(nid)
-        for child in children_map.get(nid, []):
-            queue.append(child)
-
-    return result
 
 
 class IngredientService:
@@ -61,10 +27,12 @@ class IngredientService:
         self._accessible_outlet_ids_cache: dict[int, set[int]] = {}
 
     def _get_accessible_outlet_ids(self, user_outlet_id: int) -> set[int]:
-        """Cached wrapper around get_accessible_outlet_ids (per-request)."""
+        """Cached wrapper using centralized OutletService (per-request)."""
         if user_outlet_id not in self._accessible_outlet_ids_cache:
-            self._accessible_outlet_ids_cache[user_outlet_id] = get_accessible_outlet_ids(
-                self.session, user_outlet_id
+            from app.domain.outlet_service import OutletService
+            outlet_service = OutletService(self.session)
+            self._accessible_outlet_ids_cache[user_outlet_id] = outlet_service.get_accessible_outlet_ids(
+                user_outlet_id
             )
         return self._accessible_outlet_ids_cache[user_outlet_id]
 
@@ -149,6 +117,16 @@ class IngredientService:
                                            category_ids=category_ids, units=units, allergen_ids=allergen_ids, is_halal=is_halal)
         count_stmt = select(func.count()).select_from(statement.subquery())
         return self.session.exec(count_stmt).one()
+
+    def list_paginated_with_count(self, offset: int, limit: int, active_only=True, category=None, source=None, master_only=False, search=None,
+                                   category_ids=None, units=None, allergen_ids=None, is_halal=None) -> tuple[list[IngredientListRead], int]:
+        """Return paginated items and total count, reusing the same base filter."""
+        from sqlalchemy import func
+        base = self._build_list_query(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
+                                       category_ids=category_ids, units=units, allergen_ids=allergen_ids, is_halal=is_halal)
+        total = self.session.exec(select(func.count()).select_from(base.subquery())).one()
+        rows = list(self.session.exec(base.order_by(Ingredient.id.desc()).offset(offset).limit(limit)).all())
+        return [IngredientListRead.model_validate(r) for r in rows], total
 
     def get_ingredient(self, ingredient_id: int) -> Ingredient | None:
         """Get an ingredient by ID."""

@@ -161,6 +161,30 @@ class TastingSessionService:
         count_stmt = select(func.count()).select_from(statement.subquery())
         return self.session.exec(count_stmt).one()
 
+    def list_paginated_with_count(self, offset: int, limit: int, search=None) -> tuple[list[TastingSessionRead], int]:
+        """Return paginated items and total count, reusing the same base filter."""
+        from sqlalchemy import func
+        base = self._build_list_query(search=search)
+        total = self.session.exec(select(func.count()).select_from(base.subquery())).one()
+        stmt = base.order_by(TastingSession.date.desc(), TastingSession.id.desc()).offset(offset).limit(limit)
+        sessions = list(self.session.exec(stmt).all())
+        session_ids = [s.id for s in sessions]
+        participants_map = self._load_participants_batch(session_ids)
+        items = [self._build_read_with_participants(s, participants_map.get(s.id, [])) for s in sessions]
+        return items, total
+
+    def get_raw(self, session_id: int) -> Optional[TastingSession]:
+        """Get a raw TastingSession model by ID (no participant loading)."""
+        return self.session.get(TastingSession, session_id)
+
+    def is_participant(self, session_id: int, user_id: str) -> bool:
+        """Check if a user is a participant in a session (lightweight query)."""
+        statement = select(TastingUser.id).where(
+            TastingUser.tasting_session_id == session_id,
+            TastingUser.user_id == user_id,
+        ).limit(1)
+        return self.session.exec(statement).first() is not None
+
     def get(self, session_id: int) -> Optional[TastingSessionRead]:
         """Get a tasting session by ID."""
         tasting_session = self.session.get(TastingSession, session_id)
@@ -169,10 +193,10 @@ class TastingSessionService:
         return self._build_read(tasting_session)
 
     def update(
-        self, session_id: int, data: TastingSessionUpdate
+        self, session_id: int, data: TastingSessionUpdate, existing: TastingSession | None = None
     ) -> Optional[TastingSessionRead]:
         """Update a tasting session."""
-        tasting_session = self.session.get(TastingSession, session_id)
+        tasting_session = existing or self.session.get(TastingSession, session_id)
         if not tasting_session:
             return None
 
@@ -200,9 +224,9 @@ class TastingSessionService:
         self.session.refresh(tasting_session)
         return self._build_read(tasting_session)
 
-    def delete(self, session_id: int) -> bool:
+    def delete(self, session_id: int, existing: TastingSession | None = None) -> bool:
         """Delete a tasting session and all its notes (cascade)."""
-        tasting_session = self.session.get(TastingSession, session_id)
+        tasting_session = existing or self.session.get(TastingSession, session_id)
         if not tasting_session:
             return False
 

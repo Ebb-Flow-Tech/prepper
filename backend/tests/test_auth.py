@@ -54,6 +54,7 @@ def mock_supabase_client(monkeypatch):
         """Mock settings with Supabase credentials."""
         supabase_url = "https://test.supabase.co"
         supabase_key = "test_key"
+        supabase_jwt_secret = None
 
     monkeypatch.setattr(
         "app.domain.supabase_auth_service.get_settings",
@@ -160,7 +161,19 @@ def mock_supabase_client(monkeypatch):
         "app.domain.supabase_auth_service.create_client",
         lambda url, key: MockSupabaseClient(url, key),
     )
+
+    # Clear singleton caches so mocks take effect
+    from app.domain.supabase_auth_service import _get_supabase_client
+    _get_supabase_client.cache_clear()
+
+    import app.domain.supabase_auth_service as auth_mod
+    auth_mod._auth_service = None
+
     yield
+
+    # Reset after test
+    _get_supabase_client.cache_clear()
+    auth_mod._auth_service = None
 
 
 # ============================================================================
@@ -358,9 +371,26 @@ def test_logout_invalid_token(client: TestClient, mock_supabase_client):
 # ============================================================================
 
 
-def test_get_current_user_success(
-    client: TestClient, mock_supabase_client, session
-):
+@pytest.fixture
+def auth_client(session, mock_supabase_client):
+    """Client without get_current_user override — uses real auth flow for /me tests."""
+    from app.main import app
+    from app.api.deps import get_session
+    from app.database import get_session as db_get_session
+
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[db_get_session] = get_session_override
+    # NOTE: get_current_user is NOT overridden here
+
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+def test_get_current_user_success(auth_client: TestClient, session):
     """Test getting current user info."""
     # Create user in database
     user = User(
@@ -372,7 +402,7 @@ def test_get_current_user_success(
     session.add(user)
     session.commit()
 
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer valid_token_admin"},
     )
@@ -385,18 +415,18 @@ def test_get_current_user_success(
     assert data["user_type"] == "admin"
 
 
-def test_get_current_user_missing_token(client: TestClient, mock_supabase_client):
+def test_get_current_user_missing_token(auth_client: TestClient):
     """Test getting current user without token."""
-    response = client.get("/api/v1/auth/me")
+    response = auth_client.get("/api/v1/auth/me")
 
     assert response.status_code == 401
     data = response.json()
     assert "Not authenticated" in data["detail"]
 
 
-def test_get_current_user_invalid_token(client: TestClient, mock_supabase_client):
+def test_get_current_user_invalid_token(auth_client: TestClient):
     """Test getting current user with invalid token."""
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer invalid_token"},
     )
@@ -406,11 +436,9 @@ def test_get_current_user_invalid_token(client: TestClient, mock_supabase_client
     assert "Invalid or expired token" in data["detail"]
 
 
-def test_get_current_user_token_valid_but_user_not_found(
-    client: TestClient, mock_supabase_client
-):
+def test_get_current_user_token_valid_but_user_not_found(auth_client: TestClient):
     """Test getting current user when token is valid but user not in database."""
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer valid_token_admin"},
     )

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Supabase Auth
     # supabase_service_role_key: str | None = None
+    supabase_jwt_secret: str | None = None
 
     # Anthropic API
     anthropic_api_key: str | None = None

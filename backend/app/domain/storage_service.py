@@ -8,6 +8,25 @@ import httpx
 
 from app.config import get_settings
 
+# Shared httpx client — reused across all StorageService instances
+_http_client: httpx.AsyncClient | None = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared httpx.AsyncClient."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient()
+    return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the shared httpx client (call during app shutdown)."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+
 
 class StorageError(Exception):
     """Error during storage operations."""
@@ -69,26 +88,25 @@ class StorageService:
             f"{self.settings.supabase_bucket}/{filename}"
         )
 
-        async with httpx.AsyncClient() as client:
-            try:
-                upload_response = await client.post(
-                    upload_url,
-                    headers={
-                        **self._get_headers(),
-                        "Content-Type": "image/png",
-                    },
-                    content=image_data,
-                    timeout=60.0,
-                )
-                upload_response.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                # Log the actual response body for debugging
-                error_detail = e.response.text if e.response else "No response body"
-                raise StorageError(
-                    f"Failed to upload to Supabase: {e.response.status_code} - {error_detail}"
-                )
-            except httpx.HTTPError as e:
-                raise StorageError(f"Failed to upload to Supabase: {str(e)}")
+        client = get_http_client()
+        try:
+            upload_response = await client.post(
+                upload_url,
+                headers={
+                    **self._get_headers(),
+                    "Content-Type": "image/png",
+                },
+                content=image_data,
+                timeout=60.0,
+            )
+            upload_response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text if e.response else "No response body"
+            raise StorageError(
+                f"Failed to upload to Supabase: {e.response.status_code} - {error_detail}"
+            )
+        except httpx.HTTPError as e:
+            raise StorageError(f"Failed to upload to Supabase: {str(e)}")
 
         # Return the public URL
         public_url = (
@@ -122,16 +140,16 @@ class StorageService:
             f"{self.settings.supabase_bucket}/{filename}"
         )
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.delete(
-                    delete_url,
-                    headers=self._get_headers(),
-                    timeout=30.0,
-                )
-                return response.status_code in (200, 204)
-            except httpx.HTTPError:
-                return False
+        client = get_http_client()
+        try:
+            response = await client.delete(
+                delete_url,
+                headers=self._get_headers(),
+                timeout=30.0,
+            )
+            return response.status_code in (200, 204)
+        except httpx.HTTPError:
+            return False
 
 
 def is_storage_configured() -> bool:

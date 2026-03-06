@@ -146,6 +146,14 @@ class RecipeService:
         count_stmt = select(func.count()).select_from(statement.subquery())
         return self.session.exec(count_stmt).one()
 
+    def list_paginated_with_count(self, offset: int, limit: int, status=None, current_user=None, search: str | None = None, category_ids=None) -> tuple[list[Recipe], int]:
+        """Return paginated items and total count, reusing the same base filter."""
+        from sqlalchemy import func
+        base = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
+        total = self.session.exec(select(func.count()).select_from(base.subquery())).one()
+        items = list(self.session.exec(base.order_by(Recipe.id.desc()).offset(offset).limit(limit)).all())
+        return items, total
+
     def get_recipe(self, recipe_id: int) -> Recipe | None:
         """Get a recipe by ID."""
         return self.session.get(Recipe, recipe_id)

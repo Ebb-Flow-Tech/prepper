@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Header, status
 from sqlmodel import Session
 
 from app.database import engine
-from app.domain.supabase_auth_service import SupabaseAuthService
+from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
 from app.models import User
 
@@ -34,7 +34,7 @@ def get_current_user(
         )
 
     token = authorization.replace("Bearer ", "")
-    auth_service = SupabaseAuthService()
+    auth_service = get_auth_service()
 
     # Verify token and get user ID
     user_id = auth_service.verify_token(token)

@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from app.domain.ingredient_service import get_accessible_outlet_ids
+from app.domain.outlet_service import OutletService
 from app.models.supplier import (
     Supplier,
     SupplierCreate,
@@ -126,7 +126,7 @@ class SupplierService:
         if not is_admin:
             if user_outlet_id is None:
                 return []
-            accessible = get_accessible_outlet_ids(self.session, user_outlet_id)
+            accessible = OutletService(self.session).get_accessible_outlet_ids(user_outlet_id)
             statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
 
         rows = self.session.exec(statement).all()

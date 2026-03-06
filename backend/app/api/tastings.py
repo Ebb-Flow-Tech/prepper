@@ -41,8 +41,24 @@ def _check_session_access(
     )
 
 
+def _check_session_access_raw(
+    tasting_session, current_user: User, service: TastingSessionService
+) -> None:
+    """Lightweight access check using raw TastingSession (no full participant load)."""
+    if current_user.user_type == UserType.ADMIN:
+        return
+    if tasting_session.creator_id == current_user.id:
+        return
+    if service.is_participant(tasting_session.id, current_user.id):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied",
+    )
+
+
 def _check_creator_only(
-    tasting_session: TastingSessionRead, current_user: User
+    tasting_session, current_user: User
 ) -> None:
     """Raise 403 unless the current user is the session creator."""
     if tasting_session.creator_id == current_user.id:
@@ -81,8 +97,7 @@ def list_tasting_sessions(
     from app.models.pagination import PaginatedResponse
     service = TastingSessionService(session)
     offset = (page_number - 1) * page_size
-    items = service.list_paginated(offset=offset, limit=page_size, search=search)
-    total = service.count(search=search)
+    items, total = service.list_paginated_with_count(offset=offset, limit=page_size, search=search)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
@@ -119,14 +134,14 @@ def get_tasting_session_stats(
     Non-admin users can only access sessions they created or participate in.
     """
     service = TastingSessionService(session)
-    tasting_session = service.get(session_id)
+    tasting_session = service.get_raw(session_id)
     if not tasting_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasting session not found",
         )
 
-    _check_session_access(tasting_session, current_user)
+    _check_session_access_raw(tasting_session, current_user, service)
     return service.get_stats(session_id)
 
 
@@ -142,7 +157,7 @@ def update_tasting_session(
     Only the session creator can update the session.
     """
     service = TastingSessionService(session)
-    tasting_session = service.get(session_id)
+    tasting_session = service.get_raw(session_id)
     if not tasting_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -151,7 +166,7 @@ def update_tasting_session(
 
     _check_creator_only(tasting_session, current_user)
 
-    updated_session = service.update(session_id, data)
+    updated_session = service.update(session_id, data, existing=tasting_session)
     if not updated_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -171,7 +186,7 @@ def delete_tasting_session(
     Only the session creator can delete the session.
     """
     service = TastingSessionService(session)
-    tasting_session = service.get(session_id)
+    tasting_session = service.get_raw(session_id)
     if not tasting_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -180,7 +195,7 @@ def delete_tasting_session(
 
     _check_creator_only(tasting_session, current_user)
 
-    deleted = service.delete(session_id)
+    deleted = service.delete(session_id, existing=tasting_session)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

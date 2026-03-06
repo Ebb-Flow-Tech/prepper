@@ -18,7 +18,9 @@ async def lifespan(app: FastAPI):
     # Startup
     create_db_and_tables()
     yield
-    # Shutdown (cleanup if needed)
+    # Shutdown
+    from app.domain.storage_service import close_http_client
+    await close_http_client()
 
 
 def create_app() -> FastAPI:

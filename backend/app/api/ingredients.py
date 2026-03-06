@@ -60,8 +60,7 @@ def list_ingredients(
     offset = (page_number - 1) * page_size
     filter_kwargs = dict(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
                          category_ids=parsed_category_ids, units=parsed_units, allergen_ids=parsed_allergen_ids, is_halal=parsed_is_halal)
-    items = service.list_paginated(offset=offset, limit=page_size, **filter_kwargs)
-    total = service.count(**filter_kwargs)
+    items, total = service.list_paginated_with_count(offset=offset, limit=page_size, **filter_kwargs)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 

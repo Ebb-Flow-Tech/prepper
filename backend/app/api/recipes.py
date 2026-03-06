@@ -55,8 +55,7 @@ def list_recipes(
 
     service = RecipeService(session)
     offset = (page_number - 1) * page_size
-    items = service.list_paginated(offset=offset, limit=page_size, status=status, current_user=current_user, search=search, category_ids=parsed_category_ids)
-    total = service.count(status=status, current_user=current_user, search=search, category_ids=parsed_category_ids)
+    items, total = service.list_paginated_with_count(offset=offset, limit=page_size, status=status, current_user=current_user, search=search, category_ids=parsed_category_ids)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 

@@ -141,8 +141,7 @@ class MenuService:
         )
         new_menu = Menu.model_validate(new_menu_data)
         self.session.add(new_menu)
-        self.session.commit()
-        self.session.refresh(new_menu)
+        self.session.flush()
 
         # Get original sections
         original_sections = self._get_sections_for_menu(menu_id)
@@ -156,8 +155,7 @@ class MenuService:
                 order_no=old_section.order_no,
             )
             self.session.add(new_section)
-            self.session.commit()
-            self.session.refresh(new_section)
+            self.session.flush()
             section_map[old_section.id] = new_section.id
 
             # Copy items from this section
@@ -173,15 +171,15 @@ class MenuService:
                     substitution=old_item.substitution,
                 )
                 self.session.add(new_item)
-            self.session.commit()
 
         # Copy outlet links
         original_outlets = self._get_outlets_for_menu(menu_id)
         for mo in original_outlets:
             new_menu_outlet = MenuOutlet(menu_id=new_menu.id, outlet_id=mo.outlet_id)
             self.session.add(new_menu_outlet)
-        self.session.commit()
 
+        self.session.commit()
+        self.session.refresh(new_menu)
         return new_menu
 
     def soft_delete_menu(self, menu_id: int) -> Menu | None:
@@ -264,8 +262,7 @@ class MenuService:
                     order_no=section_data["order_no"],
                 )
                 self.session.add(new_section)
-                self.session.commit()
-                self.session.refresh(new_section)
+                self.session.flush()
                 new_section_ids.add(new_section.id)
                 section_id = new_section.id
 
@@ -329,8 +326,7 @@ class MenuService:
                     substitution=item_data.get("substitution"),
                 )
                 self.session.add(new_item)
-                self.session.commit()
-                self.session.refresh(new_item)
+                self.session.flush()
                 new_item_ids.add(new_item.id)
 
         # Delete items not in payload
@@ -339,8 +335,6 @@ class MenuService:
             item = self.session.get(MenuItem, item_id)
             if item:
                 self.session.delete(item)
-
-        self.session.commit()
 
     # --- Outlet Management ---
 
@@ -399,8 +393,7 @@ class MenuService:
     def _get_accessible_outlet_ids(self, user: User) -> set[int]:
         """Get the set of outlet IDs accessible to a user.
 
-        - If user is in a parent outlet (brand): that outlet + all child outlets
-        - If user is in a child outlet (location): that outlet + parent
+        Uses centralized OutletService hierarchy resolution (single query).
         """
         if not user.outlet_id:
             return set()
@@ -408,23 +401,4 @@ class MenuService:
         from app.domain.outlet_service import OutletService
 
         outlet_service = OutletService(self.session)
-        user_outlet = outlet_service.get_outlet(user.outlet_id)
-        if not user_outlet:
-            return set()
-
-        accessible = {user.outlet_id}
-
-        # If user is in a location, add parent
-        if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
-            accessible.add(user_outlet.parent_outlet_id)
-
-        # Add all child outlets (works for both brand and location parents)
-        def add_children(outlet_id: int):
-            children = outlet_service.get_child_outlets(outlet_id)
-            for child in children:
-                accessible.add(child.id)
-                add_children(child.id)
-
-        add_children(user.outlet_id)
-
-        return accessible
+        return outlet_service.get_accessible_outlet_ids(user.outlet_id)
