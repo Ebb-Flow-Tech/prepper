@@ -6,19 +6,21 @@ import { Toaster } from 'sonner';
 import { AppProvider } from './store';
 import { ThemeProvider } from './theme';
 import { AuthGuard } from '@/components/AuthGuard';
+import { setQueryClientRef } from './query-client-ref';
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
-            refetchOnWindowFocus: false,
-          },
+  const [queryClient] = useState(() => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: 1000 * 60 * 5, // 5 minutes
+          refetchOnWindowFocus: false,
         },
-      })
-  );
+      },
+    });
+    setQueryClientRef(client);
+    return client;
+  });
 
   return (
     <QueryClientProvider client={queryClient}>

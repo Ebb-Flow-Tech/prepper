@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { registerLogoutCallback } from '@/lib/auth-interceptor';
+import { getQueryClient } from '@/lib/query-client-ref';
 
 const AUTH_STORAGE_KEY = 'prepper_auth';
 
@@ -135,7 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsHydrated(true);
   }, []);
 
-  // Register logout callback for auth-interceptor
+  // Register logout callback for auth-interceptor (forced logout on expired token)
   useEffect(() => {
     registerLogoutCallback(() => {
       setState((prev) => ({
@@ -149,6 +150,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isManager: false,
         outletId: null
       }));
+      // Clear TanStack Query cache so next user doesn't see stale data
+      getQueryClient()?.clear();
     });
   }, []);
 
@@ -232,11 +235,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager: boolean = false, outletId: number | null = null) => {
+    // Clear any data cached from previous user session before setting new auth
+    getQueryClient()?.clear();
     setState((prev) => ({ ...prev, userId, jwt, userType, refreshToken, username, email, isManager, outletId }));
   }, []);
 
   const logout = useCallback(() => {
     setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null }));
+    // Clear TanStack Query cache so the next user doesn't see stale data
+    getQueryClient()?.clear();
   }, []);
 
   return (
