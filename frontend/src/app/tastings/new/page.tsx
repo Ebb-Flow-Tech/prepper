@@ -48,7 +48,12 @@ export default function NewTastingSessionPage() {
 
   const getDateTimeString = (): string => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    return `${dateStr}T${get24HourTime()}`;
+    const offset = selectedDate.getTimezoneOffset();
+    const sign = offset <= 0 ? '+' : '-';
+    const absOffset = Math.abs(offset);
+    const offsetHours = Math.floor(absOffset / 60).toString().padStart(2, '0');
+    const offsetMins = (absOffset % 60).toString().padStart(2, '0');
+    return `${dateStr}T${get24HourTime()}:00${sign}${offsetHours}:${offsetMins}`;
   };
 
   const validateForm = (): boolean => {
@@ -87,6 +92,7 @@ export default function NewTastingSessionPage() {
           session_id: session.id,
           session_name: name.trim(),
           session_date: getDateTimeString(),
+          formatted_date: `${format(selectedDate, 'EEEE, MMMM d, yyyy')} at ${getDisplayTime()}`,
           session_location: location.trim() || null,
           recipients: selectedParticipants.map((p) => ({
             email: p.email,

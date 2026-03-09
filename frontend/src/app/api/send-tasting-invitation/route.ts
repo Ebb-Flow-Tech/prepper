@@ -9,6 +9,7 @@ const SendTastingInvitationSchema = z.object({
   session_id: z.number().int().positive(),
   session_name: z.string().min(1),
   session_date: z.string(),
+  formatted_date: z.string().optional(),
   session_location: z.string().optional().nullable(),
   recipients: z.array(z.object({
     email: z.string().email(),
@@ -21,12 +22,14 @@ const SendTastingInvitationSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log("body",body)
 
     // Validate request
     const validatedData = SendTastingInvitationSchema.parse(body);
 
     // Skip sending invitations if the session date is in the past
     const sessionDate = new Date(validatedData.session_date);
+    console.log("sessionDate",sessionDate)
     if (sessionDate < new Date()) {
       return Response.json({
         success: true,
@@ -56,15 +59,8 @@ export async function POST(request: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     const inviteLink = `${appUrl}/tastings/invite/${validatedData.session_id}`;
 
-    // Format the date nicely
-    const formattedDate = new Date(validatedData.session_date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Use pre-formatted date from the frontend (avoids server timezone issues)
+    const formattedDate = validatedData.formatted_date ?? validatedData.session_date;
 
     const logoUrl = `${appUrl}/logo/Reciperep%20logo%20inline%20840x180.png`;
 

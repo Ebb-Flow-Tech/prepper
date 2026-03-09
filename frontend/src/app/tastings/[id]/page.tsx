@@ -521,7 +521,12 @@ export default function TastingSessionDetailPage() {
   const getDateTimeString = (): string => {
     if (!selectedDate) return '';
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    return `${dateStr}T${get24HourTime()}`;
+    const offset = selectedDate.getTimezoneOffset();
+    const sign = offset <= 0 ? '+' : '-';
+    const absOffset = Math.abs(offset);
+    const offsetHours = Math.floor(absOffset / 60).toString().padStart(2, '0');
+    const offsetMins = (absOffset % 60).toString().padStart(2, '0');
+    return `${dateStr}T${get24HourTime()}:00${sign}${offsetHours}:${offsetMins}`;
   };
 
   const handleUpdateSession = async (data: UpdateTastingSessionRequest) => {

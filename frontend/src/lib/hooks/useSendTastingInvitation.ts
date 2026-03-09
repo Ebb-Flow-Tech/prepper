@@ -5,6 +5,7 @@ interface SendTastingInvitationPayload {
   session_id: number;
   session_name: string;
   session_date: string;
+  formatted_date?: string;
   session_location?: string | null;
   recipients: Array<{
     email: string;
