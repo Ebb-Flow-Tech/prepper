@@ -327,23 +327,27 @@ export async function POST(request: Request) {
 
         console.log('[Lark] Sending to', validatedData.recipients.length, 'recipients');
 
-        validatedData.recipients.forEach((recipient) => {
-          larkSends.push(
-            larkClient.im.message.create({
-              params: { receive_id_type: 'email' },
-              data: {
-                receive_id: recipient.email,
-                msg_type: 'text',
-                content: JSON.stringify({ text: larkText }),
-              },
-            }).then((res) => {
-              console.log(`[Lark] Message sent to ${recipient.email}:`, JSON.stringify(res));
-              larkCount++;
-            }).catch((err) => {
-              console.error(`[Lark] Message failed for ${recipient.email}:`, JSON.stringify(err, null, 2));
-            })
-          );
-        });
+        // Send Lark messages sequentially to avoid token acquisition race conditions
+        larkSends.push(
+          (async () => {
+            for (const recipient of validatedData.recipients) {
+              try {
+                const res = await larkClient.im.message.create({
+                  params: { receive_id_type: 'email' },
+                  data: {
+                    receive_id: recipient.email,
+                    msg_type: 'text',
+                    content: JSON.stringify({ text: larkText }),
+                  },
+                });
+                console.log(`[Lark] Message sent to ${recipient.email}:`, JSON.stringify(res));
+                larkCount++;
+              } catch (err) {
+                console.error(`[Lark] Message failed for ${recipient.email}:`, JSON.stringify(err, null, 2));
+              }
+            }
+          })()
+        );
       } catch (error) {
         console.error('[Lark] Initialization error:', error);
         // Continue with email/SMS sending even if Lark fails

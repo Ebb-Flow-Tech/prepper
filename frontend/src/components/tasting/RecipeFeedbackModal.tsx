@@ -7,6 +7,7 @@ import {
   MapPin,
   Users,
   Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { useAppState } from '@/lib/store';
 import {
@@ -16,7 +17,7 @@ import {
   useDeleteTastingNote,
   useSyncTastingNoteImages,
 } from '@/lib/hooks/useTastings';
-import { useRecipeForTasting, useRecipeAllergens } from '@/lib/hooks';
+import { useRecipeForTasting, useRecipeAllergens, useRecipeIngredients } from '@/lib/hooks';
 import { type ImageWithId } from '@/components/tasting/ImageUploadPreview';
 import {
   FeedbackNoteCard,
@@ -29,7 +30,7 @@ import {
   Badge,
   Skeleton,
 } from '@/components/ui';
-import type { TastingSession } from '@/types';
+import type { TastingSession, RecipeTastingIngredient } from '@/types';
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-GB', {
@@ -46,6 +47,7 @@ interface RecipeFeedbackModalProps {
   sessionId: number;
   recipeId: number;
   session: TastingSession;
+  ingredients?: RecipeTastingIngredient[];
 }
 
 export function RecipeFeedbackModal({
@@ -54,6 +56,7 @@ export function RecipeFeedbackModal({
   sessionId,
   recipeId,
   session,
+  ingredients = [],
 }: RecipeFeedbackModalProps) {
   const { userId, username } = useAppState();
 
@@ -71,6 +74,7 @@ export function RecipeFeedbackModal({
   const isInvited = userId && session?.participants?.some((p) => p.user_id === userId) === true;
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showIngredients, setShowIngredients] = useState(false);
 
   const handleAddNote = async (data: FeedbackFormData, imagesWithId: ImageWithId[] = []) => {
     if (!sessionId || !recipeId) return;
@@ -198,10 +202,35 @@ export function RecipeFeedbackModal({
               )}
 
               {/* Description */}
-              {recipe.description?.trim() && (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  {recipe.description.trim()}
-                </p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                {recipe.description?.trim() || <span className="italic">No Description</span>}
+              </p>
+
+              {/* Collapsible Ingredients */}
+              {ingredients.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowIngredients(!showIngredients)}
+                    className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                  >
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showIngredients ? 'rotate-0' : '-rotate-90'}`} />
+                    Ingredients ({ingredients.length})
+                  </button>
+                  {showIngredients && (
+                    <ul className="mt-2 space-y-1 pl-6">
+                      {ingredients.map((ing) => (
+                        <li key={ing.id} className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
+                          <span className="w-1 h-1 rounded-full bg-zinc-400 dark:bg-zinc-500 shrink-0" />
+                          {ing.name}
+                          {ing.base_unit && (
+                            <span className="text-xs text-zinc-400 dark:text-zinc-500">({ing.base_unit})</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
 

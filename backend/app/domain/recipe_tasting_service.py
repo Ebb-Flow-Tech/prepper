@@ -5,8 +5,11 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from app.models import (
+    Ingredient,
     Recipe,
+    RecipeIngredient,
     RecipeTasting,
+    RecipeTastingIngredient,
     RecipeTastingRead,
     RecipeTastingCreate,
     RecipeTastingBatchCreate,
@@ -119,7 +122,8 @@ class RecipeTastingService:
         return True
 
     def get_recipes_for_session(self, session_id: int) -> list[RecipeTastingRead]:
-        """Get all recipe-tasting links for a session, with recipe names."""
+        """Get all recipe-tasting links for a session, with recipe names and ingredients."""
+        # Get recipe-tasting links with recipe names
         statement = (
             select(RecipeTasting, Recipe.name)
             .join(Recipe, RecipeTasting.recipe_id == Recipe.id)
@@ -127,12 +131,33 @@ class RecipeTastingService:
             .order_by(RecipeTasting.id)
         )
         results = self.session.exec(statement).all()
+
+        if not results:
+            return []
+
+        # Batch-load ingredients for all recipe IDs in this session
+        recipe_ids = [rt.recipe_id for rt, _ in results]
+        ing_rows = self.session.exec(
+            select(RecipeIngredient.recipe_id, Ingredient.id, Ingredient.name, Ingredient.base_unit, Ingredient.is_halal)
+            .join(Ingredient, RecipeIngredient.ingredient_id == Ingredient.id)
+            .where(RecipeIngredient.recipe_id.in_(recipe_ids))
+            .order_by(Ingredient.name)
+        ).all()
+
+        # Group ingredients by recipe_id
+        recipe_ingredients: dict[int, list[RecipeTastingIngredient]] = {}
+        for rid, ing_id, ing_name, base_unit, is_halal in ing_rows:
+            recipe_ingredients.setdefault(rid, []).append(
+                RecipeTastingIngredient(id=ing_id, name=ing_name, base_unit=base_unit, is_halal=is_halal)
+            )
+
         return [
             RecipeTastingRead(
                 id=rt.id,
                 recipe_id=rt.recipe_id,
                 tasting_session_id=rt.tasting_session_id,
                 recipe_name=name,
+                ingredients=recipe_ingredients.get(rt.recipe_id, []),
                 created_at=rt.created_at,
             )
             for rt, name in results

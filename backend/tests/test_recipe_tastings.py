@@ -351,3 +351,213 @@ def test_get_session_recipes_empty(client: TestClient):
     response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
     assert response.status_code == 200
     assert response.json() == []
+
+
+# ============ Recipe Ingredients in Session Recipes Response ============
+
+
+def _create_ingredient(client: TestClient, name: str, base_unit: str = "g") -> dict:
+    """Helper to create an ingredient."""
+    response = client.post(
+        "/api/v1/ingredients",
+        json={"name": name, "base_unit": base_unit},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def _create_recipe_with_ingredients(
+    client: TestClient, recipe_name: str, ingredient_ids: list[int]
+) -> int:
+    """Helper to create a recipe and add ingredients to it."""
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": recipe_name, "yield_quantity": 1, "yield_unit": "portion"},
+    ).json()
+    for ing_id in ingredient_ids:
+        client.post(
+            f"/api/v1/recipes/{recipe['id']}/ingredients",
+            json={"ingredient_id": ing_id, "quantity": 100, "unit": "g"},
+        )
+    return recipe["id"]
+
+
+def _create_session_with_recipes(
+    client: TestClient, session_name: str, recipe_ids: list[int]
+) -> int:
+    """Helper to create a tasting session and add recipes to it."""
+    session = client.post(
+        "/api/v1/tasting-sessions",
+        json={"name": session_name, "date": "2024-12-15"},
+    ).json()
+    if recipe_ids:
+        client.post(
+            f"/api/v1/tasting-sessions/{session['id']}/recipes/batch",
+            json={"recipe_ids": recipe_ids},
+        )
+    return session["id"]
+
+
+def test_session_recipes_include_ingredients(client: TestClient):
+    """Test that session recipes response includes ingredients for each recipe."""
+    ing1 = _create_ingredient(client, "Garlic")
+    ing2 = _create_ingredient(client, "Olive Oil", "ml")
+    recipe_id = _create_recipe_with_ingredients(
+        client, "Aglio Olio", [ing1["id"], ing2["id"]]
+    )
+    session_id = _create_session_with_recipes(client, "Tasting", [recipe_id])
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+
+    recipe_entry = data[0]
+    assert recipe_entry["recipe_name"] == "Aglio Olio"
+    assert "ingredients" in recipe_entry
+    assert len(recipe_entry["ingredients"]) == 2
+
+    ing_names = {i["name"] for i in recipe_entry["ingredients"]}
+    assert ing_names == {"Garlic", "Olive Oil"}
+
+    # Check ingredient fields
+    for ing in recipe_entry["ingredients"]:
+        assert "id" in ing
+        assert "name" in ing
+        assert "base_unit" in ing
+        assert "is_halal" in ing
+
+
+def test_session_recipes_empty_ingredients(client: TestClient):
+    """Test that a recipe with no ingredients returns empty ingredients list."""
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Empty Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+    ).json()
+    session_id = _create_session_with_recipes(client, "Tasting", [recipe["id"]])
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["ingredients"] == []
+
+
+def test_session_recipes_multiple_recipes_with_ingredients(client: TestClient):
+    """Test ingredients are correctly grouped per recipe."""
+    salt = _create_ingredient(client, "Salt")
+    pepper = _create_ingredient(client, "Pepper")
+    butter = _create_ingredient(client, "Butter")
+
+    recipe1_id = _create_recipe_with_ingredients(
+        client, "Pasta", [salt["id"], pepper["id"]]
+    )
+    recipe2_id = _create_recipe_with_ingredients(
+        client, "Steak", [salt["id"], butter["id"]]
+    )
+    session_id = _create_session_with_recipes(
+        client, "Dinner Tasting", [recipe1_id, recipe2_id]
+    )
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+
+    recipes_by_name = {r["recipe_name"]: r for r in data}
+
+    # Pasta has Salt and Pepper
+    pasta_ings = {i["name"] for i in recipes_by_name["Pasta"]["ingredients"]}
+    assert pasta_ings == {"Salt", "Pepper"}
+
+    # Steak has Salt and Butter
+    steak_ings = {i["name"] for i in recipes_by_name["Steak"]["ingredients"]}
+    assert steak_ings == {"Salt", "Butter"}
+
+
+def test_session_recipes_shared_ingredient_appears_in_both(client: TestClient):
+    """Test that a shared ingredient appears in both recipes' ingredient lists."""
+    salt = _create_ingredient(client, "Salt")
+
+    recipe1_id = _create_recipe_with_ingredients(client, "Pasta", [salt["id"]])
+    recipe2_id = _create_recipe_with_ingredients(client, "Steak", [salt["id"]])
+    session_id = _create_session_with_recipes(
+        client, "Tasting", [recipe1_id, recipe2_id]
+    )
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    data = response.json()
+
+    # Salt should appear in both recipe ingredient lists
+    for recipe_entry in data:
+        ing_names = {i["name"] for i in recipe_entry["ingredients"]}
+        assert "Salt" in ing_names
+
+
+def test_session_recipes_ingredients_update_on_recipe_change(client: TestClient):
+    """Test that ingredients reflect recipe additions and removals."""
+    ing1 = _create_ingredient(client, "Tomato")
+    ing2 = _create_ingredient(client, "Basil")
+
+    recipe1_id = _create_recipe_with_ingredients(client, "Marinara", [ing1["id"]])
+    recipe2_id = _create_recipe_with_ingredients(client, "Caprese", [ing1["id"], ing2["id"]])
+
+    session_id = _create_session_with_recipes(client, "Italian Tasting", [recipe1_id])
+
+    # Initially only Marinara with Tomato
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    data = response.json()
+    assert len(data) == 1
+    assert len(data[0]["ingredients"]) == 1
+
+    # Add Caprese recipe
+    client.post(
+        f"/api/v1/tasting-sessions/{session_id}/recipes",
+        json={"recipe_id": recipe2_id},
+    )
+
+    # Now two recipes with their ingredients
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    data = response.json()
+    assert len(data) == 2
+
+    # Remove Marinara
+    client.delete(f"/api/v1/tasting-sessions/{session_id}/recipes/{recipe1_id}")
+
+    # Only Caprese left with Tomato and Basil
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["recipe_name"] == "Caprese"
+    ing_names = {i["name"] for i in data[0]["ingredients"]}
+    assert ing_names == {"Tomato", "Basil"}
+
+
+def test_session_recipes_no_recipes_returns_empty(client: TestClient):
+    """Test empty session returns empty list."""
+    session_id = _create_session_with_recipes(client, "Empty Session", [])
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_session_recipes_ingredient_base_unit(client: TestClient):
+    """Test that ingredient base_unit is correctly returned."""
+    ing_ml = _create_ingredient(client, "Olive Oil", "ml")
+    ing_g = _create_ingredient(client, "Flour", "g")
+    ing_pcs = _create_ingredient(client, "Eggs", "pcs")
+
+    recipe_id = _create_recipe_with_ingredients(
+        client, "Recipe", [ing_ml["id"], ing_g["id"], ing_pcs["id"]]
+    )
+    session_id = _create_session_with_recipes(client, "Tasting", [recipe_id])
+
+    response = client.get(f"/api/v1/tasting-sessions/{session_id}/recipes")
+    data = response.json()
+    ingredients = data[0]["ingredients"]
+
+    units_by_name = {i["name"]: i["base_unit"] for i in ingredients}
+    assert units_by_name["Olive Oil"] == "ml"
+    assert units_by_name["Flour"] == "g"
+    assert units_by_name["Eggs"] == "pcs"

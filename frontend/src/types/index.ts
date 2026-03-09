@@ -323,11 +323,19 @@ export interface UpdateTastingNoteRequest {
 
 // ============ Recipe-Tasting Session Types ============
 
+export interface RecipeTastingIngredient {
+  id: number;
+  name: string;
+  base_unit: string;
+  is_halal: boolean;
+}
+
 export interface RecipeTasting {
   id: number;
   recipe_id: number;
   tasting_session_id: number;
   recipe_name?: string | null;
+  ingredients: RecipeTastingIngredient[];
   created_at: string;
 }
 

@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
-- **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal & Session Status Indicators
+- **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal, Derived Session Ingredients & Sequential Lark Fix
 - **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
 - **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
 - **0.0.21** (2026-03-05) - Participant-Only Feedback, Canvas Unit Price Auto-Conversion & Recipe Loading Fix
@@ -108,6 +108,46 @@ Added visual feedback for review progress and image upload states on tasting pag
 **Files Modified**:
 - `frontend/src/app/tastings/[id]/page.tsx` — Review status indicators
 - `frontend/src/app/tastings/[id]/r/[recipeId]/page.tsx` — Loading states and form reset
+
+### Changed
+
+#### Lark DMs Sent Sequentially to Avoid Token Race Condition
+
+Lark messages were previously dispatched in parallel via `forEach` + `Promise.all`. The SDK's automatic tenant token acquisition caused race conditions when multiple requests fired before the first token was cached.
+
+**Fix**: Wrapped Lark sends in a sequential `for...of` loop so the first message acquires and caches the token, and subsequent messages reuse it.
+
+**Files Modified**:
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Sequential Lark DM sending
+
+#### Derive Session Ingredients from Recipe Ingredients (Backend + Frontend)
+
+Session ingredients were previously managed as a separate list (add/remove individually). Now they are derived automatically from the recipes linked to the session, eliminating duplicate data management.
+
+**Backend**:
+- `RecipeTastingRead` now includes `ingredients: list[RecipeTastingIngredient]` with ingredient id, name, base_unit, is_halal
+- `RecipeTastingIngredient` DTO added for minimal nested ingredient info
+- `get_recipes_for_session()` batch-loads recipe ingredients via JOIN query and groups by recipe_id
+- Tests added for ingredient inclusion in recipe-tasting responses
+
+**Frontend**:
+- Session ingredients section now derives from recipe ingredients (no separate add/remove UI)
+- `DerivedIngredient` type aggregates ingredients across recipes with `recipe_names[]`
+- Removed `useSessionIngredients`, `useAddIngredientsToSession`, `useRemoveIngredientFromSession` usage from session detail page
+- `RecipeFeedbackModal` updated with ingredient display improvements
+
+**Files Modified**:
+- `backend/app/models/recipe_tasting.py` — Added `RecipeTastingIngredient`, `ingredients` on `RecipeTastingRead`
+- `backend/app/models/__init__.py` — Export new types
+- `backend/app/domain/recipe_tasting_service.py` — Batch-load ingredients in `get_recipes_for_session()`
+- `backend/tests/test_recipe_tastings.py` — Tests for ingredient inclusion
+- `frontend/src/app/tastings/[id]/page.tsx` — Derived ingredients, removed manual ingredient management
+- `frontend/src/components/tasting/RecipeFeedbackModal.tsx` — Updated ingredient display
+- `frontend/src/types/index.ts` — Added `RecipeTastingIngredient` type
+
+#### Moved flow-ui-starter to docs/
+
+Relocated `flow-ui-starter/` directory under `docs/` for better project organization.
 
 ---
 

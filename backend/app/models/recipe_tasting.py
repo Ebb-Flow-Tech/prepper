@@ -22,13 +22,23 @@ class RecipeTasting(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class RecipeTastingIngredient(SQLModel):
+    """Minimal ingredient info nested in RecipeTastingRead."""
+
+    id: int
+    name: str
+    base_unit: str
+    is_halal: bool = False
+
+
 class RecipeTastingRead(SQLModel):
-    """RecipeTasting for API response (includes recipe name)."""
+    """RecipeTasting for API response (includes recipe name and ingredients)."""
 
     id: int
     recipe_id: int
     tasting_session_id: int
     recipe_name: Optional[str] = None
+    ingredients: list[RecipeTastingIngredient] = []
     created_at: datetime
 
 
