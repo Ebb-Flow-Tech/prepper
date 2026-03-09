@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal & Session Status Indicators
 - **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
 - **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
 - **0.0.21** (2026-03-05) - Participant-Only Feedback, Canvas Unit Price Auto-Conversion & Recipe Loading Fix
@@ -29,6 +30,85 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.24] - 2026-03-09
+
+### Added
+
+#### Lark DM Invitations for Tasting Sessions (Plan 14)
+
+Integrated Lark as a third notification channel alongside Email (SendGrid) and SMS (Twilio). Tasting session invitations are now sent as Lark direct messages to all participants.
+
+**Features**:
+- `@larksuiteoapi/node-sdk` integration for sending Lark DMs via bot
+- SDK handles tenant token generation, caching, and refresh automatically
+- Each recipient receives a Lark DM with session name, date, location, and invite link
+- Graceful degradation: if `LARK_APP_ID`/`LARK_APP_SECRET` not configured, Email/SMS send normally with `lark_count: 0`
+- Per-recipient error isolation: one failed Lark DM does not block others or Email/SMS
+- API response includes `lark_count` alongside `email_count` and `sms_count`
+- Toast message shows combined delivery summary across all channels
+
+**Environment Variables**:
+- `LARK_APP_ID` — Lark app ID from open.larksuite.com
+- `LARK_APP_SECRET` — Lark app secret from open.larksuite.com
+
+**Files Modified**:
+- `frontend/package.json` — Added `@larksuiteoapi/node-sdk` dependency
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Lark client init, DM sending, `lark_count` response
+- `frontend/src/lib/hooks/useSendTastingInvitation.ts` — Added `lark_count` to response type
+- `frontend/.env.example` — Added `LARK_APP_ID`, `LARK_APP_SECRET`
+
+#### Add-to-Calendar Applink in Lark Messages (Plan 14, Part 3)
+
+Lark DMs now include a clickable deep link that opens the Lark Calendar event creation page with session details pre-filled.
+
+**Features**:
+- Applink URL: `https://applink.larksuite.com/client/calendar/event/create?startTime=...&endTime=...&summary=...`
+- `startTime`: session date as Unix timestamp (seconds)
+- `endTime`: startTime + 1 hour
+- `summary`: URL-encoded "Tasting: {session_name}"
+- Clicking the link opens Lark Calendar with pre-filled event — user confirms to add to their own calendar
+- No server-side Calendar API calls or additional permissions needed
+
+**Files Modified**:
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Calendar applink URL generation
+
+#### Branded Invitation Email Template (Plan 13, P1-4)
+
+Redesigned the tasting invitation email with a professional, branded layout.
+
+**Features**:
+- Branded header with RecipePrep logo and distinct color scheme
+- Personalized greeting using recipient name (if available)
+- Session details card with icons for session name, date/time, and location
+- Custom message support with styled blockquote
+- Prominent CTA button ("View Tasting Session")
+- Responsive HTML email design
+
+**Files Modified**:
+- `frontend/src/app/api/send-tasting-invitation/route.ts` — Full email template redesign
+
+#### Inline Recipe Feedback Modal (Plan 13, P2-2)
+
+Added expandable feedback cards on the tasting session detail page, allowing participants to submit tasting notes without navigating away.
+
+**Files Modified**:
+- `frontend/src/app/tastings/[id]/page.tsx` — Inline feedback modal for recipes
+
+#### Session Status Indicators & Loading States (Plan 13, P0-2/P0-3)
+
+Added visual feedback for review progress and image upload states on tasting pages.
+
+**Features**:
+- Per-recipe feedback status indicators (checked/unchecked) on session detail page
+- Loading spinners during image upload in feedback submission
+- Form state improvements after submission
+
+**Files Modified**:
+- `frontend/src/app/tastings/[id]/page.tsx` — Review status indicators
+- `frontend/src/app/tastings/[id]/r/[recipeId]/page.tsx` — Loading states and form reset
+
 ---
 
 ## [0.0.23] - 2026-03-06

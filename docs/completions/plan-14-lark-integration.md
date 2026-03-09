@@ -84,36 +84,30 @@ The `@larksuiteoapi/node-sdk` handles tenant token generation, caching, and refr
 
 ---
 
-### Part 3: Lark Calendar Event with Clickable Link (P1)
+### Part 3: Add-to-Calendar Applink in Lark Message (P1)
 
-#### 3.1 Calendar Event Creation via Lark SDK
-- [x] In `frontend/src/app/api/send-tasting-invitation/route.ts`, before sending Lark DMs:
-  - Create a calendar event on the bot's primary calendar using `client.calendar.calendarEvent.create`:
-    - `summary`: "Tasting: {session_name}"
-    - `description`: invite link and context
-    - `start_time.timestamp`: session date as Unix timestamp (seconds)
-    - `end_time.timestamp`: start + 1 hour
-    - `location.name`: session location (if set)
-  - Add all recipients as attendees via `client.calendar.calendarEventAttendee.create` using `third_party_email` — this auto-adds the event to their Lark calendars
-  - Extract `app_link` from the event creation response — this is the clickable Lark deep link
-  - Wrap both calls in try/catch — if calendar creation fails, DMs still send with a plain-text fallback reminder
+#### 3.1 Lark Calendar Applink URL
+- [x] In `frontend/src/app/api/send-tasting-invitation/route.ts`, build a Lark Calendar applink URL:
+  - URL: `https://applink.larksuite.com/client/calendar/event/create`
+  - `startTime`: session date as Unix timestamp (seconds)
+  - `endTime`: startTime + 1 hour (3600 seconds)
+  - `summary`: URL-encoded "Tasting: {session_name}"
+- [x] Clicking the link opens Lark's calendar event creation page with pre-filled data — the user confirms to add it to their own calendar
+- [x] No server-side Calendar API calls needed — purely a client-side deep link
 
 #### 3.2 Calendar Link in Lark DM
-- [x] Append the `app_link` to the Lark message text:
+- [x] Append the applink to the Lark message text:
   ```
   You're invited to a tasting session: "Session Name" on Monday, March 10, 2026, 10:00 AM at Main Kitchen. Join here: https://app.example.com/tastings/invite/42
 
-  📅 Add to your Lark Calendar: https://applink.larksuite.com/client/calendar/event/detail?...
+  📅 Add to your Lark Calendar: https://applink.larksuite.com/client/calendar/event/create?startTime=1741564800&endTime=1741568400&summary=Tasting%3A%20Session%20Name
   ```
-- [x] If calendar event creation fails, fall back to: `📅 Don't forget to add this to your calendar!`
 
 **Acceptance Criteria (Part 3):**
-- Given Lark is configured, when invitations are sent, then a Lark Calendar event is created with session name, time, and location
-- Given the calendar event is created, then all recipients are added as attendees (event appears on their Lark calendars)
-- Given the calendar event is created, then the Lark DM includes a clickable `app_link` to view/open the event
-- Given calendar event creation fails, then the Lark DM still sends with a plain-text calendar reminder fallback
-- Given a session has no location, then the calendar event is still created (without location)
-- Requires Lark bot to have `calendar:calendar` permission scope in addition to `im:message`
+- Given a Lark message is sent, then the message includes a clickable applink to create a calendar event
+- Given a user clicks the applink, then Lark opens the calendar event creation page with session name and time pre-filled
+- Given a session has no location, then the applink still works (location is not included in the URL)
+- No additional Lark bot permissions needed beyond `im:message`
 
 ---
 
@@ -130,10 +124,9 @@ The `@larksuiteoapi/node-sdk` handles tenant token generation, caching, and refr
 4. Add `lark_count` to response
 5. Update `useSendTastingInvitation.ts` response types
 
-### Step 3: Lark Calendar Event + Deep Link (Part 3)
-1. Create Lark Calendar event via SDK (`client.calendar.calendarEvent.create`) with session details
-2. Add recipients as attendees via SDK (`client.calendar.calendarEventAttendee.create`)
-3. Include the event's `app_link` in the Lark DM for one-click access
+### Step 3: Add-to-Calendar Applink (Part 3)
+1. Build Lark Calendar applink URL with `startTime`, `endTime`, `summary` query params
+2. Append the clickable link to the Lark DM text
 
 ---
 
@@ -281,55 +274,34 @@ Scenario: Email, SMS, and Lark are sent concurrently
   And the total response time is not significantly longer than the slowest channel
 ```
 
-### Part 3 Tests: Lark Calendar Event + Deep Link
+### Part 3 Tests: Add-to-Calendar Applink
 
-#### 3.1 Calendar Event Created with Session Details
+#### 3.1 Applink URL in Lark Message
 ```
-Scenario: Lark Calendar event is created for the tasting session
-  Given LARK_APP_ID and LARK_APP_SECRET are configured
-  When POST /api/send-tasting-invitation is called
-  Then a calendar event is created on the bot's primary calendar
-  And the event summary is "Tasting: {session_name}"
-  And the event start_time matches the session date
-  And the event end_time is 1 hour after start_time
-  And the event location matches the session location (if set)
-```
-
-#### 3.2 Recipients Added as Calendar Attendees
-```
-Scenario: All recipients are added as attendees to the calendar event
-  Given a calendar event was created
-  And 3 recipients are selected
-  When attendees are added via calendarEventAttendee.create
-  Then all 3 recipients are added using third_party_email
-  And the event appears on each recipient's Lark Calendar
+Scenario: Lark message includes a calendar applink
+  Given a Lark DM is sent for a tasting session
+  When the message text is built
+  Then it contains a URL starting with https://applink.larksuite.com/client/calendar/event/create
+  And the URL includes startTime matching the session Unix timestamp
+  And the URL includes endTime = startTime + 3600
+  And the URL includes summary = URL-encoded "Tasting: {session_name}"
 ```
 
-#### 3.3 Lark DM Includes Clickable Calendar Link
+#### 3.2 Applink Opens Pre-filled Calendar Creation
 ```
-Scenario: Lark DM contains app_link to the calendar event
-  Given a calendar event was created successfully
-  When the Lark DM is sent
-  Then the message includes the app_link URL from the event response
-  And the link is clickable and opens the event in Lark
-```
-
-#### 3.4 Calendar Failure — Graceful Fallback
-```
-Scenario: Lark DM still sends if calendar event creation fails
-  Given the Lark Calendar API returns an error
-  When the Lark DM is sent
-  Then the message falls back to a plain-text calendar reminder
-  And DM delivery is not blocked
+Scenario: Clicking the applink opens Lark calendar with pre-filled data
+  Given a recipient clicks the calendar applink in the Lark DM
+  Then Lark opens the calendar event creation page
+  And the event name and time are pre-filled from the URL parameters
 ```
 
-#### 3.5 Calendar Link Does Not Affect SMS
+#### 3.3 Calendar Link Does Not Affect SMS
 ```
 Scenario: SMS message does NOT include calendar link
   Given the same invitation is sent via SMS and Lark
   When comparing message content
   Then SMS contains only the original format (no calendar line)
-  And Lark contains the SMS text plus the calendar link
+  And Lark contains the SMS text plus the calendar applink
 ```
 
 ### Integration Tests (Full Flow)
