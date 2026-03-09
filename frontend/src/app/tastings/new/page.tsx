@@ -90,6 +90,7 @@ export default function NewTastingSessionPage() {
           session_location: location.trim() || null,
           recipients: selectedParticipants.map((p) => ({
             email: p.email,
+            username: p.username,
             phone_number: p.phone_number ?? null,
           })),
         });

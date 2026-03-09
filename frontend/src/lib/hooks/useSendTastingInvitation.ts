@@ -8,6 +8,7 @@ interface SendTastingInvitationPayload {
   session_location?: string | null;
   recipients: Array<{
     email: string;
+    username?: string;
     phone_number?: string | null;
   }>;
   message?: string;

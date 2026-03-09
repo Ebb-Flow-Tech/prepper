@@ -255,7 +255,7 @@ function SessionRecipesSection({
 
       {!isLoading && sessionRecipes.length > 0 && (
         <div className="space-y-2">
-          {sessionRecipes.map((sr) => {
+          {[...sessionRecipes].sort((a, b) => (a.recipe_name || '').localeCompare(b.recipe_name || '')).map((sr) => {
             return (
               <div
                 key={sr.id}
