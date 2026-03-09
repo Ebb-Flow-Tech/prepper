@@ -84,22 +84,36 @@ The `@larksuiteoapi/node-sdk` handles tenant token generation, caching, and refr
 
 ---
 
-### Part 3: Calendar Recommendation in Lark Message (P1)
+### Part 3: Lark Calendar Event with Clickable Link (P1)
 
-#### 3.1 Calendar Prompt Text
-- [ ] Append a calendar recommendation to the Lark message text:
+#### 3.1 Calendar Event Creation via Lark SDK
+- [x] In `frontend/src/app/api/send-tasting-invitation/route.ts`, before sending Lark DMs:
+  - Create a calendar event on the bot's primary calendar using `client.calendar.calendarEvent.create`:
+    - `summary`: "Tasting: {session_name}"
+    - `description`: invite link and context
+    - `start_time.timestamp`: session date as Unix timestamp (seconds)
+    - `end_time.timestamp`: start + 1 hour
+    - `location.name`: session location (if set)
+  - Add all recipients as attendees via `client.calendar.calendarEventAttendee.create` using `third_party_email` — this auto-adds the event to their Lark calendars
+  - Extract `app_link` from the event creation response — this is the clickable Lark deep link
+  - Wrap both calls in try/catch — if calendar creation fails, DMs still send with a plain-text fallback reminder
+
+#### 3.2 Calendar Link in Lark DM
+- [x] Append the `app_link` to the Lark message text:
   ```
   You're invited to a tasting session: "Session Name" on Monday, March 10, 2026, 10:00 AM at Main Kitchen. Join here: https://app.example.com/tastings/invite/42
 
-  📅 Don't forget to add this to your calendar!
+  📅 Add to your Lark Calendar: https://applink.larksuite.com/client/calendar/event/detail?...
   ```
-- [ ] The recommendation is a plain-text line appended to the existing message — no Lark Calendar API calls
-- [ ] Include full date/time and location so the user has all the info needed to create a calendar event manually
+- [x] If calendar event creation fails, fall back to: `📅 Don't forget to add this to your calendar!`
 
 **Acceptance Criteria (Part 3):**
-- Given a Lark message is sent, then the message text includes a calendar reminder line at the end
-- Given a session has no location, then the calendar reminder still appears (without location info)
-- The calendar reminder is text-only — no API integration with any calendar service
+- Given Lark is configured, when invitations are sent, then a Lark Calendar event is created with session name, time, and location
+- Given the calendar event is created, then all recipients are added as attendees (event appears on their Lark calendars)
+- Given the calendar event is created, then the Lark DM includes a clickable `app_link` to view/open the event
+- Given calendar event creation fails, then the Lark DM still sends with a plain-text calendar reminder fallback
+- Given a session has no location, then the calendar event is still created (without location)
+- Requires Lark bot to have `calendar:calendar` permission scope in addition to `im:message`
 
 ---
 
@@ -116,8 +130,10 @@ The `@larksuiteoapi/node-sdk` handles tenant token generation, caching, and refr
 4. Add `lark_count` to response
 5. Update `useSendTastingInvitation.ts` response types
 
-### Step 3: Calendar Recommendation (Part 3)
-1. Append calendar reminder text to the Lark message body
+### Step 3: Lark Calendar Event + Deep Link (Part 3)
+1. Create Lark Calendar event via SDK (`client.calendar.calendarEvent.create`) with session details
+2. Add recipients as attendees via SDK (`client.calendar.calendarEventAttendee.create`)
+3. Include the event's `app_link` in the Lark DM for one-click access
 
 ---
 
@@ -265,33 +281,55 @@ Scenario: Email, SMS, and Lark are sent concurrently
   And the total response time is not significantly longer than the slowest channel
 ```
 
-### Part 3 Tests: Calendar Recommendation
+### Part 3 Tests: Lark Calendar Event + Deep Link
 
-#### 3.1 Calendar Text in Lark Message
+#### 3.1 Calendar Event Created with Session Details
 ```
-Scenario: Lark message includes calendar reminder
-  Given a Lark message is being composed for a tasting session
-  When the message text is built
-  Then the last line contains a calendar reminder prompt
-  And the message includes the full date/time for easy calendar entry
-```
-
-#### 3.2 Calendar Text with No Location
-```
-Scenario: Calendar reminder works without location
-  Given a tasting session with no location set
-  When the Lark message is sent
-  Then the calendar reminder still appears
-  And the message does not include location info
+Scenario: Lark Calendar event is created for the tasting session
+  Given LARK_APP_ID and LARK_APP_SECRET are configured
+  When POST /api/send-tasting-invitation is called
+  Then a calendar event is created on the bot's primary calendar
+  And the event summary is "Tasting: {session_name}"
+  And the event start_time matches the session date
+  And the event end_time is 1 hour after start_time
+  And the event location matches the session location (if set)
 ```
 
-#### 3.3 Calendar Text Does Not Affect SMS
+#### 3.2 Recipients Added as Calendar Attendees
 ```
-Scenario: SMS message does NOT include calendar reminder
+Scenario: All recipients are added as attendees to the calendar event
+  Given a calendar event was created
+  And 3 recipients are selected
+  When attendees are added via calendarEventAttendee.create
+  Then all 3 recipients are added using third_party_email
+  And the event appears on each recipient's Lark Calendar
+```
+
+#### 3.3 Lark DM Includes Clickable Calendar Link
+```
+Scenario: Lark DM contains app_link to the calendar event
+  Given a calendar event was created successfully
+  When the Lark DM is sent
+  Then the message includes the app_link URL from the event response
+  And the link is clickable and opens the event in Lark
+```
+
+#### 3.4 Calendar Failure — Graceful Fallback
+```
+Scenario: Lark DM still sends if calendar event creation fails
+  Given the Lark Calendar API returns an error
+  When the Lark DM is sent
+  Then the message falls back to a plain-text calendar reminder
+  And DM delivery is not blocked
+```
+
+#### 3.5 Calendar Link Does Not Affect SMS
+```
+Scenario: SMS message does NOT include calendar link
   Given the same invitation is sent via SMS and Lark
   When comparing message content
   Then SMS contains only the original format (no calendar line)
-  And Lark contains the SMS text plus the calendar reminder
+  And Lark contains the SMS text plus the calendar link
 ```
 
 ### Integration Tests (Full Flow)

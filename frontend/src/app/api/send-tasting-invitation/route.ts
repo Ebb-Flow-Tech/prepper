@@ -2,6 +2,7 @@ import { z } from 'zod';
 import sgMail from '@sendgrid/mail';
 import type { MailDataRequired } from '@sendgrid/mail';
 import twilio from 'twilio';
+import * as lark from '@larksuiteoapi/node-sdk';
 
 // Request schema for sending tasting invitations
 const SendTastingInvitationSchema = z.object({
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
         message: 'Session is in the past — invitations not sent',
         email_count: 0,
         sms_count: 0,
+        lark_count: 0,
         recipient_count: validatedData.recipients.length,
       });
     }
@@ -297,7 +299,60 @@ export async function POST(request: Request) {
       }
     }
 
-    // Send emails and SMS in parallel
+    // Initialize Lark for DMs (if configured)
+    let larkCount = 0;
+    const larkSends: Promise<unknown>[] = [];
+
+    const larkAppId = process.env.LARK_APP_ID;
+    const larkAppSecret = process.env.LARK_APP_SECRET;
+
+    console.log('[Lark] LARK_APP_ID configured:', !!larkAppId, 'LARK_APP_SECRET configured:', !!larkAppSecret);
+
+    if (larkAppId && larkAppSecret && validatedData.recipients.length > 0) {
+      try {
+        const larkClient = new lark.Client({
+          appId: larkAppId,
+          appSecret: larkAppSecret,
+          appType: lark.AppType.SelfBuild,
+          domain: lark.Domain.Lark,
+        });
+
+        // Build Lark Calendar applink — clicking opens the event creation page pre-filled
+        const startTimestamp = Math.floor(sessionDate.getTime() / 1000);
+        const endTimestamp = startTimestamp + 3600; // +1 hour
+        const calendarSummary = encodeURIComponent(`Tasting: ${validatedData.session_name}`);
+        const calendarLink = `https://applink.larksuite.com/client/calendar/event/create?startTime=${startTimestamp}&endTime=${endTimestamp}&summary=${calendarSummary}`;
+
+        const larkText = `${smsText}\n\n📅 Add to your Lark Calendar: ${calendarLink}`;
+
+        console.log('[Lark] Sending to', validatedData.recipients.length, 'recipients');
+
+        validatedData.recipients.forEach((recipient) => {
+          larkSends.push(
+            larkClient.im.message.create({
+              params: { receive_id_type: 'email' },
+              data: {
+                receive_id: recipient.email,
+                msg_type: 'text',
+                content: JSON.stringify({ text: larkText }),
+              },
+            }).then((res) => {
+              console.log(`[Lark] Message sent to ${recipient.email}:`, JSON.stringify(res));
+              larkCount++;
+            }).catch((err) => {
+              console.error(`[Lark] Message failed for ${recipient.email}:`, JSON.stringify(err, null, 2));
+            })
+          );
+        });
+      } catch (error) {
+        console.error('[Lark] Initialization error:', error);
+        // Continue with email/SMS sending even if Lark fails
+      }
+    } else {
+      console.log('[Lark] Skipped — not configured or no recipients');
+    }
+
+    // Send emails, SMS, and Lark in parallel
     const sendPromises: Promise<unknown>[] = [];
 
     if (emailMessages.length > 0) {
@@ -305,6 +360,7 @@ export async function POST(request: Request) {
     }
 
     sendPromises.push(...twilioSends);
+    sendPromises.push(...larkSends);
 
     if (sendPromises.length > 0) {
       await Promise.all(sendPromises);
@@ -317,12 +373,16 @@ export async function POST(request: Request) {
     if (smsCount > 0) {
       summary.push(`${smsCount} SMS`);
     }
+    if (larkCount > 0) {
+      summary.push(`${larkCount} Lark message(s)`);
+    }
 
     return Response.json({
       success: true,
       message: `Invitations sent via ${summary.join(' and ')}`,
       email_count: emailMessages.length,
       sms_count: smsCount,
+      lark_count: larkCount,
       recipient_count: validatedData.recipients.length,
     });
   } catch (error) {

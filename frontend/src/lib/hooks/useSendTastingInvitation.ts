@@ -20,6 +20,7 @@ interface SendTastingInvitationResponse {
   recipient_count: number;
   email_count?: number;
   sms_count?: number;
+  lark_count?: number;
 }
 
 async function sendTastingInvitation(
