@@ -42,6 +42,7 @@ import {
   Badge,
 } from '@/components/ui';
 import { ParticipantPicker } from '@/components/tasting/ParticipantPicker';
+import { RecipeFeedbackModal } from '@/components/tasting/RecipeFeedbackModal';
 import type { Recipe, RecipeTasting, Ingredient, IngredientTasting, User, UpdateTastingSessionRequest } from '@/types';
 import { useAppState } from '@/lib/store';
 import { ApiError } from '@/lib/api';
@@ -71,6 +72,7 @@ interface SessionRecipesSectionProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   reviewedRecipeIds: Set<number>;
+  onRecipeClick: (recipeId: number) => void;
 }
 
 function SessionRecipesSection({
@@ -87,6 +89,7 @@ function SessionRecipesSection({
   searchQuery,
   onSearchChange,
   reviewedRecipeIds,
+  onRecipeClick,
 }: SessionRecipesSectionProps) {
   const [showAddRecipe, setShowAddRecipe] = useState(false);
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<number>>(new Set());
@@ -258,9 +261,10 @@ function SessionRecipesSection({
                 key={sr.id}
                 className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg"
               >
-                <Link
-                  href={`/tastings/${sessionId}/r/${sr.recipe_id}`}
-                  className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400"
+                <button
+                  type="button"
+                  onClick={() => onRecipeClick(sr.recipe_id)}
+                  className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 text-left"
                 >
                   {reviewedRecipeIds.has(sr.recipe_id) ? (
                     <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
@@ -268,7 +272,7 @@ function SessionRecipesSection({
                     <div className="h-4 w-4 rounded-full border-2 border-zinc-300 dark:border-zinc-600 shrink-0" />
                   )}
                   {sr.recipe_name || `Recipe #${sr.recipe_id}`}
-                </Link>
+                </button>
                 {isCreator && (
                   <button
                     onClick={() => onRemoveRecipe(sr.recipe_id)}
@@ -610,6 +614,7 @@ export default function TastingSessionDetailPage() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedRecipeIdForModal, setSelectedRecipeIdForModal] = useState<number | null>(null);
 
   // Access control check
   const isInvited = userType === 'admin' ||
@@ -1001,6 +1006,7 @@ export default function TastingSessionDetailPage() {
             searchQuery={recipeSearch}
             onSearchChange={setRecipeSearch}
             reviewedRecipeIds={reviewedRecipeIds}
+            onRecipeClick={setSelectedRecipeIdForModal}
           />
         )}
 
@@ -1048,6 +1054,17 @@ export default function TastingSessionDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Recipe Feedback Modal */}
+      {sessionId && session && selectedRecipeIdForModal && (
+        <RecipeFeedbackModal
+          isOpen={!!selectedRecipeIdForModal}
+          onClose={() => setSelectedRecipeIdForModal(null)}
+          sessionId={sessionId}
+          recipeId={selectedRecipeIdForModal}
+          session={session}
+        />
+      )}
     </div>
   );
 }
