@@ -7,6 +7,7 @@ import { useTastingSessions } from '@/lib/hooks/useTastings';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { PageHeader, SearchInput, Button, Skeleton, Card, CardHeader, CardTitle, CardContent, CardFooter, Badge } from '@/components/ui';
 import { Pagination } from '@/components/ui/Pagination';
+import { useAppState } from '@/lib/store';
 import type { TastingSession } from '@/types';
 
 function formatDate(dateString: string): string {
@@ -29,9 +30,11 @@ function isSessionExpired(dateString: string): boolean {
 interface TastingSessionCardProps {
   session: TastingSession;
   expired?: boolean;
+  isOwn?: boolean;
+  isInvited?: boolean;
 }
 
-function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
+function TastingSessionCard({ session, expired, isOwn, isInvited }: TastingSessionCardProps) {
   return (
     <Link href={`/tastings/${session.id}`} className="block">
       <Card interactive className={`h-full ${expired ? 'opacity-75' : ''}`}>
@@ -39,8 +42,14 @@ function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <CardTitle className="truncate">{session.name}</CardTitle>
+              {isOwn && (
+                <Badge variant="success" className="text-xs shrink-0">Yours</Badge>
+              )}
+              {!isOwn && isInvited && (
+                <Badge variant="success" className="text-xs shrink-0">Invited</Badge>
+              )}
               {expired && (
-                <Badge variant="secondary" className="text-xs">Past</Badge>
+                <Badge variant="secondary" className="text-xs shrink-0">Past</Badge>
               )}
             </div>
             <div className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -87,6 +96,7 @@ function TastingSessionCard({ session, expired }: TastingSessionCardProps) {
 }
 
 export default function TastingsPage() {
+  const { userId } = useAppState();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [pageNumber, setPageNumber] = useState(1);
@@ -202,7 +212,7 @@ export default function TastingsPage() {
             </div>
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {ongoingSessions.map((session) => (
-                <TastingSessionCard key={session.id} session={session} />
+                <TastingSessionCard key={session.id} session={session} isOwn={!!(userId && session.creator_id === userId)} isInvited={!!(userId && session.participants?.some((p) => p.user_id === userId))} />
               ))}
             </div>
           </div>
@@ -222,7 +232,7 @@ export default function TastingsPage() {
             </div>
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {expiredSessions.map((session) => (
-                <TastingSessionCard key={session.id} session={session} expired />
+                <TastingSessionCard key={session.id} session={session} expired isOwn={!!(userId && session.creator_id === userId)} isInvited={!!(userId && session.participants?.some((p) => p.user_id === userId))} />
               ))}
             </div>
           </div>

@@ -270,6 +270,7 @@ export function RecipeFeedbackModal({
                     currentUserId={userId}
                     onUpdate={handleUpdateNote}
                     onDelete={handleDeleteNote}
+                    showOwnerBadge
                   />
                 ))}
               </div>

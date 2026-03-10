@@ -644,18 +644,23 @@ export default function TastingSessionDetailPage() {
 
         {/* Session Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-            {isCreator ? (
-              <EditableCell
-                value={session.name}
-                onSave={(value) => handleUpdateSession({ name: value })}
-                className="text-2xl font-bold"
-                placeholder="Session name"
-              />
-            ) : (
-              session.name
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+              {isCreator ? (
+                <EditableCell
+                  value={session.name}
+                  onSave={(value) => handleUpdateSession({ name: value })}
+                  className="text-2xl font-bold"
+                  placeholder="Session name"
+                />
+              ) : (
+                session.name
+              )}
+            </h1>
+            {isCreator && (
+              <Badge variant="success" className="text-xs shrink-0">Your Session</Badge>
             )}
-          </h1>
+          </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-600 dark:text-zinc-300">
             {/* DateTime */}
             <div className="flex items-center gap-1.5 relative">

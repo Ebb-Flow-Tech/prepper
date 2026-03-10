@@ -238,9 +238,10 @@ interface FeedbackNoteCardProps {
   currentUserId: string | null;
   onUpdate: (noteId: number, data: Partial<TastingNote>) => Promise<void>;
   onDelete: (noteId: number) => Promise<void>;
+  showOwnerBadge?: boolean;
 }
 
-export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete }: FeedbackNoteCardProps) {
+export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete, showOwnerBadge = false }: FeedbackNoteCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isImagesExpanded, setIsImagesExpanded] = useState(false);
   const { data: noteImages = [], isLoading: isLoadingImages } = useTastingNoteImages(isImagesExpanded ? note.id : null);
@@ -280,11 +281,14 @@ export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete }: Fe
     <Card className="mb-4">
       <CardHeader>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {note.taster_name && (
               <span className="font-medium text-zinc-900 dark:text-zinc-100">
                 {note.taster_name}
               </span>
+            )}
+            {showOwnerBadge && note.user_id !== null && note.user_id === currentUserId && (
+              <Badge variant="info" className="text-xs">You</Badge>
             )}
             {decisionConfig && (
               <Badge variant={decisionConfig.badgeVariant}>
