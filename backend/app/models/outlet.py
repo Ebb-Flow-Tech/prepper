@@ -16,8 +16,8 @@ class OutletType(str, Enum):
 class OutletBase(SQLModel):
     """Shared fields for Outlet."""
 
-    name: str = Field(max_length=100, index=True)
-    code: str = Field(max_length=20, description="Short code e.g. 'CS', 'TBH'")
+    name: str = Field(index=True)
+    code: str = Field(description="Short code e.g. 'CS', 'TBH'")
     outlet_type: OutletType = Field(default=OutletType.BRAND)
 
 

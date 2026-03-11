@@ -16,6 +16,8 @@ class SupplierBase(SQLModel):
     address: str | None = Field(default=None)
     phone_number: str | None = Field(default=None)
     email: str | None = Field(default=None)
+    shipping_company_name: str | None = Field(default=None)
+    code: str | None = Field(default=None)
 
 
 class Supplier(SupplierBase, table=True):
@@ -41,6 +43,8 @@ class SupplierCreate(SQLModel):
     address: str | None = None
     phone_number: str | None = None
     email: str | None = None
+    shipping_company_name: str | None = None
+    code: str | None = None
 
 
 class SupplierUpdate(SQLModel):
@@ -50,4 +54,6 @@ class SupplierUpdate(SQLModel):
     address: str | None = None
     phone_number: str | None = None
     email: str | None = None
+    shipping_company_name: str | None = None
+    code: str | None = None
     is_active: bool | None = None
