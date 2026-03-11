@@ -12,6 +12,8 @@ def test_create_supplier(client: TestClient):
             "address": "123 Main St, Springfield",
             "phone_number": "+1-555-123-4567",
             "email": "contact@acmefoods.com",
+            "shipping_company_name": "FastFreight Ltd",
+            "code": "ACME",
         },
     )
     assert response.status_code == 201
@@ -20,6 +22,8 @@ def test_create_supplier(client: TestClient):
     assert data["address"] == "123 Main St, Springfield"
     assert data["phone_number"] == "+1-555-123-4567"
     assert data["email"] == "contact@acmefoods.com"
+    assert data["shipping_company_name"] == "FastFreight Ltd"
+    assert data["code"] == "ACME"
     assert "id" in data
 
 
@@ -75,6 +79,8 @@ def test_update_supplier(client: TestClient):
             "address": "200 New Ave",
             "phone_number": "+1-555-111-1111",
             "email": "new@supplier.com",
+            "shipping_company_name": "SpeedShip Co",
+            "code": "UPDS",
         },
     )
     assert update_response.status_code == 200
@@ -83,6 +89,35 @@ def test_update_supplier(client: TestClient):
     assert data["address"] == "200 New Ave"
     assert data["phone_number"] == "+1-555-111-1111"
     assert data["email"] == "new@supplier.com"
+    assert data["shipping_company_name"] == "SpeedShip Co"
+    assert data["code"] == "UPDS"
+
+
+def test_update_supplier_shipping_and_code(client: TestClient):
+    """Test that shipping_company_name and code can be set and cleared independently."""
+    create_response = client.post(
+        "/api/v1/suppliers",
+        json={
+            "name": "Shipping Test Supplier",
+            "shipping_company_name": "Initial Carrier",
+            "code": "INIT",
+        },
+    )
+    assert create_response.status_code == 201
+    data = create_response.json()
+    assert data["shipping_company_name"] == "Initial Carrier"
+    assert data["code"] == "INIT"
+    supplier_id = data["id"]
+
+    # Clear shipping_company_name and code
+    update_response = client.patch(
+        f"/api/v1/suppliers/{supplier_id}",
+        json={"shipping_company_name": None, "code": None},
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["shipping_company_name"] is None
+    assert updated["code"] is None
 
 
 def test_delete_supplier(client: TestClient):

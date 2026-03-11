@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus, MoreVertical, Check, X, Edit as EditIcon } from 'lucide-react';
+import { ArrowLeft, ImagePlus, MapPin, Phone, Mail, Trash2, Package, Plus, MoreVertical, Check, X, Edit as EditIcon, Truck, Tag } from 'lucide-react';
 import {
   useSupplier,
   useUpdateSupplier,
@@ -69,7 +69,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     outlet_id: outletId ? outletId.toString() : '',
   });
 
-  const handleUpdateSupplier = (data: { name?: string; address?: string | null; phone_number?: string | null; email?: string | null }) => {
+  const handleUpdateSupplier = (data: { name?: string; code?: string | null; address?: string | null; phone_number?: string | null; email?: string | null; shipping_company_name?: string | null }) => {
     updateSupplierMutation.mutate(
       { id: supplierId, data },
       {
@@ -246,18 +246,38 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                     {/* Contact Information */}
                     <div className="mt-4 space-y-3">
                       <div className="flex items-center gap-2 text-sm">
+                        <Tag className="h-4 w-4 text-zinc-400 shrink-0" />
+                        <span className="text-zinc-500 dark:text-zinc-400 w-32 shrink-0">Code:</span>
+                        <EditableCell
+                          value={supplier.code || ''}
+                          onSave={(value) => handleUpdateSupplier({ code: value || null })}
+                          className="font-medium text-zinc-900 dark:text-zinc-100 flex-1"
+                          placeholder="Add code"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
                         <MapPin className="h-4 w-4 text-zinc-400 shrink-0" />
-                        <span className="text-zinc-500 dark:text-zinc-400 w-16">Address:</span>
+                        <span className="text-zinc-500 dark:text-zinc-400 w-32 shrink-0">Shipping address:</span>
                         <EditableCell
                           value={supplier.address || ''}
                           onSave={(value) => handleUpdateSupplier({ address: value || null })}
                           className="font-medium text-zinc-900 dark:text-zinc-100 flex-1"
-                          placeholder="Add address"
+                          placeholder="Add shipping address"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Truck className="h-4 w-4 text-zinc-400 shrink-0" />
+                        <span className="text-zinc-500 dark:text-zinc-400 w-32 shrink-0">Shipping company:</span>
+                        <EditableCell
+                          value={supplier.shipping_company_name || ''}
+                          onSave={(value) => handleUpdateSupplier({ shipping_company_name: value || null })}
+                          className="font-medium text-zinc-900 dark:text-zinc-100 flex-1"
+                          placeholder="Add shipping company"
                         />
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Phone className="h-4 w-4 text-zinc-400 shrink-0" />
-                        <span className="text-zinc-500 dark:text-zinc-400 w-16">Phone:</span>
+                        <span className="text-zinc-500 dark:text-zinc-400 w-32 shrink-0">Phone:</span>
                         <EditableCell
                           value={supplier.phone_number || ''}
                           onSave={(value) => handleUpdateSupplier({ phone_number: value || null })}
@@ -267,7 +287,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Mail className="h-4 w-4 text-zinc-400 shrink-0" />
-                        <span className="text-zinc-500 dark:text-zinc-400 w-16">Email:</span>
+                        <span className="text-zinc-500 dark:text-zinc-400 w-32 shrink-0">Email:</span>
                         <EditableCell
                           value={supplier.email || ''}
                           onSave={(value) => handleUpdateSupplier({ email: value || null })}

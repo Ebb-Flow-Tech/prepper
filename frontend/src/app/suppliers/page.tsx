@@ -145,9 +145,14 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
                 <CardTitle className="text-xl cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300">
                   <OverflowTooltip text={supplier.name}>{supplier.name}</OverflowTooltip>
                 </CardTitle>
-                {!supplier.is_active && (
-                  <Badge variant="secondary" className="mt-1">Archived</Badge>
-                )}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {supplier.code && (
+                    <Badge variant="info" className="font-mono text-xs">{supplier.code}</Badge>
+                  )}
+                  {!supplier.is_active && (
+                    <Badge variant="secondary">Archived</Badge>
+                  )}
+                </div>
               </div>
             </Link>
             {supplier.is_active ? (

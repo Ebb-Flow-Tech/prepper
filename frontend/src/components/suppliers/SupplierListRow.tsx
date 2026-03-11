@@ -17,12 +17,17 @@ export function SupplierListRow({ supplier, href }: SupplierListRowProps) {
         <CardContent className="py-2">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-medium text-zinc-900 dark:text-zinc-100 truncate hover:text-blue-600 dark:hover:text-blue-400">
-                {supplier.name}
-                {!supplier.is_active && (
-                  <Badge variant="secondary" className="ml-2 align-middle">Archived</Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-medium text-zinc-900 dark:text-zinc-100 truncate hover:text-blue-600 dark:hover:text-blue-400">
+                  {supplier.name}
+                </h3>
+                {supplier.code && (
+                  <Badge variant="info" className="font-mono text-xs shrink-0">{supplier.code}</Badge>
                 )}
-              </h3>
+                {!supplier.is_active && (
+                  <Badge variant="secondary" className="shrink-0">Archived</Badge>
+                )}
+              </div>
               <div className="flex flex-col gap-1 mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                 {supplier.address && (
                   <div className="flex items-center gap-2 truncate">

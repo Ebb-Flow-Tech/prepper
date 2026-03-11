@@ -432,9 +432,11 @@ export interface AddIngredientsToSessionRequest {
 export interface Supplier {
   id: number;
   name: string;
+  code: string | null;
   address: string | null;
   phone_number: string | null;
   email: string | null;
+  shipping_company_name: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -442,16 +444,20 @@ export interface Supplier {
 
 export interface CreateSupplierRequest {
   name: string;
+  code?: string | null;
   address?: string;
   phone_number?: string;
   email?: string;
+  shipping_company_name?: string | null;
 }
 
 export interface UpdateSupplierRequest {
   name?: string;
+  code?: string | null;
   address?: string | null;
   phone_number?: string | null;
   email?: string | null;
+  shipping_company_name?: string | null;
   is_active?: boolean;
 }
 
