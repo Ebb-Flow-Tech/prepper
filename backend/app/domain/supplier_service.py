@@ -113,13 +113,17 @@ class SupplierService:
 
         Filters by outlet tree when user_outlet_id is provided (non-admin).
         """
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
         statement = (
             select(SupplierIngredient)
             .where(SupplierIngredient.supplier_id == supplier_id)
             .options(
                 selectinload(SupplierIngredient.supplier),
                 selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
+                selectinload(SupplierIngredient.outlet_links).selectinload(
+                    OutletSupplierIngredient.outlet
+                ),
             )
         )
 
@@ -127,7 +131,13 @@ class SupplierService:
             if user_outlet_id is None:
                 return []
             accessible = OutletService(self.session).get_accessible_outlet_ids(user_outlet_id)
-            statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
+            statement = statement.where(
+                SupplierIngredient.id.in_(
+                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                        OutletSupplierIngredient.outlet_id.in_(accessible)
+                    )
+                )
+            )
 
         rows = self.session.exec(statement).all()
 
@@ -135,13 +145,19 @@ class SupplierService:
         for si in rows:
             supplier_name = si.supplier.name if si.supplier else None
             ingredient_name = si.ingredient.name if si.ingredient else None
-            outlet_name = si.outlet.name if si.outlet else None
+            outlet_id = None
+            outlet_name = None
+            if si.outlet_links:
+                first_link = si.outlet_links[0]
+                outlet_id = first_link.outlet_id
+                if first_link.outlet:
+                    outlet_name = first_link.outlet.name
             result.append(
                 SupplierIngredientRead(
                     id=si.id,
                     ingredient_id=si.ingredient_id,
                     supplier_id=si.supplier_id,
-                    outlet_id=si.outlet_id,
+                    outlet_id=outlet_id,
                     sku=si.sku,
                     pack_size=si.pack_size,
                     pack_unit=si.pack_unit,

@@ -21,13 +21,14 @@ from app.database import engine
 from app.models.category import Category
 from app.models.ingredient import Ingredient
 from app.models.outlet import Outlet, OutletType
+from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 from app.models.supplier import Supplier
 from app.models.supplier_ingredient import SupplierIngredient
 
 EXPORTS_DIR = Path(__file__).parent.parent / "exports"
 SUPPLIERS_FILE = EXPORTS_DIR / "Suppliers.xlsx"
 PRICINGS_FILE = EXPORTS_DIR / "SponsoredSupplierPricings.xlsx"
-PRODUCTS_FILE = EXPORTS_DIR / "ProductList.xlsx"
+PRODUCTS_FILE = EXPORTS_DIR / "ProductList_modified.xlsx"
 
 
 def read_sheet(path: Path, sheet_name: str | None = None) -> list[dict]:
@@ -69,6 +70,34 @@ def derive_outlet_code(branch: str, used_codes: set[str]) -> str:
     while f"{code}{suffix}" in used_codes:
         suffix += 1
     return f"{code}{suffix}"
+
+
+_UNIT_MAP: dict[str, str] = {
+    "kg": "kg",
+    "g": "g",
+    "l": "l",
+    "ml": "ml",
+    "pcs": "pcs",
+    "pc": "pcs",
+}
+
+
+def parse_pack_from_name(name: str) -> tuple[float, str]:
+    """Extract pack size and base unit from a product name string.
+
+    E.g. "Chicken Breast 500g"  → (500.0, "g")
+         "Fresh Milk 1L"        → (1.0, "l")
+         "Eggs 12 pcs"          → (12.0, "pcs")
+
+    Falls back to (1.0, "pcs") if no match found.
+    Anything not in (kg, g, l, ml, pcs) is normalised to "pcs".
+    """
+    pattern = r"(\d+(?:\.\d+)?)\s*(kg|g|l|ml|pcs?|pc|units?|oz|lbs?|lb)\b"
+    match = re.search(pattern, name, re.IGNORECASE)
+    if match:
+        raw_unit = match.group(2).lower()
+        return float(match.group(1)), _UNIT_MAP.get(raw_unit, "pcs")
+    return 1.0, "pcs"
 
 
 # ---------------------------------------------------------------------------
@@ -170,21 +199,16 @@ def seed_outlets(session: Session, product_rows: list[dict]) -> dict[str, Outlet
                 seen.add(branch)
 
     outlet_by_branch: dict[str, Outlet] = {}
-    used_codes: set[str] = set()
 
     for branch in branches:
         existing = session.exec(select(Outlet).where(Outlet.name == branch)).first()
         if existing:
             outlet_by_branch[branch] = existing
-            used_codes.add(existing.code)
             continue
-
-        code = derive_outlet_code(branch, used_codes)
-        used_codes.add(code)
 
         outlet = Outlet(
             name=branch,
-            code=code,
+            code=None,
             outlet_type=OutletType.BRAND,
             parent_outlet_id=None,
             is_active=True,
@@ -245,18 +269,15 @@ def seed_ingredients(
             continue
 
         name = str(row.get("Product name") or "").strip()
-        uom_raw = str(row.get("UOM") or "").strip()
-        base_unit = uom_raw.split()[0] if uom_raw else "UNIT"
+        pack_size, base_unit = parse_pack_from_name(name)
 
         tag = str(row.get("Tags") or "").strip()
         category_id = category_by_tag[tag].id if tag in category_by_tag else None
 
         try:
             price_raw = row.get("Price")
-            min_order_raw = row.get("Min. order")
             price = float(price_raw) if price_raw not in (None, "") else None
-            min_order = float(min_order_raw) if min_order_raw not in (None, "") else None
-            cost = price / min_order if price and min_order else price
+            cost = price / pack_size if price and pack_size else price
         except (TypeError, ValueError, ZeroDivisionError):
             cost = None
 
@@ -299,7 +320,8 @@ def seed_supplier_ingredient_links(
     ingredient_by_product_code: dict[str, Ingredient],
     outlet_by_branch: dict[str, Outlet],
 ) -> None:
-    created = 0
+    si_created = 0
+    osi_created = 0
     skipped = 0
 
     for row in product_rows:
@@ -325,45 +347,75 @@ def seed_supplier_ingredient_links(
             skipped += len(branches)
             continue
 
+        name = str(row.get("Product name") or "").strip()
+        pack_size, pack_unit = parse_pack_from_name(name)
+
         try:
-            pack_size_raw = row.get("Min. order")
             price_raw = row.get("Price")
-            pack_size = float(pack_size_raw) if pack_size_raw not in (None, "") else 1.0
             price_per_pack = float(price_raw) if price_raw not in (None, "") else 0.0
         except (TypeError, ValueError):
-            pack_size = 1.0
             price_per_pack = 0.0
 
+        # Create or reuse a single SupplierIngredient per product_code (sku)
+        si = session.exec(
+            select(SupplierIngredient).where(SupplierIngredient.sku == product_code)
+        ).first()
+
+        if si is None:
+            try:
+                si = SupplierIngredient(
+                    supplier_id=supplier.id,
+                    ingredient_id=ingredient.id,
+                    sku=product_code,
+                    pack_size=pack_size,
+                    pack_unit=pack_unit,
+                    price_per_pack=price_per_pack,
+                    currency="SGD",
+                    source="fmh",
+                )
+                session.add(si)
+                session.flush()
+                si_created += 1
+            except Exception as exc:
+                print(f"WARNING: could not create supplier_ingredient for '{product_code}': {exc}")
+                session.rollback()
+                skipped += len(branches)
+                continue
+
+        # Create an OutletSupplierIngredient for each branch
         for branch in branches:
             outlet = outlet_by_branch.get(branch)
             if outlet is None:
                 skipped += 1
                 continue
 
-            sku = f"{product_code}__{outlet.code}"
+            existing_osi = session.exec(
+                select(OutletSupplierIngredient).where(
+                    OutletSupplierIngredient.supplier_ingredient_id == si.id,
+                    OutletSupplierIngredient.outlet_id == outlet.id,
+                )
+            ).first()
+            if existing_osi:
+                continue
 
             try:
-                link = SupplierIngredient(
-                    supplier_id=supplier.id,
-                    ingredient_id=ingredient.id,
+                osi = OutletSupplierIngredient(
+                    supplier_ingredient_id=si.id,
                     outlet_id=outlet.id,
-                    sku=sku,
-                    pack_size=pack_size,
-                    pack_unit=str(row.get("Packaging") or "UNIT").strip(),
-                    price_per_pack=price_per_pack,
-                    currency="SGD",
-                    source="fmh",
                 )
-                session.add(link)
+                session.add(osi)
                 session.flush()
-                created += 1
+                osi_created += 1
             except Exception as exc:
-                print(f"WARNING: could not create link for '{product_code}' @ '{branch}': {exc}")
+                print(f"WARNING: could not create outlet link for '{product_code}' @ '{branch}': {exc}")
                 session.rollback()
                 skipped += 1
 
     session.commit()
-    print(f"Step 6: {created} supplier-ingredient links created, {skipped} skipped.")
+    print(
+        f"Step 6: {si_created} supplier-ingredients created, "
+        f"{osi_created} outlet links created, {skipped} skipped."
+    )
 
 
 # ---------------------------------------------------------------------------

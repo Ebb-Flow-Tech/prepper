@@ -194,21 +194,23 @@ class IngredientService:
         self, si: SupplierIngredient
     ) -> SupplierIngredientRead:
         """Build a SupplierIngredientRead DTO from a SupplierIngredient row."""
-        supplier_name = None
-        ingredient_name = None
+        supplier_name = si.supplier.name if si.supplier else None
+        ingredient_name = si.ingredient.name if si.ingredient else None
+
+        # Derive outlet_id and outlet_name from the first outlet link
+        outlet_id = None
         outlet_name = None
-        if si.supplier:
-            supplier_name = si.supplier.name
-        if si.ingredient:
-            ingredient_name = si.ingredient.name
-        if si.outlet:
-            outlet_name = si.outlet.name
+        if si.outlet_links:
+            first_link = si.outlet_links[0]
+            outlet_id = first_link.outlet_id
+            if first_link.outlet:
+                outlet_name = first_link.outlet.name
 
         return SupplierIngredientRead(
             id=si.id,
             ingredient_id=si.ingredient_id,
             supplier_id=si.supplier_id,
-            outlet_id=si.outlet_id,
+            outlet_id=outlet_id,
             sku=si.sku,
             pack_size=si.pack_size,
             pack_unit=si.pack_unit,
@@ -222,6 +224,24 @@ class IngredientService:
             ingredient_name=ingredient_name,
             outlet_name=outlet_name,
         )
+
+    def _load_si_with_relations(self, si_id: int) -> SupplierIngredient | None:
+        """Reload a SupplierIngredient with all relationships eagerly loaded."""
+        from sqlalchemy.orm import selectinload
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
+        stmt = (
+            select(SupplierIngredient)
+            .where(SupplierIngredient.id == si_id)
+            .options(
+                selectinload(SupplierIngredient.supplier),
+                selectinload(SupplierIngredient.ingredient),
+                selectinload(SupplierIngredient.outlet_links).selectinload(
+                    OutletSupplierIngredient.outlet
+                ),
+            )
+        )
+        return self.session.exec(stmt).first()
 
     def get_ingredient_suppliers(
         self,
@@ -239,6 +259,7 @@ class IngredientService:
             return None
 
         from sqlalchemy.orm import selectinload
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
         statement = (
             select(SupplierIngredient)
@@ -246,7 +267,9 @@ class IngredientService:
             .options(
                 selectinload(SupplierIngredient.supplier),
                 selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
+                selectinload(SupplierIngredient.outlet_links).selectinload(
+                    OutletSupplierIngredient.outlet
+                ),
             )
         )
 
@@ -254,7 +277,14 @@ class IngredientService:
             if user_outlet_id is None:
                 return []
             accessible = self._get_accessible_outlet_ids(user_outlet_id)
-            statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
+            # Filter to supplier_ingredients that have at least one outlet link in accessible set
+            statement = statement.where(
+                SupplierIngredient.id.in_(
+                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                        OutletSupplierIngredient.outlet_id.in_(accessible)
+                    )
+                )
+            )
 
         rows = self.session.exec(statement).all()
         return [self._build_supplier_ingredient_read(si) for si in rows]
@@ -268,6 +298,8 @@ class IngredientService:
             SupplierIngredientRead on success, None if ingredient/supplier not found,
             or an error string if a duplicate link or SKU exists.
         """
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
         ingredient = self.get_ingredient(ingredient_id)
         if not ingredient:
             return None
@@ -276,17 +308,6 @@ class IngredientService:
         supplier = self.session.get(Supplier, data.supplier_id)
         if not supplier:
             return None
-
-        # Check for duplicate (ingredient_id, supplier_id, outlet_id)
-        existing = self.session.exec(
-            select(SupplierIngredient).where(
-                SupplierIngredient.ingredient_id == ingredient_id,
-                SupplierIngredient.supplier_id == data.supplier_id,
-                SupplierIngredient.outlet_id == data.outlet_id,
-            )
-        ).first()
-        if existing:
-            return "Supplier is already linked to this ingredient for this outlet"
 
         # Check for duplicate SKU
         if data.sku:
@@ -305,7 +326,6 @@ class IngredientService:
         si = SupplierIngredient(
             ingredient_id=ingredient_id,
             supplier_id=data.supplier_id,
-            outlet_id=data.outlet_id,
             sku=data.sku,
             pack_size=data.pack_size,
             pack_unit=data.pack_unit,
@@ -315,33 +335,50 @@ class IngredientService:
             is_preferred=data.is_preferred,
         )
         self.session.add(si)
-        self.session.commit()
-        self.session.refresh(si)
+        self.session.flush()  # get si.id before committing
 
-        # Reload with relationships
-        from sqlalchemy.orm import selectinload
-
-        statement = (
-            select(SupplierIngredient)
-            .where(SupplierIngredient.id == si.id)
-            .options(
-                selectinload(SupplierIngredient.supplier),
-                selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
+        # Create outlet link if outlet_id provided
+        if data.outlet_id is not None:
+            outlet_link = OutletSupplierIngredient(
+                supplier_ingredient_id=si.id,
+                outlet_id=data.outlet_id,
             )
-        )
-        refreshed = self.session.exec(statement).first()
+            self.session.add(outlet_link)
+
+        self.session.commit()
+
+        refreshed = self._load_si_with_relations(si.id)
         return self._build_supplier_ingredient_read(refreshed) if refreshed else None
 
     def update_ingredient_supplier(
         self, supplier_ingredient_id: int, data: SupplierIngredientUpdate
     ) -> SupplierIngredientRead | None:
         """Update a supplier-ingredient link."""
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
         si = self.session.get(SupplierIngredient, supplier_ingredient_id)
         if not si:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+
+        # Handle outlet_id separately (lives in OutletSupplierIngredient)
+        new_outlet_id = update_data.pop("outlet_id", None)
+        if new_outlet_id is not None:
+            # Replace the first outlet link (or add one if none exists)
+            existing_link = self.session.exec(
+                select(OutletSupplierIngredient).where(
+                    OutletSupplierIngredient.supplier_ingredient_id == supplier_ingredient_id
+                )
+            ).first()
+            if existing_link:
+                existing_link.outlet_id = new_outlet_id
+                self.session.add(existing_link)
+            else:
+                self.session.add(OutletSupplierIngredient(
+                    supplier_ingredient_id=supplier_ingredient_id,
+                    outlet_id=new_outlet_id,
+                ))
 
         # If setting as preferred, unset others first
         if update_data.get("is_preferred"):
@@ -353,21 +390,8 @@ class IngredientService:
         si.updated_at = datetime.utcnow()
         self.session.add(si)
         self.session.commit()
-        self.session.refresh(si)
 
-        # Reload with relationships
-        from sqlalchemy.orm import selectinload
-
-        statement = (
-            select(SupplierIngredient)
-            .where(SupplierIngredient.id == si.id)
-            .options(
-                selectinload(SupplierIngredient.supplier),
-                selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
-            )
-        )
-        refreshed = self.session.exec(statement).first()
+        refreshed = self._load_si_with_relations(si.id)
         return self._build_supplier_ingredient_read(refreshed) if refreshed else None
 
     def remove_ingredient_supplier(self, supplier_ingredient_id: int) -> bool:
@@ -398,46 +422,53 @@ class IngredientService:
 
         from sqlalchemy.orm import selectinload
 
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
         accessible: set[int] | None = None
         if not is_admin:
             if user_outlet_id is None:
                 return None
             accessible = self._get_accessible_outlet_ids(user_outlet_id)
 
+        def _outlet_filter(stmt):
+            if accessible is not None:
+                return stmt.where(
+                    SupplierIngredient.id.in_(
+                        select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                            OutletSupplierIngredient.outlet_id.in_(accessible)
+                        )
+                    )
+                )
+            return stmt
+
+        base_options = (
+            selectinload(SupplierIngredient.supplier),
+            selectinload(SupplierIngredient.ingredient),
+            selectinload(SupplierIngredient.outlet_links).selectinload(
+                OutletSupplierIngredient.outlet
+            ),
+        )
+
         # Try preferred first
-        statement = (
+        statement = _outlet_filter(
             select(SupplierIngredient)
             .where(
                 SupplierIngredient.ingredient_id == ingredient_id,
                 SupplierIngredient.is_preferred == True,
             )
-            .options(
-                selectinload(SupplierIngredient.supplier),
-                selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
-            )
+            .options(*base_options)
         )
-        if accessible is not None:
-            statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
-
         preferred = self.session.exec(statement).first()
         if preferred:
             return self._build_supplier_ingredient_read(preferred)
 
         # Fall back to first supplier
-        statement = (
+        statement = _outlet_filter(
             select(SupplierIngredient)
             .where(SupplierIngredient.ingredient_id == ingredient_id)
-            .options(
-                selectinload(SupplierIngredient.supplier),
-                selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet),
-            )
+            .options(*base_options)
             .limit(1)
         )
-        if accessible is not None:
-            statement = statement.where(SupplierIngredient.outlet_id.in_(accessible))
-
         first = self.session.exec(statement).first()
         return self._build_supplier_ingredient_read(first) if first else None
 

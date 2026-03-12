@@ -74,6 +74,11 @@ from app.models.supplier_ingredient import (
     SupplierIngredientUpdate,
     SupplierIngredientRead,
 )
+from app.models.outlet_supplier_ingredient import (
+    OutletSupplierIngredient,
+    OutletSupplierIngredientCreate,
+    OutletSupplierIngredientRead,
+)
 from app.models.recipe_tasting import (
     RecipeTasting,
     RecipeTastingIngredient,
@@ -227,6 +232,10 @@ __all__ = [
     "SupplierIngredientCreate",
     "SupplierIngredientUpdate",
     "SupplierIngredientRead",
+    # OutletSupplierIngredient
+    "OutletSupplierIngredient",
+    "OutletSupplierIngredientCreate",
+    "OutletSupplierIngredientRead",
     # RecipeTasting
     "RecipeTasting",
     "RecipeTastingRead",

@@ -3,12 +3,12 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy.orm import relationship as sa_relationship
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.ingredient import Ingredient
-    from app.models.outlet import Outlet
+    from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
     from app.models.supplier import Supplier
 
 
@@ -17,7 +17,6 @@ class SupplierIngredientBase(SQLModel):
 
     ingredient_id: int = Field(foreign_key="ingredients.id", index=True)
     supplier_id: int = Field(foreign_key="suppliers.id", index=True)
-    outlet_id: int = Field(foreign_key="outlets.id", index=True)
     sku: str | None = Field(default=None, unique=True)
     pack_size: float
     pack_unit: str
@@ -31,12 +30,6 @@ class SupplierIngredient(SupplierIngredientBase, table=True):
     """Normalized join table linking suppliers to ingredients with pricing data."""
 
     __tablename__ = "supplier_ingredients"
-    __table_args__ = (
-        UniqueConstraint(
-            "ingredient_id", "supplier_id", "outlet_id",
-            name="uq_supplier_ingredient_outlet",
-        ),
-    )
 
     id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -45,7 +38,10 @@ class SupplierIngredient(SupplierIngredientBase, table=True):
     # Relationships
     ingredient: Optional["Ingredient"] = Relationship(back_populates="supplier_ingredients")
     supplier: Optional["Supplier"] = Relationship(back_populates="supplier_ingredients")
-    outlet: Optional["Outlet"] = Relationship()
+    outlet_links: list["OutletSupplierIngredient"] = Relationship(
+        back_populates="supplier_ingredient",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
 
 class SupplierIngredientCreate(SQLModel):
@@ -53,7 +49,7 @@ class SupplierIngredientCreate(SQLModel):
 
     ingredient_id: int
     supplier_id: int
-    outlet_id: int
+    outlet_id: int | None = None
     sku: str | None = None
     pack_size: float
     pack_unit: str
@@ -66,6 +62,7 @@ class SupplierIngredientCreate(SQLModel):
 class SupplierIngredientUpdate(SQLModel):
     """Schema for updating a supplier-ingredient link (all fields optional)."""
 
+    outlet_id: int | None = None
     sku: str | None = None
     pack_size: float | None = None
     pack_unit: str | None = None
@@ -73,7 +70,6 @@ class SupplierIngredientUpdate(SQLModel):
     currency: str | None = None
     source: str | None = None
     is_preferred: bool | None = None
-    outlet_id: int | None = None
 
 
 class SupplierIngredientRead(SQLModel):
@@ -82,7 +78,7 @@ class SupplierIngredientRead(SQLModel):
     id: int
     ingredient_id: int
     supplier_id: int
-    outlet_id: int
+    outlet_id: int | None = None
     sku: str | None = None
     pack_size: float
     pack_unit: str
