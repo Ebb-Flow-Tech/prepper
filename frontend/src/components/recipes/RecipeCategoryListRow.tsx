@@ -1,23 +1,29 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Edit2, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Edit2, Archive, ArchiveRestore } from 'lucide-react';
+import { Badge, Button } from '@/components/ui';
 import type { RecipeCategory } from '@/types';
 
 interface RecipeCategoryListRowProps {
   category: RecipeCategory;
-  onDelete?: (category: RecipeCategory) => void;
+  onArchive?: (category: RecipeCategory) => void;
+  onUnarchive?: (category: RecipeCategory) => void;
 }
 
-export function RecipeCategoryListRow({ category, onDelete }: RecipeCategoryListRowProps) {
+export function RecipeCategoryListRow({ category, onArchive, onUnarchive }: RecipeCategoryListRowProps) {
   const router = useRouter();
   return (
     <div className="flex items-center justify-between p-4 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors">
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-          {category.name}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+            {category.name}
+          </h3>
+          {!category.is_active && (
+            <Badge variant="warning">Archived</Badge>
+          )}
+        </div>
         {category.description && (
           <p className="text-sm text-zinc-600 dark:text-zinc-300 line-clamp-1 mt-0.5">
             {category.description}
@@ -38,15 +44,26 @@ export function RecipeCategoryListRow({ category, onDelete }: RecipeCategoryList
         >
           <Edit2 className="h-4 w-4" />
         </Button>
-        {onDelete && (
+        {onArchive && category.is_active && (
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            onClick={() => onDelete(category)}
-            title="Delete"
+            onClick={() => onArchive(category)}
+            title="Archive"
           >
-            <Trash2 className="h-4 w-4" />
+            <Archive className="h-4 w-4" />
+          </Button>
+        )}
+        {onUnarchive && !category.is_active && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onUnarchive(category)}
+            title="Unarchive"
+          >
+            <ArchiveRestore className="h-4 w-4" />
           </Button>
         )}
       </div>

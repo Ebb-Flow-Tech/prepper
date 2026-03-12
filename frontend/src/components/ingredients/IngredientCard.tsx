@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Edit2, Archive, ArchiveRestore, ImagePlus, AlertCircle } from 'lucide-react';
+import { Edit2, Archive, ArchiveRestore, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
 import { useAllergensByIngredient, useAllergens } from '@/lib/hooks';
@@ -44,14 +44,6 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
           </p>
         </div>
 
-        {/* Placeholder for image */}
-        <button
-          className="w-12 h-12 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          title="Add image (coming soon)"
-          disabled
-        >
-          <ImagePlus className="h-5 w-5" />
-        </button>
       </CardHeader>
 
       <CardContent>

@@ -30,20 +30,24 @@ class RecipeCategoryService:
         statement = select(RecipeCategory)
         return list(self.session.exec(statement).all())
 
-    def _build_list_query(self, search=None):
+    def _build_list_query(self, active_only: bool = True, search: str | None = None):
         statement = select(RecipeCategory)
+        if active_only:
+            statement = statement.where(RecipeCategory.is_active == True)
         if search:
             statement = statement.where(RecipeCategory.name.ilike(f"%{search}%"))
         return statement
 
-    def list_paginated(self, offset: int, limit: int, search=None) -> list[RecipeCategory]:
-        statement = self._build_list_query(search=search)
+    def list_paginated(
+        self, offset: int, limit: int, active_only: bool = True, search: str | None = None
+    ) -> list[RecipeCategory]:
+        statement = self._build_list_query(active_only=active_only, search=search)
         statement = statement.offset(offset).limit(limit)
         return list(self.session.exec(statement).all())
 
-    def count(self, search=None) -> int:
+    def count(self, active_only: bool = True, search: str | None = None) -> int:
         from sqlalchemy import func
-        statement = self._build_list_query(search=search)
+        statement = self._build_list_query(active_only=active_only, search=search)
         count_stmt = select(func.count()).select_from(statement.subquery())
         return self.session.exec(count_stmt).one()
 
@@ -69,8 +73,21 @@ class RecipeCategoryService:
         self.session.refresh(recipe_category)
         return recipe_category
 
+    def soft_delete_recipe_category(self, category_id: int) -> RecipeCategory | None:
+        """Soft-delete a recipe category by setting is_active to False."""
+        recipe_category = self.get_recipe_category(category_id)
+        if not recipe_category:
+            return None
+
+        recipe_category.is_active = False
+        recipe_category.updated_at = datetime.utcnow()
+        self.session.add(recipe_category)
+        self.session.commit()
+        self.session.refresh(recipe_category)
+        return recipe_category
+
     def delete_recipe_category(self, category_id: int) -> bool:
-        """Delete a recipe category by ID."""
+        """Hard-delete a recipe category by ID."""
         recipe_category = self.get_recipe_category(category_id)
         if not recipe_category:
             return False

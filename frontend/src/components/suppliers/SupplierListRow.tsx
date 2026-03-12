@@ -29,6 +29,9 @@ export function SupplierListRow({ supplier, href }: SupplierListRowProps) {
                 )}
               </div>
               <div className="flex flex-col gap-1 mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                {supplier.shipping_company_name && (
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">Ships via {supplier.shipping_company_name}</span>
+                )}
                 {supplier.address && (
                   <div className="flex items-center gap-2 truncate">
                     <MapPin className="h-3.5 w-3.5 flex-shrink-0" />

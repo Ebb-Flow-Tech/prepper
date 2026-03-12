@@ -73,7 +73,7 @@ def test_create_category_duplicate_name_case_insensitive(client: TestClient):
 
 
 def test_list_categories(client: TestClient):
-    """Test listing categories."""
+    """Test listing categories returns paginated response."""
     # Create two categories
     client.post(
         "/api/v1/categories",
@@ -87,7 +87,10 @@ def test_list_categories(client: TestClient):
     response = client.get("/api/v1/categories")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert "items" in data
+    assert "total_count" in data
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_list_categories_excludes_soft_deleted(client: TestClient):
@@ -110,8 +113,9 @@ def test_list_categories_excludes_soft_deleted(client: TestClient):
     response = client.get("/api/v1/categories")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "Active Category"
+    assert data["total_count"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "Active Category"
 
 
 def test_list_categories_include_inactive(client: TestClient):
@@ -134,7 +138,8 @@ def test_list_categories_include_inactive(client: TestClient):
     response = client.get("/api/v1/categories?active_only=false")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert data["total_count"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_get_category(client: TestClient):

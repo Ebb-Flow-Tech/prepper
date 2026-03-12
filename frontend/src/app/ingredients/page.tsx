@@ -2,12 +2,12 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Plus } from 'lucide-react';
-import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useAllergens, useDebouncedValue } from '@/lib/hooks';
+import { useIngredients, useDeactivateIngredient, useUpdateIngredient, useCategories, useCategoriesPaginated, useAllergens, useDebouncedValue } from '@/lib/hooks';
 import { IngredientCard, IngredientListRow, CategoriesTab, FilterButtons, AddIngredientModal, AllergensTab } from '@/components/ingredients';
 import { PageHeader, SearchInput, Select, GroupSection, ListSection, Button, Skeleton, ViewToggle, Checkbox } from '@/components/ui';
 import { Pagination } from '@/components/ui/Pagination';
 import { toast } from 'sonner';
-import type { Ingredient } from '@/types';
+import type { Ingredient, Category } from '@/types';
 import { useAppState, type IngredientTab } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -130,6 +130,27 @@ function IngredientsListTab() {
   const { data: categories } = useCategories();
   const { data: allergens } = useAllergens();
 
+  // Paginated categories for filter buttons (load more / append)
+  const [filterCatPage, setFilterCatPage] = useState(1);
+  const [filterCategories, setFilterCategories] = useState<Category[]>([]);
+  const { data: filterCatData, isFetching: filterCatFetching } = useCategoriesPaginated({
+    page_size: 10,
+    page_number: filterCatPage,
+    active_only: true,
+  });
+  useEffect(() => {
+    if (filterCatData?.items && !filterCatFetching) {
+      if (filterCatData.page_number === 1) {
+        setFilterCategories(filterCatData.items);
+      } else {
+        setFilterCategories((prev) => [...prev, ...filterCatData.items]);
+      }
+    }
+  }, [filterCatData, filterCatFetching]);
+  const hasMoreFilterCategories = filterCatData
+    ? filterCategories.length < filterCatData.total_count
+    : false;
+
   const filteredIngredients = useMemo(() => {
     if (!ingredients) return [];
     return sortIngredients(ingredients, sortBy);
@@ -223,7 +244,10 @@ function IngredientsListTab() {
         {/* Filter Buttons */}
         <div className="mb-6">
           <FilterButtons
-            categories={categories}
+            categories={filterCategories}
+            hasMoreCategories={hasMoreFilterCategories}
+            onLoadMoreCategories={() => setFilterCatPage((p) => p + 1)}
+            isLoadingMoreCategories={filterCatFetching}
             selectedCategories={selectedCategories}
             onCategoryChange={setSelectedCategories}
             selectedUnits={selectedUnits}

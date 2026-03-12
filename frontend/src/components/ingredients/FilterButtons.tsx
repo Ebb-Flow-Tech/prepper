@@ -13,6 +13,9 @@ const UNIT_OPTIONS = [
 
 interface FilterButtonsProps {
   categories: Category[] | undefined;
+  hasMoreCategories?: boolean;
+  onLoadMoreCategories?: () => void;
+  isLoadingMoreCategories?: boolean;
   selectedCategories: number[];
   onCategoryChange: (categoryIds: number[]) => void;
   selectedUnits: string[];
@@ -26,6 +29,9 @@ interface FilterButtonsProps {
 
 export function FilterButtons({
   categories,
+  hasMoreCategories,
+  onLoadMoreCategories,
+  isLoadingMoreCategories,
   selectedCategories,
   onCategoryChange,
   selectedUnits,
@@ -93,6 +99,15 @@ export function FilterButtons({
               {category.name}
             </button>
           ))}
+          {hasMoreCategories && (
+            <button
+              onClick={onLoadMoreCategories}
+              disabled={isLoadingMoreCategories}
+              className="px-3 py-1 text-xs font-medium rounded-full text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 underline transition-colors disabled:opacity-50"
+            >
+              {isLoadingMoreCategories ? 'Loading...' : 'See more'}
+            </button>
+          )}
         </div>
       )}
 

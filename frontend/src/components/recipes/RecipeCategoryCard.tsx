@@ -2,16 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit2, Trash2 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
+import { Edit2, Archive, ArchiveRestore } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import type { RecipeCategory } from '@/types';
 
 interface RecipeCategoryCardProps {
   category: RecipeCategory;
-  onDelete?: (category: RecipeCategory) => void;
+  onArchive?: (category: RecipeCategory) => void;
+  onUnarchive?: (category: RecipeCategory) => void;
 }
 
-export function RecipeCategoryCard({ category, onDelete }: RecipeCategoryCardProps) {
+export function RecipeCategoryCard({ category, onArchive, onUnarchive }: RecipeCategoryCardProps) {
   const [showActions, setShowActions] = useState(false);
   const router = useRouter();
 
@@ -26,18 +27,22 @@ export function RecipeCategoryCard({ category, onDelete }: RecipeCategoryCardPro
           <CardTitle className="truncate">
             {category.name}
           </CardTitle>
-          {category.description && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
-              {category.description}
-            </p>
-          )}
         </div>
       </CardHeader>
 
       <CardContent>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Created {new Date(category.created_at).toLocaleDateString()}
-        </p>
+        <div className="flex flex-col gap-2">
+          {category.description && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">
+              {category.description}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            {!category.is_active && (
+              <Badge variant="warning">Archived</Badge>
+            )}
+          </div>
+        </div>
       </CardContent>
 
       {/* Quick Actions */}
@@ -52,15 +57,26 @@ export function RecipeCategoryCard({ category, onDelete }: RecipeCategoryCardPro
           >
             <Edit2 className="h-3.5 w-3.5" />
           </Button>
-          {onDelete && (
+          {onArchive && category.is_active && (
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => onDelete(category)}
-              title="Delete"
+              onClick={() => onArchive(category)}
+              title="Archive"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Archive className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onUnarchive && !category.is_active && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onUnarchive(category)}
+              title="Unarchive"
+            >
+              <ArchiveRestore className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

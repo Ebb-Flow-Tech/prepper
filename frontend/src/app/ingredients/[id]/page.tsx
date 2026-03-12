@@ -2,7 +2,7 @@
 
 import { use, useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Archive, ArchiveRestore, ImagePlus, Plus, RefreshCw, Trash2, Truck, MoreVertical, Check, X, Edit as EditIcon } from 'lucide-react';
+import { ArrowLeft, Archive, ArchiveRestore, Plus, RefreshCw, Trash2, Truck, MoreVertical, Check, X, Edit as EditIcon, Pencil } from 'lucide-react';
 import {
   useIngredient,
   useUpdateIngredient,
@@ -497,13 +497,11 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             {/* Ingredient Header */}
             <Card className="mb-6">
               <CardContent className="p-6">
-                <div className="flex items-start gap-6">
-                  {/* Placeholder for hero image */}
-                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-                    <ImagePlus className="h-8 w-8" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-2 mb-3">
+                  <Pencil className="h-3.5 w-3.5 text-zinc-400 mt-0.5 shrink-0" />
+                  <span className="text-xs text-zinc-400">Click any field below to edit</span>
+                </div>
+                <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -624,7 +622,6 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                       )}
                     </div>
                   </div>
-                </div>
               </CardContent>
             </Card>
 

@@ -3,9 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type { CreateRecipeCategoryRequest, UpdateRecipeCategoryRequest } from '@/types';
-import type { ListParams } from '@/lib/api';
+import type { RecipeCategoryListParams } from '@/lib/api';
 
-export function useRecipeCategories(params?: ListParams) {
+export function useRecipeCategories(params?: RecipeCategoryListParams) {
   return useQuery({
     queryKey: ['recipeCategories', params],
     queryFn: () => api.getRecipeCategories(params),

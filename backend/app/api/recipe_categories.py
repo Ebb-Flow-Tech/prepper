@@ -26,17 +26,22 @@ def create_recipe_category(
 
 @router.get("")
 def list_recipe_categories(
+    active_only: bool = True,
     page_number: int = Query(default=1, ge=1),
-    page_size: int = Query(default=30, ge=1, le=100),
+    page_size: int = Query(default=30, ge=1, le=500),
     search: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ):
-    """List all recipe categories."""
+    """List recipe categories with pagination.
+
+    By default, only active (non-deleted) categories are returned.
+    Set active_only=false to include soft-deleted categories.
+    """
     from app.models.pagination import PaginatedResponse
     service = RecipeCategoryService(session)
     offset = (page_number - 1) * page_size
-    items = service.list_paginated(offset=offset, limit=page_size, search=search)
-    total = service.count(search=search)
+    items = service.list_paginated(offset=offset, limit=page_size, active_only=active_only, search=search)
+    total = service.count(active_only=active_only, search=search)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 
@@ -73,16 +78,20 @@ def update_recipe_category(
     return recipe_category
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{category_id}", response_model=RecipeCategory)
 def delete_recipe_category(
     category_id: int,
     session: Session = Depends(get_session),
 ):
-    """Delete a recipe category."""
+    """Soft-delete a recipe category by setting is_active to False.
+
+    The category is not physically removed from the database.
+    """
     service = RecipeCategoryService(session)
-    deleted = service.delete_recipe_category(category_id)
-    if not deleted:
+    category = service.soft_delete_recipe_category(category_id)
+    if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipe category not found",
         )
+    return category

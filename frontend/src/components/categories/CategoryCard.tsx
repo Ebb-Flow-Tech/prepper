@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, Archive, ArchiveRestore, FolderOpen } from 'lucide-react';
+import { Edit2, Archive, ArchiveRestore } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 import type { Category } from '@/types';
 
@@ -28,11 +28,6 @@ export function CategoryCard({ category, onEdit, onArchive, onUnarchive }: Categ
           </CardTitle>
         </div>
 
-        <div
-          className="w-12 h-12 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400"
-        >
-          <FolderOpen className="h-5 w-5" />
-        </div>
       </CardHeader>
 
       <CardContent>

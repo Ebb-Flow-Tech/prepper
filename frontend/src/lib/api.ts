@@ -874,8 +874,24 @@ export async function reorderSubRecipes(
 // ============ Categories ============
 
 export async function getCategories(activeOnly: boolean = true): Promise<Category[]> {
-  const params = new URLSearchParams({ active_only: String(activeOnly) });
-  return fetchApi<Category[]>(`/categories?${params}`);
+  // Fetch with a large page_size so all categories are returned (backward compat)
+  const params = new URLSearchParams({ active_only: String(activeOnly), page_size: '500' });
+  const response = await fetchApi<PaginatedResponse<Category>>(`/categories?${params}`);
+  return response.items;
+}
+
+export interface CategoryListParams extends ListParams {
+  active_only?: boolean;
+}
+
+export async function getCategoriesPaginated(params?: CategoryListParams): Promise<PaginatedResponse<Category>> {
+  const searchParams = new URLSearchParams();
+  if (params?.active_only !== undefined) searchParams.set('active_only', String(params.active_only));
+  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
+  if (params?.search) searchParams.set('search', params.search);
+  const query = searchParams.toString();
+  return fetchApi<PaginatedResponse<Category>>(`/categories${query ? `?${query}` : ''}`);
 }
 
 export async function getCategory(id: number): Promise<Category> {
@@ -1100,8 +1116,13 @@ export async function getRecipeOutletsBatch(
 
 // ============ Recipe Categories ============
 
-export async function getRecipeCategories(params?: ListParams): Promise<PaginatedResponse<RecipeCategory>> {
+export interface RecipeCategoryListParams extends ListParams {
+  active_only?: boolean;
+}
+
+export async function getRecipeCategories(params?: RecipeCategoryListParams): Promise<PaginatedResponse<RecipeCategory>> {
   const searchParams = new URLSearchParams();
+  if (params?.active_only !== undefined) searchParams.set('active_only', String(params.active_only));
   if (params?.page_number) searchParams.set('page_number', String(params.page_number));
   if (params?.page_size) searchParams.set('page_size', String(params.page_size));
   if (params?.search) searchParams.set('search', params.search);
@@ -1132,8 +1153,8 @@ export async function updateRecipeCategory(
   });
 }
 
-export async function deleteRecipeCategory(id: number): Promise<void> {
-  return fetchApi<void>(`/recipe-categories/${id}`, {
+export async function deleteRecipeCategory(id: number): Promise<RecipeCategory> {
+  return fetchApi<RecipeCategory>(`/recipe-categories/${id}`, {
     method: 'DELETE',
   });
 }

@@ -2,7 +2,8 @@
 
 from datetime import datetime
 
-from sqlmodel import Session, select, func
+from sqlalchemy import func
+from sqlmodel import Session, select
 
 from app.models.category import (
     Category,
@@ -42,6 +43,26 @@ class CategoryService:
         if active_only:
             statement = statement.where(Category.is_active == True)
         return list(self.session.exec(statement).all())
+
+    def _build_list_query(self, active_only: bool = True, search: str | None = None):
+        statement = select(Category)
+        if active_only:
+            statement = statement.where(Category.is_active == True)
+        if search:
+            statement = statement.where(Category.name.ilike(f"%{search}%"))
+        return statement
+
+    def list_paginated(
+        self, offset: int, limit: int, active_only: bool = True, search: str | None = None
+    ) -> list[Category]:
+        statement = self._build_list_query(active_only=active_only, search=search)
+        statement = statement.offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count(self, active_only: bool = True, search: str | None = None) -> int:
+        statement = self._build_list_query(active_only=active_only, search=search)
+        count_stmt = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_stmt).one()
 
     def get_category(self, category_id: int) -> Category | None:
         """Get a category by ID."""

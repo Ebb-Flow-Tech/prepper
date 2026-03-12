@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
-- **0.0.25** (2026-03-12) - FMH Import Pipeline, Recipe-Category Search & Menu UX Enhancements
+- **0.0.25** (2026-03-12) - FMH Import Pipeline, Recipe-Category Search, Menu UX Enhancements, Recipe Category Soft Delete, Ingredient Filter Pagination & UI Polish
 - **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal, Derived Session Ingredients & Sequential Lark Fix
 - **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
 - **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
@@ -159,6 +159,94 @@ The `+` button on each menu section's items header now opens an inline multi-sel
 - `backend/app/utils/unit_conversion.py`
 - `frontend/src/lib/utils.ts`
 - `frontend/src/lib/unitConversion.ts`
+
+#### Volume ↔ Mass Cross-Category Unit Conversion
+
+`convert_to_base_unit()` now supports volume-to-mass and mass-to-volume conversions using density = 1 g/ml (i.e. 1 ml = 1 g, 1 l = 1 kg). Previously these combinations returned `None` as incompatible.
+
+**Files Modified**:
+- `backend/app/utils/unit_conversion.py` — Added cross-category conversion branch
+
+#### Recipe Category Soft Delete & Pagination Parity
+
+Recipe categories now match ingredient category behaviour end-to-end: soft delete (archive/unarchive) instead of hard delete, `active_only` filtering, and "Show archived" checkbox in the UI.
+
+**Backend**:
+- Added `is_active: bool = Field(default=True)` to `RecipeCategory` model
+- `RecipeCategoryService._build_list_query()`, `list_paginated()`, and `count()` now accept `active_only` param
+- Added `soft_delete_recipe_category()` service method
+- `DELETE /recipe-categories/{id}` changed from hard delete (204) to soft delete (200, returns archived category)
+- `GET /recipe-categories` accepts `active_only` query param (default `true`)
+- Alembic migration `d5e6f7g8h9i0` — adds `is_active` column to `recipe_categories` with `server_default=true`
+
+**Frontend**:
+- Added `is_active` field to `RecipeCategory` type and `UpdateRecipeCategoryRequest`
+- Added `RecipeCategoryListParams` interface with `active_only` in `api.ts`
+- Updated `useRecipeCategories` hook to use `RecipeCategoryListParams`
+- `RecipeCategoriesTab`: added `showArchived` state, `active_only` in query, page reset on filter change, archive confirmation modal, and unarchive via PATCH
+- `RecipeCategoryCard` / `RecipeCategoryListRow`: replaced `onDelete` with `onArchive`/`onUnarchive`; added `Archive`/`ArchiveRestore` icons and "Archived" badge
+
+**Tests**:
+- `test_recipe_categories.py`: updated `test_delete_recipe_category` for soft-delete (200 + `is_active=false`); added `test_list_recipe_categories_active_only` and `test_unarchive_recipe_category`; added `is_active` assertions to create tests
+
+**Files Modified**:
+- `backend/app/models/recipe_category.py`
+- `backend/app/domain/recipe_category_service.py`
+- `backend/app/api/recipe_categories.py`
+- `backend/alembic/versions/d5e6f7g8h9i0_add_is_active_to_recipe_categories.py` *(new)*
+- `backend/tests/test_recipe_categories.py`
+- `frontend/src/types/index.ts`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/hooks/useRecipeCategories.ts`
+- `frontend/src/components/recipes/RecipeCategoriesTab.tsx`
+- `frontend/src/components/recipes/RecipeCategoryCard.tsx`
+- `frontend/src/components/recipes/RecipeCategoryListRow.tsx`
+
+#### Ingredient Category Filter — Server-Side Pagination with Load More
+
+The category filter buttons on `/ingredients` now load categories from the server page-by-page (10 per page) with a "See more" button to append further pages, instead of loading all categories upfront.
+
+**Files Modified**:
+- `frontend/src/app/ingredients/page.tsx` — `useCategoriesPaginated` for filter buttons, append-on-load-more logic
+- `frontend/src/components/ingredients/FilterButtons.tsx` — `hasMoreCategories`, `onLoadMoreCategories`, `isLoadingMoreCategories` props; "See more" button
+- `frontend/src/lib/hooks/useCategories.ts` — Added `useCategoriesPaginated` hook
+
+#### Recipe Category Filter Buttons — Show All Toggle
+
+When more than 8 recipe category filter buttons exist, only the first 8 are shown with a `+N more` / `See less` toggle button.
+
+**Files Modified**:
+- `frontend/src/components/recipes/RecipeCategoryFilterButtons.tsx` — `showAll` state, `CATEGORY_VISIBLE_LIMIT`, toggle button
+
+#### Recipe Overview Tab — Inline Recipe Name Editing
+
+Recipe name in the Overview tab is now inline-editable via a hover-reveal pencil icon. Saves on Enter or confirm button; Escape reverts.
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/OverviewTab.tsx` — `isEditingName` / `nameValue` state, `handleSaveName()`, inline edit input with confirm/cancel
+
+#### Menu Builder — Collapsible Item Fields
+
+Key Highlights, Additional Info, and Substitution fields in `DraggableItem` are now collapsible via chevron toggle buttons (expanded by default). The Outlets section in the menu header is also collapsible.
+
+**Files Modified**:
+- `frontend/src/components/menu/MenuBuilder.tsx` — `highlightsOpen`, `additionalOpen`, `substitutionOpen`, `outletsOpen` state; chevron toggle buttons
+
+#### UI Polish — Remove Placeholder Image Elements
+
+Removed non-functional image placeholder buttons from ingredient cards and the ingredient detail page header. The ingredient detail page now shows a subtle "Click any field below to edit" hint instead.
+
+**Files Modified**:
+- `frontend/src/components/ingredients/IngredientCard.tsx` — Removed `ImagePlus` placeholder button
+- `frontend/src/app/ingredients/[id]/page.tsx` — Replaced image placeholder with edit hint; removed `ImagePlus` import
+- `frontend/src/components/categories/CategoryCard.tsx` — Removed `FolderOpen` icon placeholder
+
+#### Supplier List Row — Shipping Company Display
+
+Supplier list rows now display `shipping_company_name` as "Ships via …" when present.
+
+**Files Modified**:
+- `frontend/src/components/suppliers/SupplierListRow.tsx` — Inline shipping company name display
 
 ---
 

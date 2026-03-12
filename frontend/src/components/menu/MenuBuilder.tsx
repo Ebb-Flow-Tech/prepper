@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Copy, GripVertical, LayoutGrid, List, Search, X } from 'lucide-react';
+import { Trash2, Plus, Copy, GripVertical, LayoutGrid, List, Search, X, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import {
@@ -336,6 +336,9 @@ function DraggableItem({
   };
 
   const [recipeSearch, setRecipeSearch] = useState('');
+  const [highlightsOpen, setHighlightsOpen] = useState(true);
+  const [additionalOpen, setAdditionalOpen] = useState(true);
+  const [substitutionOpen, setSubstitutionOpen] = useState(true);
   const filteredRecipes = recipeSearch
     ? recipes.filter((r) => r.name.toLowerCase().includes(recipeSearch.toLowerCase()))
     : recipes;
@@ -440,44 +443,65 @@ function DraggableItem({
 
           {/* Key Highlights */}
           <div>
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            <button
+              type="button"
+              onClick={() => setHighlightsOpen(!highlightsOpen)}
+              className="flex items-center gap-1.5 w-full text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${highlightsOpen ? '' : '-rotate-90'}`} />
               Key Highlights
-            </p>
-            <Textarea
-              value={item.key_highlights || ''}
-              onChange={(e) => onUpdate('key_highlights', e.target.value)}
-              placeholder="e.g., signature item, seasonal special"
-              className="text-sm"
-              rows={2}
-            />
+            </button>
+            {highlightsOpen && (
+              <Textarea
+                value={item.key_highlights || ''}
+                onChange={(e) => onUpdate('key_highlights', e.target.value)}
+                placeholder="e.g., signature item, seasonal special"
+                className="text-sm"
+                rows={2}
+              />
+            )}
           </div>
 
           {/* Additional Info */}
           <div>
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            <button
+              type="button"
+              onClick={() => setAdditionalOpen(!additionalOpen)}
+              className="flex items-center gap-1.5 w-full text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${additionalOpen ? '' : '-rotate-90'}`} />
               Additional Info
-            </p>
-            <Textarea
-              value={item.additional_info || ''}
-              onChange={(e) => onUpdate('additional_info', e.target.value)}
-              placeholder="e.g., dietary notes, preparation tips"
-              className="text-sm"
-              rows={2}
-            />
+            </button>
+            {additionalOpen && (
+              <Textarea
+                value={item.additional_info || ''}
+                onChange={(e) => onUpdate('additional_info', e.target.value)}
+                placeholder="e.g., dietary notes, preparation tips"
+                className="text-sm"
+                rows={2}
+              />
+            )}
           </div>
 
           {/* Substitution */}
           <div>
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            <button
+              type="button"
+              onClick={() => setSubstitutionOpen(!substitutionOpen)}
+              className="flex items-center gap-1.5 w-full text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${substitutionOpen ? '' : '-rotate-90'}`} />
               Substitution
-            </p>
-            <Textarea
-              value={item.substitution || ''}
-              onChange={(e) => onUpdate('substitution', e.target.value)}
-              placeholder="e.g., alternative ingredients, preparation notes"
-              className="text-sm"
-              rows={2}
-            />
+            </button>
+            {substitutionOpen && (
+              <Textarea
+                value={item.substitution || ''}
+                onChange={(e) => onUpdate('substitution', e.target.value)}
+                placeholder="e.g., alternative ingredients, preparation notes"
+                className="text-sm"
+                rows={2}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -594,6 +618,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
   const [name, setName] = useState(menu?.name || '');
   const [isPublished, setIsPublished] = useState(menu?.is_published || false);
   const [selectedOutletIds, setSelectedOutletIds] = useState<number[]>([]);
+  const [outletsOpen, setOutletsOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
 
   // Multi-add state
@@ -870,23 +895,35 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
         />
 
         <div>
-          <label className="block text-sm font-medium mb-2">Outlets *</label>
-          <div className="space-y-2">
-            {accessibleOutlets.map((outlet) => (
-              <Checkbox
-                key={outlet.id}
-                checked={selectedOutletIds.includes(outlet.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedOutletIds([...selectedOutletIds, outlet.id]);
-                  } else {
-                    setSelectedOutletIds(selectedOutletIds.filter((id) => id !== outlet.id));
-                  }
-                }}
-                label={outlet.name}
-              />
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setOutletsOpen(!outletsOpen)}
+            className="flex items-center gap-2 text-sm font-medium mb-2 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${outletsOpen ? '' : '-rotate-90'}`} />
+            Outlets *
+            {selectedOutletIds.length > 0 && (
+              <span className="text-xs text-zinc-400 font-normal">({selectedOutletIds.length} selected)</span>
+            )}
+          </button>
+          {outletsOpen && (
+            <div className="space-y-2">
+              {accessibleOutlets.map((outlet) => (
+                <Checkbox
+                  key={outlet.id}
+                  checked={selectedOutletIds.includes(outlet.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedOutletIds([...selectedOutletIds, outlet.id]);
+                    } else {
+                      setSelectedOutletIds(selectedOutletIds.filter((id) => id !== outlet.id));
+                    }
+                  }}
+                  label={outlet.name}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

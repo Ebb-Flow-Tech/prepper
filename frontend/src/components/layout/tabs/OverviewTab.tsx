@@ -9,7 +9,7 @@ import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useT
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
 import { useUser } from '@/lib/hooks/useUsers';
 import { useAppState } from '@/lib/store';
-import { Badge, Card, CardContent, Skeleton, Button, Modal } from '@/components/ui';
+import { Badge, Card, CardContent, Skeleton, Button, Modal, EditableCell } from '@/components/ui';
 import { formatCurrency, formatTimer } from '@/lib/utils';
 import { RecipeImageCarousel } from '@/components/recipe/RecipeImageCarousel';
 import { useState, useEffect, useRef } from 'react';
@@ -56,6 +56,8 @@ export function OverviewTab() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
   const [isFeedbacksOpen, setIsFeedbacksOpen] = useState(false);
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [tagSearchFilter, setTagSearchFilter] = useState('');
@@ -103,6 +105,7 @@ export function OverviewTab() {
   useEffect(() => {
     if (recipe) {
       setDescriptionValue(recipe.description || '');
+      setNameValue(recipe.name || '');
     }
   }, [recipe?.id]);
 
@@ -127,6 +130,17 @@ export function OverviewTab() {
       setTagSearchFilter('');
     }
   }, [isTagDropdownOpen]);
+
+  const handleSaveName = () => {
+    if (selectedRecipeId && nameValue.trim() && nameValue.trim() !== recipe?.name) {
+      updateRecipe(
+        { id: selectedRecipeId, data: { name: nameValue.trim() } },
+        { onSuccess: () => setIsEditingName(false) }
+      );
+    } else {
+      setIsEditingName(false);
+    }
+  };
 
   const handleSaveDescription = () => {
     if (selectedRecipeId && descriptionValue !== recipe?.description) {
@@ -218,9 +232,41 @@ export function OverviewTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                          {recipe.name}
-                        </h1>
+                        {isEditingName ? (
+                          <div className="flex items-center gap-2 mb-1">
+                            <input
+                              value={nameValue}
+                              onChange={(e) => setNameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveName();
+                                if (e.key === 'Escape') { setIsEditingName(false); setNameValue(recipe?.name || ''); }
+                              }}
+                              autoFocus
+                              className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 bg-transparent border-b-2 border-[hsl(var(--primary))] focus:outline-none flex-1 min-w-0"
+                            />
+                            <button onClick={handleSaveName} disabled={isUpdating} className="text-green-600 hover:text-green-700 disabled:opacity-50 shrink-0">
+                              <Check className="h-5 w-5" />
+                            </button>
+                            <button onClick={() => { setIsEditingName(false); setNameValue(recipe?.name || ''); }} className="text-zinc-400 hover:text-zinc-600 shrink-0">
+                              <X className="h-5 w-5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 group">
+                            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                              {recipe.name}
+                            </h1>
+                            {canEditRecipe && (
+                              <button
+                                onClick={() => setIsEditingName(true)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-600"
+                                title="Edit name"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <p className="text-zinc-500 dark:text-zinc-400 mt-1">
                           Yield: {recipe.yield_quantity} {recipe.yield_unit}
                         </p>

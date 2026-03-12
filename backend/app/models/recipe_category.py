@@ -20,6 +20,7 @@ class RecipeCategory(RecipeCategoryBase, table=True):
     __tablename__ = "recipe_categories"
 
     id: int | None = Field(default=None, primary_key=True)
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -36,3 +37,4 @@ class RecipeCategoryUpdate(SQLModel):
 
     name: str | None = None
     description: str | None = None
+    is_active: bool | None = None

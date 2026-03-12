@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
-import { useCategories, useUpdateCategory, useDeactivateCategory } from '@/lib/hooks';
+import { useCategoriesPaginated, useUpdateCategory, useDeactivateCategory, useDebouncedValue } from '@/lib/hooks';
 import { CategoryCard, CategoryListRow, AddCategoryModal } from '@/components/categories';
 import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle, Checkbox } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import { toast } from 'sonner';
 import type { Category } from '@/types';
 
@@ -108,22 +109,22 @@ export function CategoriesTab() {
   const updateCategory = useUpdateCategory();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [view, setView] = useState<ViewType>('grid');
-  const { data: categories, isLoading, error } = useCategories(showArchived);
+  const [pageNumber, setPageNumber] = useState(1);
 
-  const filteredCategories = useMemo(() => {
-    if (!categories) return [];
+  useEffect(() => { setPageNumber(1); }, [debouncedSearch, showArchived]);
 
-    return categories.filter((cat) => {
-      if (search && !cat.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [categories, search]);
+  const { data, isLoading, error } = useCategoriesPaginated({
+    active_only: !showArchived,
+    page_number: pageNumber,
+    page_size: 30,
+    search: debouncedSearch || undefined,
+  });
+  const filteredCategories = data?.items ?? [];
 
   const handleArchive = (category: Category) => {
     deactivateCategory.mutate(category.id, {
@@ -242,6 +243,17 @@ export function CategoriesTab() {
               ))}
             </div>
           )
+        )}
+
+        {/* Pagination */}
+        {data && (
+          <Pagination
+            pageNumber={data.page_number}
+            totalPages={data.total_pages}
+            totalCount={data.total_count}
+            currentPageSize={data.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
 

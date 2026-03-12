@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
-import { useRecipeCategories, useUpdateRecipeCategory, useDeleteRecipeCategory } from '@/lib/hooks';
+import { useRecipeCategories, useUpdateRecipeCategory, useDeleteRecipeCategory, useDebouncedValue } from '@/lib/hooks';
 import { RecipeCategoryCard } from './RecipeCategoryCard';
 import { RecipeCategoryListRow } from './RecipeCategoryListRow';
 import { AddRecipeCategoryModal } from './AddRecipeCategoryModal';
-import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle, ConfirmModal } from '@/components/ui';
+import { PageHeader, SearchInput, Button, Skeleton, Input, Textarea, ViewToggle, ConfirmModal, Checkbox } from '@/components/ui';
+import { Pagination } from '@/components/ui/Pagination';
 import { toast } from 'sonner';
 import type { RecipeCategory, UpdateRecipeCategoryRequest } from '@/types';
 
@@ -99,39 +100,51 @@ function EditCategoryModal({ category, onClose }: EditCategoryModalProps) {
 
 export function RecipeCategoriesTab() {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [showForm, setShowForm] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [editingCategory, setEditingCategory] = useState<RecipeCategory | null>(null);
   const [view, setView] = useState<ViewType>('grid');
   const [deleteConfirm, setDeleteConfirm] = useState<RecipeCategory | null>(null);
-  const { data: categoriesData, isLoading, error } = useRecipeCategories({ page_size: 30 });
+  const [pageNumber, setPageNumber] = useState(1);
+
+  useEffect(() => { setPageNumber(1); }, [debouncedSearch, showArchived]);
+
+  const { data: categoriesData, isLoading, error } = useRecipeCategories({
+    active_only: !showArchived,
+    page_size: 30,
+    page_number: pageNumber,
+    search: debouncedSearch || undefined,
+  });
   const categories = categoriesData?.items ?? [];
   const deleteRecipeCategory = useDeleteRecipeCategory();
+  const updateRecipeCategory = useUpdateRecipeCategory();
 
-  const filteredCategories = useMemo(() => {
-    if (!categories) return [];
 
-    return categories.filter((category) => {
-      if (search && !category.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [categories, search]);
-
-  const handleDeleteCategory = (category: RecipeCategory) => {
+  const handleArchive = (category: RecipeCategory) => {
     setDeleteConfirm(category);
   };
 
-  const handleConfirmDelete = () => {
+  const handleUnarchive = (category: RecipeCategory) => {
+    updateRecipeCategory.mutate(
+      { id: category.id, data: { is_active: true } },
+      {
+        onSuccess: () => toast.success(`${category.name} unarchived`),
+        onError: () => toast.error(`Failed to unarchive ${category.name}`),
+      }
+    );
+  };
+
+  const handleConfirmArchive = () => {
     if (!deleteConfirm) return;
 
     deleteRecipeCategory.mutate(deleteConfirm.id, {
       onSuccess: () => {
-        toast.success('Category deleted');
+        toast.success(`${deleteConfirm.name} archived`);
         setDeleteConfirm(null);
       },
       onError: () => {
-        toast.error('Failed to delete category');
+        toast.error('Failed to archive category');
         setDeleteConfirm(null);
       },
     });
@@ -174,6 +187,11 @@ export function RecipeCategoriesTab() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Checkbox
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              label="Show archived"
+            />
             <ViewToggle view={view} onViewChange={setView} />
           </div>
         </div>
@@ -196,7 +214,7 @@ export function RecipeCategoriesTab() {
         )}
 
         {/* Empty State */}
-        {!isLoading && filteredCategories.length === 0 && (
+        {!isLoading && categories.length === 0 && (
           <div className="text-center py-12">
             <p className="text-zinc-500 dark:text-zinc-400">
               {search ? 'No categories match your search' : 'No categories yet'}
@@ -205,28 +223,41 @@ export function RecipeCategoriesTab() {
         )}
 
         {/* Categories Grid */}
-        {!isLoading && filteredCategories.length > 0 && (
+        {!isLoading && categories.length > 0 && (
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredCategories.map((category) => (
+              {categories.map((category) => (
                 <RecipeCategoryCard
                   key={category.id}
                   category={category}
-                  onDelete={handleDeleteCategory}
+                  onArchive={handleArchive}
+                  onUnarchive={handleUnarchive}
                 />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
-              {filteredCategories.map((category) => (
+              {categories.map((category) => (
                 <RecipeCategoryListRow
                   key={category.id}
                   category={category}
-                  onDelete={handleDeleteCategory}
+                  onArchive={handleArchive}
+                  onUnarchive={handleUnarchive}
                 />
               ))}
             </div>
           )
+        )}
+
+        {/* Pagination */}
+        {categoriesData && (
+          <Pagination
+            pageNumber={categoriesData.page_number}
+            totalPages={categoriesData.total_pages}
+            totalCount={categoriesData.total_count}
+            currentPageSize={categoriesData.current_page_size}
+            onPageChange={setPageNumber}
+          />
         )}
       </div>
 
@@ -242,10 +273,10 @@ export function RecipeCategoriesTab() {
       <ConfirmModal
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Category"
-        message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        onConfirm={handleConfirmArchive}
+        title="Archive Category"
+        message={`Are you sure you want to archive "${deleteConfirm?.name}"? It can be restored by enabling "Show archived".`}
+        confirmLabel="Archive"
         cancelLabel="Cancel"
         variant="destructive"
       />

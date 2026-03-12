@@ -47,6 +47,9 @@ def convert_to_base_unit(
     Convert a quantity from one unit to the ingredient's base unit.
 
     Returns None if units are incompatible or unknown.
+
+    Cross-category note: volume ↔ mass conversions are supported using
+    density = 1 g/ml (so 1 ml = 1 g, 1 l = 1 kg).
     """
     from_unit_lower = from_unit.lower()
     to_base_lower = to_base_unit.lower()
@@ -64,7 +67,21 @@ def convert_to_base_unit(
         return quantity
 
     if from_category != to_category:
-        # Incompatible units (e.g., mass to volume)
+        # Allow volume <-> mass conversion using density = 1 g/ml
+        if (from_category == "volume" and to_category == "mass") or (
+            from_category == "mass" and to_category == "volume"
+        ):
+            if from_category == "volume":
+                # quantity in volume units -> convert to ml -> treat as grams
+                in_ml = quantity * VOLUME_CONVERSIONS[from_unit_lower]
+                to_factor = MASS_CONVERSIONS.get(to_base_lower, 1.0)
+                return in_ml / to_factor
+            else:
+                # quantity in mass units -> convert to g -> treat as ml
+                in_g = quantity * MASS_CONVERSIONS[from_unit_lower]
+                to_factor = VOLUME_CONVERSIONS.get(to_base_lower, 1.0)
+                return in_g / to_factor
+        # Truly incompatible units (e.g., mass to count)
         return None
 
     # Get conversion maps based on category
