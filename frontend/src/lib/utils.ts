@@ -36,7 +36,7 @@ interface ParsedIngredientLine {
 }
 
 const COMMON_UNITS = [
-  'g', 'kg', 'mg', 'oz', 'lb', 'ml', 'l', 'cl', 'dl',
+  'g', 'kg', 'mg', 'oz', 'lb', 'ml', 'l',
   'c', 'cup', 'cups', 'tbsp', 'tsp', 'pint', 'quart',
   'clove', 'cloves', 'stick', 'sticks', 'slice', 'slices',
   'piece', 'pieces', 'whole', 'pinch', 'dash', 'bunch',

@@ -345,6 +345,7 @@ export function RecipeManagementTab() {
                       key={recipe.id}
                       recipe={recipe}
                       isOwned={userId !== null && recipe.owner_id === userId}
+                      categoryNames={getCategoryNamesForRecipe(recipe.id)}
                       allergenNames={getAllergenNamesForRecipe(recipe.id)}
                     />
                   ))}

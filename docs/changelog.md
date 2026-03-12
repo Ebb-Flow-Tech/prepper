@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.25** (2026-03-12) - FMH Import Pipeline, Recipe-Category Search & Menu UX Enhancements
 - **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal, Derived Session Ingredients & Sequential Lark Fix
 - **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
 - **0.0.22** (2026-03-06) - Bug Fixes: Canvas Navigation, Recipe Creation Race Condition, Untitled Recipe Flash, Submit Button Logic, Tasting Session UX & Ingredient/Recipe Tasting DTOs
@@ -30,6 +31,135 @@ All notable changes to this project will be documented in this file.
 - **0.0.3** (2024-11-27) - Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **0.0.2** (2024-11-27) - Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **0.0.1** (2024-11-27) - Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversio
+---
+
+## [0.0.25] - 2026-03-12
+
+### Added
+
+#### FMH Import Pipeline — `seed_fmh.py` & `reset_fmh.py`
+
+Scripts to bulk-import Food Market Hub (FMH) Excel exports into the database and cleanly remove them.
+
+**`seed_fmh.py`**:
+- Reads three Excel exports from `backend/exports/`: `Suppliers.xlsx`, `SponsoredSupplierPricings.xlsx`, `ProductList_modified.xlsx`
+- Seeds suppliers, outlets, categories, ingredients, and supplier-ingredient links in a single run
+- Idempotent: skips rows that already exist by name/SKU
+- Uses `openpyxl` to parse worksheets into dicts via header row
+
+**`reset_fmh.py`**:
+- Removes all FMH-seeded data: `supplier_ingredients` (source = `fmh`), ingredients (source = `fmh`), all categories, suppliers, and outlets
+- Confirmation prompt by default; `--yes` flag skips it
+- Uses `sqlalchemy inspect` to check table existence before deleting
+
+**Database Change — `OutletSupplierIngredient` join table**:
+- New `outlet_supplier_ingredient` table links a `supplier_ingredient` record to one or more outlets for display scoping
+- Unique constraint on `(supplier_ingredient_id, outlet_id)`
+- Alembic migration `h9_refactor_supplier_ingredient_outlet_scope.py`
+- `SupplierIngredient` model updated: removed `outlet_id` direct column, added `outlet_links` relationship to `OutletSupplierIngredient`
+- `ingredient_service.py` and `supplier_service.py` refactored for new join table structure
+
+**Files Created**:
+- `backend/scripts/seed_fmh.py`
+- `backend/scripts/reset_fmh.py`
+- `backend/app/models/outlet_supplier_ingredient.py`
+- `backend/alembic/versions/h9_refactor_supplier_ingredient_outlet_scope.py`
+
+**Files Modified**:
+- `backend/app/models/supplier_ingredient.py` — Removed `outlet_id`, added `outlet_links` relationship
+- `backend/app/models/__init__.py` — Export `OutletSupplierIngredient`
+- `backend/app/domain/ingredient_service.py` — Refactored for join table
+- `backend/app/domain/supplier_service.py` — Refactored for join table
+
+#### Supplier `code` & `shipping_company_name` Fields
+
+Added two new display fields to the `Supplier` type and surfaces them in supplier list and detail views.
+
+**Files Modified**:
+- `frontend/src/types/index.ts` — `code` and `shipping_company_name` on `Supplier`, `CreateSupplierRequest`, `UpdateSupplierRequest`
+- `frontend/src/app/suppliers/page.tsx` — Display in list
+- `frontend/src/app/suppliers/[id]/page.tsx` — Display in detail
+- `frontend/src/components/suppliers/SupplierListRow.tsx` — Show code/shipping company
+- `backend/tests/test_suppliers.py` — New tests for supplier fields
+
+### Changed
+
+#### Recipe Search Matches Category Names
+
+Recipe list search (`GET /recipes?search=...`) now also returns recipes whose assigned category names match the search term, in addition to recipe name matches.
+
+**Implementation**: Subquery joins `recipe_recipe_categories → recipe_categories` and filters by `RCat.name.ilike(...)` with `is_active = True`. Result is OR-combined with the existing name match.
+
+**Files Modified**:
+- `backend/app/domain/recipe_service.py` — Extended `_build_list_query()` with category name OR clause
+
+#### Recipe-Category Links Soft-Delete
+
+`delete_recipe_category_link()`, `delete_recipe_categories_by_recipe()`, and `delete_recipe_categories_by_category()` now soft-delete by setting `is_active = False` instead of issuing a hard `session.delete()`.
+
+**Files Modified**:
+- `backend/app/domain/recipe_recipe_category_service.py` — Soft-delete with `is_active = False` + `updated_at`
+- `backend/tests/test_recipe_recipe_categories.py` — Updated tests for soft-delete behaviour
+
+#### Recipe Category Badges on Recipe List Rows
+
+Category names are now displayed as secondary badges alongside allergen badges on each recipe row in the recipe management list.
+
+**Files Modified**:
+- `frontend/src/components/recipes/RecipeListRow.tsx` — Added `categoryNames` prop and badge render
+- `frontend/src/components/recipes/RecipeManagementTab.tsx` — Pass `getCategoryNamesForRecipe()` to each row
+
+#### Inline "Create Category" in Overview Tag Dropdown
+
+When searching for a category tag in the recipe Overview tab and no match exists, a **"+ Create \"{term}\""** button appears instead of a dead-end "No matching categories" message. Clicking it creates the category and immediately assigns it to the recipe.
+
+**Files Modified**:
+- `frontend/src/components/layout/tabs/OverviewTab.tsx` — `useCreateRecipeCategory` hook; inline create on empty state
+
+#### Menu Builder — Multi-Add Recipe Picker (replaces single-add)
+
+The `+` button on each menu section's items header now opens an inline multi-select panel instead of immediately adding a blank item.
+
+**Features**:
+- Debounced search input with clear button
+- Scrollable recipe list with checkboxes; already-added recipes shown as disabled with "Added" label
+- "View more" pagination via `useInfiniteRecipes`
+- Footer shows selection count; "Add N item(s)" button confirms; Cancel closes the panel
+- Only one section's panel can be open at a time
+
+**Files Modified**:
+- `frontend/src/components/menu/MenuBuilder.tsx` — `MultiAddContent` component, `useInfiniteRecipes` + `useDebouncedValue` integration, removed single-add `addItem` function
+
+#### Canvas Tab Order — Overview Before Canvas
+
+`CANVAS_TABS` array reordered so **Overview** appears as the first tab, before **Canvas**.
+
+**Files Modified**:
+- `frontend/src/components/layout/TopAppBar.tsx`
+
+#### Menu Preview Edit Button — Admins & Managers
+
+"Edit Menu" link on `/menu/preview/[id]` is now visible to both `admin` users and users with `isManager = true` (previously admin-only).
+
+**Files Modified**:
+- `frontend/src/app/menu/preview/[id]/page.tsx`
+
+#### Image Upload — Drag-and-Drop Support
+
+`ImageUploadPreview` component refactored to extract `handleFiles(FileList)` as a shared handler, enabling programmatic file processing from both file input and drag-drop events. Added `isDragging` state for visual feedback.
+
+**Files Modified**:
+- `frontend/src/components/tasting/ImageUploadPreview.tsx`
+
+#### Remove `cl`/`dl` Unit Support
+
+`cl` (centilitre) and `dl` (decilitre) removed from `MASS_CONVERSIONS` in `unit_conversion.py` and from `COMMON_UNITS` in `utils.ts`. These units are not used in practice and were causing ambiguous conversions.
+
+**Files Modified**:
+- `backend/app/utils/unit_conversion.py`
+- `frontend/src/lib/utils.ts`
+- `frontend/src/lib/unitConversion.ts`
+
 ---
 
 ## [0.0.24] - 2026-03-09

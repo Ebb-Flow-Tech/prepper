@@ -240,7 +240,7 @@ def test_update_nonexistent_recipe_category_link(client: TestClient):
 
 
 def test_delete_recipe_category_link(client: TestClient):
-    """Test deleting a recipe-category link."""
+    """Test soft-deleting a recipe-category link sets is_active=False."""
     recipe_id = create_test_recipe(client, "Vegetables")
     category_id = create_test_category(client, "Sides")
 
@@ -255,13 +255,35 @@ def test_delete_recipe_category_link(client: TestClient):
     )
     link_id = create_response.json()["id"]
 
-    # Delete link
+    # Soft-delete link
     delete_response = client.delete(f"/api/v1/recipe-recipe-categories/{link_id}")
     assert delete_response.status_code == 204
 
-    # Verify deletion
+    # Link still exists but is_active is False
     get_response = client.get(f"/api/v1/recipe-recipe-categories/{link_id}")
-    assert get_response.status_code == 404
+    assert get_response.status_code == 200
+    assert get_response.json()["is_active"] is False
+
+
+def test_delete_recipe_category_link_can_be_relinked(client: TestClient):
+    """After soft-delete, re-creating the same link reactivates it."""
+    recipe_id = create_test_recipe(client, "Relink Dish")
+    category_id = create_test_category(client, "Relink Cat")
+
+    link_id = client.post(
+        "/api/v1/recipe-recipe-categories",
+        json={"recipe_id": recipe_id, "category_id": category_id, "is_active": True},
+    ).json()["id"]
+
+    client.delete(f"/api/v1/recipe-recipe-categories/{link_id}")
+
+    # Re-create should reactivate, returning same link ID
+    relink = client.post(
+        "/api/v1/recipe-recipe-categories",
+        json={"recipe_id": recipe_id, "category_id": category_id, "is_active": True},
+    ).json()
+    assert relink["id"] == link_id
+    assert relink["is_active"] is True
 
 
 def test_delete_nonexistent_recipe_category_link(client: TestClient):
@@ -272,7 +294,7 @@ def test_delete_nonexistent_recipe_category_link(client: TestClient):
 
 
 def test_delete_all_categories_for_recipe(client: TestClient):
-    """Test deleting all categories for a specific recipe."""
+    """Test soft-deleting all categories for a recipe sets all links to is_active=False."""
     recipe_id = create_test_recipe(client, "Rice Dish")
     category1_id = create_test_category(client, "Rice")
     category2_id = create_test_category(client, "Asian")
@@ -280,37 +302,26 @@ def test_delete_all_categories_for_recipe(client: TestClient):
     # Create links
     client.post(
         "/api/v1/recipe-recipe-categories",
-        json={
-            "recipe_id": recipe_id,
-            "category_id": category1_id,
-            "is_active": True,
-        },
+        json={"recipe_id": recipe_id, "category_id": category1_id, "is_active": True},
     )
     client.post(
         "/api/v1/recipe-recipe-categories",
-        json={
-            "recipe_id": recipe_id,
-            "category_id": category2_id,
-            "is_active": True,
-        },
+        json={"recipe_id": recipe_id, "category_id": category2_id, "is_active": True},
     )
 
-    # Delete all for recipe
-    response = client.delete(
-        f"/api/v1/recipe-recipe-categories/recipe/{recipe_id}"
-    )
+    # Soft-delete all for recipe
+    response = client.delete(f"/api/v1/recipe-recipe-categories/recipe/{recipe_id}")
     assert response.status_code == 204
 
-    # Verify all deleted
-    list_response = client.get(
-        f"/api/v1/recipe-recipe-categories/recipe/{recipe_id}"
-    )
+    # Links still exist but all inactive
+    list_response = client.get(f"/api/v1/recipe-recipe-categories/recipe/{recipe_id}")
     data = list_response.json()
-    assert len(data) == 0
+    assert len(data) == 2
+    assert all(link["is_active"] is False for link in data)
 
 
 def test_delete_all_recipes_in_category(client: TestClient):
-    """Test deleting all recipes in a specific category."""
+    """Test soft-deleting all recipes in a category sets all links to is_active=False."""
     recipe1_id = create_test_recipe(client, "Cake")
     recipe2_id = create_test_recipe(client, "Pie")
     category_id = create_test_category(client, "Pastries")
@@ -318,30 +329,19 @@ def test_delete_all_recipes_in_category(client: TestClient):
     # Create links
     client.post(
         "/api/v1/recipe-recipe-categories",
-        json={
-            "recipe_id": recipe1_id,
-            "category_id": category_id,
-            "is_active": True,
-        },
+        json={"recipe_id": recipe1_id, "category_id": category_id, "is_active": True},
     )
     client.post(
         "/api/v1/recipe-recipe-categories",
-        json={
-            "recipe_id": recipe2_id,
-            "category_id": category_id,
-            "is_active": True,
-        },
+        json={"recipe_id": recipe2_id, "category_id": category_id, "is_active": True},
     )
 
-    # Delete all for category
-    response = client.delete(
-        f"/api/v1/recipe-recipe-categories/category/{category_id}"
-    )
+    # Soft-delete all for category
+    response = client.delete(f"/api/v1/recipe-recipe-categories/category/{category_id}")
     assert response.status_code == 204
 
-    # Verify all deleted
-    list_response = client.get(
-        f"/api/v1/recipe-recipe-categories/category/{category_id}"
-    )
+    # Links still exist but all inactive
+    list_response = client.get(f"/api/v1/recipe-recipe-categories/category/{category_id}")
     data = list_response.json()
-    assert len(data) == 0
+    assert len(data) == 2
+    assert all(link["is_active"] is False for link in data)

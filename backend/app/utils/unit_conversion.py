@@ -16,8 +16,6 @@ MASS_CONVERSIONS = {
 VOLUME_CONVERSIONS = {
     "ml": 1.0,
     "l": 1000.0,
-    "cl": 10.0,
-    "dl": 100.0,
     "tsp": 4.92892,
     "tbsp": 14.7868,
     "cup": 236.588,

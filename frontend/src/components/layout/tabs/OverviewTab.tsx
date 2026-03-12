@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { ImagePlus, Clock, Thermometer, Star, CheckCircle, AlertCircle, XCircle, Wine, Wand2, Edit2, Check, X, ChevronDown, Plus } from 'lucide-react';
-import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories, useRecipeAllergens } from '@/lib/hooks';
+import { useRecipe, useRecipeIngredients, useCosting, useSubRecipes, useRecipes, useUpdateRecipe, useRecipeCategoryLinks, useRecipeCategories, useRecipeAllergens, useCreateRecipeCategory } from '@/lib/hooks';
 import { useAddRecipeToCategory, useRemoveRecipeFromCategory } from '@/lib/hooks/useRecipeRecipeCategories';
 import { useRecipeTastingNotes, useRecipeTastingSummary } from '@/lib/hooks/useTastings';
 import { useSummarizeFeedback } from '@/lib/hooks/useAgents';
@@ -79,6 +79,7 @@ export function OverviewTab() {
   const { mutate: summarizeFeedback, data: feedbackSummary, isPending: isSummarizingFeedback, error: feedbackSummaryError } = useSummarizeFeedback();
   const { mutate: addRecipeToCategory, isPending: isAddingTag } = useAddRecipeToCategory();
   const { mutate: removeRecipeFromCategory, isPending: isRemovingTag } = useRemoveRecipeFromCategory();
+  const { mutate: createRecipeCategory, isPending: isCreatingTag } = useCreateRecipeCategory();
 
   const isLoading = recipeLoading || ingredientsLoading || costingLoading || subRecipesLoading || tastingLoading;
 
@@ -389,9 +390,27 @@ export function OverviewTab() {
                                     </button>
                                   ))}
                                 {allCategories.filter((cat) => !categoryLinks.some((link) => link.category_id === cat.id) && cat.name.toLowerCase().includes(tagSearchFilter.toLowerCase())).length === 0 && (
-                                  <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                                    {tagSearchFilter ? 'No matching categories' : 'All categories added'}
-                                  </div>
+                                  tagSearchFilter ? (
+                                    <button
+                                      onClick={() => {
+                                        createRecipeCategory({ name: tagSearchFilter }, {
+                                          onSuccess: (newCat) => {
+                                            addRecipeToCategory({ recipe_id: selectedRecipeId!, category_id: newCat.id });
+                                            setIsTagDropdownOpen(false);
+                                            setTagSearchFilter('');
+                                          },
+                                        });
+                                      }}
+                                      disabled={isCreatingTag}
+                                      className="w-full text-left px-4 py-2 hover:bg-[hsl(var(--primary)/0.1)] dark:hover:bg-[hsl(var(--primary)/0.15)] text-sm text-[hsl(var(--primary))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      + Create &ldquo;{tagSearchFilter}&rdquo;
+                                    </button>
+                                  ) : (
+                                    <div className="px-4 py-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                                      All categories added
+                                    </div>
+                                  )
                                 )}
                               </div>
                             </>

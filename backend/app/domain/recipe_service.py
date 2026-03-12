@@ -107,7 +107,18 @@ class RecipeService:
         if status:
             statement = statement.where(Recipe.status == status)
         if search:
-            statement = statement.where(Recipe.name.ilike(f"%{search}%"))
+            from sqlalchemy import or_ as sql_or
+            from app.models.recipe_recipe_category import RecipeRecipeCategory
+            from app.models.recipe_category import RecipeCategory as RCat
+            cat_match = (
+                select(RecipeRecipeCategory.recipe_id)
+                .join(RCat, RecipeRecipeCategory.category_id == RCat.id)
+                .where(RCat.name.ilike(f"%{search}%"), RecipeRecipeCategory.is_active == True)
+                .distinct()
+            )
+            statement = statement.where(
+                sql_or(Recipe.name.ilike(f"%{search}%"), Recipe.id.in_(cat_match))
+            )
         if category_ids:
             from app.models.recipe_recipe_category import RecipeRecipeCategory
             category_subquery = select(RecipeRecipeCategory.recipe_id).where(

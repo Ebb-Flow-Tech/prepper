@@ -8,8 +8,8 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 const CANVAS_TABS: { id: CanvasTab; label: string }[] = [
-  { id: 'canvas', label: 'Canvas' },
   { id: 'overview', label: 'Overview' },
+  { id: 'canvas', label: 'Canvas' },
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'costs', label: 'Costs' },
   { id: 'outlets', label: 'Outlets' },

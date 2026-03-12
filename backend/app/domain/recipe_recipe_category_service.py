@@ -95,33 +95,41 @@ class RecipeRecipeCategoryService:
         return link
 
     def delete_recipe_category_link(self, link_id: int) -> bool:
-        """Delete a recipe-category link."""
+        """Soft-delete a recipe-category link by setting is_active=False."""
         link = self.get_recipe_category_link(link_id)
         if not link:
             return False
 
-        self.session.delete(link)
+        link.is_active = False
+        link.updated_at = datetime.utcnow()
+        self.session.add(link)
         self.session.commit()
         return True
 
     def delete_recipe_categories_by_recipe(self, recipe_id: int) -> int:
-        """Delete all category links for a recipe. Returns count deleted."""
+        """Soft-delete all category links for a recipe. Returns count affected."""
         statement = select(RecipeRecipeCategory).where(
-            RecipeRecipeCategory.recipe_id == recipe_id
+            RecipeRecipeCategory.recipe_id == recipe_id,
+            RecipeRecipeCategory.is_active == True,
         )
         links = list(self.session.exec(statement).all())
         for link in links:
-            self.session.delete(link)
+            link.is_active = False
+            link.updated_at = datetime.utcnow()
+            self.session.add(link)
         self.session.commit()
         return len(links)
 
     def delete_recipe_categories_by_category(self, category_id: int) -> int:
-        """Delete all recipe links for a category. Returns count deleted."""
+        """Soft-delete all recipe links for a category. Returns count affected."""
         statement = select(RecipeRecipeCategory).where(
-            RecipeRecipeCategory.category_id == category_id
+            RecipeRecipeCategory.category_id == category_id,
+            RecipeRecipeCategory.is_active == True,
         )
         links = list(self.session.exec(statement).all())
         for link in links:
-            self.session.delete(link)
+            link.is_active = False
+            link.updated_at = datetime.utcnow()
+            self.session.add(link)
         self.session.commit()
         return len(links)

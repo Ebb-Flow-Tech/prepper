@@ -89,6 +89,117 @@ def test_list_recipes_search(client: TestClient):
     assert data["items"][0]["name"] == "Chocolate Cake"
 
 
+def test_list_recipes_search_case_insensitive(client: TestClient):
+    """Search is case-insensitive for recipe names."""
+    client.post("/api/v1/recipes", json={"name": "Beef Stew", "yield_quantity": 1, "yield_unit": "portion"})
+    client.post("/api/v1/recipes", json={"name": "Mushroom Risotto", "yield_quantity": 1, "yield_unit": "portion"})
+
+    for term in ("beef", "BEEF", "Beef", "beEF"):
+        response = client.get("/api/v1/recipes", params={"search": term})
+        data = response.json()
+        assert data["total_count"] == 1, f"Expected 1 result for '{term}', got {data['total_count']}"
+        assert data["items"][0]["name"] == "Beef Stew"
+
+
+def test_list_recipes_search_no_match(client: TestClient):
+    """Search with a term that matches nothing returns empty list."""
+    client.post("/api/v1/recipes", json={"name": "Pasta", "yield_quantity": 1, "yield_unit": "portion"})
+
+    response = client.get("/api/v1/recipes", params={"search": "zzznomatch"})
+    data = response.json()
+    assert data["total_count"] == 0
+    assert data["items"] == []
+
+
+def test_list_recipes_search_partial_name(client: TestClient):
+    """Partial name match returns correct recipes."""
+    client.post("/api/v1/recipes", json={"name": "Grilled Salmon Fillet", "yield_quantity": 1, "yield_unit": "portion"})
+    client.post("/api/v1/recipes", json={"name": "Pan-Seared Salmon", "yield_quantity": 1, "yield_unit": "portion"})
+    client.post("/api/v1/recipes", json={"name": "Beef Burger", "yield_quantity": 1, "yield_unit": "portion"})
+
+    response = client.get("/api/v1/recipes", params={"search": "salmon"})
+    data = response.json()
+    assert data["total_count"] == 2
+    names = {item["name"] for item in data["items"]}
+    assert names == {"Grilled Salmon Fillet", "Pan-Seared Salmon"}
+
+
+def test_list_recipes_search_by_category_name(client: TestClient):
+    """Searching by a category name returns recipes tagged with that category."""
+    # Create categories
+    breakfast = client.post("/api/v1/recipe-categories", json={"name": "Breakfast"}).json()
+    desserts = client.post("/api/v1/recipe-categories", json={"name": "Desserts"}).json()
+
+    # Create recipes
+    r1 = client.post("/api/v1/recipes", json={"name": "Scrambled Eggs", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    r2 = client.post("/api/v1/recipes", json={"name": "Chocolate Mousse", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    r3 = client.post("/api/v1/recipes", json={"name": "Avocado Toast", "yield_quantity": 1, "yield_unit": "portion"}).json()
+
+    # Tag r1 and r3 with Breakfast, r2 with Desserts
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r1["id"], "category_id": breakfast["id"]})
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r2["id"], "category_id": desserts["id"]})
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r3["id"], "category_id": breakfast["id"]})
+
+    response = client.get("/api/v1/recipes", params={"search": "breakfast"})
+    data = response.json()
+    assert data["total_count"] == 2
+    names = {item["name"] for item in data["items"]}
+    assert names == {"Scrambled Eggs", "Avocado Toast"}
+
+
+def test_list_recipes_search_by_category_name_case_insensitive(client: TestClient):
+    """Category name search is case-insensitive."""
+    cat = client.post("/api/v1/recipe-categories", json={"name": "Vegan"}).json()
+    r = client.post("/api/v1/recipes", json={"name": "Lentil Soup", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r["id"], "category_id": cat["id"]})
+
+    for term in ("vegan", "VEGAN", "Vegan"):
+        response = client.get("/api/v1/recipes", params={"search": term})
+        data = response.json()
+        assert data["total_count"] == 1, f"Expected 1 result for '{term}', got {data['total_count']}"
+        assert data["items"][0]["name"] == "Lentil Soup"
+
+
+def test_list_recipes_search_matches_name_and_category(client: TestClient):
+    """Search returns union of name matches and category matches without duplicates."""
+    cat = client.post("/api/v1/recipe-categories", json={"name": "Italian"}).json()
+
+    # r1 matches by name AND is tagged Italian (should appear once)
+    r1 = client.post("/api/v1/recipes", json={"name": "Italian Meatballs", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    # r2 matches only by category
+    r2 = client.post("/api/v1/recipes", json={"name": "Tiramisu", "yield_quantity": 1, "yield_unit": "portion"}).json()
+    # r3 matches neither
+    client.post("/api/v1/recipes", json={"name": "Fish & Chips", "yield_quantity": 1, "yield_unit": "portion"})
+
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r1["id"], "category_id": cat["id"]})
+    client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r2["id"], "category_id": cat["id"]})
+
+    response = client.get("/api/v1/recipes", params={"search": "italian"})
+    data = response.json()
+    assert data["total_count"] == 2
+    names = {item["name"] for item in data["items"]}
+    assert names == {"Italian Meatballs", "Tiramisu"}
+
+
+def test_list_recipes_search_excludes_inactive_category_links(client: TestClient):
+    """Recipes tagged with a category that has been soft-deleted are NOT returned by category name search."""
+    cat = client.post("/api/v1/recipe-categories", json={"name": "Seafood"}).json()
+    r = client.post("/api/v1/recipes", json={"name": "Prawn Cocktail", "yield_quantity": 1, "yield_unit": "portion"}).json()
+
+    # Link recipe to category, then soft-delete the link via DELETE endpoint
+    link = client.post("/api/v1/recipe-recipe-categories", json={"recipe_id": r["id"], "category_id": cat["id"]}).json()
+    client.delete(f"/api/v1/recipe-recipe-categories/{link['id']}")
+
+    # Category search should NOT find the recipe after soft-delete
+    response = client.get("/api/v1/recipes", params={"search": "seafood"})
+    data = response.json()
+    assert data["total_count"] == 0
+
+    # Name search still works (recipe name doesn't contain "seafood")
+    name_response = client.get("/api/v1/recipes", params={"search": "prawn"})
+    assert name_response.json()["total_count"] == 1
+
+
 def test_create_recipe_with_cost_price(client: TestClient):
     """Test creating a recipe with cost_price."""
     response = client.post(

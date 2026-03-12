@@ -38,6 +38,7 @@ export function ImageUploadPreview({
   );
   const [removingImageId, setRemovingImageId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Update selectedImages when uploadedImages prop changes (e.g., after query loads)
   useEffect(() => {
@@ -58,10 +59,7 @@ export function ImageUploadPreview({
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.currentTarget.files;
-    if (!files) return;
-
+  const handleFiles = async (files: FileList) => {
     setIsProcessing(true);
     try {
       const newBase64Images: ImageWithId[] = [];
@@ -103,6 +101,10 @@ export function ImageUploadPreview({
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.currentTarget.files) await handleFiles(e.currentTarget.files);
+  };
+
   const handleRemoveSelected = (index: number) => {
     const newSelected = selectedImages.filter((_, i) => i !== index);
     setSelectedImages(newSelected);
@@ -140,7 +142,10 @@ export function ImageUploadPreview({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing || isLoading}
-            className="w-full border-2 border-dashed border-zinc-300 dark:border-zinc-600 rounded-lg p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+            onDrop={async (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); if (e.dataTransfer.files.length) await handleFiles(e.dataTransfer.files); }}
+            className={`w-full border-2 border-dashed rounded-lg p-6 text-center hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDragging ? 'border-blue-400 bg-blue-50/10' : 'border-zinc-300 dark:border-zinc-600'}`}
           >
             {isProcessing ? (
               <Loader2 className="h-6 w-6 text-purple-500 mx-auto mb-2 animate-spin" />

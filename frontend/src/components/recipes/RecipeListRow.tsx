@@ -13,6 +13,7 @@ interface RecipeListRowProps {
   isOwned?: boolean;
   href?: string;
   allergenNames?: string[];
+  categoryNames?: string[];
 }
 
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
@@ -21,7 +22,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [] }: RecipeListRowProps) {
+export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [], categoryNames = [] }: RecipeListRowProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-2">
@@ -47,6 +48,9 @@ export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortio
                 {isOwned && (
                   <Badge className="text-xs bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
                 )}
+                {categoryNames.map((name) => (
+                  <Badge key={name} variant="secondary" className="text-xs">{name}</Badge>
+                ))}
                 {allergenNames.map((name) => (
                   <Badge key={name} variant="warning" className="text-xs">{name}</Badge>
                 ))}

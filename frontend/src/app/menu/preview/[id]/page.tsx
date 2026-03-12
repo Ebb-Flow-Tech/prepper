@@ -4,8 +4,9 @@ import { use, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ChevronDown, ChevronUp, ArrowLeft, LayoutGrid, List } from 'lucide-react';
-import { useMenu, useRecipes, useRecipeAllergensBatch } from '@/lib/hooks';
+import { useMenu, useRecipes, useRecipeAllergensBatch, useRecipeCategories, useAllRecipeRecipeCategories } from '@/lib/hooks';
 import { Skeleton, Button, Badge } from '@/components/ui';
+import { useAppState } from '@/lib/store';
 
 interface PreviewMenuPageProps {
   params: Promise<{ id: string }>;
@@ -26,6 +27,35 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
     [menu]
   );
   const { data: allergenMap } = useRecipeAllergensBatch(recipeIds);
+  const { userType, isManager } = useAppState();
+
+  // Recipe category data
+  const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 100 });
+  const recipeCategories = Array.isArray(recipeCategoriesData?.items) ? recipeCategoriesData.items : (Array.isArray(recipeCategoriesData) ? recipeCategoriesData : []);
+  const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
+
+  const recipeCategoryMap = useMemo(() => {
+    const map = new Map<number, number[]>();
+    if (!recipeCategoryLinks) return map;
+    recipeCategoryLinks.forEach((link) => {
+      if (link.is_active) {
+        const existing = map.get(link.recipe_id) || [];
+        map.set(link.recipe_id, [...existing, link.category_id]);
+      }
+    });
+    return map;
+  }, [recipeCategoryLinks]);
+
+  const categoryNameMap = useMemo(() => {
+    return new Map(recipeCategories.map((c) => [c.id, c.name]));
+  }, [recipeCategories]);
+
+  const getCategoryNamesForRecipe = (recipeId: number): string[] => {
+    const categoryIds = recipeCategoryMap.get(recipeId) || [];
+    return categoryIds
+      .map((catId) => categoryNameMap.get(catId))
+      .filter((name): name is string => name !== undefined);
+  };
 
   const toggleSection = (sectionId: number) => {
     setExpandedSections((prev) => {
@@ -95,6 +125,13 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
               Version {menu.version_no} •{' '}
               {menu.is_published ? 'Published' : 'Draft'}
             </p>
+            {(userType === 'admin' || isManager) && (
+              <Link href={`/menu/edit/${menuId}`}>
+                <Button size="sm" variant="default" className="mt-2">
+                  Edit Menu
+                </Button>
+              </Link>
+            )}
           </div>
           <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-800 rounded-md p-1">
             <Button
@@ -146,11 +183,13 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                         <div className="grid grid-cols-2 gap-4">
                           {section.items.map((item) => {
                             const recipe = recipes.find((r) => r.id === item.recipe_id);
+                            const allergens = allergenMap?.get(item.recipe_id) ?? [];
+                            const categoryNames = getCategoryNamesForRecipe(item.recipe_id);
                             return (
                               <div key={item.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
                                 {/* Recipe Image */}
                                 {recipe?.image_url && (
-                                  <div className="relative w-full h-32 bg-zinc-100 dark:bg-zinc-800">
+                                  <div className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-800">
                                     <Image
                                       src={recipe.image_url}
                                       alt={recipe.name}
@@ -160,7 +199,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                   </div>
                                 )}
                                 {!recipe?.image_url && (
-                                  <div className="w-full h-32 bg-zinc-100 dark:bg-zinc-800" />
+                                  <div className="w-full aspect-video bg-zinc-100 dark:bg-zinc-800" />
                                 )}
 
                                 {/* Content */}
@@ -175,43 +214,65 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                     </p>
                                   </div>
 
-                                  {/* Allergens */}
-                                  {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
-                                    <div>
-                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                                        Allergens
-                                      </p>
-                                      <div className="flex flex-wrap gap-1">
-                                        {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
-                                          <Badge key={a.id} variant="warning">{a.name}</Badge>
-                                        ))}
-                                      </div>
+                                  {/* Description */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Description</p>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {recipe?.description || <span className="italic text-zinc-400 dark:text-zinc-600">No description written</span>}
+                                    </p>
+                                  </div>
+
+                                  {/* Categories */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Categories
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {categoryNames.length > 0 ? (
+                                        categoryNames.map((name) => (
+                                          <Badge key={name} variant="secondary">{name}</Badge>
+                                        ))
+                                      ) : (
+                                        <Badge variant="secondary">N/A</Badge>
+                                      )}
                                     </div>
-                                  )}
+                                  </div>
+
+                                  {/* Allergens */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Allergens
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {allergens.length > 0 ? (
+                                        allergens.map((a) => (
+                                          <Badge key={a.id} variant="warning">{a.name}</Badge>
+                                        ))
+                                      ) : (
+                                        <Badge variant="warning">N/A</Badge>
+                                      )}
+                                    </div>
+                                  </div>
 
                                   {/* Key Highlights */}
-                                  {item.key_highlights && (
-                                    <div>
-                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                                        Key Highlights
-                                      </p>
-                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                        {item.key_highlights}
-                                      </p>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Key Highlights
+                                    </p>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.key_highlights || <span className="italic text-zinc-400 dark:text-zinc-600">No key highlights written</span>}
+                                    </p>
+                                  </div>
 
                                   {/* Additional Info */}
-                                  {item.additional_info && (
-                                    <div>
-                                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                                        Additional Info
-                                      </p>
-                                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                        {item.additional_info}
-                                      </p>
-                                    </div>
-                                  )}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                                      Additional Info
+                                    </p>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.additional_info || <span className="italic text-zinc-400 dark:text-zinc-600">No additional info written</span>}
+                                    </p>
+                                  </div>
 
                                   {/* Substitution */}
                                   <div>
@@ -219,7 +280,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                       Substitution
                                     </p>
                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                      {item.substitution || <span className="text-zinc-400 dark:text-zinc-600 italic">None</span>}
+                                      {item.substitution || <span className="italic text-zinc-400 dark:text-zinc-600">No substitution available</span>}
                                     </p>
                                   </div>
 
@@ -241,40 +302,82 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                         </div>
                       ) : (
                         <ul className="space-y-3">
-                          {section.items.map((item) => (
+                          {section.items.map((item) => {
+                            const listRecipe = recipes.find((r) => r.id === item.recipe_id);
+                            const allergens = allergenMap?.get(item.recipe_id) ?? [];
+                            const categoryNames = getCategoryNamesForRecipe(item.recipe_id);
+                            return (
                             <li key={item.id} className="pb-3 border-b border-zinc-100 last:border-0 dark:border-zinc-800">
                               <div className="flex justify-between items-start">
-                                <div className="flex-1">
+                                <div className="flex-1 space-y-2">
                                   <p className="font-medium">{item.recipe_name}</p>
-                                  {(allergenMap?.get(item.recipe_id) ?? []).length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {(allergenMap?.get(item.recipe_id) ?? []).map((a) => (
-                                        <Badge key={a.id} variant="warning">{a.name}</Badge>
-                                      ))}
+
+                                  {/* Description */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Description</p>
+                                    <p className="text-sm text-zinc-500">
+                                      {listRecipe?.description || <span className="italic text-zinc-400 dark:text-zinc-600">No description written</span>}
+                                    </p>
+                                  </div>
+
+                                  {/* Categories */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Categories</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {categoryNames.length > 0 ? (
+                                        categoryNames.map((name) => (
+                                          <Badge key={name} variant="secondary">{name}</Badge>
+                                        ))
+                                      ) : (
+                                        <Badge variant="secondary">N/A</Badge>
+                                      )}
                                     </div>
-                                  )}
-                                  {item.key_highlights && (
-                                    <p className="text-sm text-zinc-500 italic mt-2">
-                                      {item.key_highlights}
-                                    </p>
-                                  )}
-                                  {item.additional_info && (
+                                  </div>
+
+                                  {/* Allergens */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Allergens</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {allergens.length > 0 ? (
+                                        allergens.map((a) => (
+                                          <Badge key={a.id} variant="warning">{a.name}</Badge>
+                                        ))
+                                      ) : (
+                                        <Badge variant="warning">N/A</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Key Highlights */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Key Highlights</p>
                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                      {item.additional_info}
+                                      {item.key_highlights || <span className="italic text-zinc-400 dark:text-zinc-600">No key highlights written</span>}
                                     </p>
-                                  )}
-                                  {item.substitution && (
+                                  </div>
+
+                                  {/* Additional Info */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Additional Info</p>
                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                      {item.substitution}
+                                      {item.additional_info || <span className="italic text-zinc-400 dark:text-zinc-600">No additional info written</span>}
                                     </p>
-                                  )}
+                                  </div>
+
+                                  {/* Substitution */}
+                                  <div>
+                                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">Substitution</p>
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                      {item.substitution || <span className="italic text-zinc-400 dark:text-zinc-600">No substitution available</span>}
+                                    </p>
+                                  </div>
                                 </div>
                                 {item.display_price && (
                                   <p className="font-semibold ml-4">${item.display_price.toFixed(2)}</p>
                                 )}
                               </div>
                             </li>
-                          ))}
+                          ); })}
                         </ul>
                       )}
                     </div>

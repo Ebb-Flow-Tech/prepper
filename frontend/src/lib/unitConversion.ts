@@ -14,8 +14,6 @@ const MASS_CONVERSIONS: Record<string, number> = {
 const VOLUME_CONVERSIONS: Record<string, number> = {
   ml: 1,
   l: 1000,
-  cl: 10,
-  dl: 100,
   tsp: 4.92892,
   tbsp: 14.7868,
   cup: 236.588,

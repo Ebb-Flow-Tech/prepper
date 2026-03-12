@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Copy, GripVertical, LayoutGrid, List } from 'lucide-react';
+import { Trash2, Plus, Copy, GripVertical, LayoutGrid, List, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import {
@@ -22,7 +22,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useRecipes, useOutlets, useCreateMenu, useUpdateMenu, useForkMenu, useRecipeAllergensBatch } from '@/lib/hooks';
+import { useRecipes, useOutlets, useCreateMenu, useUpdateMenu, useForkMenu, useRecipeAllergensBatch, useInfiniteRecipes, useDebouncedValue } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Textarea, Badge, Checkbox } from '@/components/ui';
 import type { MenuDetail, Recipe } from '@/types';
@@ -54,6 +54,135 @@ interface Allergen {
   name: string;
 }
 
+// Multi-Add Content Component
+function MultiAddContent({
+  sectionItems,
+  recipes,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  selectedIds,
+  onToggle,
+  search,
+  onSearchChange,
+  onConfirm,
+  onCancel,
+}: {
+  sectionItems: LocalItem[];
+  recipes: Recipe[];
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
+  selectedIds: Set<number>;
+  onToggle: (id: number) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const existingIds = new Set(sectionItems.map((i) => i.recipe_id));
+
+  return (
+    <div className="mt-3 border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+      {/* Search */}
+      <div className="p-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search recipes..."
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            autoFocus
+            className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          />
+          {search && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Recipe list */}
+      <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
+        {recipes.length === 0 && (
+          <p className="p-3 text-sm text-zinc-400 text-center">No recipes found</p>
+        )}
+        {recipes.map((recipe) => {
+          const alreadyAdded = existingIds.has(recipe.id);
+          const selected = selectedIds.has(recipe.id);
+          return (
+            <button
+              key={recipe.id}
+              onClick={() => !alreadyAdded && onToggle(recipe.id)}
+              disabled={alreadyAdded}
+              className={[
+                'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
+                alreadyAdded
+                  ? 'opacity-40 cursor-not-allowed bg-white dark:bg-zinc-950'
+                  : selected
+                  ? 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  : 'bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900',
+              ].join(' ')}
+            >
+              <div
+                className={[
+                  'flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center transition-colors',
+                  selected && !alreadyAdded
+                    ? 'bg-zinc-900 border-zinc-900 dark:bg-zinc-100 dark:border-zinc-100'
+                    : 'border-zinc-300 dark:border-zinc-600',
+                ].join(' ')}
+              >
+                {selected && !alreadyAdded && (
+                  <svg className="h-2.5 w-2.5 text-white dark:text-zinc-900" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <span className="flex-1 truncate">{recipe.name}</span>
+              {alreadyAdded && (
+                <span className="text-xs text-zinc-400 shrink-0">Added</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Load more */}
+      {hasNextPage && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 py-2">
+          <button
+            onClick={onLoadMore}
+            disabled={isFetchingNextPage}
+            className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 disabled:opacity-50"
+          >
+            {isFetchingNextPage ? 'Loading…' : 'View more'}
+          </button>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2.5 flex items-center justify-between gap-2">
+        <span className="text-xs text-zinc-500">
+          {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select recipes to add'}
+        </span>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={onConfirm} disabled={selectedIds.size === 0}>
+            Add {selectedIds.size > 0 ? `${selectedIds.size} item${selectedIds.size > 1 ? 's' : ''}` : ''}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Draggable Section Component
 function DraggableSection({
   section,
@@ -61,22 +190,24 @@ function DraggableSection({
   recipes,
   onUpdateSection,
   onRemoveSection,
-  onAddItem,
   onRemoveItem,
   onUpdateItem,
   viewMode,
   allergenMap,
+  onOpenMultiAdd,
+  multiAddPanel,
 }: {
   section: LocalSection;
   sectionIndex: number;
   recipes: Recipe[];
   onUpdateSection: (index: number, field: string, value: unknown) => void;
   onRemoveSection: (index: number) => void;
-  onAddItem: (sectionIndex: number) => void;
   onRemoveItem: (sectionIndex: number, itemIndex: number) => void;
   onUpdateItem: (sectionIndex: number, itemIndex: number, field: string, value: unknown) => void;
   viewMode: 'card' | 'list';
   allergenMap?: Map<number, Allergen[]>;
+  onOpenMultiAdd: () => void;
+  multiAddPanel?: React.ReactNode;
 }) {
   const {
     attributes,
@@ -129,9 +260,10 @@ function DraggableSection({
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-medium">Items</h4>
           <Button
-            onClick={() => onAddItem(sectionIndex)}
+            onClick={onOpenMultiAdd}
             size="sm"
             variant="ghost"
+            title="Add recipes"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -159,6 +291,8 @@ function DraggableSection({
             ))}
           </div>
         </SortableContext>
+
+        {multiAddPanel}
       </div>
     </div>
   );
@@ -201,6 +335,11 @@ function DraggableItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const [recipeSearch, setRecipeSearch] = useState('');
+  const filteredRecipes = recipeSearch
+    ? recipes.filter((r) => r.name.toLowerCase().includes(recipeSearch.toLowerCase()))
+    : recipes;
+
   const recipe = recipes.find((r) => r.id === item.recipe_id);
 
   if (viewMode === 'card') {
@@ -212,7 +351,7 @@ function DraggableItem({
       >
         {/* Recipe Image */}
         {recipe?.image_url && (
-          <div className="relative w-full h-32 bg-zinc-100 dark:bg-zinc-800">
+          <div className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-800">
             <Image
               src={recipe.image_url}
               alt={recipe.name}
@@ -248,12 +387,19 @@ function DraggableItem({
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
               Recipe Name
             </p>
+            <input
+              type="text"
+              placeholder="Search recipes..."
+              value={recipeSearch}
+              onChange={(e) => setRecipeSearch(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-zinc-200 dark:border-zinc-700 rounded-md mb-1 bg-white dark:bg-zinc-900 focus:outline-none"
+            />
             <Select
               value={item.recipe_id.toString()}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                 onUpdate('recipe_id', parseInt(e.target.value))
               }
-              options={recipes.map((r) => ({
+              options={filteredRecipes.map((r) => ({
                 value: r.id.toString(),
                 label: r.name,
               }))}
@@ -354,19 +500,28 @@ function DraggableItem({
           <GripVertical className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2">
-          <Select
-            value={item.recipe_id.toString()}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              onUpdate('recipe_id', parseInt(e.target.value))
-            }
-            options={
-              recipes?.map((r) => ({
-                value: r.id.toString(),
-                label: r.name,
-              })) || []
-            }
-            className="flex-1"
-          />
+          <div className="flex-1 flex flex-col gap-1">
+            <input
+              type="text"
+              placeholder="Search recipes..."
+              value={recipeSearch}
+              onChange={(e) => setRecipeSearch(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-zinc-200 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-900 focus:outline-none"
+            />
+            <Select
+              value={item.recipe_id.toString()}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                onUpdate('recipe_id', parseInt(e.target.value))
+              }
+              options={
+                filteredRecipes?.map((r) => ({
+                  value: r.id.toString(),
+                  label: r.name,
+                })) || []
+              }
+              className="w-full"
+            />
+          </div>
           <Input
             type="number"
             step="0.01"
@@ -440,6 +595,66 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
   const [isPublished, setIsPublished] = useState(menu?.is_published || false);
   const [selectedOutletIds, setSelectedOutletIds] = useState<number[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
+
+  // Multi-add state
+  const [multiAddTarget, setMultiAddTarget] = useState<number | null>(null);
+  const [multiAddSearch, setMultiAddSearch] = useState('');
+  const [multiAddSelectedIds, setMultiAddSelectedIds] = useState<Set<number>>(new Set());
+  const debouncedMultiSearch = useDebouncedValue(multiAddSearch, 300);
+  const {
+    data: multiAddData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteRecipes({ search: debouncedMultiSearch || undefined, page_size: 20 });
+  const multiAddRecipes = multiAddData?.pages.flatMap((p) => p.items) ?? [];
+
+  const openMultiAdd = useCallback((sectionIndex: number) => {
+    setMultiAddTarget(sectionIndex);
+    setMultiAddSearch('');
+    setMultiAddSelectedIds(new Set());
+  }, []);
+
+  const toggleMultiAddRecipe = useCallback((recipeId: number) => {
+    setMultiAddSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(recipeId)) next.delete(recipeId);
+      else next.add(recipeId);
+      return next;
+    });
+  }, []);
+
+  const confirmMultiAdd = useCallback(() => {
+    if (multiAddTarget === null) return;
+    setSections((prev) => {
+      const newSections = [...prev];
+      const sectionItems = newSections[multiAddTarget].items;
+      const existingIds = new Set(sectionItems.map((i) => i.recipe_id));
+      const newItems: LocalItem[] = [];
+      multiAddSelectedIds.forEach((recipeId) => {
+        if (!existingIds.has(recipeId)) {
+          newItems.push({
+            recipe_id: recipeId,
+            order_no: sectionItems.length + newItems.length,
+            display_price: null,
+            additional_info: null,
+            key_highlights: null,
+            substitution: null,
+          });
+        }
+      });
+      newSections[multiAddTarget] = {
+        ...newSections[multiAddTarget],
+        items: [...sectionItems, ...newItems],
+      };
+      return newSections;
+    });
+    setMultiAddTarget(null);
+  }, [multiAddTarget, multiAddSelectedIds]);
+
+  const cancelMultiAdd = useCallback(() => {
+    setMultiAddTarget(null);
+  }, []);
   const [sections, setSections] = useState<LocalSection[]>(
     menu?.sections.map((s) => ({
       id: s.id,
@@ -495,20 +710,6 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
 
   const removeSection = (index: number) => {
     setSections(sections.filter((_, i) => i !== index));
-  };
-
-  const addItem = (sectionIndex: number) => {
-    const newItem: LocalItem = {
-      recipe_id: recipes?.[0]?.id || 0,
-      order_no: sections[sectionIndex].items.length,
-      display_price: null,
-      additional_info: null,
-      key_highlights: null,
-      substitution: null,
-    };
-    const newSections = [...sections];
-    newSections[sectionIndex].items.push(newItem);
-    setSections(newSections);
   };
 
   const removeItem = (sectionIndex: number, itemIndex: number) => {
@@ -735,11 +936,28 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
                   recipes={recipes || []}
                   onUpdateSection={updateSection}
                   onRemoveSection={removeSection}
-                  onAddItem={addItem}
                   onRemoveItem={removeItem}
                   onUpdateItem={updateItem}
                   viewMode={viewMode}
                   allergenMap={allergenMap}
+                  onOpenMultiAdd={() => openMultiAdd(sectionIndex)}
+                  multiAddPanel={
+                    multiAddTarget === sectionIndex ? (
+                      <MultiAddContent
+                        sectionItems={section.items}
+                        recipes={multiAddRecipes}
+                        hasNextPage={!!hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        onLoadMore={fetchNextPage}
+                        selectedIds={multiAddSelectedIds}
+                        onToggle={toggleMultiAddRecipe}
+                        search={multiAddSearch}
+                        onSearchChange={setMultiAddSearch}
+                        onConfirm={confirmMultiAdd}
+                        onCancel={cancelMultiAdd}
+                      />
+                    ) : undefined
+                  }
                 />
               ))}
             </div>
