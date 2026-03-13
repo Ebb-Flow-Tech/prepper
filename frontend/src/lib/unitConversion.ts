@@ -1,6 +1,9 @@
 /**
  * Unit conversion utilities for the frontend.
  * Mirrors backend logic from backend/app/utils/unit_conversion.py
+ *
+ * Cross-category mass↔volume conversions use the approximation 1g = 1ml
+ * (water density). This is a cooking-practical approximation for liquids.
  */
 
 const MASS_CONVERSIONS: Record<string, number> = {
@@ -25,6 +28,11 @@ const COUNT_CONVERSIONS: Record<string, number> = {
   dozen: 12,
 };
 
+// Cross-category extras shown in the unit dropdown
+// For a mass unit, also show these volume units (and vice versa)
+const MASS_CROSS_UNITS = ['ml', 'l'] as const;
+const VOLUME_CROSS_UNITS = ['g', 'kg'] as const;
+
 type UnitCategory = 'mass' | 'volume' | 'count';
 
 function getUnitCategory(unit: string): UnitCategory | null {
@@ -45,7 +53,8 @@ function getConversionsForCategory(category: UnitCategory): Record<string, numbe
 
 /**
  * Convert a quantity from one unit to another.
- * Returns null if units are incompatible (different categories).
+ * Same-category conversions are exact. Mass↔volume uses 1g = 1ml.
+ * Returns null only for unrecognised units.
  */
 export function convertUnit(quantity: number, fromUnit: string, toUnit: string): number | null {
   const fromLower = fromUnit.toLowerCase();
@@ -57,20 +66,35 @@ export function convertUnit(quantity: number, fromUnit: string, toUnit: string):
   const toCategory = getUnitCategory(toLower);
 
   if (fromCategory === null || toCategory === null) return quantity;
-  if (fromCategory !== toCategory) return null;
 
-  const conversions = getConversionsForCategory(fromCategory);
-  const fromFactor = conversions[fromLower] ?? 1;
-  const toFactor = conversions[toLower] ?? 1;
+  // Same-category conversion
+  if (fromCategory === toCategory) {
+    const conversions = getConversionsForCategory(fromCategory);
+    const fromFactor = conversions[fromLower] ?? 1;
+    const toFactor = conversions[toLower] ?? 1;
+    return (quantity * fromFactor) / toFactor;
+  }
 
-  const standardQuantity = quantity * fromFactor;
-  return standardQuantity / toFactor;
+  // Cross-category mass↔volume: treat 1g = 1ml
+  if (
+    (fromCategory === 'mass' && toCategory === 'volume') ||
+    (fromCategory === 'volume' && toCategory === 'mass')
+  ) {
+    const fromConversions = getConversionsForCategory(fromCategory);
+    const toConversions = getConversionsForCategory(toCategory);
+    const fromFactor = fromConversions[fromLower] ?? 1;
+    const toFactor = toConversions[toLower] ?? 1;
+    // Convert to base unit (g or ml), then across (1g=1ml), then to target unit
+    return (quantity * fromFactor) / toFactor;
+  }
+
+  return null;
 }
 
 /**
  * Convert a unit price from one unit to another (inverse of quantity conversion).
  * E.g. $0.01/g → $10.00/kg (price goes up as unit gets larger).
- * Returns null if units are incompatible (different categories).
+ * Mass↔volume uses 1g = 1ml.
  */
 export function convertUnitPrice(price: number, fromUnit: string, toUnit: string): number | null {
   const fromLower = fromUnit.toLowerCase();
@@ -82,21 +106,39 @@ export function convertUnitPrice(price: number, fromUnit: string, toUnit: string
   const toCategory = getUnitCategory(toLower);
 
   if (fromCategory === null || toCategory === null) return price;
-  if (fromCategory !== toCategory) return null;
 
-  const conversions = getConversionsForCategory(fromCategory);
-  const fromFactor = conversions[fromLower] ?? 1;
-  const toFactor = conversions[toLower] ?? 1;
+  // Same-category: inverse of quantity conversion
+  if (fromCategory === toCategory) {
+    const conversions = getConversionsForCategory(fromCategory);
+    const fromFactor = conversions[fromLower] ?? 1;
+    const toFactor = conversions[toLower] ?? 1;
+    return price * (toFactor / fromFactor);
+  }
 
-  // Inverse of quantity: larger unit = higher price per unit
-  return price * (toFactor / fromFactor);
+  // Cross-category mass↔volume: treat 1g = 1ml (inverse of quantity)
+  if (
+    (fromCategory === 'mass' && toCategory === 'volume') ||
+    (fromCategory === 'volume' && toCategory === 'mass')
+  ) {
+    const fromConversions = getConversionsForCategory(fromCategory);
+    const toConversions = getConversionsForCategory(toCategory);
+    const fromFactor = fromConversions[fromLower] ?? 1;
+    const toFactor = toConversions[toLower] ?? 1;
+    return price * (toFactor / fromFactor);
+  }
+
+  return null;
 }
 
 /**
- * Get all units compatible with the given unit (same category).
+ * Get all units compatible with the given unit.
+ * For mass units, also includes ml/l. For volume units, also includes g/kg.
  */
 export function getCompatibleUnits(unit: string): string[] {
   const category = getUnitCategory(unit.toLowerCase());
   if (!category) return [unit];
-  return Object.keys(getConversionsForCategory(category));
+  const same = Object.keys(getConversionsForCategory(category));
+  if (category === 'mass') return [...same, ...MASS_CROSS_UNITS];
+  if (category === 'volume') return [...same, ...VOLUME_CROSS_UNITS];
+  return same;
 }

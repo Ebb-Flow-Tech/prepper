@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## Version History
 
+- **0.0.26** (2026-03-13) - Cross-Category Unit Conversion in Canvas: Weight↔Volume unit switching (g/kg↔ml/l) with automatic quantity and price conversion in CanvasLayout ingredient table and cards
 - **0.0.25** (2026-03-12) - FMH Import Pipeline, Recipe-Category Search, Menu UX Enhancements, Recipe Category Soft Delete, Ingredient Filter Pagination & UI Polish
 - **0.0.24** (2026-03-09) - Lark Integration & Tasting UX: Lark DM Invitations, Add-to-Calendar Applink, Branded Email Template, Inline Recipe Feedback Modal, Derived Session Ingredients & Sequential Lark Fix
 - **0.0.23** (2026-03-06) - Performance Audit Fixes: Singleton Supabase Client, Local JWT Verification, N+1 Elimination, Centralized Outlet Hierarchy, Shared httpx Client & Bounded Costing Cache
