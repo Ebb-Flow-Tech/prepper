@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.50](#0050---2026-07-08)** — Passport Sync Consumer: Read-Model Projection of Org/Membership/Entitlement/Identity-Link Events, Signed Sync Receive Endpoint, Role Projection, Entitlement Kill Switch & Nightly Reconciliation
 - **[0.0.49](#0049---2026-06-16)** — Recipe Canvas Polish: Design-Token Migration (266 Hardcoded `zinc-*` Pairs Removed), Terracotta Active/Drop States, Reduced-Motion Support & Cost-Pill Contrast Fix
 - **[0.0.48](#0048---2026-05-22)** — Tasting Session Inline Feedback: Collapsible Per-Dish Feedback Panel Replaces Modal
 - **[0.0.47](#0047---2026-05-20)** — Tasting Session Dish Reordering: Drag-and-Drop Sequence Control for Session Creators
@@ -55,6 +56,37 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.50] - 2026-07-08
+
+### Added
+
+#### Passport Sync Consumer — Read-Model Projection
+
+Prepper is now a conforming Passport sync consumer. Passport is the source of truth for organisations, memberships/roles, and entitlements; Prepper projects those facts into local read-model tables from a signed webhook feed and reads them on its request path — it never mints these aggregates. The integration is dormant until configured (`PASSPORT_*` env + the private SDK installed), so this release changes no runtime behaviour by default.
+
+- New read-model tables (`backend/app/models/passport.py`), Passport UUIDs adopted verbatim as string PKs: `passport_organization`, `passport_membership`, `passport_entitlement`, `passport_identity_link`. Alembic migration `p0rtsync9m0d1` creates them with RLS **enabled + forced** and no client policies (default-deny) — a read-only projection only the `BYPASSRLS` backend writes; member emails are unreachable by `anon` / `authenticated`.
+- `backend/app/passport/store.py`: dialect-aware, version-guarded upsert (`INSERT … ON CONFLICT (id) DO UPDATE … WHERE excluded.version >= version`) — race-safe against concurrent deliveries and idempotent on replay / out-of-order events (guard is `>=`, not `>`).
+- Signed sync receive endpoint mounted at `/api/v1/passport/sync` via the SDK's `build_sync_router` (HMAC verify → stale `schema_version` → version-guarded apply → 2xx only after commit). Handlers for all 12 event types; `membership.removed` keeps the row as a `status=removed` tombstone (not a delete); entitlement revocation is applied via `entitlement.upserted` with a non-active status. Prepper does not project Passport units — its serial-PK `outlets` table is untouched and those handlers are conforming no-ops.
+
+#### Role Projection & Entitlement Kill Switch
+- Passport org role → local `users.user_type` (Owner/Admin → admin, Member → normal). `membership.removed` demotes and revokes local unit-scoped grants (`is_manager`, `outlet_id`).
+- Identity link reported to Passport on every login / register / OAuth completion (best-effort; a no-op when Passport is unconfigured and never blocks login).
+- Org-level entitlement kill switch (`backend/app/passport/access.py`) wired into `get_current_user` — blocks the whole org when its entitlement is synced and non-active, and **fails open** until entitlements are synced so existing behaviour is preserved.
+
+#### Reconciliation, Tests & Dependency Wiring
+- Nightly server-side reconciliation via a single `snapshot()` call (`python -m app.passport.reconcile`) — a scheduled job, not client polling.
+- `backend/tests/test_passport_sync.py` — 11 tests covering the version guard, both traps, immutable insert-if-absent / delete-if-present, role projection with grant revocation, and the entitlement kill switch (including fail-open).
+- Private `passport-client` SDK added to `pyproject.toml` (two-channel Renovate: `staging` tracks prerelease `rc` tags, `main` tracks stable); root `renovate.json` opens CI-gated bump PRs on new tags.
+
+**Files changed:**
+- `backend/app/models/passport.py`, `backend/app/models/__init__.py`
+- `backend/app/passport/` — `store.py`, `role_projection.py`, `access.py`, `handlers.py`, `sync_router.py`, `identity.py`, `reconcile.py`
+- `backend/app/api/auth.py`, `backend/app/api/deps.py`, `backend/app/config.py`, `backend/app/main.py`
+- `backend/alembic/versions/p0rtsync9m0d1_add_passport_read_model.py`
+- `backend/tests/test_passport_sync.py`, `backend/.env.example`, `backend/pyproject.toml`, `renovate.json`
+
 ---
 
 ## [0.0.49] - 2026-06-16

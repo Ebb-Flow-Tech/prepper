@@ -13,14 +13,15 @@ from app.domain.user_service import UserService
 from app.models import (
     LoginRequest,
     LoginResponse,
+    RefreshTokenResponse,
     RegisterRequest,
     TokenRequest,
-    RefreshTokenResponse,
     User,
     UserCreate,
     UserRead,
     UserType,
 )
+from app.passport.identity import report_identity_link_safe
 
 router = APIRouter()
 
@@ -54,7 +55,7 @@ def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid email or password",
         )
-    except RuntimeError as e:
+    except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service unavailable",
@@ -67,6 +68,9 @@ def login(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found in database",
         )
+
+    # Report the identity link to Passport (best-effort, no-op if unconfigured).
+    report_identity_link_safe(subject=user.id, email=user.email)
 
     return LoginResponse(
         user=UserRead.model_validate(user),
@@ -145,13 +149,16 @@ def register(
     # Login to get tokens
     try:
         auth_result = auth_service.login(data.email, data.password)
-    except Exception as e:
+    except Exception:
         # User created but login failed - this is unexpected
         # Raise error to allow client to handle
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User created but failed to generate tokens. Please login separately.",
         )
+
+    # Report the identity link to Passport (best-effort, no-op if unconfigured).
+    report_identity_link_safe(subject=user.id, email=user.email)
 
     return LoginResponse(
         user=UserRead.model_validate(user),
@@ -208,6 +215,7 @@ def oauth_complete(
     # Fast path: user already provisioned.
     existing = user_service.get_user(user_id)
     if existing:
+        report_identity_link_safe(subject=existing.id, email=existing.email)
         return UserRead.model_validate(existing)
 
     # Fetch Supabase profile for email + Google-supplied metadata.
@@ -262,6 +270,9 @@ def oauth_complete(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists",
         )
+
+    # Report the identity link to Passport (best-effort, no-op if unconfigured).
+    report_identity_link_safe(subject=user.id, email=user.email)
 
     return UserRead.model_validate(user)
 

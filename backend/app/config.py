@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     # Anthropic API
     anthropic_api_key: str | None = None
 
+    # Passport sync consumer (identity/org/entitlement platform).
+    # When these are unset the sync endpoint is not mounted and identity
+    # reporting is a no-op — the app degrades gracefully without Passport.
+    passport_api_url: str | None = None
+    passport_org_id: str | None = None
+    passport_api_key: str | None = None
+    passport_webhook_secret: str | None = None
+    # Set only during a 24h webhook-secret rotation overlap; clear afterwards.
+    passport_webhook_secret_prev: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

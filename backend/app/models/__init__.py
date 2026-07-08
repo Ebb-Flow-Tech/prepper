@@ -179,6 +179,12 @@ from app.models.supplier_ingredient_tag import (
     SupplierIngredientTagRead,
     SupplierIngredientTagCreate,
 )
+from app.models.passport import (
+    PassportOrganization,
+    PassportMembership,
+    PassportEntitlement,
+    PassportIdentityLink,
+)
 
 __all__ = [
     # Ingredient
@@ -336,4 +342,9 @@ __all__ = [
     "SupplierIngredientTagLink",
     "SupplierIngredientTagRead",
     "SupplierIngredientTagCreate",
+    # Passport read-model projection
+    "PassportOrganization",
+    "PassportMembership",
+    "PassportEntitlement",
+    "PassportIdentityLink",
 ]

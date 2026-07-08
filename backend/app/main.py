@@ -5,9 +5,42 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import (
+    allergens,
+    auth,
+    categories,
+    category_agent,
+    costing,
+    feedback_summary_agent,
+    ingredient_allergens,
+    ingredient_tasting_notes,
+    ingredient_tastings,
+    ingredients,
+    instructions,
+    menu_sketch_section_item_comments,
+    menu_sketch_section_items,
+    menu_sketch_sections,
+    menu_sketches,
+    menus,
+    outlets,
+    recipe_allergens,
+    recipe_categories,
+    recipe_images,
+    recipe_ingredients,
+    recipe_recipe_categories,
+    recipe_tastings,
+    recipes,
+    sub_recipes,
+    supplier_ingredient_tags,
+    supplier_ingredients,
+    suppliers,
+    tasting_history,
+    tasting_note_images,
+    tastings,
+    users,
+)
 from app.config import get_settings
 from app.database import create_db_and_tables
-from app.api import auth, ingredients, recipes, recipe_ingredients, instructions, costing, sub_recipes, outlets, tastings, suppliers, recipe_tastings, tasting_history, categories, category_agent, feedback_summary_agent, recipe_images, tasting_note_images, recipe_categories, recipe_recipe_categories, users, ingredient_tastings, ingredient_tasting_notes, allergens, ingredient_allergens, recipe_allergens, menus, menu_sketches, menu_sketch_sections, menu_sketch_section_items, menu_sketch_section_item_comments, supplier_ingredients, supplier_ingredient_tags
 
 settings = get_settings()
 
@@ -226,6 +259,20 @@ def create_app() -> FastAPI:
         prefix=f"{settings.api_v1_prefix}/supplier-ingredient-tags",
         tags=["supplier-ingredient-tags"],
     )
+
+    # Passport sync receive endpoint (identity/org/entitlement platform).
+    # The private `passport-client` SDK is an optional dependency: if it isn't
+    # installed the endpoint is simply not mounted, and the app runs unchanged.
+    try:
+        from app.passport.sync_router import mount_passport_sync
+
+        mount_passport_sync(app, api_prefix=settings.api_v1_prefix)
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).info(
+            "passport-client not installed; Passport sync endpoint not mounted"
+        )
 
     @app.get("/health")
     async def health_check():
