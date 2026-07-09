@@ -7,6 +7,7 @@ and org role -> local ``user_type`` projection with grant revocation. None of th
 private ``passport_client`` SDK: the store operates on plain dicts and a SQLModel ``Session``.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -253,3 +254,78 @@ def test_org_blocked_when_entitlement_inactive(session: Session):
     session.expire_all()
     with _with_org(ORG):
         assert access.is_org_blocked(session) is False
+
+
+# --- resync_org fan-out (the manual re-sync bundle, SDK 0.2.0+) ---------------------------
+
+def _record_handlers(monkeypatch, handlers_obj, names):
+    """Replace each named per-aggregate handler on ``handlers_obj`` with a coroutine that
+    records its name in call order. Returns the shared call log."""
+    calls: list[str] = []
+
+    def _make(name):
+        async def _f(_payload):
+            calls.append(name)
+        return _f
+
+    for name in names:
+        monkeypatch.setattr(handlers_obj, name, _make(name))
+    return calls
+
+
+_ALL_HANDLER_NAMES = (
+    "upsert_org", "upsert_unit", "create_relation", "upsert_membership",
+    "create_identity_link", "upsert_entitlement",
+    "remove_membership", "remove_identity_link", "remove_relation",
+)
+
+
+def _resync_bundle(*, org_id=ORG, memberships=1):
+    return SimpleNamespace(
+        app_id="prepper",
+        org_id=org_id,
+        resync_id="resync-1",
+        triggered_by=None,
+        organizations=[SimpleNamespace()],
+        units=[SimpleNamespace()],
+        unit_relations=[SimpleNamespace()],
+        memberships=[SimpleNamespace() for _ in range(memberships)],
+        identity_links=[SimpleNamespace()],
+        entitlements=[SimpleNamespace()],
+    )
+
+
+def test_resync_org_fans_out_in_fk_order_upsert_only(monkeypatch):
+    from app.passport import handlers as handlers_mod
+
+    monkeypatch.setattr(handlers_mod, "_org_id", lambda: ORG)
+    h = handlers_mod.PassportHandlers()
+    calls = _record_handlers(monkeypatch, h, _ALL_HANDLER_NAMES)
+
+    asyncio.run(h.resync_org(_resync_bundle(memberships=2)))
+
+    # FK-safe order (org -> units -> relations -> memberships -> links -> entitlements),
+    # every collection element applied through its per-aggregate handler.
+    assert calls == [
+        "upsert_org",
+        "upsert_unit",
+        "create_relation",
+        "upsert_membership",
+        "upsert_membership",
+        "create_identity_link",
+        "upsert_entitlement",
+    ]
+    # TRAP 3: upsert-only — a resync never deletes / removes local rows.
+    assert not ({"remove_membership", "remove_identity_link", "remove_relation"} & set(calls))
+
+
+def test_resync_org_drops_mis_routed_bundle(monkeypatch):
+    from app.passport import handlers as handlers_mod
+
+    monkeypatch.setattr(handlers_mod, "_org_id", lambda: ORG)
+    h = handlers_mod.PassportHandlers()
+    calls = _record_handlers(monkeypatch, h, _ALL_HANDLER_NAMES)
+
+    # A bundle for a different org is dropped wholesale (own-app routing is per-org).
+    asyncio.run(h.resync_org(_resync_bundle(org_id="other-org")))
+    assert calls == []

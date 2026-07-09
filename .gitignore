@@ -70,6 +70,8 @@ cookies.txt
 .claude/settings.json
 .claude/settings.local.json
 .vscode/settings.local.json
+.claude/eval.jsonl
+.claude/touch-log.txt
 
 # Logs (can contain tokens)
 logs/

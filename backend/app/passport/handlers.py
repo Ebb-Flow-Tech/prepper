@@ -6,37 +6,48 @@ via ``payload.model_dump()``, and delegates the actual version-guarded persisten
 ``2xx`` only after the handler commits; handler exceptions propagate -> 500 -> the delivery
 worker retries. Nothing here is swallowed, and nothing logs the payload body.
 
-THE TWO TRAPS (get these wrong and the integration silently breaks):
+THE THREE TRAPS (get these wrong and the integration silently breaks):
   1. ``remove_membership`` is a version-guarded UPSERT that KEEPS the row (``status=removed``)
      — never a delete — then revokes the user's local unit-scoped grants (rule 6).
   2. ``upsert_entitlement`` also carries REVOCATION (``status != "active"``); there is no
      entitlement-remove event. The incoming non-active state is applied, never filtered.
+  3. ``resync_org`` (the manual per-org re-sync bundle) is UPSERT-ONLY: it fans the bundle's
+     collections out through the same per-aggregate handlers and NEVER deletes local rows
+     absent from the bundle. Its ``identity_links`` are a per-org SUBSET, never authoritative.
 
-This module imports ``passport_client`` at module load. It is only imported by
-``sync_router.mount_passport_sync`` (behind an ``ImportError`` guard) and ``reconcile``, so
-the SDK's absence never affects the rest of the app.
+The SDK payload types are imported under ``TYPE_CHECKING`` only — with ``from __future__ import
+annotations`` every annotation is a string, and the handlers touch payloads purely by duck-typed
+attribute access / ``model_dump()``. So this module imports cleanly even without the private SDK
+installed (the receiver in ``sync_router`` and the client in ``reconcile`` still need it, and both
+are guarded). This also lets ``ResyncPayload`` — added in SDK 0.2.0 — be referenced on an older pin
+without breaking the import: an unimplemented event is a no-op, and here the method is simply never
+invoked until the pin carries ``org.resync``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
-from passport_client import (
-    EntitlementPayload,
-    IdentityLinkPayload,
-    MembershipPayload,
-    OrgPayload,
-    RelationPayload,
-    UnitPayload,
-    UserPayload,
-)
 from sqlmodel import Session
 
 from app.config import get_settings
 from app.database import engine
 from app.models import PassportMembership
 from app.passport import role_projection, store
+
+if TYPE_CHECKING:
+    from passport_client import (
+        EntitlementPayload,
+        IdentityLinkPayload,
+        MembershipPayload,
+        OrgPayload,
+        RelationPayload,
+        ResyncPayload,
+        UnitPayload,
+        UserPayload,
+    )
 
 
 @contextmanager
@@ -57,7 +68,7 @@ def _wrong_org(organization_id: str) -> bool:
 
 
 class PassportHandlers:
-    """Implements the ``passport_client`` ``SyncHandlers`` protocol (all 12 methods).
+    """Implements the ``passport_client`` ``SyncHandlers`` protocol (all 13 methods).
 
     Persistence + commit happen inside each handler (via ``store``); the router acks
     ``2xx`` only after the commit succeeds.
@@ -140,3 +151,28 @@ class PassportHandlers:
             return
         with _session() as session:
             store.apply_entitlement(session, payload.model_dump())
+
+    # --- manual re-sync (own-app bundle, SDK 0.2.0+) ----------------------------------
+    async def resync_org(self, payload: ResyncPayload) -> None:
+        # TRAP 3: UPSERT-ONLY. ``org.resync`` re-emits one org's full current state to THIS
+        # app so a drifted read model converges without a ``snapshot()`` pass. Apply every
+        # collection through the SAME per-aggregate handlers, in FK-safe order
+        # (org -> units -> relations -> memberships -> links -> entitlements). NEVER delete a
+        # local row absent from the bundle, and never treat ``identity_links`` as
+        # authoritative — they are a per-org SUBSET, not a reconciliation/pruning source.
+        # Each per-aggregate handler re-applies its own ``_wrong_org`` filter; the bundle-level
+        # guard below drops a mis-routed bundle wholesale (we still ack 2xx).
+        if str(payload.org_id) != _org_id():
+            return
+        for org in payload.organizations:
+            await self.upsert_org(org)
+        for unit in payload.units:
+            await self.upsert_unit(unit)  # no-op: Prepper does not project Passport units
+        for relation in payload.unit_relations:
+            await self.create_relation(relation)  # no-op
+        for membership in payload.memberships:
+            await self.upsert_membership(membership)
+        for link in payload.identity_links:
+            await self.create_identity_link(link)
+        for entitlement in payload.entitlements:
+            await self.upsert_entitlement(entitlement)

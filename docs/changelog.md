@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.51](#0051---2026-07-09)** — Passport Sync Consumer: Adopt the `org.resync` Manual Re-Sync Handler (SDK 0.2.0, Upsert-Only Fan-Out) with Forward-Compatible Type-Only SDK Imports
 - **[0.0.50](#0050---2026-07-08)** — Passport Sync Consumer: Read-Model Projection of Org/Membership/Entitlement/Identity-Link Events, Signed Sync Receive Endpoint, Role Projection, Entitlement Kill Switch & Nightly Reconciliation
 - **[0.0.49](#0049---2026-06-16)** — Recipe Canvas Polish: Design-Token Migration (266 Hardcoded `zinc-*` Pairs Removed), Terracotta Active/Drop States, Reduced-Motion Support & Cost-Pill Contrast Fix
 - **[0.0.48](#0048---2026-05-22)** — Tasting Session Inline Feedback: Collapsible Per-Dish Feedback Panel Replaces Modal
@@ -58,6 +59,25 @@ All notable changes to Prepper are documented here.
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
 ---
 
+## [0.0.51] - 2026-07-09
+
+### Added
+
+#### Passport Sync Consumer — `org.resync` Manual Re-Sync Handler
+
+Catch-up to the additive SDK 0.2.0 contract. Passport gained a super-admin **manual per-org re-sync**: from the dashboard it re-emits one org's full current state to a single app as one `org.resync` event, letting a drifted read model converge without waiting for the nightly `snapshot()` pass. Prepper now implements the 13th `SyncHandlers` method to consume it. Additive and dormant on the current pin — no runtime behaviour changes by default.
+
+- `resync_org` (`backend/app/passport/handlers.py`) fans the bundle's six collections out through the **same per-aggregate handlers**, in FK-safe order (org → units → relations → memberships → links → entitlements). **Trap 3 — upsert-only:** it never deletes local rows absent from the bundle, and its `identity_links` (a per-org subset, not authoritative) never drive a pruning path. A bundle-level org guard drops a mis-routed bundle wholesale (still acked 2xx).
+- SDK payload types are now imported under `TYPE_CHECKING` only. With `from __future__ import annotations` every annotation is a string touched purely by duck-typed attribute access, so `handlers.py` imports cleanly without the private SDK **and** can reference `ResyncPayload` (new in 0.2.0) while the branch is still pinned to an earlier tag — the method simply never fires until the pin carries `org.resync`. The receiver (`sync_router`) and client (`reconcile`) still require the SDK and remain guarded.
+- `backend/tests/test_passport_sync.py` — two SDK-free tests assert the fan-out order + upsert-only invariant (no remove/delete handler is ever called) and that a wrong-org bundle is dropped.
+
+**Activation note:** the handler is present but stays dormant until the `staging` pyproject pin advances from `passport-client-v0.1.0rc1` to `v0.2.0rc1` (Renovate's prerelease channel bump; `main` tracks the `v0.2.0` stable). The dispatch guard makes the interim safe: unknown on an older SDK, no-op if unimplemented.
+
+**Files changed:**
+- `backend/app/passport/handlers.py`, `backend/tests/test_passport_sync.py`
+
+---
+
 ## [0.0.50] - 2026-07-08
 
 ### Added
@@ -78,14 +98,14 @@ Prepper is now a conforming Passport sync consumer. Passport is the source of tr
 #### Reconciliation, Tests & Dependency Wiring
 - Nightly server-side reconciliation via a single `snapshot()` call (`python -m app.passport.reconcile`) — a scheduled job, not client polling.
 - `backend/tests/test_passport_sync.py` — 11 tests covering the version guard, both traps, immutable insert-if-absent / delete-if-present, role projection with grant revocation, and the entitlement kill switch (including fail-open).
-- Private `passport-client` SDK added to `pyproject.toml` (two-channel Renovate: `staging` tracks prerelease `rc` tags, `main` tracks stable); root `renovate.json` opens CI-gated bump PRs on new tags.
+- Private `passport-client` SDK added to `pyproject.toml` (two-channel Renovate: `staging` tracks prerelease `rc` tags, `main` tracks stable); root `renovate.json` opens CI-gated bump PRs on new tags. PR workflow `.github/workflows/ci.yml` installs the private SDK (reusing the `EBB_PACKAGES_TOKEN` secret), import-smoke-tests `passport_client`, and runs ruff + pytest — the gate Renovate auto-merge waits on.
 
 **Files changed:**
 - `backend/app/models/passport.py`, `backend/app/models/__init__.py`
 - `backend/app/passport/` — `store.py`, `role_projection.py`, `access.py`, `handlers.py`, `sync_router.py`, `identity.py`, `reconcile.py`
 - `backend/app/api/auth.py`, `backend/app/api/deps.py`, `backend/app/config.py`, `backend/app/main.py`
 - `backend/alembic/versions/p0rtsync9m0d1_add_passport_read_model.py`
-- `backend/tests/test_passport_sync.py`, `backend/.env.example`, `backend/pyproject.toml`, `renovate.json`
+- `backend/tests/test_passport_sync.py`, `backend/.env.example`, `backend/pyproject.toml`, `renovate.json`, `.github/workflows/ci.yml`
 
 ---
 

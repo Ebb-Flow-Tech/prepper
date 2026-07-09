@@ -1,0 +1,51 @@
+# PR CI — the gate Renovate's auto-merge waits for.
+#
+# It MUST (a) install the PRIVATE passport-client dep and (b) actually exercise it (import +
+# tests), so a mis-versioned SDK break fails here before it can auto-merge. It fetches the private
+# git deps (passport-client, ebb-flow-tech-auth) with the SAME secret the Docker build already uses,
+# `EBB_PACKAGES_TOKEN`, via git's insteadOf rewrite.
+#
+# NOTE: install fails (correctly) until the pinned passport-client tag is pushed on
+# missiongroupsystems/passport — that red check is a real signal, not a CI bug.
+#
+# Two channels: PRs into `staging` (prerelease rc pin) and `main` (stable pin) both run this.
+# The required-status-check name is the job id below — `test`.
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main, staging]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"   # matches the Dockerfile runtime (python:3.11-slim)
+
+      # Let pip fetch the private git deps. Reuses the repo's existing packages PAT.
+      - name: Configure private git access
+        run: |
+          git config --global \
+            url."https://x-access-token:${{ secrets.EBB_PACKAGES_TOKEN }}@github.com/".insteadOf \
+            "https://github.com/"
+
+      - name: Install (incl. private passport-client)
+        run: pip install -e ".[dev]"
+
+      # Proves the SDK imports against the pinned tag — catches a broken install / import-level break.
+      - name: Import smoke-test
+        run: python -c "import passport_client; print('passport_client', passport_client.__version__)"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
