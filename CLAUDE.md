@@ -28,7 +28,7 @@ Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe
 
 ## Commands
 ```
-# Backend (cd backend)
+# Backend (cd backend) — requires Python 3.12+ (passport-client declares requires-python >=3.12)
 python -m venv venv && source venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env

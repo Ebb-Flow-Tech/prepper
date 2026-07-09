@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -16,9 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 
 # Install Python dependencies.
-# ebb-flow-tech-auth installs from a private GitHub repo — inject a PAT via
+# ebb-flow-tech-auth and passport-client install from private GitHub repos — inject a PAT via
 # BuildKit secret. Deploy with: flyctl deploy --build-secret gh_token=$EBB_PACKAGES_TOKEN
+#
+# The pip upgrade is load-bearing: the image's bundled pip (24.0) answers an unsatisfiable
+# constraint by backtracking to ResolutionTooDeep after ~45min instead of naming the offender.
 RUN --mount=type=secret,id=gh_token,required=false \
+    pip install --no-cache-dir --upgrade pip && \
     if [ -f /run/secrets/gh_token ]; then \
         TOKEN=$(cat /run/secrets/gh_token) && \
         git config --global url."https://${TOKEN}@github.com/".insteadOf "https://github.com/"; \

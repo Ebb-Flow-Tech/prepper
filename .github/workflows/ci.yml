@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"   # matches the Dockerfile runtime (python:3.11-slim)
+          python-version: "3.12"   # matches the Dockerfile runtime (python:3.12-slim)
 
       # Let pip fetch the private git deps. Reuses the repo's existing packages PAT.
       - name: Configure private git access

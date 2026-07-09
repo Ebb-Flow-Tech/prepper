@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.52](#0052---2026-07-09)** — Build Fix: Python 3.12 Floor Across Image, CI & Package Metadata — Unblocks the Staging Deploy `ResolutionTooDeep` Caused by `passport-client`'s `requires-python >=3.12`
 - **[0.0.51](#0051---2026-07-09)** — Passport Sync Consumer: Adopt the `org.resync` Manual Re-Sync Handler (SDK 0.2.0, Upsert-Only Fan-Out) with Forward-Compatible Type-Only SDK Imports
 - **[0.0.50](#0050---2026-07-08)** — Passport Sync Consumer: Read-Model Projection of Org/Membership/Entitlement/Identity-Link Events, Signed Sync Receive Endpoint, Role Projection, Entitlement Kill Switch & Nightly Reconciliation
 - **[0.0.49](#0049---2026-06-16)** — Recipe Canvas Polish: Design-Token Migration (266 Hardcoded `zinc-*` Pairs Removed), Terracotta Active/Drop States, Reduced-Motion Support & Cost-Pill Contrast Fix
@@ -57,6 +58,27 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.52] - 2026-07-09
+
+### Fixed
+
+#### Build — Python 3.12 Floor Unblocks the Staging Deploy
+
+The staging Fly deploy failed after ~74 minutes with `pip._vendor.resolvelib.resolvers.ResolutionTooDeep: 200000`. The message is a symptom, not the cause: `passport-client` (added in 0.0.50) declares `requires-python = ">=3.12"` on every published tag, while `backend/Dockerfile` built on `python:3.11-slim`. Because the SDK is a direct git reference, pip cannot fall back to an older version of it — the requirement has zero valid candidates, so the resolver backtracked through every other package's version space (visibly walking `python-multipart` 0.0.12 → 0.0.9, then starting on `pyjwt`) until it hit the 200000-round cap. The image's bundled **pip 24.0** reports the cap rather than naming the offending constraint; newer pip surfaces the real error, `Package 'passport-client' requires a different Python`.
+
+- `backend/Dockerfile` — `python:3.11-slim` → `python:3.12-slim`. Also upgrades pip before installing: the bundled 24.0 turns an unsatisfiable constraint into a 45-minute backtracking storm instead of a one-line error, so the upgrade is load-bearing for future diagnosability, not cosmetic.
+- `backend/pyproject.toml` — `requires-python` `>=3.11` → `>=3.12`. The old floor was simply untrue given the `passport-client` dependency, and understating it is what let pip thrash rather than fail fast.
+- `.github/workflows/ci.yml` — CI runner Python `3.11` → `3.12`, keeping the gate matched to the image it guards.
+
+Verified by a `flyctl deploy --build-only --remote-only` against `fly.stage.toml`: the `pip install` layer now completes in **26.5s** (previously 4450s before dying), `passport-client-0.1.0` builds and installs cleanly, and all compiled wheels resolve as `cp312`. No backtracking occurred. No release command ran and no machines were replaced, so the passport read-model migration remains unapplied.
+
+**Dev-facing:** local virtualenvs now require Python 3.12+. `ruff`'s `target-version` and `mypy`'s `python_version` still read `py311`/`3.11`; these lag the real floor but are left alone deliberately — bumping ruff's target can activate new `UP` autofixes and turn CI red on existing code, which belongs in its own change.
+
+**Files changed:**
+- `backend/Dockerfile`, `backend/pyproject.toml`, `.github/workflows/ci.yml`
+
 ---
 
 ## [0.0.51] - 2026-07-09

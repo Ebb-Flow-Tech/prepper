@@ -3,7 +3,9 @@ name = "recipe-builder-api"
 version = "0.1.0"
 description = "Recipe Builder MVP - FastAPI backend for recipe management and costing"
 readme = "README.md"
-requires-python = ">=3.11"
+# >=3.12 because passport-client (below) declares requires-python >=3.12. Keep these in step:
+# a lower floor here makes pip's resolver thrash to ResolutionTooDeep rather than name the conflict.
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
