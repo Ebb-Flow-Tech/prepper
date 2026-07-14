@@ -13,7 +13,7 @@ export class LoginPage {
     this.emailInput = page.locator('#email');
     this.passwordInput = page.locator('#password');
     this.submitButton = page.locator('button[type="submit"]');
-    this.errorMessage = page.locator('.bg-red-50, [class*="bg-red"]').first();
+    this.errorMessage = page.locator('[role="alert"]').first();
     this.registerLink = page.locator('a[href="/register"]');
   }
 

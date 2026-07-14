@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.1.0](#010---2026-07-14)** — Post-CI Review Remediation: E2E Suite Un-Rotted (Semantic Selectors), Contrast Fix on Canvas Empty States, `archived` No Longer Reads as an Error & Version-Tree De-Zinced
 - **[0.0.50](#0050---2026-07-14)** — Mission Systems CI: Self-Hosted Satoshi, Three-Tier Token Architecture, Forest Accent Budget, Semantic Feedback Palette, Dark Mode Removed & Product-Wide Sentence Case (106 Files)
 - **[0.0.49](#0049---2026-06-16)** — Recipe Canvas Polish: Design-Token Migration (266 Hardcoded `zinc-*` Pairs Removed), Terracotta Active/Drop States, Reduced-Motion Support & Cost-Pill Contrast Fix
 - **[0.0.48](#0048---2026-05-22)** — Tasting Session Inline Feedback: Collapsible Per-Dish Feedback Panel Replaces Modal
@@ -56,6 +57,89 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.1.0] - 2026-07-14
+
+A review pass over `0.0.50` (Mission Systems CI). The token architecture itself held up — build, `tsc`, and lint were green, dark-mode removal was complete, and every contrast ratio the plan claimed was verified numerically and found accurate. What the CI pass missed was the *fallout*: a 129-file restyle that renames classes and rewrites copy silently invalidates anything that asserts on classes or copy.
+
+This release fixes what that pass broke or left behind. **No feature work.** 12 files changed.
+
+### Fixed
+
+#### The E2E suite was red — and had been for two releases
+
+`0.0.50` verified `npm run build`, `tsc`, `lint`, and Playwright *visual* checks. It never ran the 15-spec **functional** suite, which is not wired into CI (`.github/workflows/` only carries `fly-deploy.yml`) and so fails silently. Six tests were broken by the restyle:
+
+| Spec | Asserted on | Why it broke |
+|---|---|---|
+| `auth.spec.ts` ×4 (`:61`, `:143`, `:282`, `:294`, via `pages/LoginPage.ts:16`) | `.bg-red-50, [class*="bg-red"]` | The error banner became `bg-[var(--color-feedback-error-tint)]`. The locator matched nothing; these are hard `toBeVisible()` assertions. |
+| `ingredients.spec.ts:71` | `toContainText('Add New Ingredient')` | Sentence case → "Add new ingredient". |
+| `outlets.admin.spec.ts:30` | `toContainText('Add New Outlet')` | Sentence case → "Add outlet". |
+
+A seventh — `navigation.spec.ts:42`, asserting the active nav item's class contains `bg-zinc` — had been failing since **`0.0.49`**, when `bg-zinc-100` became `bg-secondary`. Nobody noticed, because no spec file has been touched in five commits. That is the more important finding: the regression net was already torn, and the CI pass widened the hole.
+
+**The fix is not to re-pin the selectors to the new strings** — that just reloads the same gun. Every repaired assertion now targets *semantics*, which a restyle cannot move:
+
+- Error banners are located by **`role="alert"`**, not by a Tailwind class. This required adding `role="alert"` to the login (`login/page.tsx:113`) and register (`register/page.tsx:167`) error `<div>`s — an accessibility improvement in its own right, since screen readers now announce auth failures.
+- The active nav item is located by **`aria-current="page"`** (already emitted by `TopNav`), not by its background class.
+- Modal titles use **case-insensitive regexes** (`/add (new )?ingredient/i`) instead of exact copy.
+
+> ⚠️ The suite still requires a live backend, a running frontend, and seeded auth state, so it could not be executed during this pass — the repairs are verified statically (the asserted attributes exist in the rendered source; both titles full-match their regexes). **Run `npm run test:e2e` against a live stack before shipping.** Wiring this suite into CI is the obvious follow-up; a test suite nobody runs is not a safety net.
+
+#### Contrast: canvas empty states used the *disabled* token for live text
+
+`CanvasTab.tsx:303`, `:370`, `:810` rendered **"No pricing"**, **"No suppliers"**, and **"No ingredients"** with `--color-text-disabled` — `#8d8a82`, **3.45:1**, below the 4.5:1 WCAG AA floor. These sit in the else-branch of a ternary: they are live informational content, not disabled controls, so no WCAG exemption applies. The token's own definition in `globals.css:122` says *"never essential text"* — and on a costing product, "No pricing" is precisely essential, since it's the signal that an ingredient has no price attached.
+
+All three now use `text-muted-foreground` (`#6b6962`, **5.49:1** — AA pass). The `ImagePlus` placeholder icons still use the disabled token, correctly: they are decorative chrome, and at 3.45:1 they clear the 3:1 non-text bar.
+
+#### `archived` recipes read as an error in one view and a warning in two others
+
+Same domain state, three call sites, two different semantic colours after the palette sweep:
+
+- `RecipeListRow.tsx:23` → `'destructive'` (clay/red)
+- `rnd/page.tsx:22` and `rnd/r/[recipeId]/page.tsx:58` → `'warning'`
+
+Per CLAUDE.md, archived is a **normal soft-delete state** — "archived records remain for historical reference." Painting it with the error palette invents a failure signal that doesn't exist, which is exactly the mistake the CI pass elsewhere took care to avoid (§ "decorative colour went neutral, not recoloured"). `RecipeListRow` is now aligned to `'warning'`, matching the other two.
+
+#### Version tree still rendered in cold zinc
+
+The one place the "0 raw palette colours" grep couldn't see, because it matched utility classes and not hex literals. `VersionsTab.tsx` and `rnd/r/[recipeId]/page.tsx` both hardcoded `#71717a` (edge strokes, arrow markers) and `#e4e4e7` (dot grid) — Tailwind **zinc**, the cold greys `globals.css:63` explicitly forbids — plus a `prose-zinc` typography class.
+
+ReactFlow paints these into SVG **presentation attributes**, which do not resolve CSS custom properties, so they genuinely cannot be tokens. They are now named constants (`TREE_EDGE_COLOR`, `TREE_GRID_COLOR`) carrying the **warm** ink values (`#8d8a82` at 3.45:1 — clears 1.4.11 for a 2px connector — and a `#e6e3dc` beige hairline), with a comment stating why the token layer can't reach here. `prose-zinc` → `prose-stone` (warm).
+
+#### Dead title-cased fallback
+
+`ingredients/page.tsx:81` still returned `{ 'All Ingredients': … }` while `:49` returned `{ 'All ingredients': … }`. Unreachable (all four `GroupByOption` values are handled above it) and display-only, but an inconsistent literal that `general.md` prohibits. Aligned.
+
+### Known gaps / follow-ups
+
+Reviewed and deliberately **not** changed this pass — recorded so they aren't rediscovered cold:
+
+| Gap | Detail |
+|---|---|
+| **`0.0.50` was not "styling only"** | It added a `loading` prop to `Button` (still **zero callers**), added `role="switch"` / `aria-hidden` / `aria-current` / `aria-expanded`, and dropped `disabled:pointer-events-none`. That last one means native tooltips on disabled buttons now fire where they previously could not (`AddItemPanel.tsx:92` has exactly such a tooltip). All are improvements; none need reverting. The *label* was wrong, not the code. |
+| **Outline button border fails WCAG 1.4.11** | `Button.tsx:46` uses `border-border` = `rgba(23,23,23,0.16)` ≈ **1.40:1** — the precise value `globals.css:82` names as failing. The CI pass fixed this for inputs (→ `#807d76`, 4.11:1) but not for buttons. Either the 3:1 control-boundary standard applies to buttons or it doesn't; today the file's own comment indicts its own button. Same for the `Switch` off-track (`--border-strong`, **1.86:1**). |
+| **Disabled + checked `Switch` is invisible** | `disabled:bg-muted` beats `checked:bg-primary` (equal specificity, later in the compiled sheet), yielding a `#f6f5f1` track with a white knob — **1.05:1**. Currently **unreachable**: the only `<Switch>` call site (`RightPanel.tsx:465`) never passes `disabled`. A landmine for whoever adds the second one. |
+| **60 × `font-semibold` render as Bold 700** | Satoshi ships 300/400/500/700 — no 600 cut. CSS weight matching searches upward, so every `font-semibold` resolves to **700**, quietly undoing the "headings are 500" intent. Needs a sweep. |
+| **No font preload** | `font-display: swap` with woff2s discovered only after CSS parse ⇒ guaranteed FOUT on first paint. Preloading Regular + Medium is the cheap win. |
+| **Tasting invitation email still carries the old brand** | `api/send-tasting-invitation/route.ts` hardcodes terracotta `#c0431a` (×11) plus Playfair Display / DM Sans. Email HTML genuinely cannot use CSS variables, but customers currently receive terracotta-branded invitations from a forest-green product. |
+| **Drag ghost no longer distinguishes ingredient from recipe** | `DragPreviewCard` is neutral for both. Its docstring claims they're "told apart by label and image" — untrue for an **image-less recipe**, which now renders pixel-identical to an ingredient card. Deliberate under the accent budget, but they have different drop targets. |
+| **Token-layer slack** | Tier 2 is reachable only via arbitrary-value escapes (`text-[var(--color-text-primary)]`) — `@theme inline` bridges tier 3 only, so "never read tier 1" is convention, not enforcement. The `--space-*` 4px grid is registered nowhere and is dead but for one consumer. Orphans: `--border-subtle`, `--surface-accent`, `--elevation-0`, `--c-chart-2..8`, `--tertiary`. |
+| **File size** | `CanvasTab.tsx` is 3,179 lines (~6× the 500-line limit); 15 files exceed it. Pre-existing, untouched, still the clearest refactor target. |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run build` | ✅ Compiled successfully, 27/27 static pages |
+| `tsc --noEmit` | ✅ Pass |
+| `npm run lint` | ✅ 0 errors (87 pre-existing warnings, all unused-vars) |
+| `pytest` (backend) | ⚪ Not run — **backend untouched**, 0 files changed under `backend/` |
+| `npm run test:e2e` | ⚠️ **Not executed** — needs live backend + seeded auth. Repairs verified statically. |
+| Compliance greps | ✅ zinc hex 0 · `prose-zinc` 0 · disabled-token-on-live-text 0 · class/copy-coupled e2e selectors 0 |
+| Contrast (recomputed) | ✅ `#807d76`/white 4.11:1 · white/forest 12.42:1 · muted 5.49:1 · all 4 feedback tones AA on tint |
+
 ---
 
 ## [0.0.50] - 2026-07-14

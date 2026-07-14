@@ -300,7 +300,7 @@ function StagedIngredientCard({
               {' '}(${unitCost.toFixed(2)}/{staged.unit})
             </span>
           ) : (
-            <span className="text-[var(--color-text-disabled)]">No pricing</span>
+            <span className="text-muted-foreground">No pricing</span>
           )}
         </div>
 
@@ -367,7 +367,7 @@ function StagedIngredientCard({
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1 text-[var(--color-text-disabled)]">No suppliers</p>
+                <p className="mt-1 text-muted-foreground">No suppliers</p>
               )}
             </div>
           </div>
@@ -807,7 +807,7 @@ function StagedRecipeCard({
                 })()}
                 </ul>
               ) : (
-                <p className="mt-1 text-[var(--color-text-disabled)]">No ingredients</p>
+                <p className="mt-1 text-muted-foreground">No ingredients</p>
               )}
             </div>
 

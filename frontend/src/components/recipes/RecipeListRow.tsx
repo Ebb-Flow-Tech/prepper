@@ -17,10 +17,10 @@ interface RecipeListRowProps {
   matchedViaSubDish?: boolean;
 }
 
-const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'destructive' | 'secondary'> = {
+const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
   draft: 'secondary',
   active: 'success',
-  archived: 'destructive',
+  archived: 'warning',
 };
 
 export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [], categoryNames = [], matchedViaSubDish }: RecipeListRowProps) {

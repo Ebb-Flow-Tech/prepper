@@ -52,6 +52,12 @@ interface RndRecipePageProps {
 
 type TabType = 'overview' | 'versions';
 
+// ReactFlow paints edges and the dot grid into SVG presentation attributes, which
+// do not resolve CSS custom properties — these must be literals. Values mirror the
+// warm ink ramp (--c-ink-300 / a beige hairline); never a cold grey.
+const TREE_EDGE_COLOR = '#8d8a82';
+const TREE_GRID_COLOR = '#e6e3dc';
+
 const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
   draft: 'secondary',
   active: 'success',
@@ -291,10 +297,10 @@ function buildVersionGraph(
         target: String(recipe.id),
         type: 'smoothstep',
         animated: false,
-        style: { stroke: '#71717a', strokeWidth: 2 },
+        style: { stroke: TREE_EDGE_COLOR, strokeWidth: 2 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: '#71717a',
+          color: TREE_EDGE_COLOR,
           width: 20,
           height: 20,
         },
@@ -848,7 +854,7 @@ function OverviewTab({
                     ))}
                   </ol>
                 ) : recipe.instructions_raw ? (
-                  <div className="prose prose-zinc max-w-none">
+                  <div className="prose prose-stone max-w-none">
                     <p className="whitespace-pre-wrap text-foreground">
                       {recipe.instructions_raw}
                     </p>
@@ -963,7 +969,7 @@ function VersionsTab({
             maxZoom={1}
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="#e4e4e7" gap={16} />
+            <Background color={TREE_GRID_COLOR} gap={16} />
           </ReactFlow>
         </div>
 

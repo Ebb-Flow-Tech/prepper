@@ -110,7 +110,7 @@ export default function LoginPage() {
               />
             </div>
             {error && (
-              <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-3 text-sm text-[var(--color-feedback-error)]">
+              <div role="alert" className="rounded-lg bg-[var(--color-feedback-error-tint)] p-3 text-sm text-[var(--color-feedback-error)]">
                 {error}
               </div>
             )}

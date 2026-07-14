@@ -78,7 +78,7 @@ function groupIngredients(
     }, {} as Record<string, Ingredient[]>);
   }
 
-  return { 'All Ingredients': ingredients };
+  return { 'All ingredients': ingredients };
 }
 
 function IngredientsListTab() {

@@ -27,7 +27,7 @@ test.describe('Outlets Page (/outlets) — Admin only', () => {
     // so this assertion confirms the actual modal panel is visible.
     const modal = page.locator('[role="dialog"]');
     await expect(modal).toBeVisible({ timeout: 5_000 });
-    await expect(modal.locator('#modal-title')).toContainText('Add New Outlet');
+    await expect(modal.locator('#modal-title')).toHaveText(/add (new )?outlet/i);
   });
 
   test('creating an outlet adds it to the grid', async ({ page }) => {

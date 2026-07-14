@@ -34,12 +34,13 @@ test.describe('Top Navigation', () => {
   });
 
   test('active page link is highlighted', async ({ page }) => {
-    // The nav item link (not the logo) has bg-zinc-100 when active
-    // Logo is a[href="/recipes"].first(), nav item is the second one (has rounded-md class)
-    const recipesNavItem = page.locator('nav').first().locator('a[href="/recipes"][class*="rounded"]');
+    // Assert the semantic marker, not the styling: the active nav item carries
+    // aria-current="page". Class-based assertions rot on every restyle.
+    const recipesNavItem = page
+      .locator('nav')
+      .first()
+      .locator('a[href="/recipes"][aria-current="page"]');
     await expect(recipesNavItem).toBeVisible();
-    const classes = await recipesNavItem.getAttribute('class') || '';
-    expect(classes).toContain('bg-zinc');
   });
 
   test('username is displayed in the nav', async ({ page }) => {

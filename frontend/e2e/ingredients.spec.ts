@@ -68,7 +68,7 @@ test.describe('Ingredients List Page (/ingredients)', () => {
     await addBtn.click();
     const modal = page.locator('[role="dialog"]');
     await expect(modal).toBeVisible({ timeout: 5_000 });
-    await expect(modal.locator('#modal-title')).toContainText('Add New Ingredient');
+    await expect(modal.locator('#modal-title')).toHaveText(/add (new )?ingredient/i);
   });
 
   test.describe('Filters', () => {

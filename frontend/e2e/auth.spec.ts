@@ -279,7 +279,7 @@ test.describe('Register Page (/register)', () => {
       await page.locator('#confirmPassword').fill('ab');
       await page.locator('button[type="submit"]').click();
       await page.waitForTimeout(500);
-      const errorDiv = page.locator('.bg-red-50, [class*="bg-red"]').first();
+      const errorDiv = page.locator('[role="alert"]').first();
       await expect(errorDiv).toBeVisible({ timeout: 3_000 });
     });
 
@@ -291,7 +291,7 @@ test.describe('Register Page (/register)', () => {
       await page.locator('#confirmPassword').fill('different456');
       await page.locator('button[type="submit"]').click();
       await page.waitForTimeout(500);
-      const errorDiv = page.locator('.bg-red-50, [class*="bg-red"]').first();
+      const errorDiv = page.locator('[role="alert"]').first();
       await expect(errorDiv).toBeVisible({ timeout: 3_000 });
     });
 
