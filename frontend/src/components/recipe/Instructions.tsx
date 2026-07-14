@@ -87,7 +87,7 @@ export function Instructions({ recipe, canEdit }: InstructionsProps) {
           className={cn(
             'flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors',
             instructionsTab === 'freeform'
-              ? 'bg-card text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-elevation-1'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -98,7 +98,7 @@ export function Instructions({ recipe, canEdit }: InstructionsProps) {
           className={cn(
             'flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors',
             instructionsTab === 'steps'
-              ? 'bg-card text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-elevation-1'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >

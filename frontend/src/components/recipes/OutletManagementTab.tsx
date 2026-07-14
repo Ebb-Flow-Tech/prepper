@@ -72,13 +72,13 @@ function EditOutletModal({ outlet, allOutlets, onClose }: EditOutletModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--color-scrim)]" onClick={onClose} />
       <form
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-lg p-6 shadow-lg w-full max-w-md mx-4"
+        className="relative bg-card border border-border rounded-2xl p-6 shadow-elevation-3 w-full max-w-md mx-4"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-lg">Edit Outlet</h3>
+          <h3 className="font-medium text-lg">Edit outlet</h3>
           <Button variant="ghost" size="icon" onClick={onClose} type="button">
             <X className="h-4 w-4" />
           </Button>
@@ -105,7 +105,7 @@ function EditOutletModal({ outlet, allOutlets, onClose }: EditOutletModalProps) 
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Outlet Type</label>
+            <label className="block text-sm font-medium mb-1">Outlet type</label>
             <Select
               value={formData.outlet_type}
               onChange={(e) => setFormData((prev) => ({ ...prev, outlet_type: e.target.value as OutletType }))}
@@ -114,11 +114,11 @@ function EditOutletModal({ outlet, allOutlets, onClose }: EditOutletModalProps) 
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Parent Outlet</label>
+            <label className="block text-sm font-medium mb-1">Parent outlet</label>
             <select
               value={formData.parent_outlet_id || ''}
               onChange={(e) => setFormData((prev) => ({ ...prev, parent_outlet_id: e.target.value ? parseInt(e.target.value) : null }))}
-              className="w-full px-3 py-2 border border-input rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-input rounded-lg bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">-- None --</option>
               {allOutlets
@@ -136,7 +136,7 @@ function EditOutletModal({ outlet, allOutlets, onClose }: EditOutletModalProps) 
               Cancel
             </Button>
             <Button type="submit" disabled={updateOutlet.isPending}>
-              {updateOutlet.isPending ? 'Saving...' : 'Save Changes'}
+              {updateOutlet.isPending ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </div>
@@ -269,7 +269,7 @@ export function OutletManagementTab({ userType }: OutletManagementTabProps) {
           {userType === 'admin' && (
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Outlet</span>
+              <span className="hidden sm:inline">Add outlet</span>
             </Button>
           )}
         </PageHeader>
@@ -311,13 +311,13 @@ export function OutletManagementTab({ userType }: OutletManagementTabProps) {
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
           )

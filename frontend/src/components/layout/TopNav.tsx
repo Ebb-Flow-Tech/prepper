@@ -103,22 +103,14 @@ export function TopNav() {
         {/* Logo */}
         <Link
           href="/recipes"
-          className="flex items-center mr-4 md:mr-8"
+          className="flex items-center mr-4 md:mr-8 rounded-lg"
         >
           <Image
             src="/logo/Reciperep logo inline 840x180.png"
             alt="Reciperep"
             width={140}
             height={30}
-            className="h-7 w-auto dark:hidden"
-            priority
-          />
-          <Image
-            src="/logo/Reciperep logo inline light 840x180.png"
-            alt="Reciperep"
-            width={140}
-            height={30}
-            className="h-7 w-auto hidden dark:block"
+            className="h-7 w-auto"
             priority
           />
         </Link>
@@ -130,7 +122,9 @@ export function TopNav() {
             <div className="flex flex-1 md:hidden justify-end items-center">
               <button
                 onClick={() => setIsMenuOpen((v) => !v)}
-                className="rounded-md p-2 text-muted-foreground hover:bg-secondary"
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={isMenuOpen}
+                className="rounded-lg p-2 text-muted-foreground transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
               >
                 {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
@@ -148,18 +142,21 @@ export function TopNav() {
                     <Link
                       href={href}
                       onClick={(e) => handleNavClick(e, href)}
+                      aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                        // 8px hit area; active carries --surface-selected + weight 500 (§7.2).
+                        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors duration-[120ms]',
                         isActive
-                          ? 'bg-secondary text-foreground'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                          ? 'bg-background-contrast font-medium text-foreground'
+                          : 'font-normal text-muted-foreground hover:bg-accent hover:text-foreground'
                       )}
                     >
                       <Icon className="h-4 w-4" />
                       <span className="hidden xl:inline">{label}</span>
                     </Link>
-                    {/* Tooltip: visible only at md-2xl (when labels are hidden) */}
-                    <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 hidden md:block xl:hidden rounded-md bg-popover px-2 py-1 text-xs font-medium text-popover-foreground opacity-0 transition-opacity group-hover:opacity-100 whitespace-nowrap z-50">
+                    {/* Tooltip: visible only at md-2xl (when labels are hidden). §12.7 —
+                        dark warm fill, white 12px text, 6px radius. */}
+                    <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--surface-tooltip)] px-2 py-1 text-xs font-normal text-[var(--color-text-inverse)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 md:block xl:hidden">
                       {label}
                     </div>
                   </div>
@@ -170,16 +167,26 @@ export function TopNav() {
             {/* User Info and Logout (Desktop) */}
             <div className="hidden md:flex items-center gap-3">
               {username && (
-                <span className="hidden md:inline text-sm font-medium text-muted-foreground">
-                  {username}
-                </span>
+                <div className="flex items-center gap-2">
+                  {/* Avatar is sanctioned brand chrome — one of the accent's four
+                      named roles (§4). */}
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-medium uppercase text-primary-foreground"
+                  >
+                    {username.charAt(0)}
+                  </span>
+                  <span className="hidden text-sm text-muted-foreground md:inline">
+                    {username}
+                  </span>
+                </div>
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
               >
                 <LogOut className="h-4 w-4" />
-                <span className="hidden md:inline">Logout</span>
+                <span className="hidden md:inline">Log out</span>
               </button>
             </div>
           </>
@@ -195,7 +202,7 @@ export function TopNav() {
             onClick={() => setIsMenuOpen(false)}
           />
           {/* Menu */}
-          <div className="absolute top-16 left-0 right-0 z-50 border-b border-border bg-card shadow-lg md:hidden">
+          <div className="absolute top-16 left-0 right-0 z-50 border-b border-border bg-popover shadow-elevation-2 md:hidden">
             <div className="flex flex-col py-2 px-2">
               {NAV_ITEMS.filter((item) => {
                 if (item.adminOnly && userType !== 'admin') return false;
@@ -210,11 +217,13 @@ export function TopNav() {
                       setIsMenuOpen(false);
                       handleNavClick(e, href);
                     }}
+                    aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      // ≥44px touch target (§6.2, §15).
+                      'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-[120ms]',
                       isActive
-                        ? 'bg-secondary text-foreground'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        ? 'bg-background-contrast font-medium text-foreground'
+                        : 'font-normal text-muted-foreground hover:bg-accent hover:text-foreground'
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -224,16 +233,22 @@ export function TopNav() {
               })}
               <div className="my-2 border-t border-border" />
               {username && (
-                <div className="px-3 py-2 text-sm font-medium text-muted-foreground">
-                  {username}
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-medium uppercase text-primary-foreground"
+                  >
+                    {username.charAt(0)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">{username}</span>
                 </div>
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Logout</span>
+                <span>Log out</span>
               </button>
             </div>
           </div>
@@ -244,7 +259,7 @@ export function TopNav() {
         isOpen={showUnsavedModal}
         onClose={handleCancelLeave}
         onConfirm={handleConfirmLeave}
-        title="Unsaved Changes"
+        title="Unsaved changes"
         message="You have unsaved changes. If you leave now, your work will be lost."
         confirmLabel="Leave"
         cancelLabel="Stay"

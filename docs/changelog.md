@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.50](#0050---2026-07-14)** — Mission Systems CI: Self-Hosted Satoshi, Three-Tier Token Architecture, Forest Accent Budget, Semantic Feedback Palette, Dark Mode Removed & Product-Wide Sentence Case (106 Files)
 - **[0.0.49](#0049---2026-06-16)** — Recipe Canvas Polish: Design-Token Migration (266 Hardcoded `zinc-*` Pairs Removed), Terracotta Active/Drop States, Reduced-Motion Support & Cost-Pill Contrast Fix
 - **[0.0.48](#0048---2026-05-22)** — Tasting Session Inline Feedback: Collapsible Per-Dish Feedback Panel Replaces Modal
 - **[0.0.47](#0047---2026-05-20)** — Tasting Session Dish Reordering: Drag-and-Drop Sequence Control for Session Creators
@@ -55,6 +56,115 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.50] - 2026-07-14
+
+Applied the **Mission Systems product CI** across the whole frontend, replacing the interim brand pass from 0.0.49. Styling-only: no API, model, hook, or behaviour changes anywhere. 106 files changed (+1,401 / −1,824 — a net reduction of 423 lines).
+
+This entry supersedes two decisions made in 0.0.49: the `game-card` canvas aesthetic (explicitly preserved there) is now **removed**, and the terracotta/Polymath brand is replaced by **forest green / Satoshi**.
+
+### Changed
+
+#### Identity — Satoshi Self-Hosted, Typekit Removed
+
+- **`layout.tsx`**: removed the Adobe Typekit `<link>` (Polymath) and the Manrope `next/font` import. Fonts are no longer fetched from a third-party CDN at render time.
+- **`public/fonts/satoshi/`** (new): Satoshi self-hosted as 5 `.woff2` cuts — Light 300, Regular 400, Italic 400, Medium 500, Bold 700 — wired via `@font-face` with `font-display: swap`.
+- **Geist Mono** retained as the single sanctioned second face, scoped to product codes, SKUs, and IDs. Never used for prose or labels.
+- **Body weight is now 400** (was inheriting a lighter cut). 300 is reserved for ≥24px display moments only. Headings are **500**, not 600/700 — hierarchy comes from size and weight on one family.
+
+#### Token Architecture — Three Tiers
+
+`globals.css` rewritten (720 → 439 lines) as a strict three-tier system:
+
+1. **Primitives** (`--c-*`) — the only place a raw hex may appear: forest `#1d3a2a`, the warm ink ramp (`#171717` → `#8d8a82`), beige surfaces, the four feedback hues, the `#807d76` control border, and 8 categorical chart series.
+2. **Semantic aliases** (`--color-text-*`, `--surface-*`, `--color-feedback-*`, `--border-*`, `--elevation-*`) — role → primitive.
+3. **Component tokens** — which also rebind the app's *existing* Tailwind utility names (`bg-card`, `text-muted-foreground`, `border-border`, `bg-primary`…) onto tier 2.
+
+That third tier is why 106 files inherited the CI without a class-by-class rewrite. **Consequence: re-skinning the product, or adding dark mode back later, means editing the tier-2 alias map alone — components never reference a hex or a `--c-*` primitive.**
+
+The previous HSL-channel convention (`hsl(var(--token))`) is gone; tokens now hold hex directly. All 48 consumer sites converted.
+
+#### Brand Accent Budget
+
+Forest `#1d3a2a` is now the **only** brand colour, and is spent solely on four named roles: the primary button, the active/selected state, checked controls (checkbox, radio, toggle, focus ring), and brand chrome (avatar, logo tile). Nothing else in the product is green.
+
+Critically, **the accent is not the success colour** — `#1d3a2a` reads as "dark/authoritative", not "healthy". Success has its own legible token (`#2f6b46`).
+
+#### Semantic Feedback Palette
+
+Every stateful colour now maps to one of four AA-verified roles, each with a text tone and a tint background:
+
+| Role | Text/icon | Tint | Used for |
+|---|---|---|---|
+| `error` | `#9a3b2e` clay | `#fbf1ef` | destructive, delete, archived, loss |
+| `warning` | `#8a5a1f` ochre | `#f8f1e3` | wastage, unsaved, low stock, allergens |
+| `success` | `#2f6b46` green | `#ebf2ec` | approved, active, profit |
+| `info` | `#335a7a` slate | `#eaf0f5` | testing, in-progress |
+
+**~250 raw Tailwind palette utilities** (`red-*`, `green-*`, `blue-*`, `purple-*`, `amber-*`, `zinc-*` …) were removed across 46 page and feature files and remapped **by meaning, not by hue**. Decorative colour that carried no state meaning went **neutral** rather than being recoloured — notably the tasting module's purple theme, ingredient/recipe type chips, category and supplier-code badges, and the blue/green drag accent bars.
+
+#### Canvas — `game-card` Aesthetic Removed
+
+The collectible-card-game styling (~330 lines of CSS: neon glows, rarity dots, dark gradient art panels, blue-ingredient / green-recipe colour coding, uppercase bold white titles) is deleted. `CanvasTab.tsx`'s staged ingredient/recipe cards and all four drag-overlay variants are rebuilt on tokens — 12px radius, hairline border, `--elevation-1`, sentence-case titles, and a neutral `Badge` for the unit chip. The four near-identical drag-preview blocks were extracted into one `DragPreviewCard`.
+
+The `.flow-ui-hover-lift` / `.flow-ui-active-scale` and `.mono-gradient` utilities were also removed; their consumers now use the elevation ramp and native `:active` states.
+
+#### Component Primitives (15 files in `ui/`)
+
+- **`Button`**: 8px radius (no pill buttons in product UI), accent-filled primary, real `hover`/`active`/`disabled`/`loading` states. Disabled uses a muted fill + `--color-text-disabled` — **never opacity alone**. Added a `loading` prop that preserves width and sets `aria-busy`.
+- **`Badge`**: 999px pill, 12px/500, feedback tint + matching text. Dropped the hard-coded `violet-100/violet-700` "unit" variant — units now use the neutral beige pill.
+- **`Card`**: 12px radius, `--elevation-1`, hover to `--elevation-2`. Title is 16/500, not `font-semibold`.
+- **`Modal` / `ConfirmModal`**: 16px radius, overlay surface, `--elevation-3`, and a warm `--color-scrim` (`rgba(23,23,23,0.32)`) replacing `bg-black/50`.
+- **`Checkbox` / `Switch`**: checked/on state is now the **brand accent**, not `blue-500`.
+- **`DropdownButton`**, **`EditableCell`**, **`PageHeader`**, **`Skeleton`**, **`SearchInput`**: tokenised; `EditableCell`'s `purple-400` border removed.
+
+#### Sentence Case — Product-Wide
+
+Per the CI, the **only** uppercase text permitted in the product is the nav section eyebrow (`.nav-eyebrow`, 11px/500/+0.06em, grey). Removed every other `uppercase` class (canvas table headers, canvas field labels, RightPanel group headings, TastingTab labels, settings field labels, login divider) and de-title-cased ~120 user-visible strings ("Add New Supplier" → "Add supplier", "Account Information" → "Account information", "Sign Up" → "Sign up"). The only surviving `uppercase` is on single-letter avatar initials.
+
+#### TopNav
+
+Kept the existing top-nav shell (the CI's canonical side-nav was deliberately **not** adopted this pass — see *Known gaps*). Active item now carries `--surface-selected` + weight 500 with `aria-current="page"`; added the forest user avatar; tooltips moved to the spec's dark warm fill; mobile nav items given ≥44px touch targets; "Logout" → "Log out".
+
+### Removed
+
+#### Dark Mode
+
+Light-theme only, per the CI. Deleted `lib/theme.tsx` (`ThemeProvider`, `useTheme`), the `ThemeProvider` wrapper in `providers.tsx`, the theme toggle in the design-system page, the pre-paint FOUC script and `color-scheme: light dark` in `layout.tsx`, the entire `.dark` token map in `globals.css`, and the `darkMode` key in `tailwind.config.ts`. **258 now-dead `dark:` utility classes** were stripped across 50 files.
+
+Dark mode remains *re-addable* without touching components: add a second tier-2 alias map under `[data-theme="dark"]` (see §16 of the styleguide).
+
+### Fixed
+
+#### Unreadable Text on the Accent Fill
+
+The brand accent changed from a **light** terracotta to a **dark** forest green. Six controls rendered `text-black` on that fill — black on dark green, effectively illegible. All now use `text-primary-foreground` (white, 12.4:1). Affected: the OverviewTab image-upload FAB, "Add category" and tasting "Generate" buttons, the version-tree "Current" pill, and the "Owned" badge.
+
+#### Input Border Failed WCAG 1.4.11
+
+Form controls used `border-input` at `rgba(23,23,23,0.16)` ≈ **1.4:1** against white — below the 3:1 required for a non-text UI boundary, so field edges were not reliably perceivable. All text inputs, textareas, selects, search inputs, and checkboxes now use a **1px `#807d76`** border at **4.1:1**. Hairlines are retained for dividers and card edges, where the 3:1 rule does not apply.
+
+#### Design-System Logo Swatch
+
+The "logo on dark" swatches rendered the *dark* logo cut on a dark fill (invisible) after the light/dark image swap was removed. Now correctly reference the existing light logo assets.
+
+### Known gaps
+
+- **The app shell is still a top nav**, not the CI's canonical ~260px left side-nav. Consequently there is no workspace switcher, no uppercase nav section eyebrows in situ, and no accent-filled hero metric card. This was a deliberate scope decision; it is the main remaining delta from the reference design.
+- **`/design-system` is not registered in `AuthGuard`'s `VALID_ROUTE_PATTERNS`**, so navigating to it directly while logged in redirects to `/settings`. The showcase is reachable via **Settings → Design**. Pre-existing; not fixed here.
+- **`CanvasTab.tsx` is 3,179 lines** — roughly 6× the 500-line rule in `.claude/rules/performance.md`. 15 files exceed the limit. Pre-existing and untouched structurally, but it is the clearest refactor target.
+
+### Verification
+
+- `npm run build` — passes, 27/27 static pages generated.
+- `tsc --noEmit` — passes.
+- `npm run lint` — 0 errors (87 pre-existing warnings, all unused-vars in hooks).
+- Playwright screenshots at 1280×800 and 390×844 confirm: Satoshi resolving at computed weight **400** / 14px base, accent budget holding, feedback tints correct on badges, and **zero horizontal overflow** on mobile.
+- Compliance greps all clean across `src/`: no raw Tailwind palette colours, no `hsl(var(…))`, no `dark:`, no `game-card`, no `flow-ui-*`, no `bg-black`, no raw `shadow-sm|md|lg|xl`.
+
+**Files changed:** 106 — `globals.css`, `layout.tsx`, `tailwind.config.ts`, `providers.tsx`, `theme.tsx` (deleted), 5 new Satoshi `.woff2`, 15 `ui/` primitives, 12 `layout/` components, 29 app pages, and 42 feature components.
+
 ---
 
 ## [0.0.49] - 2026-06-16

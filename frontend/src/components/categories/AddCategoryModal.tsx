@@ -50,11 +50,11 @@ export function AddCategoryModal({ isOpen, onClose }: AddCategoryModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Tag">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add tag">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Tag Name *
+            Tag name *
           </label>
           <Input
             value={name}
@@ -81,7 +81,7 @@ export function AddCategoryModal({ isOpen, onClose }: AddCategoryModalProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || !name.trim()}>
-            {isSubmitting ? 'Creating...' : 'Create Tag'}
+            {isSubmitting ? 'Creating...' : 'Create tag'}
           </Button>
         </div>
       </form>

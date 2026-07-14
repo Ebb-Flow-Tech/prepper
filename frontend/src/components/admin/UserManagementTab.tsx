@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { SearchInput, Skeleton, PageHeader, Button } from '@/components/ui';
+import { SearchInput, Skeleton, PageHeader, Button, Badge } from '@/components/ui';
 import { useUsers, useUpdateUser, useOutlets } from '@/lib/hooks';
 import { AddUserModal } from './AddUserModal';
 import { toast } from 'sonner';
@@ -75,7 +75,7 @@ export function UserManagementTab() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load users. Please try again.
         </div>
       </div>
@@ -101,7 +101,7 @@ export function UserManagementTab() {
             />
           </div>
           <Button onClick={() => setIsAddUserModalOpen(true)}>
-            Add User
+            Add user
           </Button>
         </div>
 
@@ -125,7 +125,7 @@ export function UserManagementTab() {
 
         {/* Users Table */}
         {!isLoading && filteredUsers.length > 0 && (
-          <div className="overflow-x-auto border border-border rounded-lg">
+          <div className="overflow-x-auto border border-border rounded-xl">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-secondary">
@@ -182,7 +182,7 @@ export function UserManagementTab() {
                           autoFocus
                           disabled={updateUser.isPending}
                           placeholder="Add phone..."
-                          className="px-2 py-1 text-sm w-full border border-blue-500 rounded bg-card text-foreground placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="px-2 py-1 text-sm w-full border border-input rounded-lg bg-card text-foreground placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                       ) : (
                         <div
@@ -197,15 +197,7 @@ export function UserManagementTab() {
                       )}
                     </td>
                     <td className="px-6 py-3 text-sm">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          user.user_type === 'admin'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                        }`}
-                      >
-                        {user.user_type === 'admin' ? 'Admin' : 'Normal'}
-                      </span>
+                      <Badge>{user.user_type === 'admin' ? 'Admin' : 'Normal'}</Badge>
                     </td>
                     <td className="px-6 py-3 text-sm">
                       {user.user_type === 'admin' ? (
@@ -214,13 +206,13 @@ export function UserManagementTab() {
                         <button
                           onClick={() => handleManagerToggle(user.id, user.is_manager)}
                           disabled={updateUser.isPending}
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                             user.is_manager
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800'
-                              : 'bg-secondary text-secondary-foreground hover:bg-muted'
+                              ? 'border-[var(--border-strong)] bg-[var(--surface-selected)] text-foreground hover:bg-muted'
+                              : 'border-transparent bg-secondary text-muted-foreground hover:bg-muted'
                           }`}
                         >
-                          {user.is_manager ? 'Manager' : 'Not Manager'}
+                          {user.is_manager ? 'Manager' : 'Not manager'}
                         </button>
                       )}
                     </td>
@@ -237,7 +229,7 @@ export function UserManagementTab() {
                             )
                           }
                           disabled={updateUser.isPending}
-                          className="px-2 py-1 text-sm border border-input rounded bg-card text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-2 py-1 text-sm border border-input rounded-lg bg-card text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">None</option>
                           {outlets?.map((outlet) => (

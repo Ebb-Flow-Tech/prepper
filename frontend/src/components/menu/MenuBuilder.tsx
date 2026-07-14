@@ -94,7 +94,7 @@ function MultiAddContent({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             autoFocus
-            className="w-full pl-8 pr-8 py-1.5 text-sm bg-card border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full pl-8 pr-8 py-1.5 text-sm bg-card border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-ring"
           />
           {search && (
             <button
@@ -395,7 +395,7 @@ function DraggableItem({
               placeholder="Search recipes..."
               value={recipeSearch}
               onChange={(e) => setRecipeSearch(e.target.value)}
-              className="w-full px-2 py-1 text-sm border border-input rounded-md mb-1 bg-card focus:outline-none"
+              className="w-full px-2 py-1 text-sm border border-input rounded-lg mb-1 bg-card focus:outline-none"
             />
             <Select
               value={item.recipe_id.toString()}
@@ -443,7 +443,7 @@ function DraggableItem({
             />
           </div>
 
-          {/* Key Highlights */}
+          {/* Key highlights */}
           <div>
             <button
               type="button"
@@ -451,7 +451,7 @@ function DraggableItem({
               className="flex items-center gap-1.5 w-full text-xs font-medium text-muted-foreground mb-1 hover:text-foreground transition-colors"
             >
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${highlightsOpen ? '' : '-rotate-90'}`} />
-              Key Highlights
+              Key highlights
             </button>
             {highlightsOpen && (
               <Textarea
@@ -464,7 +464,7 @@ function DraggableItem({
             )}
           </div>
 
-          {/* Additional Info */}
+          {/* Additional info */}
           <div>
             <button
               type="button"
@@ -472,7 +472,7 @@ function DraggableItem({
               className="flex items-center gap-1.5 w-full text-xs font-medium text-muted-foreground mb-1 hover:text-foreground transition-colors"
             >
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${additionalOpen ? '' : '-rotate-90'}`} />
-              Additional Info
+              Additional info
             </button>
             {additionalOpen && (
               <Textarea
@@ -532,7 +532,7 @@ function DraggableItem({
               placeholder="Search recipes..."
               value={recipeSearch}
               onChange={(e) => setRecipeSearch(e.target.value)}
-              className="w-full px-2 py-1 text-sm border border-input rounded-md bg-card focus:outline-none"
+              className="w-full px-2 py-1 text-sm border border-input rounded-lg bg-card focus:outline-none"
             />
             <Select
               value={item.recipe_id.toString()}
@@ -934,9 +934,9 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
       {/* Sections */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Sections (drag to reorder)</h3>
+          <h3 className="font-medium">Sections (drag to reorder)</h3>
           <div className="flex gap-2">
-            <div className="flex items-center gap-1 border border-border rounded-md p-1">
+            <div className="flex items-center gap-1 border border-border rounded-lg p-1">
               <Button
                 onClick={() => setViewMode('list')}
                 size="sm"

@@ -19,7 +19,7 @@ export default function MenuSketchListPage() {
       <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <PageHeader
-          title="Menu Drafts"
+          title="Menu drafts"
           description="Freeform canvas for brainstorming menu layouts"
         >
           <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-muted-foreground">
@@ -76,11 +76,11 @@ export default function MenuSketchListPage() {
               <Link
                 key={sketch.id}
                 href={`/menu-sketch/${sketch.id}`}
-                className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md"
+                className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-elevation-1 transition-all hover:shadow-elevation-2"
               >
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="truncate text-base font-semibold text-foreground">
+                    <h3 className="truncate text-base font-medium text-foreground">
                       {sketch.name}
                     </h3>
                     <div className="flex items-center gap-1.5 shrink-0">

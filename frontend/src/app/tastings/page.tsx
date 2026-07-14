@@ -64,8 +64,8 @@ function TastingSessionCard({ session, expired, isOwn, isInvited }: TastingSessi
           </div>
           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
             expired
-              ? 'bg-secondary text-muted-foreground'
-              : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-primary text-primary-foreground'
           }`}>
             <Wine className="h-5 w-5" />
           </div>
@@ -141,7 +141,7 @@ export default function TastingsPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load tasting sessions. Please try again.
         </div>
       </div>
@@ -152,13 +152,13 @@ export default function TastingsPage() {
     <div className="h-full w-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
-          title="Tasting Sessions"
+          title="Tasting sessions"
           description="Track recipe tastings and feedback from R&D sessions"
         >
           <Link href="/tastings/new">
             <Button>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New Session</span>
+              <span className="hidden sm:inline">New session</span>
             </Button>
           </Link>
         </PageHeader>
@@ -179,7 +179,7 @@ export default function TastingsPage() {
         {isLoading && (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
+              <Skeleton key={i} className="h-48 rounded-xl" />
             ))}
           </div>
         )}
@@ -197,7 +197,7 @@ export default function TastingsPage() {
             <Link href="/tastings/new" className="mt-4 inline-block">
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Session
+                Create session
               </Button>
             </Link>
           </div>
@@ -207,9 +207,9 @@ export default function TastingsPage() {
         {!isLoading && ongoingSessions.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-purple-500" />
+              <Clock className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold text-foreground">
-                Upcoming & Today
+                Upcoming & today
               </h2>
               <span className="text-sm text-muted-foreground">
                 ({ongoingSessions.length})
@@ -229,7 +229,7 @@ export default function TastingsPage() {
             <div className="flex items-center gap-2 mb-4">
               <History className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold text-foreground">
-                Past Sessions
+                Past sessions
               </h2>
               <span className="text-sm text-muted-foreground">
                 ({expiredSessions.length})

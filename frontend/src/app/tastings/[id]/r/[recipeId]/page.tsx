@@ -139,7 +139,7 @@ export default function RecipeTastingPage() {
   if (!session) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Tasting session not found.
         </div>
       </div>
@@ -149,7 +149,7 @@ export default function RecipeTastingPage() {
   if (!recipe) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Recipe not found.
         </div>
       </div>
@@ -165,14 +165,14 @@ export default function RecipeTastingPage() {
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Session
+            Back to session
           </Link>
         </div>
 
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <ChefHat className="h-6 w-6 text-purple-500" />
+            <ChefHat className="h-6 w-6 text-muted-foreground" />
             <h1 className="text-2xl font-bold text-foreground">{recipe.name}</h1>
           </div>
           <p className="text-sm text-muted-foreground mb-2">{session.name}</p>
@@ -222,20 +222,20 @@ export default function RecipeTastingPage() {
               onClick={() => setShowAddForm(true)}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Add Feedback
+              Add feedback
             </Button>
           )}
         </div>
 
         {/* Add Feedback Form */}
         {showAddForm && (
-          <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
+          <Card className="mb-4 border-border bg-muted/50">
             <CardContent className="pt-4">
               <FeedbackForm
                 initialData={{ taster_name: username || '' }}
                 onSubmit={handleAddNote}
                 onCancel={() => setShowAddForm(false)}
-                submitLabel="Add Feedback"
+                submitLabel="Add feedback"
                 showImages={true}
               />
             </CardContent>

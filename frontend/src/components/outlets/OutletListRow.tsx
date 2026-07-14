@@ -11,10 +11,11 @@ interface OutletListRowProps {
 }
 
 export function OutletListRow({ outlet, parentOutletName, href }: OutletListRowProps) {
-  const outletTypeVariants: Record<string, 'default' | 'secondary' | 'warning'> = {
+  // Outlet type is decorative, not a state — every type gets the neutral pill.
+  const outletTypeVariants: Record<string, 'default' | 'secondary'> = {
     franchise: 'default',
     corporate: 'secondary',
-    delivery: 'warning',
+    delivery: 'secondary',
   };
 
   return (
@@ -23,7 +24,7 @@ export function OutletListRow({ outlet, parentOutletName, href }: OutletListRowP
         <CardContent className="py-2">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-medium text-foreground truncate hover:text-blue-600 dark:hover:text-blue-400">
+              <h3 className="text-base font-medium text-foreground truncate hover:text-primary">
                 {outlet.name}
               </h3>
               {outlet.code && (

@@ -31,7 +31,7 @@ export function AddFeedbackModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Add Feedback — ${recipeName}`}
+      title={`Add feedback — ${recipeName}`}
       maxWidth="max-w-lg"
       maxHeight="max-h-[80vh]"
     >
@@ -39,7 +39,7 @@ export function AddFeedbackModal({
         initialData={initialData}
         onSubmit={handleSubmit}
         onCancel={onClose}
-        submitLabel="Add Feedback"
+        submitLabel="Add feedback"
         showImages={true}
       />
     </Modal>

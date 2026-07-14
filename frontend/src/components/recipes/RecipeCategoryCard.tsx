@@ -47,7 +47,7 @@ export function RecipeCategoryCard({ category, onArchive, onUnarchive }: RecipeC
 
       {/* Quick Actions */}
       {showActions && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-md shadow-sm border border-border p-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-lg shadow-elevation-1 border border-border p-1">
           <Button
             variant="ghost"
             size="icon"

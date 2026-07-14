@@ -67,11 +67,11 @@ export function AddOutletModal({ isOpen, onClose }: AddOutletModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Outlet">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add outlet">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Outlet Name *
+            Outlet name *
           </label>
           <Input
             value={name}
@@ -93,7 +93,7 @@ export function AddOutletModal({ isOpen, onClose }: AddOutletModalProps) {
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Outlet Type
+            Outlet type
           </label>
           <Select
             value={outletType}
@@ -104,12 +104,12 @@ export function AddOutletModal({ isOpen, onClose }: AddOutletModalProps) {
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Parent Outlet (optional)
+            Parent outlet (optional)
           </label>
           <select
             value={parentOutletId}
             onChange={(e) => setParentOutletId(e.target.value)}
-            className="w-full px-3 py-2 border border-input rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-input rounded-lg bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">-- None --</option>
             {allOutlets
@@ -128,7 +128,7 @@ export function AddOutletModal({ isOpen, onClose }: AddOutletModalProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || !name.trim() || !code.trim()}>
-            {isSubmitting ? 'Creating...' : 'Create Outlet'}
+            {isSubmitting ? 'Creating...' : 'Create outlet'}
           </Button>
         </div>
       </form>

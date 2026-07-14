@@ -126,7 +126,7 @@ export function ImageUploadPreview({
       {/* Upload area */}
       <div>
         <label className="block text-sm font-medium text-muted-foreground mb-2">
-          Add Images
+          Add images
         </label>
         <div className="relative">
           <input
@@ -145,10 +145,10 @@ export function ImageUploadPreview({
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
             onDrop={async (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); if (e.dataTransfer.files.length) await handleFiles(e.dataTransfer.files); }}
-            className={`w-full border-2 border-dashed rounded-lg p-6 text-center hover:border-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDragging ? 'border-blue-400 bg-blue-50/10' : 'border-border'}`}
+            className={`w-full border-2 border-dashed rounded-xl p-6 text-center hover:border-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDragging ? 'border-[var(--color-feedback-info)] bg-[var(--color-feedback-info-tint)]' : 'border-border'}`}
           >
             {isProcessing ? (
-              <Loader2 className="h-6 w-6 text-purple-500 mx-auto mb-2 animate-spin" />
+              <Loader2 className="h-6 w-6 text-primary mx-auto mb-2 animate-spin" />
             ) : (
               <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
             )}
@@ -181,10 +181,10 @@ export function ImageUploadPreview({
                     <button
                       type="button"
                       onClick={() => handleRemoveSelected(index)}
-                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      className="absolute inset-0 bg-[var(--color-scrim)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                       disabled={isLoading}
                     >
-                      <X className="h-4 w-4 text-white" />
+                      <X className="h-4 w-4 text-[var(--color-text-inverse)]" />
                     </button>
                   </div>
                 )
@@ -215,9 +215,9 @@ export function ImageUploadPreview({
                     <button
                       type="button"
                       onClick={() => handleRemoveUploaded(image.id!)}
-                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      className="absolute inset-0 bg-[var(--color-scrim)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                     >
-                      <X className="h-4 w-4 text-white" />
+                      <X className="h-4 w-4 text-[var(--color-text-inverse)]" />
                     </button>
                   </div>
                 )

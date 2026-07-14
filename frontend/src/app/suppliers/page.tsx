@@ -149,7 +149,7 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
                 </CardTitle>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {supplier.code && (
-                    <Badge variant="info" className="font-mono text-xs">{supplier.code}</Badge>
+                    <Badge variant="secondary" className="font-mono text-xs">{supplier.code}</Badge>
                   )}
                   {!supplier.is_active && (
                     <Badge variant="secondary">Archived</Badge>
@@ -292,7 +292,7 @@ export default function SuppliersPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load suppliers. Please try again.
         </div>
       </div>
@@ -311,13 +311,13 @@ export default function SuppliersPage() {
               label="FMH"
               items={[
                 {
-                  label: downloadingSupplier ? 'Downloading…' : 'Export Sample Suppliers',
+                  label: downloadingSupplier ? 'Downloading…' : 'Export sample suppliers',
                   icon: <Download className="h-3.5 w-3.5" />,
                   onClick: handleDownloadSampleSupplier,
                   disabled: downloadingSupplier,
                 },
                 {
-                  label: downloadingPricings ? 'Downloading…' : 'Export Sample Supplier Pricings',
+                  label: downloadingPricings ? 'Downloading…' : 'Export sample supplier pricings',
                   icon: <Download className="h-3.5 w-3.5" />,
                   onClick: handleDownloadSamplePricings,
                   disabled: downloadingPricings,
@@ -331,7 +331,7 @@ export default function SuppliersPage() {
             />
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Supplier</span>
+              <span className="hidden sm:inline">Add supplier</span>
             </Button>
           </div>
         </PageHeader>
@@ -364,13 +364,13 @@ export default function SuppliersPage() {
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
           )

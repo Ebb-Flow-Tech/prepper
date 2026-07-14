@@ -14,7 +14,8 @@ export function PageHeader({ title, description, children, className }: PageHead
     <div className={cn('mb-6', className)}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          {/* Page title: 24/1.25, weight 500, -0.015em (§5.2) */}
+          <h1 className="text-2xl font-medium leading-tight tracking-[-0.015em] text-foreground">
             {title}
           </h1>
           {description && (

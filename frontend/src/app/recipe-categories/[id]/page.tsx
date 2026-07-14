@@ -108,7 +108,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
           <ArrowLeft className="h-4 w-4" />
           Back to Recipes
         </Link>
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Category not found or failed to load.
         </div>
       </div>
@@ -129,8 +129,8 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
 
         {isLoading ? (
           <div className="space-y-6">
-            <Skeleton className="h-32 rounded-lg" />
-            <Skeleton className="h-48 rounded-lg" />
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-48 rounded-xl" />
           </div>
         ) : category ? (
           <>
@@ -199,7 +199,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Add Recipe
+                    Add recipe
                   </Button>
                 </div>
 
@@ -211,13 +211,13 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                     setSearchTerm('');
                     setFormData({ recipe_id: '' });
                   }}
-                  title="Add Recipe to Category"
+                  title="Add recipe to category"
                   maxWidth="max-w-lg"
                 >
                   <form onSubmit={handleAddRecipe} className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-2">
-                        Search Recipe
+                        Search recipe
                       </label>
                       <Input
                         type="text"
@@ -261,7 +261,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                         disabled={!formData.recipe_id || addRecipeMutation.isPending}
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Add Recipe
+                        Add recipe
                       </Button>
                     </div>
                   </form>
@@ -272,7 +272,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                   <Modal
                     isOpen={!!deleteConfirm}
                     onClose={() => setDeleteConfirm(null)}
-                    title="Remove Recipe from Category"
+                    title="Remove recipe from category"
                     maxWidth="max-w-md"
                   >
                     <div className="space-y-4">
@@ -299,7 +299,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                           disabled={removeMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          Remove Recipe
+                          Remove recipe
                         </Button>
                       </div>
                     </div>
@@ -313,7 +313,7 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Recipe Name
+                            Recipe name
                           </th>
                           <th className="py-3 px-2 w-12"></th>
                         </tr>
@@ -329,9 +329,9 @@ export default function RecipeCategoryPage({ params }: RecipeCategoryPageProps) 
                               <td className="py-3 px-2 text-foreground font-medium">
                                 <Link
                                   href={`/recipes/${recipeLink.recipe_id}`}
-                                  className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                  className="hover:text-primary hover:underline"
                                 >
-                                  {recipe?.name || 'Unknown Recipe'}
+                                  {recipe?.name || 'Unknown recipe'}
                                 </Link>
                               </td>
                               <td className="py-3 px-2">

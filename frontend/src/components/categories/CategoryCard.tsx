@@ -39,7 +39,7 @@ export function CategoryCard({ category, onEdit, onArchive, onUnarchive }: Categ
           )}
           <div className="flex items-center gap-2">
             {!category.is_active && (
-              <Badge variant="warning">Archived</Badge>
+              <Badge variant="destructive">Archived</Badge>
             )}
           </div>
         </div>
@@ -47,7 +47,7 @@ export function CategoryCard({ category, onEdit, onArchive, onUnarchive }: Categ
 
       {/* Quick Actions */}
       {showActions && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-md shadow-sm border border-border p-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-lg shadow-elevation-1 border border-border p-1">
           {onEdit && (
             <Button
               variant="ghost"

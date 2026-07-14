@@ -9,26 +9,29 @@ interface BadgeProps {
   className?: string;
 }
 
+/**
+ * Status pill (§12.4). 999px radius, sentence case, 12px/500.
+ * Always a feedback tint background + its matching text tone — never a
+ * saturated fill for inline table use. Plain/neutral states get the beige pill.
+ */
 export function Badge({ children, variant = 'default', className }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium transition-colors',
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium leading-[1.4]',
+        'transition-colors duration-[120ms] ease-out',
         {
-          'bg-secondary text-secondary-foreground':
-            variant === 'default',
+          // Neutral beige pill — plain states, counts, and unit chips.
           'bg-muted text-muted-foreground':
-            variant === 'secondary',
-          'bg-[hsl(var(--status-approved-bg))] text-[hsl(var(--status-approved))]':
+            variant === 'default' || variant === 'secondary' || variant === 'unit',
+          'bg-[var(--color-feedback-success-tint)] text-[var(--color-feedback-success)]':
             variant === 'success',
-          'bg-[hsl(var(--status-testing-bg))] text-[hsl(var(--status-testing))]':
+          'bg-[var(--color-feedback-info-tint)] text-[var(--color-feedback-info)]':
             variant === 'info',
-          'bg-[hsl(var(--color-amber-light))] text-[hsl(var(--color-amber-dark))]':
+          'bg-[var(--color-feedback-warning-tint)] text-[var(--color-feedback-warning)]':
             variant === 'warning',
-          'bg-[hsl(var(--status-archived-bg))] text-[hsl(var(--status-archived))]':
+          'bg-[var(--color-feedback-error-tint)] text-[var(--color-feedback-error)]':
             variant === 'destructive',
-          'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300':
-            variant === 'unit',
         },
         className
       )}

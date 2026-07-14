@@ -13,8 +13,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-xl border border-border bg-card p-4 text-card-foreground',
-          interactive && 'cursor-pointer transition-shadow hover:shadow-md flow-ui-hover-lift',
+          // Cards: 12px radius, hairline edge, elevation-1 over the sunken canvas (§8, §9).
+          'rounded-xl border border-border bg-card p-5 text-card-foreground shadow-elevation-1',
+          interactive &&
+            'cursor-pointer transition-shadow duration-[120ms] ease-out hover:shadow-elevation-2',
           className
         )}
         {...props}
@@ -48,7 +50,8 @@ export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(
     return (
       <h3
         ref={ref}
-        className={cn('font-semibold text-foreground', className)}
+        // Card / group title: 16px, weight 500 (§5.2). Headings are 500, not 600/700.
+        className={cn('text-base font-medium tracking-[-0.005em] text-foreground', className)}
         {...props}
       />
     );

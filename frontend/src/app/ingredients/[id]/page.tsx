@@ -98,7 +98,7 @@ function EditableSelect({ value, onSave, options, className = '' }: EditableSele
         value={value}
         onChange={handleChange}
         onBlur={handleBlur}
-        className={`px-1 py-0.5 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-card ${className}`}
+        className={`px-1 py-0.5 text-sm border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-ring bg-card ${className}`}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -171,7 +171,7 @@ function AllergensSection({ ingredientId }: AllergensSectionProps) {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                    Allergen Name
+                    Allergen name
                   </th>
                   <th className="text-left py-3 px-2 font-medium text-muted-foreground">
                     Description
@@ -225,7 +225,7 @@ function AllergensSection({ ingredientId }: AllergensSectionProps) {
             <select
               value={selectedAllergenId || ''}
               onChange={(e) => setSelectedAllergenId(e.target.value ? parseInt(e.target.value, 10) : null)}
-              className="flex-1 px-3 py-2 text-sm border border-input rounded-md bg-card text-foreground"
+              className="flex-1 px-3 py-2 text-sm border border-input rounded-lg bg-card text-foreground"
             >
               <option value="">Select allergen to add...</option>
               {availableAllergens.map((a) => (
@@ -472,9 +472,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Ingredients
+          Back to ingredients
         </Link>
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Ingredient not found or failed to load.
         </div>
       </div>
@@ -490,15 +490,15 @@ export default function IngredientPage({ params }: IngredientPageProps) {
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Ingredients
+          Back to ingredients
         </Link>
 
         {isLoading ? (
           <div className="space-y-6">
-            <Skeleton className="h-32 rounded-lg" />
+            <Skeleton className="h-32 rounded-xl" />
             <div className="grid gap-6 md:grid-cols-2">
-              <Skeleton className="h-48 rounded-lg" />
-              <Skeleton className="h-48 rounded-lg" />
+              <Skeleton className="h-48 rounded-xl" />
+              <Skeleton className="h-48 rounded-xl" />
             </div>
           </div>
         ) : ingredient ? (
@@ -561,9 +561,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
 
                         return (
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground">Unit Cost:</span>
+                            <span className="text-muted-foreground">Unit cost:</span>
                             {hasSupplierWithUnit ? (
-                              <span className="font-medium text-foreground">
+                              <span className="font-medium text-foreground tabular-nums">
                                 {displayCost !== null ? formatCurrency(displayCost) : '-'}
                                 <span className="ml-2 text-xs text-muted-foreground">
                                   (median from {suppliersWithUnit.length} supplier{suppliersWithUnit.length > 1 ? 's' : ''})
@@ -574,7 +574,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                 value={ingredient.cost_per_base_unit?.toString() ?? ''}
                                 onSave={(value) => handleUpdateIngredient({ cost_per_base_unit: value ? parseFloat(value) : null })}
                                 type="number"
-                                className="font-medium text-foreground"
+                                className="font-medium text-foreground tabular-nums"
                                 displayValue={ingredient.cost_per_base_unit !== null ? formatCurrency(ingredient.cost_per_base_unit) : '-'}
                               />
                             )}
@@ -582,7 +582,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         );
                       })()}
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Base Unit:</span>
+                        <span className="text-muted-foreground">Base unit:</span>
                         <EditableSelect
                           value={ingredient.base_unit}
                           onSave={(newUnit) => {
@@ -614,7 +614,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                           size="sm"
                           onClick={handleReassignCategory}
                           disabled={categorizeIngredientMutation.isPending}
-                          className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-orange-950"
+                          className="text-xs"
                         >
                           <RefreshCw className={`h-3 w-3 mr-1 ${categorizeIngredientMutation.isPending ? 'animate-spin' : ''}`} />
                           {categorizeIngredientMutation.isPending ? 'Assigning...' : 'Reassign'}
@@ -638,7 +638,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Truck className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <Truck className="h-5 w-5 text-muted-foreground" />
                   <h2 className="text-lg font-semibold text-foreground">
                     Suppliers
                   </h2>
@@ -651,7 +651,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Add Supplier
+                    Add supplier
                   </Button>
                 </div>
 
@@ -659,7 +659,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                 <Modal
                   isOpen={showAddModal}
                   onClose={() => setShowAddModal(false)}
-                  title="Add Supplier"
+                  title="Add supplier"
                   maxWidth="max-w-lg"
                 >
                   <form onSubmit={handleAddSupplier} className="space-y-4">
@@ -715,7 +715,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Pack Size
+                        Pack size
                       </label>
                       <Input
                         type="text"
@@ -733,7 +733,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Pack Unit
+                        Pack unit
                       </label>
                       <Select
                         value={formData.pack_unit}
@@ -748,7 +748,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Price/Pack
+                        Price/pack
                       </label>
                       <Input
                         type="text"
@@ -766,9 +766,9 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Unit Cost
+                        Unit cost
                       </label>
-                      <div className="px-3 py-2 rounded border border-input bg-secondary text-foreground">
+                      <div className="px-3 py-2 rounded-lg border border-input bg-secondary text-foreground tabular-nums">
                         {formData.pack_size && formData.price_per_pack
                           ? formatCurrency(calculateUnitCost(parseFloat(formData.pack_size), parseFloat(formData.price_per_pack)))
                           : formatCurrency(0)}
@@ -794,7 +794,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         }
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Add Supplier
+                        Add supplier
                       </Button>
                     </div>
                   </form>
@@ -807,7 +807,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Supplier Name
+                            Supplier name
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
                             Outlet
@@ -816,16 +816,16 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             SKU
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-muted-foreground">
-                            Pack Size
+                            Pack size
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Pack Unit
+                            Pack unit
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-muted-foreground">
-                            Price/Pack
+                            Price/pack
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-muted-foreground">
-                            Unit Cost
+                            Unit cost
                           </th>
                           <th className="py-3 px-2 w-12"></th>
                         </tr>
@@ -839,7 +839,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             <td className="py-3 px-2 text-foreground font-medium">
                               <Link
                                 href={`/suppliers/${supplier.supplier_id}`}
-                                className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                className="hover:text-primary hover:underline"
                               >
                                 {supplier.supplier_name}
                               </Link>
@@ -862,13 +862,13 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                     })
                                   }
                                   placeholder="e.g., SKU-001"
-                                  className="w-full px-2 py-1 text-sm border border-input rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                  className="w-full px-2 py-1 text-sm font-mono border border-input rounded-lg bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                                 />
                               ) : (
                                 supplier.sku ?? '-'
                               )}
                             </td>
-                            <td className="py-3 px-2 text-right text-foreground">
+                            <td className="py-3 px-2 text-right text-foreground tabular-nums">
                               {editingSupplier === supplier.id ? (
                                 <input
                                   type="text"
@@ -887,7 +887,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                     const n = parseFloat(editData[supplier.id]?.pack_size ?? '');
                                     if (!isNaN(n)) setEditData({ ...editData, [supplier.id]: { ...editData[supplier.id], pack_size: String(n) } });
                                   }}
-                                  className="w-full px-2 py-1 text-sm border border-input rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                                  className="w-full px-2 py-1 text-sm border border-input rounded-lg bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring text-right tabular-nums"
                                 />
                               ) : (
                                 supplier.pack_size
@@ -906,7 +906,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                       },
                                     })
                                   }
-                                  className="px-2 py-1 text-sm border border-input rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 w-full"
+                                  className="px-2 py-1 text-sm border border-input rounded-lg bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full"
                                 >
                                   {UNIT_OPTIONS.map((opt) => (
                                     <option key={opt.value} value={opt.value}>
@@ -918,7 +918,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                 supplier.pack_unit
                               )}
                             </td>
-                            <td className="py-3 px-2 text-right text-foreground">
+                            <td className="py-3 px-2 text-right text-foreground tabular-nums">
                               {editingSupplier === supplier.id ? (
                                 <input
                                   type="text"
@@ -937,13 +937,13 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                     const n = parseFloat(editData[supplier.id]?.price_per_pack ?? '');
                                     if (!isNaN(n)) setEditData({ ...editData, [supplier.id]: { ...editData[supplier.id], price_per_pack: String(n) } });
                                   }}
-                                  className="w-full px-2 py-1 text-sm border border-input rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                                  className="w-full px-2 py-1 text-sm border border-input rounded-lg bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring text-right tabular-nums"
                                 />
                               ) : (
                                 formatCurrency(supplier.price_per_pack)
                               )}
                             </td>
-                            <td className="py-3 px-2 text-right text-foreground">
+                            <td className="py-3 px-2 text-right text-foreground tabular-nums">
                               {editingSupplier === supplier.id
                                 ? formatCurrency(
                                     calculateUnitCost(
@@ -961,7 +961,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                 </button>
 
                                 {/* Dropdown menu */}
-                                <div className="absolute right-0 top-full mt-0 bg-popover border border-border rounded-md shadow-lg opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
+                                <div className="absolute right-0 top-full mt-0 bg-popover border border-border rounded-xl shadow-elevation-2 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
                                   {editingSupplier === supplier.id ? (
                                     <>
                                       <Button
@@ -972,7 +972,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                           setEditData({});
                                         }}
                                         disabled={updateSupplierMutation.isPending}
-                                        className="w-full justify-start text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded-none first:rounded-t-md h-8 px-3"
+                                        className="w-full justify-start text-muted-foreground hover:text-foreground rounded-none first:rounded-t-xl h-8 px-3"
                                       >
                                         <X className="h-4 w-4 mr-2" />
                                         Cancel
@@ -997,7 +997,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                           }
                                         }}
                                         disabled={updateSupplierMutation.isPending}
-                                        className="w-full justify-start text-green-600 hover:text-green-700 dark:hover:text-green-400 rounded-none last:rounded-b-md h-8 px-3"
+                                        className="w-full justify-start text-primary hover:opacity-80 rounded-none last:rounded-b-xl h-8 px-3"
                                       >
                                         <Check className="h-4 w-4 mr-2" />
                                         Save
@@ -1019,7 +1019,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                             },
                                           });
                                         }}
-                                        className="w-full justify-start text-[hsl(var(--primary))] hover:opacity-80 rounded-none first:rounded-t-md h-8 px-3"
+                                        className="w-full justify-start text-primary hover:opacity-80 rounded-none first:rounded-t-xl h-8 px-3"
                                       >
                                         <EditIcon className="h-4 w-4 mr-2" />
                                         Edit
@@ -1029,7 +1029,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                                         size="sm"
                                         onClick={() => handleDeleteSupplier(supplier.id)}
                                         disabled={removeSupplierMutation.isPending}
-                                        className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 rounded-none last:rounded-b-md h-8 px-3"
+                                        className="w-full justify-start text-[var(--color-feedback-error)] hover:bg-[var(--color-feedback-error-tint)] rounded-none last:rounded-b-xl h-8 px-3"
                                       >
                                         <Trash2 className="h-4 w-4 mr-2" />
                                         Delete

@@ -183,8 +183,8 @@ function RndRecipeCard({ recipe, isOwned, onFork, isFork, isForking }: RndRecipe
           disabled={summarizeMutation.isPending}
           className="w-full px-4 py-2 flex items-center justify-between hover:bg-secondary transition-colors disabled:opacity-50"
         >
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Feedback Summary
+          <span className="text-xs font-medium text-muted-foreground">
+            Feedback summary
           </span>
           {summarizeMutation.isPending ? (
             <RefreshCw className="h-4 w-4 text-muted-foreground animate-spin" />
@@ -404,7 +404,7 @@ function WipRecipeCard({ recipe, isOwned }: WipRecipeCardProps) {
           setShowCreateModal(false);
           setSessionName('');
         }}
-        title="Create Tasting Session"
+        title="Create tasting session"
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -640,7 +640,7 @@ function PipelinesTab() {
   if (feedbackError) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load recipes. Please try again.
         </div>
       </div>
@@ -651,7 +651,7 @@ function PipelinesTab() {
     <div className="h-full w-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
-          title="R&D Workspace"
+          title="R&D workspace"
           description="Track and iterate on dishes with tasting feedback"
         />
 
@@ -687,7 +687,7 @@ function PipelinesTab() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
                 <span className="text-muted-foreground"><ClipboardList className="h-5 w-5" /></span>
-                <h2 className="font-semibold text-lg">To Do</h2>
+                <h2 className="font-medium text-xl">To do</h2>
                 <span className="ml-auto text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                   {filteredTodoRecipes.length}
                 </span>
@@ -717,7 +717,7 @@ function PipelinesTab() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
                 <span className="text-muted-foreground"><Loader2 className="h-5 w-5" /></span>
-                <h2 className="font-semibold text-lg">In Progress</h2>
+                <h2 className="font-medium text-xl">In progress</h2>
                 <span className="ml-auto text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                   {wipCount}
                 </span>
@@ -755,7 +755,7 @@ function PipelinesTab() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
                 <span className="text-muted-foreground"><CheckCircle className="h-5 w-5" /></span>
-                <h2 className="font-semibold text-lg">Review</h2>
+                <h2 className="font-medium text-xl">Review</h2>
               </div>
 
               <div className="flex-1 space-y-4 min-h-[200px]">

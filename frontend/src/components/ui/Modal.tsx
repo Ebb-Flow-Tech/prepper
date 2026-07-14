@@ -92,12 +92,12 @@ export function Modal({
     >
       {/* Backdrop - click to close (blocked when disableClose) */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-[var(--color-scrim)]"
         aria-hidden="true"
         onClick={disableClose ? undefined : onClose}
       />
 
-      {/* Modal content */}
+      {/* Modal content — 16px radius, overlay surface, elevation-3 (§9, §12.6) */}
       <div
         ref={modalRef}
         role="dialog"
@@ -105,25 +105,25 @@ export function Modal({
         aria-labelledby="modal-title"
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full overflow-y-auto rounded-lg bg-card p-6 shadow-xl',
-          'border border-border',
-          'focus:outline-none',
+          'relative z-10 w-full overflow-y-auto rounded-2xl bg-popover p-6',
+          'shadow-elevation-3 focus:outline-none',
           maxWidth,
           maxHeight
         )}
       >
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="mb-6 flex items-start justify-between">
+          {/* Section title: 20/500 (§5.2) */}
           <h2
             id="modal-title"
-            className="text-lg font-semibold text-foreground"
+            className="text-xl font-medium tracking-[-0.01em] text-foreground"
           >
             {title}
           </h2>
           {!disableClose && (
             <button
               onClick={onClose}
-              className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              className="rounded-lg p-1 text-[var(--color-text-tertiary)] transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
               aria-label="Close modal"
             >
               <X className="h-5 w-5" />

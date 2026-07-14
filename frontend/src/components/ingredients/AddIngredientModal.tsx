@@ -195,17 +195,17 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Add New Ingredient" maxWidth="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add new ingredient" maxWidth="max-w-2xl">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Info Section */}
         <div className="space-y-4">
           <h3 className="text-sm font-medium text-foreground">
-            Basic Information
+            Basic information
           </h3>
 
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">
-              Ingredient Name *
+              Ingredient name *
             </label>
             <Input
               value={name}
@@ -217,7 +217,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Base Unit *
+                Base unit *
               </label>
               <Select
                 value={baseUnit}
@@ -227,7 +227,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Cost per Unit (optional)
+                Cost per unit (optional)
               </label>
               <Input
                 type="text"
@@ -263,13 +263,13 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
               disabled={availableSuppliers.length === 0 && supplierEntries.length === suppliers.length}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Add Supplier
+              Add supplier
             </Button>
           </div>
 
           {supplierEntries.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4 border border-dashed border-border rounded-lg">
-              No suppliers added. Click &quot;Add Supplier&quot; to link suppliers to this ingredient.
+              No suppliers added. Click &quot;Add supplier&quot; to link suppliers to this ingredient.
             </p>
           ) : (
             <div className="space-y-4">
@@ -297,7 +297,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || !name.trim()}>
-            {isSubmitting ? 'Creating...' : 'Create Ingredient'}
+            {isSubmitting ? 'Creating...' : 'Create ingredient'}
           </Button>
         </div>
       </form>
@@ -343,7 +343,7 @@ function SupplierEntryForm({
           variant="ghost"
           size="sm"
           onClick={() => onRemove(entry.id)}
-          className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+          className="text-[var(--color-feedback-error)] hover:bg-[var(--color-feedback-error-tint)]"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -399,7 +399,7 @@ function SupplierEntryForm({
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Pack Size *
+            Pack size *
           </label>
           <Input
             type="text"
@@ -413,7 +413,7 @@ function SupplierEntryForm({
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Pack Unit *
+            Pack unit *
           </label>
           <Select
             value={entry.pack_unit}
@@ -427,7 +427,7 @@ function SupplierEntryForm({
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Price per Pack *
+            Price per pack *
           </label>
           <Input
             type="text"
@@ -445,7 +445,7 @@ function SupplierEntryForm({
         <Checkbox
           checked={entry.is_preferred}
           onChange={(e) => onChange(entry.id, 'is_preferred', e.target.checked)}
-          label="Preferred Supplier"
+          label="Preferred supplier"
         />
       </div>
     </div>

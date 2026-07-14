@@ -79,7 +79,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New User">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add new user">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -118,7 +118,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Phone Number (optional)
+            Phone number (optional)
           </label>
           <Input
             type="tel"
@@ -130,7 +130,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            User Type
+            User type
           </label>
           <Select
             value={userType}
@@ -146,7 +146,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
           <select
             value={outletId}
             onChange={(e) => setOutletId(e.target.value)}
-            className="w-full px-3 py-2 border border-input rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-input rounded-lg bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">-- None --</option>
             {outlets.map((outlet) => (
@@ -166,7 +166,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
             type="submit"
             disabled={isSubmitting || !email.trim() || !username.trim() || !password.trim()}
           >
-            {isSubmitting ? 'Creating...' : 'Create User'}
+            {isSubmitting ? 'Creating...' : 'Create user'}
           </Button>
         </div>
       </form>

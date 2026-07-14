@@ -110,7 +110,7 @@ export default function LoginPage() {
               />
             </div>
             {error && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-3 text-sm text-[var(--color-feedback-error)]">
                 {error}
               </div>
             )}
@@ -123,7 +123,7 @@ export default function LoginPage() {
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-border" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
+            <div className="relative flex justify-center text-xs">
               <span className="bg-card px-2 text-muted-foreground">
                 Or continue with
               </span>
@@ -179,8 +179,8 @@ export default function LoginPage() {
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-medium text-foreground hover:underline">
-              Sign Up
+            <Link href="/register" className="font-medium text-[var(--color-text-link)] hover:underline">
+              Sign up
             </Link>
           </p>
         </CardContent>

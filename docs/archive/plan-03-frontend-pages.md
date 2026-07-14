@@ -1,467 +1,277 @@
 # Plan 03: Frontend - New Pages
 
-**Status**: Implemented (v0.0.8)
 **Completed**: 2025-12-17
-**Priority**: Medium-High
-**Dependencies**: Plan 01 (Ingredient enhancements), Plan 02 (Recipe extensions)
+**Status**: Implemented
 
 ---
 
-## Overview
+## Summary
 
-Expand the frontend from a single recipe canvas to a multi-page application with dedicated views for ingredients, recipes, R&D, and finance. Uses Pinterest-style masonry layouts for visual browsing.
+Expanded the frontend from a single recipe canvas to a multi-page application with five dedicated views:
+
+- `/` — Recipe Canvas (existing)
+- `/ingredients` — Ingredients Library (new)
+- `/recipes` — Recipes Gallery (new)
+- `/recipes/[id]` — Individual Recipe Page (new)
+- `/rnd` — R&D Workspace (new)
+- `/finance` — Finance Reporting placeholder (new)
 
 ---
 
-## Navigation Structure
+## Implementation Details
 
-```
-/                       → Recipe Canvas (current, default)
-/ingredients            → Ingredients Library (new)
-/recipes                → Recipes Gallery (new)
-/recipes/[id]           → Individual Recipe Page (new)
-/rnd                    → R&D Workspace (new)
-/finance                → Finance Reporting (new)
-```
+### 1. Top Navigation (`TopNav.tsx`)
 
-### Top Navigation Update
+**File**: `frontend/src/components/layout/TopNav.tsx`
+
+Created a persistent top navigation bar that appears on all pages. Features:
+- Logo and app name linking to home
+- Five navigation links with active state highlighting
+- Icons for each section (using lucide-react)
+- Responsive design: icons only on mobile, icons + labels on desktop
+
+**Integration**: Added to root layout (`app/layout.tsx`) so it appears on all pages.
 
 ```tsx
-// components/layout/TopNav.tsx
-<nav>
-  <Link href="/">Canvas</Link>
-  <Link href="/ingredients">Ingredients</Link>
-  <Link href="/recipes">Recipes</Link>
-  <Link href="/rnd">R&D</Link>
-  <Link href="/finance">Finance</Link>
-</nav>
+// Navigation structure
+const NAV_ITEMS = [
+  { href: '/', label: 'Canvas', icon: ChefHat },
+  { href: '/ingredients', label: 'Ingredients', icon: Package },
+  { href: '/recipes', label: 'Recipes', icon: BookOpen },
+  { href: '/rnd', label: 'R&D', icon: FlaskConical },
+  { href: '/finance', label: 'Finance', icon: DollarSign },
+];
 ```
 
 ---
 
-## 1. Ingredients Page (`/ingredients`)
+### 2. Shared UI Components
 
-### Goal
-Browse and manage the full ingredient library with visual grouping and filtering.
+Created reusable components for the new pages:
 
-### Layout
-**Pinterest-style masonry grid** with cards grouped by default by **Supplier**.
+| Component | File | Purpose |
+|-----------|------|---------|
+| `Card` | `ui/Card.tsx` | Card container with header, title, content, footer sub-components |
+| `MasonryGrid` | `ui/MasonryGrid.tsx` | Pinterest-style responsive grid using `react-masonry-css` |
+| `GroupSection` | `ui/GroupSection.tsx` | Section with title, count badge, and grid children |
+| `PageHeader` | `ui/PageHeader.tsx` | Page title, description, and action buttons |
+| `SearchInput` | `ui/SearchInput.tsx` | Search input with icon and clear button |
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ [Search...] [Group by: Supplier ▼] [Filter: Category ▼] │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ── ABC Foods ──────────────────────────────────────    │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐       │
-│  │ Tomato  │ │ Onion   │ │ Garlic  │ │ Carrot  │       │
-│  │ $2.50/kg│ │ $1.20/kg│ │ $8.00/kg│ │ $1.50/kg│       │
-│  │ [Veg]   │ │ [Veg]   │ │ [Veg]   │ │ [Veg]   │       │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘       │
-│                                                         │
-│  ── FoodHub ────────────────────────────────────────    │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐                   │
-│  │ Chicken │ │ Salmon  │ │ Beef    │                   │
-│  │ $6.00/kg│ │ $18/kg  │ │ $12/kg  │                   │
-│  │ [Protein│ │ [Protein│ │ [Protein│                   │
-│  └─────────┘ └─────────┘ └─────────┘                   │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Grouping Options
-- **Supplier** (default) — Group by preferred supplier
-- **Category** — Group by food category
-- **Master Ingredient** — Show variants under masters
-- **None** — Flat alphabetical list
-
-### Ingredient Card
-
-```tsx
-interface IngredientCardProps {
-  ingredient: Ingredient;
-  showSupplier?: boolean;
-  showCategory?: boolean;
-}
-
-// Card displays:
-// - Name
-// - Unit cost (from preferred supplier)
-// - Category badge
-// - Master ingredient link (if variant)
-// - Quick actions: Edit, View recipes using this
-```
-
-### Features
-- **Search**: Filter by name (debounced)
-- **Inline create**: Click "+" to add new ingredient
-- **Click to expand**: Show full supplier list, all recipes using this
-- **Drag to canvas**: Drag ingredient card to recipe canvas (if open in split view)
-
-### Technical Implementation
-
-```tsx
-// app/ingredients/page.tsx
-export default function IngredientsPage() {
-  const { data: ingredients } = useIngredients();
-  const [groupBy, setGroupBy] = useState<'supplier' | 'category' | 'master' | 'none'>('supplier');
-  const [search, setSearch] = useState('');
-
-  const grouped = useMemo(() => groupIngredients(ingredients, groupBy), [ingredients, groupBy]);
-
-  return (
-    <div className="p-6">
-      <Toolbar search={search} onSearch={setSearch} groupBy={groupBy} onGroupBy={setGroupBy} />
-      <MasonryGrid>
-        {Object.entries(grouped).map(([group, items]) => (
-          <GroupSection key={group} title={group}>
-            {items.map(ing => <IngredientCard key={ing.id} ingredient={ing} />)}
-          </GroupSection>
-        ))}
-      </MasonryGrid>
-    </div>
-  );
-}
-```
+**Library Added**: `react-masonry-css` for masonry grid layout
 
 ---
 
-## 2. Recipes Page (`/recipes`)
+### 3. Ingredients Page (`/ingredients`)
 
-### Goal
-Browse all recipes with visual filtering by outlet, status, and cost range.
+**Files**:
+- `frontend/src/app/ingredients/page.tsx`
+- `frontend/src/components/ingredients/IngredientCard.tsx`
 
-### Layout
-**Pinterest-style masonry grid** grouped by default by **Outlet/Brand**.
+**Features**:
+- Grid display of all ingredients with card layout
+- Search by name (debounced)
+- Group by: None, Unit type, or Status (Active/Archived)
+- Toggle to show/hide archived ingredients
+- Each card shows: name, cost per unit, unit badge
+- Placeholder for image upload (button visible but disabled)
+- Quick action buttons on hover: Edit, Archive
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ [Search...] [Group by: Outlet ▼] [Status: All ▼] [Cost: $0-$50] │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ── Crimson Sun ─────────────────────────────────────────────   │
-│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐         │
-│  │ 🍝 Carbonara   │ │ 🥗 Caesar     │ │ 🍰 Tiramisu   │         │
-│  │               │ │               │ │               │         │
-│  │ $4.20/portion │ │ $3.80/portion │ │ $2.50/portion │         │
-│  │ [Active] ●●●  │ │ [Active] ●●   │ │ [Draft] ●     │         │
-│  │ ABC, FMH      │ │ ABC           │ │ ABC, FMH, XYZ │         │
-│  └───────────────┘ └───────────────┘ └───────────────┘         │
-│                                                                 │
-│  ── The Butcher's Heart ─────────────────────────────────────   │
-│  ┌───────────────┐ ┌───────────────┐                           │
-│  │ 🥩 Ribeye     │ │ 🍔 Wagyu Burger│                          │
-│  │ $18.50/portion│ │ $12.00/portion│                           │
-│  └───────────────┘ └───────────────┘                           │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Recipe Card
-
-```tsx
-interface RecipeCardProps {
-  recipe: Recipe;
-}
-
-// Card displays:
-// - Name + emoji/icon
-// - Cost per portion (range if multi-supplier)
-// - Status badge (Draft/Active/Archived)
-// - BOM depth indicator (● = direct only, ●● = 1 sub-recipe, ●●● = 2+ levels)
-// - Supplier icons (mini logos of suppliers involved)
-// - Click → navigate to /recipes/[id]
-```
-
-### Grouping Options
-- **Outlet** (default)
-- **Status** (Draft, Active, Archived)
-- **Category** (if we add recipe categories)
-- **Author**
-- **None**
-
-### Features
-- **Cost range filter**: Slider for min-max cost per portion
-- **Supplier filter**: Show only recipes using specific supplier
-- **BOM visualization**: Icons showing sub-recipe depth
-- **Quick actions**: Duplicate, Archive, Open in Canvas
+**Why this approach**: The plan specified grouping by Supplier as default, but since supplier data isn't populated in the current types/API, we defaulted to simpler grouping options that work with existing data. This can be enhanced when Plan 01's supplier types are integrated into the frontend.
 
 ---
 
-## 3. Individual Recipe Page (`/recipes/[id]`)
+### 4. Recipes Gallery (`/recipes`)
 
-### Goal
-Detailed view of a single recipe with full costing breakdown, instructions, and relationships.
+**Files**:
+- `frontend/src/app/recipes/page.tsx`
+- `frontend/src/components/recipes/RecipeCard.tsx`
 
-### Layout
+**Features**:
+- Grid display of all recipes with clickable cards
+- Search by name
+- Filter by status: All, Draft, Active, Archived
+- Group by: None or Status
+- Each card shows: name, yield, status badge, cost per portion
+- Placeholder for recipe image
+- Click navigates to `/recipes/[id]`
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ ← Back to Recipes                                    [Edit] [⋮] │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  CARBONARA                              [Active] [Edit] │   │
-│  │  Yield: 4 portions                                      │   │
-│  │  Author: Chef Marco  •  Last updated: Dec 15, 2024      │   │
-│  │  Outlets: Crimson Sun, The Loft                         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────┐  ┌─────────────────────────────┐  │
-│  │  COSTING                │  │  INGREDIENTS                │  │
-│  │                         │  │                             │  │
-│  │  Batch: $16.80          │  │  • Spaghetti    400g  $2.40 │  │
-│  │  Per portion: $4.20     │  │  • Guanciale    200g  $8.00 │  │
-│  │                         │  │  • Eggs         4     $1.60 │  │
-│  │  ┌─────────────────┐    │  │  • Pecorino     100g  $4.80 │  │
-│  │  │ Range: $3.80-4.60│   │  │                             │  │
-│  │  │ (by supplier)   │    │  │  Sub-recipes:               │  │
-│  │  └─────────────────┘    │  │  • Pasta Dough (0.5 batch)  │  │
-│  └─────────────────────────┘  └─────────────────────────────┘  │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  INSTRUCTIONS (SOP)                                     │   │
-│  │                                                         │   │
-│  │  1. Bring large pot of salted water to boil             │   │
-│  │  2. Cook spaghetti until al dente (8 min) ⏱️            │   │
-│  │  3. Meanwhile, cook guanciale until crispy              │   │
-│  │  4. Whisk eggs with pecorino                            │   │
-│  │  5. Combine pasta with guanciale, remove from heat      │   │
-│  │  6. Add egg mixture, toss quickly                       │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────┐  ┌─────────────────────────────┐  │
-│  │  RELATED RECIPES        │  │  RELATED INGREDIENTS        │  │
-│  │                         │  │                             │  │
-│  │  Uses this recipe:      │  │  Also used in:              │  │
-│  │  • Carbonara Bake       │  │  Guanciale → Amatriciana    │  │
-│  │                         │  │  Pecorino → Cacio e Pepe    │  │
-│  │  Similar recipes:       │  │  Eggs → Tiramisu            │  │
-│  │  • Cacio e Pepe         │  │                             │  │
-│  │  • Amatriciana          │  │                             │  │
-│  └─────────────────────────┘  └─────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Features
-- **Costing range**: Show min-max based on supplier price variations
-- **BOM expansion**: Click sub-recipe to expand inline or navigate
-- **Edit mode**: Toggle to edit instructions, ingredients
-- **Print/Export**: Generate PDF for kitchen printing
-- **Related recipes**: Show recipes that use this as sub-recipe + recipes sharing ingredients
+**Why this approach**: The plan specified grouping by Outlet, but since outlet data isn't available in the Recipe type yet, we used Status as the default grouping. This aligns with the most useful filter for kitchen operations and can be enhanced when outlets are integrated.
 
 ---
 
-## 4. R&D Page (`/rnd`)
+### 5. Individual Recipe Page (`/recipes/[id]`)
 
-### Goal
-A digital workspace for chefs to experiment with dish ideas — search/find ingredients, sketch out recipes, and iterate without affecting production menus.
+**File**: `frontend/src/app/recipes/[id]/page.tsx`
 
-### Key Insight: "Finalization" is Implicit
-
-Rather than a rigid status field, a recipe is considered "finalized" when it's **linked via FK to an Atlas menu item**. This keeps the system flexible:
-- Recipes in R&D = not linked to any Atlas menu item
-- Recipes in production = linked to Atlas menu item(s)
-
-This approach allows chefs to freely experiment without worrying about formal status transitions.
-
-### Data Model Notes
-- No new model required — uses existing `Recipe` model
-- "R&D mode" is a **view filter**, not a data distinction
-- Optional: Add `is_experimental: bool` flag for explicit tagging, but not required
-
-### Features
-
+**Layout**:
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  R&D WORKSPACE                                    [+ New Idea]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  INGREDIENT SEARCH                                      │   │
-│  │  [Search ingredients...                              ]  │   │
-│  │                                                         │   │
-│  │  Drag ingredients below to sketch a dish idea           │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  MY EXPERIMENTS (not linked to Atlas)                   │   │
-│  │                                                         │   │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │   │
-│  │  │ Carbonara   │ │ Carbonara   │ │ New Dessert │       │   │
-│  │  │ v2 (cheap)  │ │ v3 (premium)│ │ Idea        │       │   │
-│  │  │ $3.10       │ │ $6.80       │ │ $?.??       │       │   │
-│  │  │ [Edit]      │ │ [Edit]      │ │ [Edit]      │       │   │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘       │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  COMPARE VARIANTS                                       │   │
-│  │                                                         │   │
-│  │  Select recipes to compare side-by-side:                │   │
-│  │  □ Carbonara v1  □ Carbonara v2  □ Carbonara v3        │   │
-│  │                                          [Compare →]    │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  RECENT TASTING SESSIONS                                │   │
-│  │                                                         │   │
-│  │  Dec 15: Carbonara variants  [View Notes]               │   │
-│  │  Dec 10: New dessert menu    [View Notes]               │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ ← Back to Recipes        [Edit btn] │
+├─────────────────────────────────────┤
+│ [Image placeholder] Recipe Name     │
+│                     Yield, Status   │
+│                     Created/Updated │
+├─────────────────────────────────────┤
+│  COSTING        │  INGREDIENTS      │
+│  Batch cost     │  • Item 1         │
+│  Per portion    │  • Item 2         │
+│  Margin         │  ...              │
+├─────────────────────────────────────┤
+│  INSTRUCTIONS                       │
+│  1. Step one                        │
+│  2. Step two (with timer/temp)      │
+│  ...                                │
+└─────────────────────────────────────┘
 ```
 
-### R&D-Specific Features
-- **Ingredient search/drag**: Quickly add ingredients to a new recipe idea
-- **Cost estimation**: Real-time costing as ingredients are added
-- **Variant comparison**: Side-by-side view of recipe variants (cost, ingredients, notes)
-- **Tasting session links**: Quick access to recent tasting feedback
-- **"Promote to production"**: When ready, link to Atlas menu item (outside Prepper)
+**Features**:
+- Full recipe details with costing breakdown
+- Ingredients list with quantities
+- Structured instructions with timers and temperatures
+- Falls back to raw instructions if no structured steps
+- "Edit in Canvas" button links back to home with recipe selected
+- Placeholder for hero image
+
+**Why this approach**: This is a read-focused view complementing the Canvas which is edit-focused. Users can browse recipes and their costs without the overhead of the drag-and-drop canvas.
 
 ---
 
-## 5. Finance Page (`/finance`)
+### 6. R&D Workspace (`/rnd`)
 
-### Goal
-Reporting dashboard showing sales data (from Atlas POS) combined with COGS from recipes.
+**File**: `frontend/src/app/rnd/page.tsx`
 
-### Depends On
-- Plan 04: Atlas integration (for sales data)
-- Plan 02: Outlet attribution (for filtering)
+**Features**:
+- **Ingredient Search**: Quick search to find ingredients for experimentation
+- **My Experiments**: Shows all draft recipes (treating "draft" as "experimental")
+- **Compare Variants**: Placeholder for side-by-side comparison (coming soon)
+- **Tasting Sessions**: Placeholder for tasting notes (coming soon)
+- Link to Canvas for creating new experiments
 
-### Layout
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  FINANCE REPORTING                    [Date: Dec 1-15] [Export] │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐         │
-│  │ Total Sales   │ │ Total COGS    │ │ Gross Margin  │         │
-│  │ $45,230       │ │ $15,820       │ │ 65.0%         │         │
-│  │ ↑ 12% vs LM   │ │ ↑ 8% vs LM    │ │ ↑ 2pp vs LM   │         │
-│  └───────────────┘ └───────────────┘ └───────────────┘         │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  SALES + COGS BY RECIPE                                 │   │
-│  │  ─────────────────────────────────────────────────────  │   │
-│  │  Recipe          Sold    Revenue    COGS    Margin      │   │
-│  │  Carbonara       120     $2,160    $504     76.7%       │   │
-│  │  Ribeye           45     $1,575    $833     47.1%       │   │
-│  │  Caesar           98     $1,470    $372     74.7%       │   │
-│  │  ...                                                    │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  MARGIN BANDWIDTH                                       │   │
-│  │                                                         │   │
-│  │  [Chart showing margin range per recipe based on        │   │
-│  │   supplier price variations - best/worst case]          │   │
-│  │                                                         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Features
-- **Date range picker**: Filter by period
-- **Outlet filter**: View by brand/location
-- **COGS bandwidth**: Show margin range based on supplier price variations
-- **Export**: CSV/PDF for finance team
+**Why this approach**: Per the plan, "finalization" is implicit — a recipe is experimental if it's not linked to an Atlas menu item. Since Atlas integration isn't built yet, we use `status === 'draft'` as a proxy for "experimental" recipes.
 
 ---
 
-## Shared Components Needed
+### 7. Finance Page (`/finance`)
 
-### Masonry Grid
+**File**: `frontend/src/app/finance/page.tsx`
 
-```tsx
-// components/ui/MasonryGrid.tsx
-import Masonry from 'react-masonry-css';
+**Status**: Placeholder only (blocked by Atlas integration)
 
-export function MasonryGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <Masonry
-      breakpointCols={{ default: 4, 1100: 3, 700: 2, 500: 1 }}
-      className="masonry-grid"
-      columnClassName="masonry-column"
-    >
-      {children}
-    </Masonry>
-  );
-}
-```
+**Features**:
+- Summary cards (Total Sales, COGS, Gross Margin) — placeholder values
+- Sales + COGS by Recipe table — skeleton rows
+- Margin Bandwidth chart — placeholder
+- Clear notice that Atlas integration is required
 
-### Group Section
-
-```tsx
-// components/ui/GroupSection.tsx
-export function GroupSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4 border-b pb-2">{title}</h2>
-      <div className="grid gap-4">{children}</div>
-    </section>
-  );
-}
-```
+**Why placeholder**: The Finance page requires sales data from Atlas POS (Plan 04). This placeholder establishes the UI structure and navigation while clearly communicating the dependency.
 
 ---
 
-## Implementation Order
+## Layout Changes
 
-1. **Navigation**: Add top nav with page links
-2. **Ingredients Page**: Lower dependency, validates masonry pattern
-3. **Recipes Page**: Needs outlet data from Plan 02
-4. **Individual Recipe Page**: Needs sub-recipe data
-5. **R&D Page**: Pending requirements clarification
-6. **Finance Page**: Needs Atlas integration (Plan 04)
+### Root Layout (`app/layout.tsx`)
+
+Modified to include:
+- `TopNav` component for global navigation
+- Flex container structure: `TopNav` + `main` content area
+- Content area fills remaining height (`flex-1 overflow-hidden`)
+
+### AppShell Changes
+
+- Removed redundant `h-screen` (now handled by root layout)
+- Changed to `h-full` to fill parent container
+
+### TopAppBar Changes
+
+- Removed logo and "Prepper" text (now in TopNav)
+- Reduced height from `h-16` to `h-14`
+- Removed left margin from recipe name section
 
 ---
 
-## Recipe Images (Data Model Addition)
+## Files Created
 
-```python
-# In Recipe model
-class Recipe(SQLModel, table=True):
-    # ... existing fields ...
-
-    # NEW: Optional images
-    image_url: str | None = None  # Hero image for the dish
-
-# In structured instructions (JSONB)
-# Each step can optionally have an image:
-{
-    "order": 1,
-    "text": "Sear the steak on high heat",
-    "timer_seconds": 180,
-    "image_url": "https://..."  # Optional step image
-}
+```
+frontend/src/
+├── app/
+│   ├── ingredients/
+│   │   └── page.tsx
+│   ├── recipes/
+│   │   ├── page.tsx
+│   │   └── [id]/
+│   │       └── page.tsx
+│   ├── rnd/
+│   │   └── page.tsx
+│   └── finance/
+│       └── page.tsx
+├── components/
+│   ├── layout/
+│   │   └── TopNav.tsx
+│   ├── ingredients/
+│   │   ├── IngredientCard.tsx
+│   │   └── index.ts
+│   ├── recipes/
+│   │   ├── RecipeCard.tsx
+│   │   └── index.ts
+│   └── ui/
+│       ├── Card.tsx
+│       ├── MasonryGrid.tsx
+│       ├── GroupSection.tsx
+│       ├── PageHeader.tsx
+│       └── SearchInput.tsx
 ```
 
-### Image Storage Notes
-- Images likely stored in Supabase Storage or similar
-- Frontend handles upload, stores URL in recipe
-- Consider image optimization (Next.js Image component)
+## Files Modified
 
-## Resolved Questions
-
-1. **R&D Page**: ✅ Clarified — a workspace for experimentation. Recipes are "finalized" implicitly when linked to Atlas menu item via FK. No rigid status transitions needed.
-2. **Recipe images**: ✅ Optional images supported — both dish-level hero image AND per-step images for instructions.
-3. **Mobile**: ✅ Responsive where practical. Skip mobile optimization if it adds significant complexity/LOC to specific pages.
-4. **Routing**: ✅ Continue with Next.js App Router (already in use via `/app` directory).
-5. **Image upload**: ✅ Supabase Storage. For now, leave image upload as placeholder/non-clickable buttons.
+- `frontend/src/app/layout.tsx` — Added TopNav, restructured layout
+- `frontend/src/components/layout/AppShell.tsx` — Height adjustment
+- `frontend/src/components/layout/TopAppBar.tsx` — Removed logo, height adjustment
+- `frontend/src/components/layout/index.ts` — Export TopNav
+- `frontend/src/components/ui/index.ts` — Export new components
 
 ---
 
-## Acceptance Criteria
+## Design Decisions
 
-- [ ] Top navigation allows switching between pages
-- [ ] Ingredients page shows masonry grid grouped by supplier
-- [ ] Recipes page shows masonry grid grouped by outlet
-- [ ] Individual recipe page shows full details with costing
-- [ ] Finance page shows sales + COGS summary (after Atlas integration)
-- [ ] All pages support search and filtering
+### 1. No Masonry Grid Used (Yet)
+
+The `MasonryGrid` component was created but not used in the final implementation. The standard CSS grid with `GroupSection` provided better visual consistency. Masonry can be enabled later for pages where variable-height content makes sense.
+
+### 2. Image Placeholders
+
+All image upload functionality shows as disabled placeholder buttons. This follows the decision to use Supabase Storage for images but skip implementation for now.
+
+### 3. Responsive Design
+
+- TopNav: Icons only on mobile, icons + labels on tablet+
+- Page layouts: Single column on mobile, multi-column on larger screens
+- Search/filter toolbars: Stack vertically on mobile, horizontal on desktop
+
+### 4. Status as Default Grouping
+
+For recipes, Status grouping is more useful than alphabetical for kitchen operations. Active recipes at the top, drafts for experiments, archived for reference.
+
+---
+
+## Future Enhancements
+
+When Plan 01/02 types are integrated into frontend:
+
+1. **Ingredients page**: Add grouping by Supplier, Category, Master Ingredient
+2. **Recipes page**: Add grouping by Outlet, filter by supplier
+3. **Recipe detail**: Add sub-recipes section, outlet badges, author info
+4. **R&D page**: Implement variant comparison functionality
+5. **Finance page**: Integrate with Atlas for real sales data
+
+---
+
+## Testing
+
+Build verified with `npm run build` — all new pages compile successfully.
+
+Routes generated:
+- `○ /ingredients` (static)
+- `○ /recipes` (static)
+- `ƒ /recipes/[id]` (dynamic)
+- `○ /rnd` (static)
+- `○ /finance` (static)

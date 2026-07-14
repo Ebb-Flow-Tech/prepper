@@ -26,7 +26,7 @@ export function TagsCell({ siId }: TagsCellProps) {
         ))}
         <button
           onClick={() => setOpen(true)}
-          className="inline-flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          className="inline-flex items-center justify-center rounded-lg p-0.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           aria-label="Edit tags"
         >
           <Tag className="h-3.5 w-3.5" />

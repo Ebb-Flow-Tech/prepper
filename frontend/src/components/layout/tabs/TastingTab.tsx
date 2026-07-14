@@ -35,7 +35,7 @@ function TastingNoteCard({ note }: { note: TastingNoteWithRecipe }) {
 
           {note.feedback && (
             <div className="mb-3">
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <div className="text-xs font-medium text-muted-foreground mb-1">
                 Feedback
               </div>
               <p className="text-sm text-muted-foreground">{note.feedback}</p>
@@ -44,7 +44,7 @@ function TastingNoteCard({ note }: { note: TastingNoteWithRecipe }) {
 
           {note.action_items && (
             <div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              <div className="text-xs font-medium text-muted-foreground mb-1">
                 Action Items
               </div>
               <p className="text-sm text-muted-foreground">{note.action_items}</p>
@@ -130,7 +130,7 @@ export function TastingTab() {
     return (
       <div className="flex-1 bg-background p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Recipe not found or failed to load.
           </div>
         </div>

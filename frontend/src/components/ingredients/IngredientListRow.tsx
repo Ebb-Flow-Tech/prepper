@@ -42,11 +42,11 @@ export function IngredientListRow({
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <Link href={`/ingredients/${ingredient.id}`}>
-              <h3 className="text-base font-medium text-foreground truncate hover:text-blue-600 dark:hover:text-blue-400">
+              <h3 className="text-base font-medium text-foreground truncate hover:text-primary">
                 {ingredient.name}
               </h3>
             </Link>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5 tabular-nums">
               {formatCurrency(ingredient.cost_per_base_unit)} per unit
             </p>
           </div>
@@ -57,13 +57,13 @@ export function IngredientListRow({
               {ingredient.is_halal ? (
                 <Badge variant="success" className="text-xs">Halal</Badge>
               ) : (
-                <Badge variant="secondary" className="text-xs">Non-Halal</Badge>
+                <Badge variant="secondary" className="text-xs">Non-halal</Badge>
               )}
               {!ingredient.is_active && (
                 <Badge variant="warning" className="text-xs">Archived</Badge>
               )}
               {currentCategory && (
-                <Badge variant="info" className="text-xs">{currentCategory.name}</Badge>
+                <Badge variant="default" className="text-xs">{currentCategory.name}</Badge>
               )}
               {ingredientAllergens && ingredientAllergens.length > 0 && (
                 <>

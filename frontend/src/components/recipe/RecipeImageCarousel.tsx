@@ -99,7 +99,7 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
   return (
     <div className="space-y-4">
       {/* Carousel */}
-      <div className="relative bg-secondary rounded-lg overflow-hidden mx-auto max-w-sm max-h-96">
+      <div className="relative bg-secondary rounded-xl overflow-hidden mx-auto max-w-sm max-h-96">
         {hasImages ? (
           <>
             <Image
@@ -113,14 +113,14 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
               <>
                 <button
                   onClick={handlePrevious}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-[var(--color-scrim)] hover:opacity-80 text-[var(--color-text-inverse)] p-2 rounded-full transition-opacity"
                   aria-label="Previous image"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <button
                   onClick={handleNext}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-[var(--color-scrim)] hover:opacity-80 text-[var(--color-text-inverse)] p-2 rounded-full transition-opacity"
                   aria-label="Next image"
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -162,15 +162,15 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
             <button
               onClick={handleSetAsMain}
               disabled={currentImage?.is_main || setMainImageMutation.isPending}
-              className="disabled:opacity-50 disabled:cursor-not-allowed text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
+              className="disabled:opacity-50 disabled:cursor-not-allowed text-muted-foreground hover:text-primary transition-colors"
               title={currentImage?.is_main ? "This is already the preferred image" : "Set as preferred image"}
             >
-              <Star className={`h-4 w-4 ${currentImage?.is_main ? 'fill-amber-600 dark:fill-amber-400' : ''}`} />
+              <Star className={`h-4 w-4 ${currentImage?.is_main ? 'fill-primary text-primary' : ''}`} />
             </button>
             <button
               onClick={handleDeleteImage}
               disabled={deleteImageMutation.isPending}
-              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Delete this image"
             >
               <Trash2 className="h-4 w-4" />
@@ -195,7 +195,7 @@ export function RecipeImageCarousel({ recipeId, recipeName, ingredients }: Recip
           disabled={uploadMutation.isPending}
           onClick={() => fileInputRef.current?.click()}
         >
-          Upload Image
+          Upload image
         </Button>
 
         <Button

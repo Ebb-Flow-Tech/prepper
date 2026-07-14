@@ -38,11 +38,11 @@ export function AddAllergenModal({ isOpen, onClose }: AddAllergenModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Allergen">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add new allergen">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Allergen Name *
+            Allergen name *
           </label>
           <Input
             value={name}
@@ -68,7 +68,7 @@ export function AddAllergenModal({ isOpen, onClose }: AddAllergenModalProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || !name.trim()}>
-            {isSubmitting ? 'Creating...' : 'Create Allergen'}
+            {isSubmitting ? 'Creating...' : 'Create allergen'}
           </Button>
         </div>
       </form>

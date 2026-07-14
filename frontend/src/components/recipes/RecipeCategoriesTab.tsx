@@ -51,13 +51,13 @@ function EditCategoryModal({ category, onClose }: EditCategoryModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--color-scrim)]" onClick={onClose} />
       <form
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-lg p-6 shadow-lg w-full max-w-md mx-4"
+        className="relative bg-card border border-border rounded-2xl p-6 shadow-elevation-3 w-full max-w-md mx-4"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-lg">Edit Category</h3>
+          <h3 className="font-medium text-lg">Edit category</h3>
           <Button variant="ghost" size="icon" onClick={onClose} type="button">
             <X className="h-4 w-4" />
           </Button>
@@ -89,7 +89,7 @@ function EditCategoryModal({ category, onClose }: EditCategoryModalProps) {
               Cancel
             </Button>
             <Button type="submit" disabled={updateRecipeCategory.isPending}>
-              {updateRecipeCategory.isPending ? 'Saving...' : 'Save Changes'}
+              {updateRecipeCategory.isPending ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </div>
@@ -153,7 +153,7 @@ export function RecipeCategoriesTab() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load recipe categories. Please try again.
         </div>
       </div>
@@ -169,7 +169,7 @@ export function RecipeCategoriesTab() {
         >
           <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Category</span>
+            <span className="hidden sm:inline">Add category</span>
           </Button>
         </PageHeader>
 
@@ -201,13 +201,13 @@ export function RecipeCategoriesTab() {
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
           )
@@ -274,7 +274,7 @@ export function RecipeCategoriesTab() {
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={handleConfirmArchive}
-        title="Archive Category"
+        title="Archive category"
         message={`Are you sure you want to archive "${deleteConfirm?.name}"? It can be restored by enabling "Show archived".`}
         confirmLabel="Archive"
         cancelLabel="Cancel"

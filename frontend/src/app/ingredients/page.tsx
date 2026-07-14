@@ -19,22 +19,22 @@ type SortByOption = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc';
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'No grouping' },
-  { value: 'unit', label: 'By Unit' },
-  { value: 'status', label: 'By Status' },
-  { value: 'category', label: 'By Category' },
+  { value: 'unit', label: 'By unit' },
+  { value: 'status', label: 'By status' },
+  { value: 'category', label: 'By category' },
 ];
 
 const SORT_BY_OPTIONS = [
   { value: 'name_asc', label: 'A to Z' },
   { value: 'name_desc', label: 'Z to A' },
-  { value: 'price_asc', label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
+  { value: 'price_asc', label: 'Price: low to high' },
+  { value: 'price_desc', label: 'Price: high to low' },
 ];
 
 const INGREDIENT_TABS: { id: IngredientTab; label: string }[] = [
   { id: 'products', label: 'Products' },
   { id: 'ingredients', label: 'Ingredients' },
-  { id: 'categories', label: 'Tags (Ingredients)' },
+  { id: 'categories', label: 'Tags (ingredients)' },
   { id: 'suppliers', label: 'Suppliers' },
   { id: 'allergens', label: 'Allergens' },
 ];
@@ -46,7 +46,7 @@ function groupIngredients(
   categoryMap?: Map<number, string>
 ): Record<string, Ingredient[]> {
   if (groupBy === 'none') {
-    return { 'All Ingredients': ingredients };
+    return { 'All ingredients': ingredients };
   }
 
   if (groupBy === 'unit') {
@@ -205,7 +205,7 @@ function IngredientsListTab() {
 
       {error ? (
         <div className="p-6">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Failed to load ingredients. Please try again.
           </div>
         </div>
@@ -220,7 +220,7 @@ function IngredientsListTab() {
               label="FMH"
               items={[
                 {
-                  label: downloadingItems ? 'Downloading…' : 'Export Product List',
+                  label: downloadingItems ? 'Downloading…' : 'Export product list',
                   icon: <Download className="h-3.5 w-3.5" />,
                   onClick: handleDownloadSampleItems,
                   disabled: downloadingItems,
@@ -236,7 +236,7 @@ function IngredientsListTab() {
               label="Buy Catalogue (FMH)"
               items={[
                 {
-                  label: downloadingTemplate ? 'Downloading…' : 'Download Template',
+                  label: downloadingTemplate ? 'Downloading…' : 'Download template',
                   icon: <Download className="h-3.5 w-3.5" />,
                   onClick: handleDownloadBuyCatalogueTemplate,
                   disabled: downloadingTemplate,
@@ -250,7 +250,7 @@ function IngredientsListTab() {
             />
             <Button type="button" onClick={() => setShowForm(true)} disabled={showForm}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Ingredient</span>
+              <span className="hidden sm:inline">Add ingredient</span>
             </Button>
           </div>
         </PageHeader>
@@ -315,13 +315,13 @@ function IngredientsListTab() {
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
           )

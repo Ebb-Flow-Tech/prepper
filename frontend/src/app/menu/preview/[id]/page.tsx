@@ -120,7 +120,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
         {/* Menu Header */}
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{menu.name}</h1>
+            <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">{menu.name}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Version {menu.version_no} •{' '}
               {menu.is_published ? 'Published' : 'Draft'}
@@ -128,12 +128,12 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
             {(userType === 'admin' || isManager) && (
               <Link href={`/menu/edit/${menuId}`}>
                 <Button size="sm" variant="default" className="mt-2">
-                  Edit Menu
+                  Edit menu
                 </Button>
               </Link>
             )}
           </div>
-          <div className="flex items-center gap-1 border border-border rounded-md p-1">
+          <div className="flex items-center gap-1 border border-border rounded-lg p-1">
             <Button
               onClick={() => setViewMode('list')}
               size="sm"
@@ -167,7 +167,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                     onClick={() => toggleSection(section.id)}
                     className="w-full flex items-center justify-between p-4 hover:bg-secondary"
                   >
-                    <h2 className="font-semibold">{section.name}</h2>
+                    <h2 className="font-medium text-xl">{section.name}</h2>
                     {expandedSections.has(section.id) ? (
                       <ChevronUp className="h-5 w-5" />
                     ) : (
@@ -254,20 +254,20 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                     </div>
                                   </div>
 
-                                  {/* Key Highlights */}
+                                  {/* Key highlights */}
                                   <div>
                                     <p className="text-xs font-medium text-muted-foreground mb-1">
-                                      Key Highlights
+                                      Key highlights
                                     </p>
                                     <p className="text-sm text-muted-foreground">
                                       {item.key_highlights || <span className="italic text-muted-foreground">No key highlights written</span>}
                                     </p>
                                   </div>
 
-                                  {/* Additional Info */}
+                                  {/* Additional info */}
                                   <div>
                                     <p className="text-xs font-medium text-muted-foreground mb-1">
-                                      Additional Info
+                                      Additional info
                                     </p>
                                     <p className="text-sm text-muted-foreground">
                                       {item.additional_info || <span className="italic text-muted-foreground">No additional info written</span>}
@@ -348,17 +348,17 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
                                     </div>
                                   </div>
 
-                                  {/* Key Highlights */}
+                                  {/* Key highlights */}
                                   <div>
-                                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Key Highlights</p>
+                                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Key highlights</p>
                                     <p className="text-sm text-muted-foreground">
                                       {item.key_highlights || <span className="italic text-muted-foreground">No key highlights written</span>}
                                     </p>
                                   </div>
 
-                                  {/* Additional Info */}
+                                  {/* Additional info */}
                                   <div>
-                                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Additional Info</p>
+                                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Additional info</p>
                                     <p className="text-sm text-muted-foreground">
                                       {item.additional_info || <span className="italic text-muted-foreground">No additional info written</span>}
                                     </p>

@@ -1,15 +1,11 @@
 import type { Metadata } from 'next';
-import { Manrope, Geist_Mono } from 'next/font/google';
+import { Geist_Mono } from 'next/font/google';
 import { Providers } from '@/lib/providers';
 import { TopNav } from '@/components/layout';
 import './globals.css';
 
-// Fallback fonts from Google
-const manrope = Manrope({
-  variable: '--font-manrope',
-  subsets: ['latin'],
-});
-
+// The one sanctioned second face (styleguide §5.4) — scoped to IDs, SKUs,
+// codes and logs. Satoshi is self-hosted via @font-face in globals.css.
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
@@ -30,20 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Adobe Typekit - Polymath (single brand family; Euclid Circular B stand-in) */}
-        <link rel="stylesheet" href="https://use.typekit.net/weg5tjh.css" />
-        {/* Prevent FOUC: apply theme class before first paint (critical for mobile) */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('prepper-theme')||'system';var d=t==='system'?window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light':t;document.documentElement.classList.add(d);document.documentElement.style.colorScheme=d}catch(e){}})()`,
-          }}
-        />
-      </head>
-      <body
-        className={`${manrope.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" style={{ colorScheme: 'light' }}>
+      <body className={`${geistMono.variable} antialiased`}>
         <Providers>
           <div className="flex h-dvh flex-col">
             <TopNav />

@@ -58,7 +58,7 @@ export function AddSupplierModal({ isOpen, onClose }: AddSupplierModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Supplier">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add supplier">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Supplier Name */}
         <div>

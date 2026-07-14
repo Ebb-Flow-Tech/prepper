@@ -35,7 +35,7 @@ function StarRating({ rating }: { rating: number | null }) {
         <Star
           key={star}
           className={`h-3.5 w-3.5 ${star <= rating
-              ? 'fill-amber-400 text-amber-400'
+              ? 'fill-primary text-primary'
               : 'text-muted-foreground'
             }`}
         />
@@ -189,7 +189,7 @@ export function OverviewTab() {
     return (
       <div className="flex-1 bg-background p-6">
         <div className="max-w-5xl mx-auto">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Recipe not found or failed to load.
           </div>
         </div>
@@ -233,7 +233,7 @@ export function OverviewTab() {
                     {canEditRecipe && (
                       <button
                         onClick={() => setIsImageModalOpen(true)}
-                        className="absolute bottom-1 right-1 rounded-full h-8 w-8 bg-[hsl(var(--primary))] hover:opacity-90 text-black flex items-center justify-center transition-colors shadow-lg"
+                        className="absolute bottom-1 right-1 rounded-full h-8 w-8 bg-primary hover:opacity-90 text-primary-foreground flex items-center justify-center transition-colors shadow-elevation-2"
                         title="Edit recipe image"
                       >
                         <Wand2 className="h-4 w-4" />
@@ -254,9 +254,9 @@ export function OverviewTab() {
                                 if (e.key === 'Escape') { setIsEditingName(false); setNameValue(recipe?.name || ''); }
                               }}
                               autoFocus
-                              className="text-2xl font-bold text-foreground bg-transparent border-b-2 border-[hsl(var(--primary))] focus:outline-none flex-1 min-w-0"
+                              className="text-2xl font-bold text-foreground bg-transparent border-b-2 border-primary focus:outline-none flex-1 min-w-0"
                             />
-                            <button onClick={handleSaveName} disabled={isUpdating} className="text-green-600 hover:text-green-700 disabled:opacity-50 shrink-0">
+                            <button onClick={handleSaveName} disabled={isUpdating} className="text-[var(--color-feedback-success)] hover:opacity-80 disabled:opacity-50 shrink-0">
                               <Check className="h-5 w-5" />
                             </button>
                             <button onClick={() => { setIsEditingName(false); setNameValue(recipe?.name || ''); }} className="text-muted-foreground hover:text-foreground shrink-0">
@@ -295,7 +295,7 @@ export function OverviewTab() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="secondary">v{recipe.version}</Badge>
                         {userId !== null && recipe.owner_id === userId && (
-                          <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                          <Badge className="bg-primary text-primary-foreground">Owned</Badge>
                         )}
                         {categoryLinks.map((link) => {
                           const category = allCategories.find((c) => c.id === link.category_id);
@@ -361,9 +361,9 @@ export function OverviewTab() {
                         return category ? (
                           <div
                             key={link.id}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.2)] border border-[hsl(var(--primary)/0.3)]"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background-contrast border border-border"
                           >
-                            <span className="text-sm font-medium text-[hsl(var(--primary))]">
+                            <span className="text-sm font-medium text-primary">
                               {category.name}
                             </span>
                             <button
@@ -377,7 +377,7 @@ export function OverviewTab() {
                                 }
                               }}
                               disabled={!canEditRecipe || isRemovingTag}
-                              className="ml-1 text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.7)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              className="ml-1 text-primary hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               title="Remove category"
                             >
                               <X className="h-4 w-4" />
@@ -398,7 +398,7 @@ export function OverviewTab() {
                       <button
                         onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
                         disabled={isAddingTag}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.2)] hover:bg-[hsl(var(--primary)/0.15)] dark:hover:bg-[hsl(var(--primary)/0.25)] text-[hsl(var(--primary))] text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background-contrast hover:opacity-90 text-primary text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="h-4 w-4" />
                         Add Category
@@ -406,18 +406,18 @@ export function OverviewTab() {
 
                       {/* Dropdown Menu */}
                       {isTagDropdownOpen && (
-                        <div className="absolute top-full left-0 mt-2 bg-card border border-[hsl(var(--border))] rounded-lg shadow-lg z-50 min-w-48">
+                        <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-elevation-2 z-50 min-w-48">
                           {allCategories.length > 0 ? (
                             <>
                               {/* Search Input */}
-                              <div className="p-2 border-b border-[hsl(var(--border))]">
+                              <div className="p-2 border-b border-border">
                                 <input
                                   type="text"
                                   placeholder="Search categories..."
                                   value={tagSearchFilter}
                                   onChange={(e) => setTagSearchFilter(e.target.value)}
                                   autoFocus
-                                  className="w-full px-3 py-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] placeholder-[hsl(var(--muted-foreground))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                  className="w-full px-3 py-2 rounded-md border border-border bg-card text-card-foreground placeholder:text-[var(--color-text-tertiary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 />
                               </div>
 
@@ -442,7 +442,7 @@ export function OverviewTab() {
                                         setIsTagDropdownOpen(false);
                                       }}
                                       disabled={isAddingTag}
-                                      className="w-full text-left px-4 py-2 hover:bg-[hsl(var(--primary)/0.1)] dark:hover:bg-[hsl(var(--primary)/0.15)] text-sm text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="w-full text-left px-4 py-2 hover:bg-background-contrast text-sm text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {category.name}
                                     </button>
@@ -460,7 +460,7 @@ export function OverviewTab() {
                                         });
                                       }}
                                       disabled={isCreatingTag}
-                                      className="w-full text-left px-4 py-2 hover:bg-[hsl(var(--primary)/0.1)] dark:hover:bg-[hsl(var(--primary)/0.15)] text-sm text-[hsl(var(--primary))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="w-full text-left px-4 py-2 hover:bg-background-contrast text-sm text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       + Create &ldquo;{tagSearchFilter}&rdquo;
                                     </button>
@@ -498,7 +498,7 @@ export function OverviewTab() {
                         <textarea
                           value={descriptionValue}
                           onChange={(e) => setDescriptionValue(e.target.value)}
-                          className="w-full p-3 border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                          className="w-full p-3 border border-border rounded-lg bg-card text-card-foreground placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           placeholder="Enter recipe description..."
                           rows={4}
                         />
@@ -506,7 +506,7 @@ export function OverviewTab() {
                           <button
                             onClick={handleSaveDescription}
                             disabled={isUpdating}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--status-approved))] hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium transition-colors disabled:pointer-events-none"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-feedback-success)] hover:opacity-90 disabled:opacity-50 text-primary-foreground text-sm font-medium transition-colors disabled:pointer-events-none"
                           >
                             <Check className="h-4 w-4" />
                             Save
@@ -517,7 +517,7 @@ export function OverviewTab() {
                               setDescriptionValue(recipe?.description || '');
                             }}
                             disabled={isUpdating}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted)/0.8)] disabled:opacity-50 text-[hsl(var(--foreground))] text-sm font-medium transition-colors disabled:pointer-events-none"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted hover:bg-accent disabled:opacity-50 text-foreground text-sm font-medium transition-colors disabled:pointer-events-none"
                           >
                             <X className="h-4 w-4" />
                             Cancel
@@ -541,7 +541,7 @@ export function OverviewTab() {
                   {canEditRecipe && !isEditingDescription && (
                     <button
                       onClick={() => setIsEditingDescription(true)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--primary))] hover:opacity-90 text-black text-sm font-medium transition-colors mt-1 shrink-0"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-sm font-medium transition-colors mt-1 shrink-0"
                     >
                       <Edit2 className="h-4 w-4" />
                       Edit
@@ -647,7 +647,7 @@ export function OverviewTab() {
                       {recipe.selling_price_est && costing.cost_per_portion && (
                         <div className="flex justify-between items-center py-2">
                           <span className="text-muted-foreground">Margin</span>
-                          <span className="font-semibold text-green-600 dark:text-green-400">
+                          <span className="font-semibold text-[var(--color-feedback-success)]">
                             {((1 - costing.cost_per_portion / recipe.selling_price_est) * 100).toFixed(1)}%
                           </span>
                         </div>
@@ -697,7 +697,7 @@ export function OverviewTab() {
                     ))}
                   </ol>
                 ) : recipe.instructions_raw ? (
-                  <div className="prose prose-zinc dark:prose-invert max-w-none">
+                  <div className="prose max-w-none">
                     <p className="whitespace-pre-wrap text-foreground">
                       {recipe.instructions_raw}
                     </p>
@@ -714,7 +714,7 @@ export function OverviewTab() {
             <Card className="mt-6">
               <CardContent className="p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <Wine className="h-5 w-5 text-muted-foreground" />
                   <h2 className="text-lg font-semibold text-foreground">
                     Tasting History
                   </h2>
@@ -730,7 +730,7 @@ export function OverviewTab() {
                           <button
                             onClick={() => { summaryForRecipeIdRef.current = selectedRecipeId; summarizeFeedback(selectedRecipeId!); }}
                             disabled={isSummarizingFeedback}
-                            className="flex items-center gap-2 px-2 py-1 rounded bg-[hsl(var(--primary))] hover:opacity-90 disabled:opacity-50 text-black text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                            className="flex items-center gap-2 px-2 py-1 rounded bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground text-xs font-medium transition-colors disabled:cursor-not-allowed"
                           >
                             <Wand2 className="h-3 w-3" />
                             {isSummarizingFeedback ? 'Generating...' : 'Generate'}
@@ -787,7 +787,7 @@ export function OverviewTab() {
                                   <div className="flex items-center gap-2 mb-1">
                                     <Link
                                       href={`/tastings/${note.session_id}`}
-                                      className="text-sm font-medium text-foreground hover:text-purple-600 dark:hover:text-purple-400"
+                                      className="text-sm font-medium text-foreground hover:text-primary"
                                     >
                                       {note.session_name}
                                     </Link>

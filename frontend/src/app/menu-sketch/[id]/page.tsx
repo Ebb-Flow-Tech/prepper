@@ -126,10 +126,10 @@ function DishPreviewCell({
   );
 
   return (
-    <div className={`relative px-4 py-3 space-y-2${item.is_highlight ? ' bg-amber-500/10 dark:bg-amber-500/25' : ''}`}>
+    <div className={`relative px-4 py-3 space-y-2${item.is_highlight ? ' bg-[var(--surface-selected)]' : ''}`}>
       {/* Dish name + icons + prices + badges on one row */}
       <div className="flex items-center gap-2">
-        <p className="flex-1 text-base font-semibold text-foreground leading-snug">
+        <p className="flex-1 text-base font-medium text-foreground leading-snug">
           {item.recipe_name || '—'}
         </p>
         {(item.icons ?? []).length > 0 && (
@@ -168,9 +168,9 @@ function DishPreviewCell({
               onClick={() => setShowFeedback((v) => !v)}
               className={`shrink-0 flex items-center gap-0.5 rounded-full border px-1.5 text-[10px] transition-colors hover:opacity-80 ${
                 showFeedback
-                  ? 'border-blue-400/80 bg-blue-500/25 text-blue-600 dark:text-blue-400'
+                  ? 'border-[var(--color-feedback-info)] bg-[var(--color-feedback-info-tint)] text-[var(--color-feedback-info)]'
                   : item.tasting_notes.length > 0
-                  ? 'border-blue-400/50 bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                  ? 'border-border bg-[var(--color-feedback-info-tint)] text-[var(--color-feedback-info)]'
                   : 'border-border bg-muted/60 text-muted-foreground'
               }`}
               title="Tasting feedback"
@@ -185,7 +185,7 @@ function DishPreviewCell({
               onClick={onOpenComments}
               className={`shrink-0 flex items-center gap-0.5 rounded-full border px-1.5 text-[10px] transition-colors hover:opacity-80 ${
                 commentCount > 0
-                  ? 'border-orange-400/50 bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                  ? 'border-[var(--color-feedback-warning)] bg-[var(--color-feedback-warning-tint)] text-[var(--color-feedback-warning)]'
                   : 'border-border bg-muted/60 text-muted-foreground'
               }`}
             >
@@ -239,7 +239,7 @@ function MenuSketchPreview({
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-8 text-sm">
       {name && (
-        <h1 className="text-center text-2xl font-bold tracking-wide text-foreground uppercase">
+        <h1 className="text-center text-2xl font-medium tracking-[-0.015em] text-foreground">
           {name}
         </h1>
       )}
@@ -247,10 +247,10 @@ function MenuSketchPreview({
         const items = itemsBySection[section.id] ?? [];
         const pairs = chunk(items, 2);
         return (
-          <div key={section.id} className="rounded-xl overflow-hidden border border-border shadow-sm">
+          <div key={section.id} className="rounded-xl overflow-hidden border border-border shadow-elevation-1">
             {/* Section header */}
-            <div className="text-center font-bold tracking-widest uppercase text-sm py-2.5 px-4 bg-muted text-foreground">
-              {section.name || 'Unnamed Section'}
+            <div className="text-center font-medium text-sm py-2.5 px-4 bg-muted text-foreground">
+              {section.name || 'Unnamed section'}
             </div>
 
             {/* Column headers */}
@@ -436,7 +436,7 @@ function DishCard({
   return (
     <div
       className={`relative rounded-lg border border-border p-3 space-y-2 ${
-        item.is_highlight ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-card'
+        item.is_highlight ? 'bg-[var(--surface-selected)]' : 'bg-card'
       }`}
     >
       {/* Drag handle + remove */}
@@ -487,7 +487,7 @@ function DishCard({
           className="w-full rounded border border-border bg-muted px-2 py-1 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         {showSuggestions && filtered.length > 0 && (
-          <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded border border-border bg-card shadow-lg">
+          <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded-xl border border-border bg-card shadow-elevation-2">
             {filtered.slice(0, 5).map((r) => (
               <button
                 key={r.id}
@@ -564,7 +564,7 @@ function DishCard({
                 className="w-full rounded border border-border bg-muted px-2 py-0.5 text-[10px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
               {showIngredientSuggestions && (suggestedIngredients.length > 0 || ingSearchTerm) && (
-                <div className="absolute left-0 top-full z-50 mt-0.5 max-h-40 w-full overflow-y-auto rounded border border-border bg-card shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-0.5 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-elevation-2">
                   {suggestedIngredients.map((ing, idx) => (
                     <button
                       key={ing.id}
@@ -674,7 +674,7 @@ function DishCard({
         <button
           onClick={() => setShowFeedback(true)}
           className={`flex items-center gap-0.5 rounded p-0.5 text-xs hover:opacity-80 ${
-            item.tasting_notes.length > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'
+            item.tasting_notes.length > 0 ? 'text-[var(--color-feedback-info)]' : 'text-muted-foreground'
           }`}
           title="Tasting feedback"
         >
@@ -684,7 +684,7 @@ function DishCard({
         <button
           onClick={onOpenComments}
           className={`flex items-center gap-0.5 rounded p-0.5 text-xs ${
-            unresolvedCount > 0 ? 'text-orange-500' : 'text-muted-foreground hover:text-foreground'
+            unresolvedCount > 0 ? 'text-[var(--color-feedback-warning)]' : 'text-muted-foreground hover:text-foreground'
           }`}
           title="Comments"
         >
@@ -888,7 +888,7 @@ function DishRow({
     <div
       className={`rounded-lg border ${
         isSelected ? 'border-primary/50' : 'border-border'
-      } ${item.is_highlight ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-card'}`}
+      } ${item.is_highlight ? 'bg-[var(--surface-selected)]' : 'bg-card'}`}
     >
       {/* Main row — table-like with column dividers */}
       <div
@@ -926,7 +926,7 @@ function DishRow({
             className="w-full bg-transparent font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           {showSuggestions && filtered.length > 0 && (
-            <div className="absolute left-0 top-full z-50 mt-0.5 w-56 rounded border border-border bg-card shadow-lg">
+            <div className="absolute left-0 top-full z-50 mt-0.5 w-56 rounded-xl border border-border bg-card shadow-elevation-2">
               {filtered.slice(0, 5).map((r) => (
                 <button
                   key={r.id}
@@ -980,7 +980,7 @@ function DishRow({
                 className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
               />
               {showIngredientSuggestions && (suggestedIngredients.length > 0 || ingSearchTerm) && (
-                <div className="absolute left-0 top-full z-50 mt-0.5 max-h-40 w-full overflow-y-auto rounded border border-border bg-card shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-0.5 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-elevation-2">
                   {suggestedIngredients.map((ing, idx) => (
                     <button
                       key={ing.id}
@@ -1120,7 +1120,7 @@ function DishRow({
           <button
             onClick={() => setShowFeedback(true)}
             className={`flex items-center gap-1 rounded p-0.5 text-xs hover:opacity-80 ${
-              item.tasting_notes.length > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'
+              item.tasting_notes.length > 0 ? 'text-[var(--color-feedback-info)]' : 'text-muted-foreground'
             }`}
             title="Tasting feedback"
           >
@@ -1130,7 +1130,7 @@ function DishRow({
           <button
             onClick={onOpenComments}
             className={`flex items-center gap-1 rounded p-0.5 text-xs ${
-              unresolvedCount > 0 ? 'text-orange-500' : 'text-muted-foreground hover:text-foreground'
+              unresolvedCount > 0 ? 'text-[var(--color-feedback-warning)]' : 'text-muted-foreground hover:text-foreground'
             }`}
             title="Comments"
           >
@@ -1302,7 +1302,7 @@ function SectionCard({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm">
+    <div className="rounded-xl border border-border bg-card shadow-elevation-1">
       {/* Section header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span
@@ -1344,12 +1344,12 @@ function SectionCard({
           {/* Column headers (list view) */}
           {viewMode === 'list' && orderedItems.length > 0 && (
             <div
-              className="grid items-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+              className="grid items-center text-[10px] font-medium text-muted-foreground"
               style={{ gridTemplateColumns: '44px 1fr 2fr 88px 72px 52px' }}
             >
               <span />
               <span className="px-3">Dish</span>
-              <span className="px-3">Key Ingredients</span>
+              <span className="px-3">Key ingredients</span>
               <span className="px-2">Sale</span>
               <span className="px-2">Cost</span>
               <span className="px-2 text-center">%</span>
@@ -1416,7 +1416,7 @@ function SectionCard({
               </button>
             </div>
             {showDishSuggestions && dishSuggestions.length > 0 && (
-              <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded border border-border bg-card shadow-lg">
+              <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded-xl border border-border bg-card shadow-elevation-2">
                 {newDishName.trim() && (
                   <button
                     type="button"
@@ -1650,7 +1650,7 @@ export default function MenuSketchEditorPage() {
         <div className="ml-auto flex items-center gap-1.5">
           {/* View toggle (edit mode only) */}
           {!previewMode && (
-            <div className="flex rounded-md border border-border">
+            <div className="flex rounded-lg border border-border">
               <button
                 onClick={() => setViewMode('list')}
                 className={`rounded-l-md p-1.5 ${viewMode === 'list' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
@@ -1679,7 +1679,7 @@ export default function MenuSketchEditorPage() {
                 Display
               </button>
               {showDisplayMenu && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-border bg-card p-2 shadow-xl">
+                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-card p-2 shadow-elevation-2">
                   {(Object.keys(displayOptions) as (keyof DisplayOptions)[]).map((key) => (
                     <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted">
                       <input
@@ -1818,7 +1818,7 @@ export default function MenuSketchEditorPage() {
               {notesOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
               Notes
               {sketch.notes && !notesOpen && (
-                <Check className="ml-auto h-3 w-3 text-green-500" />
+                <Check className="ml-auto h-3 w-3 text-[var(--color-feedback-success)]" />
               )}
             </button>
             {notesOpen && (

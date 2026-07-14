@@ -90,7 +90,7 @@ export function InstructionStepCard({
       style={style}
       className={cn(
         'rounded-lg border border-border bg-card',
-        isDragging && 'opacity-50 shadow-lg'
+        isDragging && 'opacity-50 shadow-elevation-2'
       )}
     >
       <div className="flex items-start gap-3 p-4">

@@ -34,7 +34,7 @@ export default function EditMenuPage({ params }: EditMenuPageProps) {
       <div className="flex h-full flex-col">
         <div className="border-b border-border">
           <div className="max-w-4xl mx-auto px-6 py-4">
-            <h1 className="text-2xl font-bold text-foreground">Edit Menu</h1>
+            <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">Edit menu</h1>
           </div>
         </div>
         <div className="flex-1 p-4">
@@ -49,7 +49,7 @@ export default function EditMenuPage({ params }: EditMenuPageProps) {
       <div className="flex h-full flex-col">
         <div className="border-b border-border">
           <div className="max-w-4xl mx-auto px-6 py-4">
-            <h1 className="text-2xl font-bold text-foreground">Edit Menu</h1>
+            <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">Edit menu</h1>
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center">
@@ -63,7 +63,7 @@ export default function EditMenuPage({ params }: EditMenuPageProps) {
     <div className="flex h-full flex-col">
       <div className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Edit Menu</h1>
+          <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">Edit menu</h1>
           <p className="text-sm text-muted-foreground mt-1">{menu.name} • Version {menu.version_no}</p>
         </div>
       </div>

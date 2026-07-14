@@ -60,7 +60,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
 
 const DECISION_CONFIG: Record<TastingDecision, { label: string; icon: typeof CheckCircle; variant: 'success' | 'warning' | 'destructive' }> = {
   approved: { label: 'Approved', icon: CheckCircle, variant: 'success' },
-  needs_work: { label: 'Needs Work', icon: AlertCircle, variant: 'warning' },
+  needs_work: { label: 'Needs work', icon: AlertCircle, variant: 'warning' },
   rejected: { label: 'Rejected', icon: XCircle, variant: 'destructive' },
 };
 
@@ -73,7 +73,7 @@ function StarRating({ rating }: { rating: number | null }) {
           key={star}
           className={`h-3.5 w-3.5 ${
             star <= rating
-              ? 'fill-amber-400 text-amber-400'
+              ? 'fill-[var(--color-feedback-warning)] text-[var(--color-feedback-warning)]'
               : 'text-muted-foreground'
           }`}
         />
@@ -104,9 +104,9 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
   return (
     <div
       className={cn(
-        'cursor-pointer rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
+        'cursor-pointer rounded-xl border p-4 transition-all hover:shadow-elevation-2 min-w-[280px] max-w-[320px]',
         isCurrentRecipe
-          ? 'border-blue-500 bg-blue-50 shadow-blue-100 dark:border-blue-400 dark:bg-blue-950 dark:shadow-blue-900/20'
+          ? 'border-[var(--border-strong)] bg-[var(--surface-selected)] shadow-elevation-1'
           : 'border-border bg-card hover:border-border'
       )}
     >
@@ -123,7 +123,7 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
               {recipe.name}
             </h3>
             {isCurrentRecipe && (
-              <Badge className="bg-blue-500 text-white text-xs shrink-0">
+              <Badge variant="info" className="text-xs shrink-0">
                 Current
               </Badge>
             )}
@@ -330,8 +330,8 @@ function ActionablesList({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">
-          Follow Ups ({uncheckedCount} tasks left)
+        <h2 className="text-xl font-medium text-foreground">
+          Follow ups ({uncheckedCount} tasks left)
         </h2>
       </div>
 
@@ -365,7 +365,7 @@ function ActionablesList({
                 }}
               >
                 {item.checked ? (
-                  <CheckSquare className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <CheckSquare className="h-5 w-5 text-[var(--color-feedback-success)]" />
                 ) : (
                   <Square className="h-5 w-5 text-muted-foreground" />
                 )}
@@ -480,7 +480,7 @@ function OverviewTab({
 
             <div className="flex-1 min-w-0">
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-foreground">
+                <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">
                   {recipe.name}
                 </h1>
                 <p className="text-muted-foreground mt-1">
@@ -516,7 +516,7 @@ function OverviewTab({
 
               <div className="flex items-center gap-2 shrink-0">
                 {userId !== null && recipe.owner_id === userId && (
-                  <Badge className="bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                  <Badge className="bg-primary text-primary-foreground">Owned</Badge>
                 )}
                 <Badge variant={STATUS_VARIANTS[recipe.status]}>
                   {recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1)}
@@ -554,16 +554,16 @@ function OverviewTab({
         </CardContent>
       </Card>
 
-      {/* Follow Ups Section (Collapsible) */}
+      {/* Follow ups Section (Collapsible) */}
       <Card className="mb-6">
         <button
           onClick={() => setIsFollowUpsOpen(!isFollowUpsOpen)}
           className="w-full p-6 flex items-center justify-between hover:bg-secondary transition-colors"
         >
           <div className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <h2 className="text-lg font-semibold text-foreground">
-              Follow Ups
+            <ClipboardList className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-xl font-medium text-foreground">
+              Follow ups
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -592,16 +592,16 @@ function OverviewTab({
         )}
       </Card>
 
-      {/* Tasting History Card (Collapsible) */}
+      {/* Tasting history Card (Collapsible) */}
       <Card className="mb-6">
         <button
           onClick={() => setIsTastingHistoryOpen(!isTastingHistoryOpen)}
           className="w-full p-6 flex items-center justify-between hover:bg-secondary transition-colors"
         >
           <div className="flex items-center gap-2">
-            <Wine className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-            <h2 className="text-lg font-semibold text-foreground">
-              Tasting History
+            <Wine className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-xl font-medium text-foreground">
+              Tasting history
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -612,7 +612,7 @@ function OverviewTab({
                 </span>
                 {tastingSummary.average_overall_rating && (
                   <div className="flex items-center gap-1 text-sm">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    <Star className="h-4 w-4 fill-[var(--color-feedback-warning)] text-[var(--color-feedback-warning)]" />
                     <span className="font-medium">{tastingSummary.average_overall_rating.toFixed(1)}</span>
                   </div>
                 )}
@@ -643,7 +643,7 @@ function OverviewTab({
                         <div className="flex items-center gap-2 mb-1">
                           <Link
                             href={`/tastings/${note.session_id}`}
-                            className="text-sm font-medium text-foreground hover:text-purple-600 dark:hover:text-purple-400"
+                            className="text-sm font-medium text-foreground hover:text-[var(--color-text-link)]"
                           >
                             {note.session_name}
                           </Link>
@@ -689,14 +689,14 @@ function OverviewTab({
         )}
       </Card>
 
-      {/* More Info Section (Collapsible) */}
+      {/* More info Section (Collapsible) */}
       <Card className="mb-6">
         <button
           onClick={() => setIsMoreInfoOpen(!isMoreInfoOpen)}
           className="w-full p-6 flex items-center justify-between hover:bg-secondary transition-colors"
         >
-          <h2 className="text-lg font-semibold text-foreground">
-            More Info
+          <h2 className="text-xl font-medium text-foreground">
+            More info
           </h2>
           <ChevronDown
             className={cn(
@@ -708,12 +708,12 @@ function OverviewTab({
 
         {isMoreInfoOpen && (
           <>
-            {/* Ingredients | Sub Recipes | Costing Grid */}
+            {/* Ingredients | Sub recipes | Costing Grid */}
             <div className="px-6 pb-6 border-t border-border pt-6">
               <div className="grid gap-6 md:grid-cols-3 mb-6">
                 {/* Ingredients Card */}
                 <div>
-                  <h3 className="text-base font-semibold mb-4 text-foreground">
+                  <h3 className="text-base font-medium mb-4 text-foreground">
                     Ingredients
                   </h3>
 
@@ -742,10 +742,10 @@ function OverviewTab({
                   )}
                 </div>
 
-                {/* Sub Recipes */}
+                {/* Sub recipes */}
                 <div>
-                  <h3 className="text-base font-semibold mb-4 text-foreground">
-                    Sub Recipes
+                  <h3 className="text-base font-medium mb-4 text-foreground">
+                    Sub recipes
                   </h3>
 
                   {subRecipes && subRecipes.length > 0 ? (
@@ -777,7 +777,7 @@ function OverviewTab({
 
                 {/* Costing */}
                 <div>
-                  <h3 className="text-base font-semibold mb-4 text-foreground">
+                  <h3 className="text-base font-medium mb-4 text-foreground">
                     Costing
                   </h3>
 
@@ -785,14 +785,14 @@ function OverviewTab({
                     <div className="space-y-4">
                       <div className="flex justify-between items-center py-2 border-b border-border">
                         <span className="text-muted-foreground">Batch Cost</span>
-                        <span className="font-semibold text-foreground">
+                        <span className="font-medium text-foreground">
                           {formatCurrency(costing.total_batch_cost)}
                         </span>
                       </div>
 
                       <div className="flex justify-between items-center py-2 border-b border-border">
                         <span className="text-muted-foreground">Cost per Portion</span>
-                        <span className="font-semibold text-xl text-foreground">
+                        <span className="font-medium text-xl tabular-nums text-foreground">
                           {formatCurrency(costing.cost_per_portion)}
                         </span>
                       </div>
@@ -800,7 +800,7 @@ function OverviewTab({
                       {recipe.selling_price_est && costing.cost_per_portion && (
                         <div className="flex justify-between items-center py-2">
                           <span className="text-muted-foreground">Margin</span>
-                          <span className="font-semibold text-green-600 dark:text-green-400">
+                          <span className="font-medium tabular-nums text-[var(--color-feedback-success)]">
                             {((1 - costing.cost_per_portion / recipe.selling_price_est) * 100).toFixed(1)}%
                           </span>
                         </div>
@@ -816,7 +816,7 @@ function OverviewTab({
 
               {/* Instructions */}
               <div className="border-t border-border pt-6">
-                <h3 className="text-base font-semibold mb-4 text-foreground">
+                <h3 className="text-base font-medium mb-4 text-foreground">
                   Instructions
                 </h3>
 
@@ -848,7 +848,7 @@ function OverviewTab({
                     ))}
                   </ol>
                 ) : recipe.instructions_raw ? (
-                  <div className="prose prose-zinc dark:prose-invert max-w-none">
+                  <div className="prose prose-zinc max-w-none">
                     <p className="whitespace-pre-wrap text-foreground">
                       {recipe.instructions_raw}
                     </p>
@@ -893,7 +893,7 @@ function VersionsTab({
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Failed to load version history
           </div>
         </CardContent>
@@ -935,8 +935,8 @@ function VersionsTab({
         {/* Header */}
         <div className="flex items-center gap-2 p-4 border-b border-border">
           <History className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold text-foreground">
-            Iteration History
+          <h2 className="text-xl font-medium text-foreground">
+            Iteration history
           </h2>
           <Badge variant="secondary" className="ml-auto">
             {versions.length} version{versions.length !== 1 ? 's' : ''}
@@ -1022,7 +1022,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: LayoutGrid },
-    { id: 'versions' as const, label: 'Iteration History', icon: History },
+    { id: 'versions' as const, label: 'Iteration history', icon: History },
   ];
 
   if (recipeError) {
@@ -1035,7 +1035,7 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
           <ArrowLeft className="h-4 w-4" />
           Back to R&D
         </Link>
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Recipe not found or failed to load.
         </div>
       </div>
@@ -1075,9 +1075,9 @@ export default function RndRecipePage({ params }: RndRecipePageProps) {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                      'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
                       activeTab === tab.id
-                        ? 'bg-card text-foreground shadow-sm'
+                        ? 'bg-card text-foreground shadow-elevation-1'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
                   >

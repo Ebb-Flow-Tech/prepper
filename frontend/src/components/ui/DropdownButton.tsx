@@ -63,7 +63,8 @@ export function DropdownButton({ label, icon, items, className }: DropdownButton
       {open && (
         <div
           className={cn(
-            'absolute right-0 z-50 mt-1 min-w-[220px] rounded-lg border border-border bg-card shadow-lg',
+            // Menu: overlay surface, 12px radius, elevation-2 (§12.7)
+            'absolute right-0 z-50 mt-1 min-w-[220px] rounded-xl border border-border bg-popover shadow-elevation-2',
             'animate-in fade-in-0 zoom-in-95 duration-100'
           )}
         >

@@ -58,13 +58,13 @@ function EditAllergenModal({ allergen, onClose }: EditAllergenModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--color-scrim)]" onClick={onClose} />
       <form
         onSubmit={handleSubmit}
-        className="relative bg-card border border-border rounded-lg p-6 shadow-lg w-full max-w-md mx-4"
+        className="relative bg-card border border-border rounded-2xl p-6 shadow-elevation-3 w-full max-w-md mx-4"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-lg">Edit Allergen</h3>
+          <h3 className="font-medium text-lg">Edit allergen</h3>
           <Button variant="ghost" size="icon" onClick={onClose} type="button">
             <X className="h-4 w-4" />
           </Button>
@@ -96,7 +96,7 @@ function EditAllergenModal({ allergen, onClose }: EditAllergenModalProps) {
               Cancel
             </Button>
             <Button type="submit" disabled={updateAllergen.isPending}>
-              {updateAllergen.isPending ? 'Saving...' : 'Save Changes'}
+              {updateAllergen.isPending ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </div>
@@ -147,7 +147,7 @@ export function AllergensTab() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Failed to load allergens. Please try again.
         </div>
       </div>
@@ -163,7 +163,7 @@ export function AllergensTab() {
         >
           <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Allergen</span>
+            <span className="hidden sm:inline">Add allergen</span>
           </Button>
         </PageHeader>
 
@@ -196,13 +196,13 @@ export function AllergensTab() {
           view === 'grid' ? (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
           )

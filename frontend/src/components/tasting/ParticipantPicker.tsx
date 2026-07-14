@@ -80,7 +80,7 @@ export function ParticipantPicker({
             placeholder="Search users by name or email..."
           />
           {query && (
-            <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-popover text-popover-foreground border border-border rounded-md shadow-lg">
+            <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-popover text-popover-foreground border border-border rounded-xl shadow-elevation-2">
               {filtered.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">
                   No users found

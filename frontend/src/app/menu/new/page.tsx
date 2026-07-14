@@ -20,7 +20,7 @@ export default function NewMenuPage() {
     <div className="flex h-full flex-col">
       <div className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Create New Menu</h1>
+          <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground">Create new menu</h1>
           <p className="text-sm text-muted-foreground mt-1">Add a new menu with sections and items</p>
         </div>
       </div>

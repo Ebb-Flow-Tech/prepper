@@ -76,7 +76,7 @@ function IngredientCostTable({ recipeId }: { recipeId: number }) {
                   ? `${formatCurrency(item.cost_per_base_unit)}/${item.base_unit}`
                   : '—'}
               </td>
-              <td className={`px-4 py-3 text-right ${item.wastage_percentage > 0 ? 'font-medium text-orange-600 dark:text-orange-400' : 'text-muted-foreground'}`}>
+              <td className={`px-4 py-3 text-right ${item.wastage_percentage > 0 ? 'font-medium text-[var(--color-feedback-warning)]' : 'text-muted-foreground'}`}>
                 {item.wastage_percentage > 0 ? `${item.wastage_percentage.toFixed(1)}%` : '—'}
               </td>
               <td className="py-3 pl-4 text-right font-medium text-foreground">
@@ -187,7 +187,7 @@ function SubRecipeCostTable({ recipeId }: { recipeId: number }) {
                 <td className="px-4 py-3 text-right text-muted-foreground">
                   <div>{item.quantity} {item.unit}</div>
                   {showScaleContext && (
-                    <div className="text-xs text-amber-600 dark:text-amber-400">
+                    <div className="text-xs text-[var(--color-feedback-warning)]">
                       {item.quantity} of {childYield} {childYieldUnit}s
                     </div>
                   )}
@@ -272,7 +272,7 @@ function CostSummary({ recipeId }: { recipeId: number }) {
                 <Info className="h-3.5 w-3.5" />
               </button>
               {showTooltip && (
-                <div className="absolute bottom-full left-1/2 z-10 mb-2 w-48 -translate-x-1/2 rounded-md bg-popover p-2 text-xs text-popover-foreground shadow-lg">
+                <div className="absolute bottom-full left-1/2 z-10 mb-2 w-48 -translate-x-1/2 rounded-md bg-[var(--surface-tooltip)] p-2 text-xs text-[var(--color-text-inverse)] shadow-elevation-2">
                   Calculated from ingredient and item costs with yield of{' '}
                   {costing.yield_quantity} {costing.yield_unit}.
                 </div>
@@ -286,11 +286,11 @@ function CostSummary({ recipeId }: { recipeId: number }) {
       </div>
 
       {costing.missing_costs.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+        <div className="rounded-lg border border-[var(--color-feedback-warning)] bg-[var(--color-feedback-warning-tint)] p-4">
+          <p className="text-sm font-medium text-[var(--color-feedback-warning)]">
             Missing cost data for:
           </p>
-          <ul className="mt-1 list-inside list-disc text-sm text-amber-700 dark:text-amber-300">
+          <ul className="mt-1 list-inside list-disc text-sm text-[var(--color-feedback-warning)]">
             {costing.missing_costs.map((name) => (
               <li key={name}>{name}</li>
             ))}
@@ -331,7 +331,7 @@ export function CostsTab() {
     return (
       <div className="flex-1 bg-background p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Recipe not found or failed to load.
           </div>
         </div>

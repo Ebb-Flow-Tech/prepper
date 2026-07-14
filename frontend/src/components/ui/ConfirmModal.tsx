@@ -68,29 +68,28 @@ export function ConfirmModal({
       aria-labelledby="modal-title"
     >
       {/* Backdrop - does NOT close on click */}
-      <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[var(--color-scrim)]" aria-hidden="true" />
 
-      {/* Modal content */}
+      {/* Modal content — 16px radius, overlay surface, elevation-3 (§9, §12.6) */}
       <div
         ref={modalRef}
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full max-w-md rounded-lg bg-card p-6 shadow-xl',
-          'border border-border',
-          'focus:outline-none'
+          'relative z-10 w-full max-w-md rounded-2xl bg-popover p-6',
+          'shadow-elevation-3 focus:outline-none'
         )}
       >
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <h2
             id="modal-title"
-            className="text-lg font-semibold text-foreground"
+            className="text-xl font-medium tracking-[-0.01em] text-foreground"
           >
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="rounded-lg p-1 text-[var(--color-text-tertiary)] transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
             aria-label="Close modal"
           >
             <X className="h-5 w-5" />

@@ -45,17 +45,17 @@ export function ProductsTab() {
           />
         </div>
 
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-xl border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-secondary border-b border-border">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product Name</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product name</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Category</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">SKU</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Supplier</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tags</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Unit</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Price / Pack</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Price / pack</th>
               </tr>
             </thead>
             <tbody>
@@ -112,7 +112,7 @@ export function ProductsTab() {
                   <td className="px-4 py-3 text-muted-foreground">
                     {item.unit}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-foreground">
+                  <td className="px-4 py-3 text-right font-medium text-foreground tabular-nums">
                     {formatCurrency(item.price_per_pack)}
                   </td>
                 </tr>

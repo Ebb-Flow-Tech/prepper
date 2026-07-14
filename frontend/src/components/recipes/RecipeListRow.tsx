@@ -17,10 +17,10 @@ interface RecipeListRowProps {
   matchedViaSubDish?: boolean;
 }
 
-const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 'secondary'> = {
+const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'destructive' | 'secondary'> = {
   draft: 'secondary',
   active: 'success',
-  archived: 'warning',
+  archived: 'destructive',
 };
 
 export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortion, isOwned, href, allergenNames = [], categoryNames = [], matchedViaSubDish }: RecipeListRowProps) {
@@ -30,7 +30,7 @@ export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortio
         <CardContent className="py-2">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-medium text-foreground truncate hover:text-blue-600 dark:hover:text-blue-400">
+              <h3 className="text-base font-medium text-foreground truncate hover:text-primary">
                 {recipe.name}
               </h3>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -47,10 +47,10 @@ export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortio
                   <Badge variant="default" className="text-xs">Prep</Badge>
                 )}
                 {matchedViaSubDish && (
-                  <Badge variant="default" className="text-xs">Via Sub-dish</Badge>
+                  <Badge variant="default" className="text-xs">Via sub-dish</Badge>
                 )}
                 {isOwned && (
-                  <Badge className="text-xs bg-black text-white dark:bg-white dark:text-black">Owned</Badge>
+                  <Badge className="text-xs bg-primary text-primary-foreground">Owned</Badge>
                 )}
                 {categoryNames.map((name) => (
                   <Badge key={name} variant="secondary" className="text-xs">{name}</Badge>
@@ -61,7 +61,7 @@ export const RecipeListRow = memo(function RecipeListRow({ recipe, costPerPortio
               </div>
 
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground tabular-nums">
                   <span className="font-medium text-foreground">
                     {formatCurrency(costPerPortion ?? (recipe.cost_price != null && recipe.yield_quantity > 0 ? recipe.cost_price / recipe.yield_quantity : recipe.cost_price))}
                   </span>

@@ -7,6 +7,11 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'typ
   label?: string;
 }
 
+/**
+ * Checkbox (§11). 18px box, 1px --border-input, 4px radius.
+ * Checked = brand accent fill + white glyph — the checked state is one of the
+ * accent's four named roles (§4). It is never blue.
+ */
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   ({ className, checked, disabled, label, ...props }, ref) => {
     return (
@@ -17,26 +22,22 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           checked={checked}
           disabled={disabled}
           className={cn(
-            'relative h-5 w-5 appearance-none rounded border-2 transition-all',
-            'border-input',
-            'bg-card',
-            'checked:bg-blue-500 checked:border-blue-500 dark:checked:bg-blue-600 dark:checked:border-blue-600',
-            'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-secondary',
-            'hover:enabled:border-blue-400 dark:hover:enabled:border-blue-500',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
-            'cursor-pointer',
-            // Checkmark using ::after pseudo-element
-            'after:content-[""] after:absolute after:hidden',
-            'checked:after:block',
-            'after:left-1.5 after:top-0.5 after:h-3 after:w-1.5',
-            'after:border-r-2 after:border-b-2 after:border-white after:dark:border-white',
-            'after:transform after:rotate-45',
+            'relative h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-sm border bg-card',
+            'border-input transition-colors duration-[120ms] ease-out',
+            'checked:border-primary checked:bg-primary',
+            'hover:enabled:border-[var(--border-strong)]',
+            'disabled:cursor-not-allowed disabled:bg-muted disabled:border-[var(--border-default)]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            // Checkmark glyph
+            'after:absolute after:hidden after:content-[""] checked:after:block',
+            'after:left-[5px] after:top-[1px] after:h-[9px] after:w-[5px]',
+            'after:rotate-45 after:border-b-2 after:border-r-2 after:border-[var(--color-text-inverse)]',
             className
           )}
           {...props}
         />
         {label && (
-          <label className="text-sm text-muted-foreground cursor-pointer select-none">
+          <label className="cursor-pointer select-none text-sm text-muted-foreground">
             {label}
           </label>
         )}

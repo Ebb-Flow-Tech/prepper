@@ -66,7 +66,7 @@ export function EditableCell({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`w-full px-1 py-0.5 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-card ${className}`}
+        className={`w-full rounded-md border border-input bg-card px-1 py-0.5 text-sm text-foreground focus-visible:border-[var(--border-focus)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
       />
     );
   }
@@ -76,7 +76,7 @@ export function EditableCell({
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={`cursor-pointer hover:bg-secondary px-1 py-0.5 rounded ${className}`}
+      className={`cursor-pointer rounded-md px-1 py-0.5 transition-colors duration-[120ms] hover:bg-accent ${className}`}
     >
       {display || <span className="text-muted-foreground italic">{placeholder || '-'}</span>}
     </span>

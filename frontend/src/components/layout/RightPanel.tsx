@@ -56,7 +56,7 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
     >
       {/* Left accent + drag handle */}
       <div className="flex items-center gap-1.5 shrink-0">
-        <div className="w-0.5 h-6 rounded-full bg-blue-400 dark:bg-blue-500" />
+        <div className="w-0.5 h-6 rounded-full bg-[var(--border-strong)]" />
         {isDragDropEnabled && (
           <button
             {...listeners}
@@ -99,7 +99,7 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
       {/* Add button */}
       <button
         onClick={handleAddClick}
-        className="shrink-0 p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all"
+        className="shrink-0 p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-accent transition-all"
         aria-label="Add to canvas"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -150,7 +150,7 @@ function DraggableRecipeCard({
     >
       {/* Left accent + drag handle */}
       <div className="flex items-center gap-1.5 shrink-0">
-        <div className="w-0.5 h-6 rounded-full bg-green-400 dark:bg-green-500" />
+        <div className="w-0.5 h-6 rounded-full bg-[var(--border-strong)]" />
         {isDragDropEnabled && (
           <button
             {...listeners}
@@ -180,7 +180,7 @@ function DraggableRecipeCard({
             {recipe.name}
           </h3>
           {isCurrentRecipe && (
-            <span className="text-[10px] font-medium uppercase text-muted-foreground shrink-0">current</span>
+            <span className="text-[10px] font-medium text-muted-foreground shrink-0">current</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
@@ -204,7 +204,7 @@ function DraggableRecipeCard({
       <button
         onClick={handleAddClick}
         disabled={isCurrentRecipe}
-        className="shrink-0 p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-green-500 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-all disabled:opacity-0"
+        className="shrink-0 p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-accent transition-all disabled:opacity-0"
         aria-label="Add to canvas"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -556,7 +556,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
                         className={cn(
                           'px-2 py-0.5 text-[11px] font-medium rounded-full transition-colors',
                           selectedCategories.includes(category.id)
-                            ? 'bg-blue-500 text-white'
+                            ? 'bg-primary text-primary-foreground'
                             : 'bg-secondary text-muted-foreground hover:bg-muted'
                         )}
                       >
@@ -569,7 +569,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
                       <button
                         onClick={() => setCatPage((p) => p + 1)}
                         disabled={catFetching}
-                        className="text-[11px] text-blue-500 dark:text-blue-400 hover:underline disabled:opacity-50"
+                        className="text-[11px] text-primary hover:underline disabled:opacity-50"
                       >
                         {catFetching ? 'Loading...' : 'See more'}
                       </button>
@@ -624,7 +624,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
             {showIngredients && (
               <div>
                 {activeTab === 'all' && (
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Ingredients</h3>
+                  <h3 className="mb-1.5 text-xs font-medium text-muted-foreground px-1">Ingredients</h3>
                 )}
                 {filteredIngredients.length === 0 ? (
                   <div className="px-1">
@@ -633,7 +633,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
                         <button
                           onClick={handleQuickAdd}
                           disabled={isQuickAdding}
-                          className="w-full mb-1.5 flex items-center gap-2 rounded-lg px-3 py-2.5 border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30 hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-600 dark:text-blue-400 transition-colors text-sm font-medium disabled:opacity-50"
+                          className="w-full mb-1.5 flex items-center gap-2 rounded-lg px-3 py-2.5 border border-dashed border-border text-muted-foreground hover:bg-accent transition-colors text-sm font-medium disabled:opacity-50"
                         >
                           <Plus className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">Add &ldquo;{search.trim()}&rdquo;</span>
@@ -678,7 +678,7 @@ export function RightPanel({ outlets }: RightPanelProps) {
             {showRecipes && (
               <div>
                 {activeTab === 'all' && (
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Items</h3>
+                  <h3 className="mb-1.5 text-xs font-medium text-muted-foreground px-1">Items</h3>
                 )}
                 {filteredRecipes.length === 0 ? (
                   <p className="text-xs text-muted-foreground px-1">

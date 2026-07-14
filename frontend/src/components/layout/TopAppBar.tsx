@@ -125,12 +125,12 @@ export function TopAppBar() {
           aria-modal="true"
           aria-labelledby="unsaved-modal-title"
         >
-          <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+          <div className="absolute inset-0 bg-[var(--color-scrim)]" aria-hidden="true" />
           <div
             ref={modalRef}
             tabIndex={-1}
             className={cn(
-              'relative z-10 w-full max-w-md rounded-lg bg-card p-6 shadow-xl',
+              'relative z-10 w-full max-w-md rounded-2xl bg-popover p-6 shadow-elevation-3',
               'border border-border',
               'focus:outline-none'
             )}

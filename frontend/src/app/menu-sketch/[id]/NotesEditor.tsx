@@ -141,13 +141,13 @@ export function NotesEditor({ initialContent, onChange, onSave }: NotesEditorPro
       {/* Link modal */}
       {linkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setLinkModalOpen(false)} />
+          <div className="absolute inset-0 bg-[var(--color-scrim)]" onClick={() => setLinkModalOpen(false)} />
           <div
             data-link-modal
-            className="relative z-10 w-full max-w-sm rounded-lg border border-border bg-card p-4 shadow-xl"
+            className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-elevation-3"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">Insert link</h3>
+              <h3 className="text-sm font-medium text-foreground">Insert link</h3>
               <button
                 type="button"
                 onClick={() => setLinkModalOpen(false)}

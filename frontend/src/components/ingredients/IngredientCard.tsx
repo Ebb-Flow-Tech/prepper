@@ -35,11 +35,11 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
       <CardHeader>
         <div className="flex-1 min-w-0">
           <Link href={`/ingredients/${ingredient.id}`}>
-            <CardTitle className="truncate text-xl hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
+            <CardTitle className="truncate text-xl hover:text-primary cursor-pointer">
               {ingredient.name}
             </CardTitle>
           </Link>
-          <p className="text-base text-muted-foreground mt-0.5">
+          <p className="text-base text-muted-foreground mt-0.5 tabular-nums">
             {formatCurrency(ingredient.cost_per_base_unit)} per unit
           </p>
         </div>
@@ -52,13 +52,13 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
           {ingredient.is_halal ? (
             <Badge variant="success" className="text-sm">Halal</Badge>
           ) : (
-            <Badge variant="secondary" className="text-sm">Non-Halal</Badge>
+            <Badge variant="secondary" className="text-sm">Non-halal</Badge>
           )}
           {!ingredient.is_active && (
             <Badge variant="warning" className="text-sm">Archived</Badge>
           )}
           {currentCategory && (
-            <Badge variant="info" className="text-sm">{currentCategory.name}</Badge>
+            <Badge variant="default" className="text-sm">{currentCategory.name}</Badge>
           )}
           {ingredientAllergens && ingredientAllergens.length > 0 && (
             <>
@@ -75,7 +75,7 @@ export function IngredientCard({ ingredient, categories, onEdit, onArchive, onUn
 
       {/* Quick Actions */}
       {showActions && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-md shadow-sm border border-border p-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-lg shadow-elevation-2 border border-border p-1">
           {onEdit && (
             <Button
               variant="ghost"

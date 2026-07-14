@@ -46,7 +46,7 @@ export function IngredientsTab() {
     return (
       <div className="flex-1 bg-background p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Recipe not found or failed to load.
           </div>
         </div>

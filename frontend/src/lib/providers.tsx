@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import { AppProvider } from './store';
-import { ThemeProvider } from './theme';
 import { AuthGuard } from '@/components/AuthGuard';
 import { setQueryClientRef } from './query-client-ref';
 
@@ -24,12 +23,10 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AppProvider>
-          <AuthGuard>{children}</AuthGuard>
-          <Toaster position="bottom-center" richColors />
-        </AppProvider>
-      </ThemeProvider>
+      <AppProvider>
+        <AuthGuard>{children}</AuthGuard>
+        <Toaster position="bottom-center" richColors />
+      </AppProvider>
     </QueryClientProvider>
   );
 }

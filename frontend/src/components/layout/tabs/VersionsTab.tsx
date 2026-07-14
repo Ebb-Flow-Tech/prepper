@@ -40,9 +40,9 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
   return (
     <div
       className={cn(
-        'cursor-pointer rounded-lg border p-4 transition-all hover:shadow-md min-w-[280px] max-w-[320px]',
+        'cursor-pointer rounded-lg border p-4 transition-shadow hover:shadow-elevation-2 min-w-[280px] max-w-[320px]',
         isCurrentRecipe
-          ? 'border-blue-500 bg-blue-50 shadow-blue-100 dark:border-blue-400 dark:bg-blue-950 dark:shadow-blue-900/20'
+          ? 'border-primary bg-background-contrast'
           : 'border-border bg-card hover:border-border'
       )}
     >
@@ -59,7 +59,7 @@ const VersionNode = memo(({ data }: NodeProps<VersionNodeType>) => {
               {recipe.name}
             </h3>
             {isCurrentRecipe && (
-              <Badge className="bg-blue-500 text-white text-xs shrink-0">
+              <Badge className="bg-primary text-primary-foreground text-xs shrink-0">
                 Current
               </Badge>
             )}
@@ -327,7 +327,7 @@ export function VersionsTab() {
     return (
       <div className="flex-1 bg-background p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
             Failed to load version history
           </div>
         </div>

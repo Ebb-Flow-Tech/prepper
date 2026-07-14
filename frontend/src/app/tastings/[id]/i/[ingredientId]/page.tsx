@@ -60,19 +60,19 @@ const DECISION_CONFIG: Record<
   approved: {
     label: 'Approved',
     icon: CheckCircle,
-    className: 'text-green-600 dark:text-green-400',
+    className: 'text-[var(--color-feedback-success)]',
     badgeVariant: 'success',
   },
   needs_work: {
-    label: 'Needs Work',
+    label: 'Needs work',
     icon: AlertCircle,
-    className: 'text-amber-600 dark:text-amber-400',
+    className: 'text-[var(--color-feedback-warning)]',
     badgeVariant: 'warning',
   },
   rejected: {
     label: 'Rejected',
     icon: XCircle,
-    className: 'text-red-600 dark:text-red-400',
+    className: 'text-[var(--color-feedback-error)]',
     badgeVariant: 'destructive',
   },
 };
@@ -92,7 +92,7 @@ function StarRating({ rating, onChange }: { rating: number | null; onChange?: (v
         >
           <Star
             className={`h-4 w-4 ${rating && star <= rating
-                ? 'fill-amber-400 text-amber-400'
+                ? 'fill-primary text-primary'
                 : 'text-muted-foreground'
               }`}
           />
@@ -200,7 +200,7 @@ function FeedbackForm({
 
       <div>
         <label className="block text-sm font-medium text-foreground mb-1">
-          Suggested Actions
+          Suggested actions
         </label>
         <Textarea
           value={actionItems}
@@ -212,7 +212,7 @@ function FeedbackForm({
 
       <div>
         <label className="block text-sm font-medium text-foreground mb-1">
-          Suggested Status
+          Suggested status
         </label>
         <Select
           value={decision}
@@ -220,7 +220,7 @@ function FeedbackForm({
           options={[
             { value: '', label: 'Select status...' },
             { value: 'approved', label: 'Approved' },
-            { value: 'needs_work', label: 'Needs Work' },
+            { value: 'needs_work', label: 'Needs work' },
             { value: 'rejected', label: 'Rejected' },
           ]}
         />
@@ -305,13 +305,13 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId }: FeedbackN
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground"
+              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
             >
               <Edit className="h-4 w-4" />
             </button>
             <button
               onClick={() => onDelete(note.id)}
-              className="p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-muted-foreground hover:text-red-600"
+              className="p-1.5 rounded-lg hover:bg-[var(--color-feedback-error-tint)] text-muted-foreground hover:text-[var(--color-feedback-error)]"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -334,7 +334,7 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId }: FeedbackN
             }}
             onSubmit={handleSave}
             onCancel={() => setIsEditing(false)}
-            submitLabel="Save Changes"
+            submitLabel="Save changes"
             showImages={true}
             existingImages={editFormImages}
           />
@@ -371,7 +371,7 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId }: FeedbackN
                           href={image.image_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg overflow-hidden bg-secondary aspect-square hover:ring-2 ring-amber-500 transition-all"
+                          className="rounded-lg overflow-hidden bg-secondary aspect-square hover:ring-2 ring-ring transition-all"
                         >
                           <Image
                             src={image.image_url}
@@ -398,13 +398,13 @@ function FeedbackNoteCard({ note, onUpdate, onDelete, currentUserId }: FeedbackN
             )}
             {note.action_items && (
               <div className="mb-3 text-sm">
-                <p className="text-muted-foreground font-medium mb-1">Suggested Actions:</p>
+                <p className="text-muted-foreground font-medium mb-1">Suggested actions:</p>
                 <p className="text-muted-foreground">{note.action_items}</p>
               </div>
             )}
             {decisionConfig && (
               <div className="mb-3 text-sm">
-                <p className="text-muted-foreground font-medium mb-1">Suggested Status:</p>
+                <p className="text-muted-foreground font-medium mb-1">Suggested status:</p>
                 <Badge variant={decisionConfig.badgeVariant}>
                   {DecisionIcon && <DecisionIcon className="h-3 w-3 mr-1" />}
                   {decisionConfig.label}
@@ -509,7 +509,7 @@ export default function IngredientTastingPage() {
   if (!session) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Tasting session not found.
         </div>
       </div>
@@ -519,7 +519,7 @@ export default function IngredientTastingPage() {
   if (!ingredient) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           Ingredient not found.
         </div>
       </div>
@@ -535,14 +535,14 @@ export default function IngredientTastingPage() {
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Session
+            Back to session
           </Link>
         </div>
 
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <Droplet className="h-6 w-6 text-amber-500" />
+            <Droplet className="h-6 w-6 text-muted-foreground" />
             <h1 className="text-2xl font-bold text-foreground">{ingredient.name}</h1>
           </div>
           <p className="text-sm text-muted-foreground mb-2">{session.name}</p>
@@ -572,7 +572,7 @@ export default function IngredientTastingPage() {
             {ingredient.is_halal ? (
               <Badge variant="success">Halal</Badge>
             ) : (
-              <Badge variant="secondary">Non-Halal</Badge>
+              <Badge variant="secondary">Non-halal</Badge>
             )}
             {ingredient.cost_per_base_unit && (
               <Badge variant="info">
@@ -596,20 +596,20 @@ export default function IngredientTastingPage() {
               onClick={() => setShowAddForm(true)}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Add Feedback
+              Add feedback
             </Button>
           )}
         </div>
 
         {/* Add Feedback Form */}
         {showAddForm && (
-          <Card className="mb-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
+          <Card className="mb-4 border-border bg-muted/50">
             <CardContent className="pt-4">
               <FeedbackForm
                 initialData={{ taster_name: username || '' }}
                 onSubmit={handleAddNote}
                 onCancel={() => setShowAddForm(false)}
-                submitLabel="Add Feedback"
+                submitLabel="Add feedback"
                 showImages={true}
               />
             </CardContent>

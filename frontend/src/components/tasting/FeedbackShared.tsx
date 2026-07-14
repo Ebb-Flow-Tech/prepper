@@ -33,19 +33,19 @@ export const DECISION_CONFIG: Record<
   approved: {
     label: 'Approved',
     icon: CheckCircle,
-    className: 'text-green-600 dark:text-green-400',
+    className: 'text-[var(--color-feedback-success)]',
     badgeVariant: 'success',
   },
   needs_work: {
-    label: 'Needs Work',
+    label: 'Needs work',
     icon: AlertCircle,
-    className: 'text-amber-600 dark:text-amber-400',
+    className: 'text-[var(--color-feedback-warning)]',
     badgeVariant: 'warning',
   },
   rejected: {
     label: 'Rejected',
     icon: XCircle,
-    className: 'text-red-600 dark:text-red-400',
+    className: 'text-[var(--color-feedback-error)]',
     badgeVariant: 'destructive',
   },
 };
@@ -67,7 +67,7 @@ export function StarRating({ rating, onChange }: { rating: number | null; onChan
         >
           <Star
             className={`h-4 w-4 ${rating && star <= rating
-                ? 'fill-amber-400 text-amber-400'
+                ? 'fill-primary text-primary'
                 : 'text-muted-foreground'
               }`}
           />
@@ -192,7 +192,7 @@ export function FeedbackForm({
 
       <div>
         <label className="block text-sm font-medium text-muted-foreground mb-1">
-          Suggested Actions
+          Suggested actions
         </label>
         <Textarea
           value={actionItems}
@@ -204,7 +204,7 @@ export function FeedbackForm({
 
       <div>
         <label className="block text-sm font-medium text-muted-foreground mb-1">
-          Suggested Status
+          Suggested status
         </label>
         <Select
           value={decision}
@@ -212,7 +212,7 @@ export function FeedbackForm({
           options={[
             { value: '', label: 'Select status...' },
             { value: 'approved', label: 'Approved' },
-            { value: 'needs_work', label: 'Needs Work' },
+            { value: 'needs_work', label: 'Needs work' },
             { value: 'rejected', label: 'Rejected' },
           ]}
         />
@@ -302,13 +302,13 @@ export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete, show
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground"
+              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
             >
               <Edit className="h-4 w-4" />
             </button>
             <button
               onClick={() => onDelete(note.id)}
-              className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+              className="p-1.5 rounded-lg hover:bg-[var(--color-feedback-error-tint)] text-muted-foreground hover:text-[var(--color-feedback-error)]"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -331,7 +331,7 @@ export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete, show
             }}
             onSubmit={handleSave}
             onCancel={() => setIsEditing(false)}
-            submitLabel="Save Changes"
+            submitLabel="Save changes"
             showImages={true}
             existingImages={editFormImages}
           />
@@ -368,7 +368,7 @@ export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete, show
                           href={image.image_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg overflow-hidden bg-muted aspect-square hover:ring-2 ring-purple-500 transition-all"
+                          className="rounded-lg overflow-hidden bg-muted aspect-square hover:ring-2 ring-ring transition-all"
                         >
                           <Image
                             src={image.image_url}
@@ -395,13 +395,13 @@ export function FeedbackNoteCard({ note, currentUserId, onUpdate, onDelete, show
             )}
             {note.action_items && (
               <div className="mb-3 text-sm">
-                <p className="text-muted-foreground font-medium mb-1">Suggested Actions:</p>
+                <p className="text-muted-foreground font-medium mb-1">Suggested actions:</p>
                 <p className="text-muted-foreground">{note.action_items}</p>
               </div>
             )}
             {decisionConfig && (
               <div className="mb-3 text-sm">
-                <p className="text-muted-foreground font-medium mb-1">Suggested Status:</p>
+                <p className="text-muted-foreground font-medium mb-1">Suggested status:</p>
                 <Badge variant={decisionConfig.badgeVariant}>
                   {DecisionIcon && <DecisionIcon className="h-3 w-3 mr-1" />}
                   {decisionConfig.label}

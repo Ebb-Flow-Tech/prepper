@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, Select, Button } from '@/components/ui';
+import { Input, Select, Button, Badge } from '@/components/ui';
 import { formatCurrency, cn } from '@/lib/utils';
 import { getIngredientSuppliers } from '@/lib/api';
 import type { RecipeIngredient } from '@/types';
@@ -179,7 +179,7 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
       style={style}
       className={cn(
         'flex items-center gap-3 rounded-lg border border-border bg-card p-3',
-        isDragging && 'opacity-50 shadow-lg'
+        isDragging && 'opacity-50 shadow-elevation-2'
       )}
     >
       {canEdit && (
@@ -199,12 +199,9 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
         {ingredient.ingredient?.allergens && ingredient.ingredient.allergens.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {ingredient.ingredient.allergens.map((allergen) => (
-              <span
-                key={allergen.id}
-                className="inline-block rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300"
-              >
+              <Badge key={allergen.id} variant="warning">
                 {allergen.name}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
@@ -223,7 +220,7 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
         inputMode="decimal"
         value={localQuantity}
         onChange={(e) => handleQuantityChange(e.target.value)}
-        className="w-20"
+        className="w-20 text-right tabular-nums"
         disabled={!canEdit}
       />
 
@@ -243,7 +240,7 @@ export const RecipeIngredientRow = memo(function RecipeIngredientRow({
           value={unitPrice}
           onChange={(e) => handleUnitPriceChange(e.target.value)}
           placeholder="Unit $"
-          className="w-20"
+          className="w-20 text-right tabular-nums"
           disabled={!canEdit}
         />
         <span className="text-muted-foreground">/{baseUnit}</span>

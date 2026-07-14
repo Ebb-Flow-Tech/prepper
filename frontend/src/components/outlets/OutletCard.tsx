@@ -57,7 +57,7 @@ export function OutletCard({ outlet, parentOutletName, onArchive, onUnarchive }:
 
       {/* Quick Actions */}
       {showActions && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-md shadow-sm border border-border p-1">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-card rounded-lg shadow-elevation-1 border border-border p-1">
           <Link
             href={`/outlets/${outlet.id}`}
             className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"

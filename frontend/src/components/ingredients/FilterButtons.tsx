@@ -159,7 +159,7 @@ export function FilterButtons({
               : 'bg-secondary text-secondary-foreground hover:bg-muted'
           )}
         >
-          Non-Halal
+          Non-halal
         </button>
       </div>
 

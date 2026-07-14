@@ -8,10 +8,7 @@ import {
   Plus,
   Trash2,
   Search,
-  GripVertical,
-  Sun,
-  Moon,
-  Monitor
+  GripVertical
 } from 'lucide-react';
 import {
   Button,
@@ -30,12 +27,11 @@ import {
   PageHeader,
   GroupSection
 } from '@/components/ui';
-import { useTheme } from '@/lib/theme';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-12">
-      <h2 className="text-xl font-semibold text-foreground mb-6 pb-2 border-b border-border">
+      <h2 className="text-xl font-medium tracking-[-0.01em] text-foreground mb-6 pb-2 border-b border-border">
         {title}
       </h2>
       {children}
@@ -65,7 +61,6 @@ function ColorSwatch({ name, variable, className }: { name: string; variable: st
 }
 
 export default function DesignSystemPage() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
   const [searchValue, setSearchValue] = useState('');
 
   return (
@@ -73,51 +68,17 @@ export default function DesignSystemPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 sm:p-6 md:p-8 lg:p-12">
         {/* Header */}
         <div className="mb-12">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Reciperep Design System</h1>
+          <h1 className="text-2xl font-medium tracking-[-0.015em] text-foreground mb-2">
+            Reciperep design system
+          </h1>
           <p className="text-muted-foreground">
-            A kitchen-first design system with warm, terracotta-inspired colors and three-font typography.
+            Mission Systems CI — Satoshi, forest accent, warm neutral ramp, semantic feedback palette.
           </p>
         </div>
 
-        {/* Theme Toggle */}
-        <Section title="Theme">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <p className="text-sm text-muted-foreground">Current theme:</p>
-            <div className="flex gap-2">
-              <Button
-                variant={theme === 'light' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('light')}
-              >
-                <Sun className="h-4 w-4" />
-                Light
-              </Button>
-              <Button
-                variant={theme === 'dark' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('dark')}
-              >
-                <Moon className="h-4 w-4" />
-                Dark
-              </Button>
-              <Button
-                variant={theme === 'system' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme('system')}
-              >
-                <Monitor className="h-4 w-4" />
-                System
-              </Button>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              (Resolved: {resolvedTheme})
-            </span>
-          </div>
-        </Section>
-
         {/* Branding */}
         <Section title="Branding">
-          <Subsection title="Logo Inline">
+          <Subsection title="Logo inline">
             <div className="flex flex-col gap-6">
               <div className="p-6 rounded-lg bg-card border border-border">
                 <Image
@@ -128,10 +89,11 @@ export default function DesignSystemPage() {
                   className="h-12 w-auto"
                 />
               </div>
-              <div className="p-6 rounded-lg bg-zinc-900 border border-border">
+              {/* The light cut is the one that reads on a dark fill. */}
+              <div className="p-6 rounded-lg bg-[var(--surface-tooltip)] border border-border">
                 <Image
-                  src="/logo/Reciperep logo inline 840x180.png"
-                  alt="Reciperep Logo Inline"
+                  src="/logo/Reciperep logo inline light 840x180.png"
+                  alt="Reciperep logo inline, light variant"
                   width={280}
                   height={60}
                   className="h-12 w-auto"
@@ -141,7 +103,7 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="Logo Icon">
+          <Subsection title="Logo icon">
             <div className="flex gap-6">
               <div className="p-4 rounded-lg bg-card border border-border">
                 <Image
@@ -152,10 +114,10 @@ export default function DesignSystemPage() {
                   className="h-16 w-16"
                 />
               </div>
-              <div className="p-4 rounded-lg bg-zinc-900 border border-border">
+              <div className="p-4 rounded-lg bg-[var(--surface-tooltip)] border border-border">
                 <Image
-                  src="/logo/Reciperep logoicon 260x260.png"
-                  alt="Reciperep Logo Icon"
+                  src="/logo/Reciperep logoicon light 260x260.png"
+                  alt="Reciperep logo icon, light variant"
                   width={64}
                   height={64}
                   className="h-16 w-16"
@@ -210,19 +172,36 @@ export default function DesignSystemPage() {
 
         {/* Colors */}
         <Section title="Colors">
-          <Subsection title="Core Brand Colors">
+          <Subsection title="Brand accent — the only brand color">
+            <p className="text-sm text-muted-foreground mb-4">
+              Spent only on its four named roles: the primary button, one hero metric, the
+              active/selected state, and brand chrome. Nothing else is green.
+            </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <ColorSwatch name="Terracotta" variable="--color-terracotta" className="bg-primary" />
-              <ColorSwatch name="Green" variable="--color-green" className="bg-[hsl(var(--color-green))]" />
-              <ColorSwatch name="Teal" variable="--color-teal" className="bg-[hsl(var(--color-teal))]" />
-              <ColorSwatch name="Amber" variable="--color-amber" className="bg-[hsl(var(--color-amber))]" />
-              <ColorSwatch name="Red" variable="--color-red" className="bg-destructive" />
-              <ColorSwatch name="Slate" variable="--color-slate" className="bg-[hsl(var(--color-slate))]" />
-              <ColorSwatch name="Sage" variable="--color-sage" className="bg-tertiary" />
+              <ColorSwatch name="Forest" variable="--color-brand-accent" className="bg-primary" />
             </div>
           </Subsection>
 
-          <Subsection title="Semantic Colors">
+          <Subsection title="Warm neutral ramp">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <ColorSwatch name="Ink" variable="--color-text-primary" className="bg-[var(--color-text-primary)]" />
+              <ColorSwatch name="Muted deep" variable="--color-text-secondary" className="bg-[var(--color-text-secondary)]" />
+              <ColorSwatch name="Muted" variable="--color-text-tertiary" className="bg-[var(--color-text-tertiary)]" />
+              <ColorSwatch name="Faded" variable="--color-text-disabled" className="bg-[var(--color-text-disabled)]" />
+              <ColorSwatch name="Beige" variable="--surface-sunken" className="bg-[var(--surface-sunken)]" />
+            </div>
+          </Subsection>
+
+          <Subsection title="Feedback palette — never signal state with color alone">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <ColorSwatch name="Error" variable="--color-feedback-error" className="bg-[var(--color-feedback-error)]" />
+              <ColorSwatch name="Warning" variable="--color-feedback-warning" className="bg-[var(--color-feedback-warning)]" />
+              <ColorSwatch name="Success" variable="--color-feedback-success" className="bg-[var(--color-feedback-success)]" />
+              <ColorSwatch name="Info" variable="--color-feedback-info" className="bg-[var(--color-feedback-info)]" />
+            </div>
+          </Subsection>
+
+          <Subsection title="Semantic colors">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <ColorSwatch name="Background" variable="--background" className="bg-background" />
               <ColorSwatch name="Foreground" variable="--foreground" className="bg-foreground" />
@@ -238,7 +217,7 @@ export default function DesignSystemPage() {
 
         {/* Typography */}
         <Section title="Typography">
-          <Subsection title="Font Families">
+          <Subsection title="Font families">
             <div className="space-y-4">
               <div>
                 <p className="text-2xl font-normal" style={{ fontFamily: 'var(--font-sans)' }}>
@@ -263,16 +242,16 @@ export default function DesignSystemPage() {
 
           <Subsection title="Headings">
             <div className="space-y-4">
-              <h1 className="text-4xl font-bold">Heading 1 — The quick brown fox</h1>
-              <h2 className="text-3xl font-bold">Heading 2 — The quick brown fox</h2>
-              <h3 className="text-2xl font-semibold">Heading 3 — The quick brown fox</h3>
-              <h4 className="text-xl font-semibold">Heading 4 — The quick brown fox</h4>
+              <h1 className="text-4xl font-medium">Heading 1 — The quick brown fox</h1>
+              <h2 className="text-3xl font-medium">Heading 2 — The quick brown fox</h2>
+              <h3 className="text-2xl font-medium">Heading 3 — The quick brown fox</h3>
+              <h4 className="text-xl font-medium">Heading 4 — The quick brown fox</h4>
               <h5 className="text-lg font-medium">Heading 5 — The quick brown fox</h5>
               <h6 className="text-base font-medium">Heading 6 — The quick brown fox</h6>
             </div>
           </Subsection>
 
-          <Subsection title="Body Text">
+          <Subsection title="Body text">
             <div className="space-y-3 max-w-2xl">
               <p className="text-foreground">
                 Primary text — Used for main content and important information. This is the default text color
@@ -307,15 +286,15 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="With Icons">
+          <Subsection title="With icons">
             <div className="flex flex-wrap gap-4">
               <Button>
                 <Plus className="h-4 w-4" />
-                New Recipe
+                New recipe
               </Button>
               <Button variant="outline">
                 <Package className="h-4 w-4" />
-                Add Ingredient
+                Add ingredient
               </Button>
               <Button variant="destructive">
                 <Trash2 className="h-4 w-4" />
@@ -345,7 +324,7 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="Recipe Status Examples">
+          <Subsection title="Recipe status examples">
             <div className="flex flex-wrap gap-3">
               <Badge variant="secondary">draft</Badge>
               <Badge variant="info">testing</Badge>
@@ -354,7 +333,7 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="Status Label Classes">
+          <Subsection title="Status label classes">
             <div className="flex flex-wrap gap-3">
               <span className="status-draft">Draft</span>
               <span className="status-testing">Testing</span>
@@ -365,7 +344,7 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="Inventory Status">
+          <Subsection title="Inventory status">
             <div className="flex flex-wrap gap-3">
               <span className="status-optimal">Optimal</span>
               <span className="status-low">Low Stock</span>
@@ -375,13 +354,13 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Form Inputs */}
-        <Section title="Form Inputs">
+        <Section title="Form inputs">
           <div className="max-w-md space-y-6">
-            <Subsection title="Text Input">
+            <Subsection title="Text input">
               <Input placeholder="Enter recipe name..." />
             </Subsection>
 
-            <Subsection title="Search Input">
+            <Subsection title="Search input">
               <SearchInput
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
@@ -406,7 +385,7 @@ export default function DesignSystemPage() {
               <Textarea placeholder="Enter cooking instructions..." />
             </Subsection>
 
-            <Subsection title="Input States">
+            <Subsection title="Input states">
               <div className="space-y-3">
                 <Input placeholder="Normal input" />
                 <Input placeholder="Disabled input" disabled />
@@ -486,7 +465,7 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Skeletons */}
-        <Section title="Loading States">
+        <Section title="Loading states">
           <Subsection title="Skeleton">
             <div className="space-y-4 max-w-md">
               <Skeleton className="h-8 w-3/4" />
@@ -502,7 +481,7 @@ export default function DesignSystemPage() {
             </div>
           </Subsection>
 
-          <Subsection title="Card Skeleton">
+          <Subsection title="Card skeleton">
             <div className="max-w-sm">
               <Card>
                 <CardHeader>
@@ -518,8 +497,8 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Page Components */}
-        <Section title="Page Components">
-          <Subsection title="Page Header">
+        <Section title="Page components">
+          <Subsection title="Page header">
             <div className="rounded-lg border border-border p-4 bg-card">
               <PageHeader
                 title="Ingredients Library"
@@ -527,15 +506,15 @@ export default function DesignSystemPage() {
               >
                 <Button>
                   <Plus className="h-4 w-4" />
-                  Add Ingredient
+                  Add ingredient
                 </Button>
               </PageHeader>
             </div>
           </Subsection>
 
-          <Subsection title="Group Section">
+          <Subsection title="Group section">
             <div className="rounded-lg border border-border p-4 bg-card">
-              <GroupSection title="Active Ingredients" count={3}>
+              <GroupSection title="Active ingredients" count={3}>
                 <Card>
                   <CardContent className="pt-4">Butter</CardContent>
                 </Card>
@@ -551,26 +530,29 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Utility Classes */}
-        <Section title="Utility Classes">
-          <Subsection title="Animations">
-            <div className="flex flex-wrap gap-6">
-              <Card interactive className="flow-ui-hover-lift w-40">
-                <CardContent className="pt-4 text-center">
-                  <p className="text-sm">.flow-ui-hover-lift</p>
-                </CardContent>
-              </Card>
-              <Button className="flow-ui-active-scale">
-                .flow-ui-active-scale
-              </Button>
-            </div>
+        <Section title="Utility classes">
+          <Subsection title="Nav section eyebrow — the one uppercase exception">
+            <p className="text-sm text-muted-foreground mb-3">
+              Nav group labels are the only uppercase text in the product. Everything else is
+              sentence case.
+            </p>
+            <p className="nav-eyebrow">Workspace</p>
           </Subsection>
 
-          <Subsection title="Gradients">
-            <div className="flex flex-wrap gap-6 items-center">
-              <div className="w-40 h-24 rounded-lg mono-gradient" />
-              <p className="mono-gradient-text text-2xl font-bold">
-                Gradient Text
-              </p>
+          <Subsection title="Monospace — IDs, SKUs and codes only">
+            <p className="text-sm text-muted-foreground mb-3">
+              Never for prose or labels.
+            </p>
+            <p className="font-mono text-[13px] text-foreground">SANC22 · POLR-NV · BAR019</p>
+          </Subsection>
+
+          <Subsection title="Tabular numbers">
+            <p className="text-sm text-muted-foreground mb-3">
+              Every number that can change or align in a column, so digits don&apos;t jitter.
+            </p>
+            <div className="tabular text-right w-32 text-foreground">
+              <p>1,184.00</p>
+              <p>62,480.00</p>
             </div>
           </Subsection>
         </Section>
@@ -609,7 +591,7 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Spacing */}
-        <Section title="Spacing Scale">
+        <Section title="Spacing scale">
           <p className="text-sm text-muted-foreground mb-4">
             Standard Tailwind spacing scale. Common patterns used in the app:
           </p>
@@ -646,7 +628,7 @@ export default function DesignSystemPage() {
         </Section>
 
         {/* Border Radius */}
-        <Section title="Border Radius">
+        <Section title="Border radius">
           <div className="flex flex-wrap gap-6">
             <div className="flex flex-col items-center gap-2">
               <div className="w-16 h-16 bg-primary rounded-sm" />

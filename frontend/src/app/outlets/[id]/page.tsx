@@ -65,7 +65,7 @@ function EditableSelect({ value, onSave, options, className = '', onValidate, di
         value={value}
         onChange={handleChange}
         onBlur={handleBlur}
-        className={`px-1 py-0.5 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-card ${className}`}
+        className={`px-1 py-0.5 text-sm border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-ring bg-card ${className}`}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -242,7 +242,7 @@ export default function OutletPage({ params }: OutletPageProps) {
           <ArrowLeft className="h-4 w-4" />
           Back
         </Link>
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
+        <div className="rounded-xl bg-[var(--color-feedback-error-tint)] p-4 text-[var(--color-feedback-error)]">
           {is403
             ? "You do not have permission to access this outlet."
             : "Outlet not found or failed to load."}
@@ -265,8 +265,8 @@ export default function OutletPage({ params }: OutletPageProps) {
 
         {isLoading ? (
           <div className="space-y-6">
-            <Skeleton className="h-32 rounded-lg" />
-            <Skeleton className="h-48 rounded-lg" />
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-48 rounded-xl" />
           </div>
         ) : outlet ? (
           <>
@@ -304,7 +304,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                     {/* Outlet Type */}
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-muted-foreground">
-                        Outlet Type
+                        Outlet type
                         {hasChildren && (
                           <span className="ml-2 text-xs text-muted-foreground">(Cannot change with child outlets)</span>
                         )}
@@ -320,7 +320,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                     {/* Parent Outlet */}
                     <div className="space-y-1">
                       <label className="block text-xs font-medium text-muted-foreground">
-                        Parent Outlet
+                        Parent outlet
                         {outlet.outlet_type === 'brand' && (
                           <span className="ml-2 text-xs text-muted-foreground">(Brands only)</span>
                         )}
@@ -351,7 +351,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                               e.target.value = '';
                             }
                           }}
-                          className="px-2 py-1 text-sm border border-purple-400 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-card text-foreground cursor-pointer"
+                          className="px-2 py-1 text-sm border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-ring bg-card text-foreground cursor-pointer"
                         >
                           <option value="">Select parent outlet...</option>
                           {parentOutletOptions.map((opt) => (
@@ -370,7 +370,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                       <label className="block text-xs font-medium text-muted-foreground">
                         Status
                       </label>
-                      <Badge variant={outlet.is_active ? 'success' : 'warning'}>
+                      <Badge variant={outlet.is_active ? 'success' : 'secondary'}>
                         {outlet.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
@@ -394,7 +394,7 @@ export default function OutletPage({ params }: OutletPageProps) {
               <CardContent className="p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-lg font-semibold text-foreground">
-                    Outlet Recipe
+                    Outlet recipe
                   </h2>
                 </div>
 
@@ -405,7 +405,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Add Recipe
+                    Add recipe
                   </Button>
                 </div>
 
@@ -417,13 +417,13 @@ export default function OutletPage({ params }: OutletPageProps) {
                     setSearchTerm('');
                     setFormData({ recipe_id: '', price_override: '' });
                   }}
-                  title="Add Recipe to Outlet"
+                  title="Add recipe to outlet"
                   maxWidth="max-w-lg"
                 >
                   <form onSubmit={handleAddRecipe} className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-2">
-                        Search Recipe
+                        Search recipe
                       </label>
                       <Input
                         type="text"
@@ -452,7 +452,7 @@ export default function OutletPage({ params }: OutletPageProps) {
 
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Price Override (Optional)
+                        Price override (optional)
                       </label>
                       <Input
                         type="text"
@@ -486,7 +486,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                         disabled={!formData.recipe_id || addRecipeToOutletMutation.isPending}
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Add Recipe
+                        Add recipe
                       </Button>
                     </div>
                   </form>
@@ -499,10 +499,10 @@ export default function OutletPage({ params }: OutletPageProps) {
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Recipe Name
+                            Recipe name
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-muted-foreground">
-                            Price Override
+                            Price override
                           </th>
                           <th className="py-3 px-2 w-12"></th>
                         </tr>
@@ -518,12 +518,12 @@ export default function OutletPage({ params }: OutletPageProps) {
                               <td className="py-3 px-2 text-foreground font-medium">
                                 <Link
                                   href={`/recipes/${recipeOutlet.recipe_id}`}
-                                  className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                  className="hover:text-primary hover:underline"
                                 >
-                                  {recipe?.name || 'Unknown Recipe'}
+                                  {recipe?.name || 'Unknown recipe'}
                                 </Link>
                               </td>
-                              <td className="py-3 px-2 text-right text-foreground">
+                              <td className="py-3 px-2 text-right text-foreground tabular-nums">
                                 {editingRecipe === recipeOutlet.recipe_id ? (
                                   <input
                                     type="text"
@@ -542,7 +542,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                       const n = parseFloat(raw);
                                       if (!isNaN(n)) setEditData({ ...editData, [recipeOutlet.recipe_id]: { price_override: String(n) } });
                                     }}
-                                    className="w-full px-2 py-1 text-sm border border-input rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                                    className="w-full px-2 py-1 text-sm border border-input rounded-lg bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring text-right tabular-nums"
                                   />
                                 ) : (
                                   recipeOutlet.price_override !== null ? formatCurrency(recipeOutlet.price_override) : '-'
@@ -554,7 +554,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
 
-                                  <div className="absolute right-0 top-full mt-0 bg-popover border border-border rounded-md shadow-lg opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
+                                  <div className="absolute right-0 top-full mt-0 bg-popover border border-border rounded-xl shadow-elevation-2 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-10 min-w-max">
                                     {editingRecipe === recipeOutlet.recipe_id ? (
                                       <>
                                         <Button
@@ -565,7 +565,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                             setEditData({});
                                           }}
                                           disabled={updateRecipeOutletMutation.isPending}
-                                          className="w-full justify-start text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded-none first:rounded-t-md h-8 px-3"
+                                          className="w-full justify-start text-[var(--color-feedback-error)] rounded-none first:rounded-t-lg h-8 px-3"
                                         >
                                           <X className="h-4 w-4 mr-2" />
                                           Cancel
@@ -575,7 +575,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                           size="sm"
                                           onClick={() => handleUpdateRecipe(recipeOutlet.recipe_id)}
                                           disabled={updateRecipeOutletMutation.isPending}
-                                          className="w-full justify-start text-green-600 hover:text-green-700 dark:hover:text-green-400 rounded-none last:rounded-b-md h-8 px-3"
+                                          className="w-full justify-start text-[var(--color-feedback-success)] rounded-none last:rounded-b-lg h-8 px-3"
                                         >
                                           <Check className="h-4 w-4 mr-2" />
                                           Save
@@ -594,7 +594,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                               },
                                             });
                                           }}
-                                          className="w-full justify-start text-[hsl(var(--primary))] hover:opacity-80 rounded-none first:rounded-t-md h-8 px-3"
+                                          className="w-full justify-start text-primary hover:opacity-80 rounded-none first:rounded-t-lg h-8 px-3"
                                         >
                                           <EditIcon className="h-4 w-4 mr-2" />
                                           Edit
@@ -604,7 +604,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                                           size="sm"
                                           onClick={() => handleDeleteRecipe(recipeOutlet.recipe_id)}
                                           disabled={removeRecipeFromOutletMutation.isPending}
-                                          className="w-full justify-start text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950 rounded-none last:rounded-b-md h-8 px-3"
+                                          className="w-full justify-start text-[var(--color-feedback-error)] hover:bg-[var(--color-feedback-error-tint)] rounded-none last:rounded-b-lg h-8 px-3"
                                         >
                                           <Trash2 className="h-4 w-4 mr-2" />
                                           Delete
@@ -636,7 +636,7 @@ export default function OutletPage({ params }: OutletPageProps) {
                 <CardContent className="p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-lg font-semibold text-muted-foreground">
-                      Recipes from Parent Outlet
+                      Recipes from parent outlet
                     </h2>
                     <span className="text-xs text-muted-foreground italic">
                       (Inherited, read-only)
@@ -649,10 +649,10 @@ export default function OutletPage({ params }: OutletPageProps) {
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Recipe Name
+                            Recipe name
                           </th>
                           <th className="text-right py-3 px-2 font-medium text-muted-foreground">
-                            Price Override
+                            Price override
                           </th>
                         </tr>
                       </thead>
@@ -667,12 +667,12 @@ export default function OutletPage({ params }: OutletPageProps) {
                               <td className="py-3 px-2 text-muted-foreground font-medium">
                                 <Link
                                   href={`/recipes/${recipeOutlet.recipe_id}`}
-                                  className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                  className="hover:text-primary hover:underline"
                                 >
-                                  {recipe?.name || 'Unknown Recipe'}
+                                  {recipe?.name || 'Unknown recipe'}
                                 </Link>
                               </td>
-                              <td className="py-3 px-2 text-right text-muted-foreground">
+                              <td className="py-3 px-2 text-right text-muted-foreground tabular-nums">
                                 {recipeOutlet.price_override !== null ? formatCurrency(recipeOutlet.price_override) : '-'}
                               </td>
                             </tr>

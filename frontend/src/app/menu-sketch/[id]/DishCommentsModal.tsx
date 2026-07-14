@@ -64,13 +64,13 @@ export function DishCommentsModal({ itemId, dishName, comments, onClose }: DishC
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="absolute inset-0 bg-[var(--color-scrim)]" onClick={onClose} />
 
-        <div className="relative z-10 flex max-h-[80vh] w-full max-w-md flex-col rounded-lg border border-border bg-card shadow-xl">
+        <div className="relative z-10 flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-border bg-card shadow-elevation-3">
           {/* Header */}
           <div className="shrink-0 border-b border-border px-4 py-3 space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="truncate pr-4 text-sm font-semibold text-foreground">
+              <h3 className="truncate pr-4 text-sm font-medium text-foreground">
                 {dishName || 'Unnamed dish'}
               </h3>
               <button

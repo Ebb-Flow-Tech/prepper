@@ -33,7 +33,7 @@ import {
   useAllRecipeRecipeCategories,
   useRecipeOutletsBatch,
 } from '@/lib/hooks';
-import { Button, Input, Select, ConfirmModal, Modal, Checkbox, NumericInput } from '@/components/ui';
+import { Badge, Button, Input, Select, ConfirmModal, Modal, Checkbox, NumericInput } from '@/components/ui';
 import { toast } from 'sonner';
 import type { RecipeStatus, Outlet, SupplierIngredient } from '@/types';
 import { RightPanel } from '../RightPanel';
@@ -87,6 +87,41 @@ const DEFAULT_METADATA: RecipeMetadata = {
   selling_price: 0,
 };
 
+/**
+ * Drag preview card. Neutral by design — the accent budget (§4) spends the
+ * brand green on primary action, the hero metric, active/selected state and
+ * brand chrome, so a drag ghost stays on the neutral ramp. Ingredients and
+ * recipes are told apart by their label and image, not by a colour code.
+ */
+function DragPreviewCard({
+  name,
+  meta,
+  imageUrl,
+}: {
+  name: string;
+  meta: string;
+  imageUrl?: string | null;
+}) {
+  return (
+    <div className="w-44 overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3">
+      <div className="relative flex h-20 items-center justify-center bg-muted">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={name} fill className="object-cover" />
+        ) : (
+          <ImagePlus className="h-8 w-8 text-[var(--color-text-disabled)]" />
+        )}
+      </div>
+      <div className="flex items-center gap-2 px-3 pt-2">
+        <GripVertical className="h-4 w-4 shrink-0 text-[var(--color-text-tertiary)]" />
+        <span className="truncate text-sm font-medium text-foreground">{name}</span>
+      </div>
+      <div className="px-3 pb-3 pt-2">
+        <Badge variant="unit">{meta}</Badge>
+      </div>
+    </div>
+  );
+}
+
 function DragOverlayContent({
   item,
   stagedIngredients,
@@ -97,94 +132,34 @@ function DragOverlayContent({
   stagedRecipes: StagedRecipe[];
 }) {
   if (item.type === 'panel-ingredient') {
-    return (
-      <div className="game-card game-card-ingredient game-card-dragging w-44 opacity-95">
-        <div className="game-card-art game-card-art-ingredient h-20 flex items-center justify-center">
-          <ImagePlus className="h-10 w-10 text-blue-300/50" />
-        </div>
-        <div className="game-card-title py-2">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-blue-300" />
-            <span className="font-bold text-white text-sm truncate uppercase">{item.ingredient.name}</span>
-          </div>
-        </div>
-        <div className="game-card-body py-2">
-          <span className="game-card-stat game-card-stat-ingredient">{item.ingredient.base_unit}</span>
-        </div>
-      </div>
-    );
+    return <DragPreviewCard name={item.ingredient.name} meta={item.ingredient.base_unit} />;
   }
 
   if (item.type === 'panel-recipe') {
     return (
-      <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
-        {item.recipe.image_url ? (
-          <div className="h-20 relative overflow-hidden rounded-t-xl">
-            <Image src={item.recipe.image_url} alt={item.recipe.name} fill className="object-cover" />
-          </div>
-        ) : (
-          <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
-            <ImagePlus className="h-10 w-10 text-green-300/50" />
-          </div>
-        )}
-        <div className="game-card-title py-2">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-green-300" />
-            <span className="font-bold text-white text-sm truncate uppercase">{item.recipe.name}</span>
-          </div>
-        </div>
-        <div className="game-card-body py-2">
-          <span className="game-card-stat game-card-stat-recipe">{item.recipe.yield_quantity} {item.recipe.yield_unit}</span>
-        </div>
-      </div>
+      <DragPreviewCard
+        name={item.recipe.name}
+        meta={`${item.recipe.yield_quantity} ${item.recipe.yield_unit}`}
+        imageUrl={item.recipe.image_url}
+      />
     );
   }
 
   if (item.type === 'staged-ingredient') {
     const staged = stagedIngredients.find((s) => s.id === item.stagedId);
     if (!staged) return null;
-    return (
-      <div className="game-card game-card-ingredient game-card-dragging w-44 opacity-95">
-        <div className="game-card-art game-card-art-ingredient h-20 flex items-center justify-center">
-          <ImagePlus className="h-10 w-10 text-blue-300/50" />
-        </div>
-        <div className="game-card-title py-2">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-blue-300" />
-            <span className="font-bold text-white text-sm truncate uppercase">{staged.ingredient.name}</span>
-          </div>
-        </div>
-        <div className="game-card-body py-2">
-          <span className="game-card-stat game-card-stat-ingredient">{staged.unit}</span>
-        </div>
-      </div>
-    );
+    return <DragPreviewCard name={staged.ingredient.name} meta={staged.unit} />;
   }
 
   if (item.type === 'staged-recipe') {
     const staged = stagedRecipes.find((s) => s.id === item.stagedId);
     if (!staged) return null;
     return (
-      <div className="game-card game-card-recipe game-card-dragging w-44 opacity-95">
-        {staged.recipe.image_url ? (
-          <div className="h-20 relative overflow-hidden rounded-t-xl">
-            <Image src={staged.recipe.image_url} alt={staged.recipe.name} fill className="object-cover" />
-          </div>
-        ) : (
-          <div className="game-card-art game-card-art-recipe h-20 flex items-center justify-center">
-            <ImagePlus className="h-10 w-10 text-green-300/50" />
-          </div>
-        )}
-        <div className="game-card-title py-2">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-4 w-4 text-green-300" />
-            <span className="font-bold text-white text-sm truncate uppercase">{staged.recipe.name}</span>
-          </div>
-        </div>
-        <div className="game-card-body py-2">
-          <span className="game-card-stat game-card-stat-recipe">{staged.recipe.yield_quantity} {staged.recipe.yield_unit}</span>
-        </div>
-      </div>
+      <DragPreviewCard
+        name={staged.recipe.name}
+        meta={`${staged.recipe.yield_quantity} ${staged.recipe.yield_unit}`}
+        imageUrl={staged.recipe.image_url}
+      />
     );
   }
 
@@ -230,32 +205,26 @@ function StagedIngredientCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="game-card game-card-ingredient game-card-hover w-56"
+      className="w-56 overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1 transition-shadow duration-[120ms] ease-out hover:shadow-elevation-2"
     >
-      {/* Card frame */}
-      <div className="game-card-frame" />
-
-      {/* Rarity indicator */}
-      <div className="game-card-rarity game-card-rarity-ingredient" />
-
       {/* Card Art */}
-      <div className="game-card-art game-card-art-ingredient flex items-center justify-center">
-        <ImagePlus className="h-12 w-12 text-blue-300/50" />
+      <div className="flex h-24 items-center justify-center bg-muted">
+        <ImagePlus className="h-8 w-8 text-[var(--color-text-disabled)]" />
       </div>
 
-      {/* Title Banner */}
-      <div className="game-card-title">
+      {/* Title */}
+      <div className="px-3 pt-3">
         <div className="flex items-center gap-2">
-          <button {...listeners} {...attributes} aria-label={`Drag ${staged.ingredient.name}`} className="cursor-grab touch-none text-blue-300 hover:text-blue-100">
+          <button {...listeners} {...attributes} aria-label={`Drag ${staged.ingredient.name}`} className="cursor-grab touch-none text-[var(--color-text-tertiary)] hover:text-foreground">
             <GripVertical className="h-5 w-5" />
           </button>
-          <h3 className="flex-1 font-bold text-white truncate text-base tracking-wide uppercase">
+          <h3 className="flex-1 truncate text-sm font-medium text-foreground">
             {staged.ingredient.name}
           </h3>
           <button
             onClick={onRemove}
             aria-label={`Remove ${staged.ingredient.name}`}
-            className="rounded p-1 text-blue-300 hover:text-white hover:bg-white/10"
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             <X className="h-5 w-5" />
           </button>
@@ -263,13 +232,11 @@ function StagedIngredientCard({
       </div>
 
       {/* Card Body */}
-      <div className="game-card-body">
+      <div className="p-3">
         {/* Category Badge */}
         {categoryName && (
-          <div className="mb-3 pb-3 border-b border-blue-400/20">
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 inline-block">
-              {categoryName}
-            </span>
+          <div className="mb-3 pb-3 border-b border-border">
+            <Badge>{categoryName}</Badge>
           </div>
         )}
 
@@ -281,7 +248,7 @@ function StagedIngredientCard({
                 const newQty = Math.max(1, staged.quantity - 1);
                 onQuantityChange(parseFloat(newQty.toFixed(1)));
               }}
-              className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
               title="Decrease quantity"
               aria-label="Decrease quantity"
             >
@@ -292,12 +259,12 @@ function StagedIngredientCard({
               onChange={onQuantityChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`Quantity of ${staged.ingredient.name}`}
-              className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-base text-white text-center focus:border-blue-400 focus:outline-none"
+              className="w-16 rounded-md border border-border bg-secondary px-2 py-1 text-base text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               min={0.001}
             />
             <button
               onClick={() => onQuantityChange(parseFloat((staged.quantity + 1).toFixed(1)))}
-              className="rounded p-1 text-blue-300 hover:text-white hover:bg-blue-500/20"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
               title="Increase quantity"
               aria-label="Increase quantity"
             >
@@ -308,7 +275,7 @@ function StagedIngredientCard({
               onChange={(e) => { e.stopPropagation(); onUnitChange(e.target.value); }}
               onClick={(e) => e.stopPropagation()}
               aria-label={`Unit for ${staged.ingredient.name}`}
-              className="rounded bg-black/30 border border-blue-400/30 px-1 py-0.5 text-sm text-blue-100 focus:border-blue-400 focus:outline-none"
+              className="rounded-md border border-border bg-secondary px-1 py-0.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getCompatibleUnits(staged.unit).map((u) => (
                 <option key={u} value={u}>{u}</option>
@@ -319,21 +286,21 @@ function StagedIngredientCard({
             onClick={() => setIsExpanded(!isExpanded)}
             aria-label={isExpanded ? 'Hide ingredient details' : 'Show ingredient details'}
             aria-expanded={isExpanded}
-            className="rounded p-1.5 text-blue-300 hover:text-white hover:bg-white/10"
+            className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Cost display */}
-        <div className="text-sm text-blue-200/80">
+        <div className="text-sm text-muted-foreground">
           {unitCost != null ? (
             <span>
-              <span className="text-blue-100 font-medium">{formatCurrency(staged.quantity * unitCost)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(staged.quantity * unitCost)}</span>
               {' '}(${unitCost.toFixed(2)}/{staged.unit})
             </span>
           ) : (
-            <span className="text-blue-300/50">No pricing</span>
+            <span className="text-[var(--color-text-disabled)]">No pricing</span>
           )}
         </div>
 
@@ -344,7 +311,7 @@ function StagedIngredientCard({
               value={staged.selectedSupplierId ?? ''}
               onChange={(e) => onSupplierSelect(e.target.value ? parseInt(e.target.value, 10) : null)}
               onClick={(e) => e.stopPropagation()}
-              className="w-full rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-xs text-blue-100 focus:border-blue-400 focus:outline-none"
+              className="w-full rounded-md border border-border bg-secondary px-2 py-1 text-xs text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">No supplier (median)</option>
               {suppliers.map((s) => (
@@ -358,51 +325,49 @@ function StagedIngredientCard({
 
         {/* Expanded details */}
         {isExpanded && (
-          <div className="mt-3 pt-3 border-t border-blue-400/20 text-sm space-y-2">
+          <div className="mt-3 pt-3 border-t border-border text-sm space-y-2">
             <div className="flex justify-between">
-              <span className="text-blue-300/60">Unit Cost</span>
-              <span className="text-blue-100 font-medium">
+              <span className="text-muted-foreground">Unit Cost</span>
+              <span className="font-medium text-foreground">
                 {unitCost != null ? `$${unitCost.toFixed(2)}/${staged.unit}` : 'N/A'}
               </span>
             </div>
             <div>
-              <label className="text-blue-300/60 flex items-center justify-between">
+              <label className="text-muted-foreground flex items-center justify-between">
                 <span>Wastage %</span>
                 <NumericInput
                   value={staged.wastage_percentage}
                   onChange={(v) => onWastageChange(v)}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-16 rounded bg-black/30 border border-blue-400/30 px-2 py-1 text-sm text-white text-center focus:border-blue-400 focus:outline-none"
+                  className="w-16 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   min={0}
                   max={100}
                 />
               </label>
             </div>
             <div>
-              <span className="text-blue-300/60">Suppliers</span>
+              <span className="text-muted-foreground">Suppliers</span>
               {suppliers.length > 0 ? (
                 <ul className="mt-1 space-y-1.5">
                   {suppliers.map((supplier) => (
                     <li
                       key={supplier.supplier_id}
-                      className="flex items-center justify-between text-blue-100"
+                      className="flex items-center justify-between text-foreground"
                     >
                       <span className={supplier.is_preferred ? 'font-medium' : ''}>
                         {supplier.supplier_name}
                         {supplier.is_preferred && (
-                          <span className="ml-1 text-xs bg-blue-500/30 text-blue-200 px-1.5 py-0.5 rounded">
-                            preferred
-                          </span>
+                          <Badge className="ml-1">preferred</Badge>
                         )}
                       </span>
-                      <span className="text-blue-200/60">
+                      <span className="text-muted-foreground">
                         ${supplier.pack_size > 0 ? (supplier.price_per_pack / supplier.pack_size).toFixed(2) : 'N/A'}/{supplier.pack_unit}
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1 text-blue-300/50">No suppliers</p>
+                <p className="mt-1 text-[var(--color-text-disabled)]">No suppliers</p>
               )}
             </div>
           </div>
@@ -437,7 +402,7 @@ function StagedIngredientListItem({
   return (
     <div className="w-full bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-4 hover:border-foreground/20 transition-colors group">
       {/* Left accent pip */}
-      <div className="w-0.5 h-8 rounded-full bg-blue-400 dark:bg-blue-500 shrink-0" />
+      <div className="w-0.5 h-8 rounded-full bg-[var(--border-strong)] shrink-0" />
 
       {/* Name + meta */}
       <div className="flex-1 min-w-0">
@@ -469,7 +434,7 @@ function StagedIngredientListItem({
           onChange={(e) => onSupplierSelect(e.target.value ? parseInt(e.target.value, 10) : null)}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Supplier for ${staged.ingredient.name}`}
-          className="shrink-0 w-32 rounded-md border border-border bg-secondary px-1.5 py-1 text-xs text-foreground/80 focus:border-blue-400 focus:outline-none"
+          className="shrink-0 w-32 rounded-md border border-border bg-secondary px-1.5 py-1 text-xs text-foreground/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="">Median</option>
           {suppliers.map((s) => (
@@ -495,7 +460,7 @@ function StagedIngredientListItem({
           onChange={onQuantityChange}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Quantity of ${staged.ingredient.name}`}
-          className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:border-blue-400 focus:outline-none"
+          className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           min={0.001}
         />
         <button
@@ -511,7 +476,7 @@ function StagedIngredientListItem({
           onChange={(e) => { e.stopPropagation(); onUnitChange(e.target.value); }}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Unit for ${staged.ingredient.name}`}
-          className="w-14 rounded-md border border-border bg-secondary px-1 py-1 text-xs text-foreground/80 focus:border-blue-400 focus:outline-none"
+          className="w-14 rounded-md border border-border bg-secondary px-1 py-1 text-xs text-foreground/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {getCompatibleUnits(staged.unit).map((u) => (
             <option key={u} value={u}>{u}</option>
@@ -526,7 +491,7 @@ function StagedIngredientListItem({
           onChange={(v) => onWastageChange(v)}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Wastage percentage for ${staged.ingredient.name}`}
-          className="w-12 rounded-md border border-border bg-secondary px-1.5 py-1 text-sm text-center tabular-nums text-foreground focus:border-blue-400 focus:outline-none"
+          className="w-12 rounded-md border border-border bg-secondary px-1.5 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           min={0}
           max={100}
         />
@@ -537,7 +502,7 @@ function StagedIngredientListItem({
       <button
         onClick={onRemove}
         aria-label={`Remove ${staged.ingredient.name}`}
-        className="shrink-0 rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500 dark:hover:text-red-400 transition-all"
+        className="shrink-0 rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-feedback-error)] transition-all"
       >
         <X className="h-4 w-4" />
       </button>
@@ -567,7 +532,7 @@ function StagedRecipeListItem({
     <div className="w-full bg-card border border-border rounded-lg px-4 py-3 hover:border-foreground/20 transition-colors group">
       <div className="flex items-center gap-4">
         {/* Left accent pip */}
-        <div className="w-0.5 h-8 rounded-full bg-green-400 dark:bg-green-500 shrink-0" />
+        <div className="w-0.5 h-8 rounded-full bg-[var(--border-strong)] shrink-0" />
 
         {/* Name + meta */}
         <div className="flex-1 min-w-0">
@@ -598,7 +563,7 @@ function StagedRecipeListItem({
             onChange={onQuantityChange}
             onClick={(e) => e.stopPropagation()}
             aria-label={`Quantity of ${staged.recipe.name}`}
-            className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:border-green-400 focus:outline-none"
+            className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             min={0.001}
           />
           <button
@@ -616,7 +581,7 @@ function StagedRecipeListItem({
         <button
           onClick={onRemove}
           aria-label={`Remove ${staged.recipe.name}`}
-          className="shrink-0 rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500 dark:hover:text-red-400 transition-all"
+          className="shrink-0 rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-feedback-error)] transition-all"
         >
           <X className="h-4 w-4" />
         </button>
@@ -629,7 +594,7 @@ function StagedRecipeListItem({
           {categoryNames.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {categoryNames.map((name) => (
-                <span key={name} className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-1.5 py-0.5 rounded">
+                <span key={name} className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                   {name}
                 </span>
               ))}
@@ -707,17 +672,11 @@ function StagedRecipeCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="game-card game-card-recipe game-card-hover w-56"
+      className="w-56 overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1 transition-shadow duration-[120ms] ease-out hover:shadow-elevation-2"
     >
-      {/* Card frame */}
-      <div className="game-card-frame" />
-
-      {/* Rarity indicator */}
-      <div className="game-card-rarity game-card-rarity-recipe" />
-
       {/* Card Art */}
       {staged.recipe.image_url ? (
-        <div className="game-card-art relative">
+        <div className="relative h-24">
           <Image
             src={staged.recipe.image_url}
             alt={staged.recipe.name}
@@ -726,24 +685,24 @@ function StagedRecipeCard({
           />
         </div>
       ) : (
-        <div className="game-card-art game-card-art-recipe flex items-center justify-center">
-          <ImagePlus className="h-12 w-12 text-green-300/50" />
+        <div className="flex h-24 items-center justify-center bg-muted">
+          <ImagePlus className="h-8 w-8 text-[var(--color-text-disabled)]" />
         </div>
       )}
 
-      {/* Title Banner */}
-      <div className="game-card-title">
+      {/* Title */}
+      <div className="px-3 pt-3">
         <div className="flex items-center gap-2">
-          <button {...listeners} {...attributes} aria-label={`Drag ${staged.recipe.name}`} className="cursor-grab touch-none text-green-300 hover:text-green-100">
+          <button {...listeners} {...attributes} aria-label={`Drag ${staged.recipe.name}`} className="cursor-grab touch-none text-[var(--color-text-tertiary)] hover:text-foreground">
             <GripVertical className="h-5 w-5" />
           </button>
-          <h3 className="flex-1 font-bold text-white truncate text-base tracking-wide uppercase">
+          <h3 className="flex-1 truncate text-sm font-medium text-foreground">
             {staged.recipe.name}
           </h3>
           <button
             onClick={onRemove}
             aria-label={`Remove ${staged.recipe.name}`}
-            className="rounded p-1 text-green-300 hover:text-white hover:bg-white/10"
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             <X className="h-5 w-5" />
           </button>
@@ -751,7 +710,7 @@ function StagedRecipeCard({
       </div>
 
       {/* Card Body */}
-      <div className="game-card-body">
+      <div className="p-3">
         {/* Stats row */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1">
@@ -760,7 +719,7 @@ function StagedRecipeCard({
                 const newQty = Math.max(1, staged.quantity - 1);
                 onQuantityChange(parseFloat(newQty.toFixed(1)));
               }}
-              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
               title="Decrease quantity"
               aria-label="Decrease quantity"
             >
@@ -771,31 +730,31 @@ function StagedRecipeCard({
               onChange={onQuantityChange}
               onClick={(e) => e.stopPropagation()}
               aria-label={`Quantity of ${staged.recipe.name}`}
-              className="w-16 rounded bg-black/30 border border-green-400/30 px-2 py-1 text-base text-white text-center focus:border-green-400 focus:outline-none"
+              className="w-16 rounded-md border border-border bg-secondary px-2 py-1 text-base text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               min={0.001}
             />
             <button
               onClick={() => onQuantityChange(parseFloat((staged.quantity + 1).toFixed(1)))}
-              className="rounded p-1 text-green-300 hover:text-white hover:bg-green-500/20"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
               title="Increase quantity"
               aria-label="Increase quantity"
             >
               <Plus className="h-4 w-4" />
             </button>
-            <span className="game-card-stat game-card-stat-recipe">portion</span>
+            <Badge variant="unit">portion</Badge>
           </div>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             aria-label={isExpanded ? 'Hide recipe details' : 'Show recipe details'}
             aria-expanded={isExpanded}
-            className="rounded p-1.5 text-green-300 hover:text-white hover:bg-white/10"
+            className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Yield display */}
-        <div className="text-sm text-green-200/80">
+        <div className="text-sm text-muted-foreground">
           Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
         </div>
 
@@ -803,24 +762,20 @@ function StagedRecipeCard({
         {(outletNames.length > 0 || categoryNames.length > 0) && (
           <div className="mt-2 flex flex-wrap gap-1">
             {outletNames.map((name) => (
-              <span key={name} className="inline-block text-xs bg-green-500/30 text-green-200 px-2 py-0.5 rounded">
-                {name}
-              </span>
+              <Badge key={name}>{name}</Badge>
             ))}
             {categoryNames.map((name) => (
-              <span key={name} className="inline-block text-xs bg-green-400/20 text-green-300 px-2 py-0.5 rounded">
-                {name}
-              </span>
+              <Badge key={name}>{name}</Badge>
             ))}
           </div>
         )}
 
         {/* Expanded details */}
         {isExpanded && (
-          <div className="mt-3 pt-3 border-t border-green-400/20 text-sm space-y-3 max-h-48 overflow-y-auto">
+          <div className="mt-3 pt-3 border-t border-border text-sm space-y-3 max-h-48 overflow-y-auto">
             {/* Ingredients Section */}
             <div>
-              <span className="text-green-300/60 font-medium">Ingredients</span>
+              <span className="text-muted-foreground font-medium">Ingredients</span>
               {recipeIngredients && recipeIngredients.length > 0 ? (
                 <ul className="mt-1.5 space-y-1.5">
                   {(() => {
@@ -832,18 +787,18 @@ function StagedRecipeCard({
                     const preferredSupplier = suppliers.find((s) => s.is_preferred);
                     const scaledQty = parseFloat((ri.quantity * scale).toFixed(3));
                     return (
-                      <li key={ri.id} className="bg-black/20 rounded p-2">
-                        <div className="font-medium text-green-100">{ingredient?.name || `Ingredient #${ri.ingredient_id}`}</div>
-                        <div className="text-green-200/60 flex flex-wrap gap-x-2">
+                      <li key={ri.id} className="bg-secondary rounded p-2">
+                        <div className="font-medium text-foreground">{ingredient?.name || `Ingredient #${ri.ingredient_id}`}</div>
+                        <div className="text-muted-foreground flex flex-wrap gap-x-2">
                           <span>{scaledQty} {ri.base_unit || ri.unit}</span>
                           {ri.unit_price != null && (
-                            <span className="text-green-100 font-medium">{formatCurrency(scaledQty * ri.unit_price)} (${ri.unit_price.toFixed(2)}/{ri.base_unit || ri.unit})</span>
+                            <span className="font-medium text-foreground">{formatCurrency(scaledQty * ri.unit_price)} (${ri.unit_price.toFixed(2)}/{ri.base_unit || ri.unit})</span>
                           )}
                         </div>
                         {suppliers.length > 0 && (
-                          <div className="text-green-300/50 mt-0.5">
+                          <div className="text-muted-foreground mt-0.5">
                             {preferredSupplier?.supplier_name || suppliers[0]?.supplier_name}
-                            {preferredSupplier && <span className="ml-1 text-xs bg-green-500/30 text-green-200 px-1.5 py-0.5 rounded">preferred</span>}
+                            {preferredSupplier && <Badge className="ml-1">preferred</Badge>}
                           </div>
                         )}
                       </li>
@@ -852,21 +807,21 @@ function StagedRecipeCard({
                 })()}
                 </ul>
               ) : (
-                <p className="mt-1 text-green-300/50">No ingredients</p>
+                <p className="mt-1 text-[var(--color-text-disabled)]">No ingredients</p>
               )}
             </div>
 
             {/* Sub-Recipes Section */}
             {subRecipes && subRecipes.length > 0 && (
               <div>
-                <span className="text-green-300/60 font-medium">Sub-Recipes</span>
+                <span className="text-muted-foreground font-medium">Sub-Recipes</span>
                 <ul className="mt-1.5 space-y-1.5">
                   {subRecipes.map((sr) => {
                     const childRecipe = allRecipes?.find((r) => r.id === sr.child_recipe_id);
                     return (
-                      <li key={sr.id} className="bg-black/20 rounded p-2">
-                        <div className="font-medium text-green-100">{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</div>
-                        <div className="text-green-200/60">
+                      <li key={sr.id} className="bg-secondary rounded p-2">
+                        <div className="font-medium text-foreground">{childRecipe?.name || `Recipe #${sr.child_recipe_id}`}</div>
+                        <div className="text-muted-foreground">
                           {sr.quantity} {sr.unit}
                         </div>
                       </li>
@@ -932,7 +887,7 @@ function TableItemDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-input rounded shadow-lg z-50 flex flex-col max-h-72">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-xl shadow-elevation-2 z-50 flex flex-col max-h-72">
           {/* Search Input */}
           <input
             type="text"
@@ -971,11 +926,11 @@ function TableItemDropdown({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{ing.name}</p>
                             <div className="flex gap-1 flex-wrap mt-1">
-                              <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded flex-shrink-0">
+                              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded flex-shrink-0">
                                 Ingredient
                               </span>
                               {categoryMap[ing.category_id || 0] && (
-                                <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded">
+                                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
                                   {categoryMap[ing.category_id || 0]}
                                 </span>
                               )}
@@ -983,7 +938,7 @@ function TableItemDropdown({
                             </div>
                           </div>
                           {ing.id === selectedIngredientId && (
-                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0">✓</span>
+                            <span className="text-xs font-semibold text-[var(--color-feedback-success)] flex-shrink-0">✓</span>
                           )}
                         </div>
                       </button>
@@ -1013,7 +968,7 @@ function TableItemDropdown({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{recipe.name}</p>
                             <div className="flex gap-1 flex-wrap mt-1">
-                              <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 rounded flex-shrink-0">
+                              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded flex-shrink-0">
                                 Recipe
                               </span>
                               <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -1022,7 +977,7 @@ function TableItemDropdown({
                             </div>
                           </div>
                           {recipe.id === selectedRecipeId && (
-                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0">✓</span>
+                            <span className="text-xs font-semibold text-[var(--color-feedback-success)] flex-shrink-0">✓</span>
                           )}
                         </div>
                       </button>
@@ -1073,12 +1028,12 @@ function CanvasTable({
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-border bg-secondary/50">
-            <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Unit</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Wastage</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-48">Item</th>
-            <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Cost</th>
-            <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-12"></th>
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Qty</th>
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Unit</th>
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Wastage</th>
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground w-48">Item</th>
+            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Cost</th>
+            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground w-12"></th>
           </tr>
         </thead>
         <tbody>
@@ -1100,7 +1055,7 @@ function CanvasTable({
                     onChange={(v) => onIngredientQuantityChange(staged.id, v)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Quantity of ${staged.ingredient.name}`}
-                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:border-blue-400 focus:outline-none"
+                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     min={0.001}
                   />
                   <button
@@ -1119,7 +1074,7 @@ function CanvasTable({
                   onChange={(e) => { e.stopPropagation(); onIngredientUnitChange(staged.id, e.target.value); }}
                   onClick={(e) => e.stopPropagation()}
                   aria-label={`Unit for ${staged.ingredient.name}`}
-                  className="rounded-md border border-border bg-secondary px-1.5 py-1 text-sm text-foreground/80 focus:border-blue-400 focus:outline-none"
+                  className="rounded-md border border-border bg-secondary px-1.5 py-1 text-sm text-foreground/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {getCompatibleUnits(staged.unit).map((u) => (
                     <option key={u} value={u}>{u}</option>
@@ -1133,7 +1088,7 @@ function CanvasTable({
                     onChange={(v) => onIngredientWastageChange(staged.id, v)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Wastage percentage for ${staged.ingredient.name}`}
-                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:border-blue-400 focus:outline-none"
+                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     min={0}
                     max={100}
                   />
@@ -1166,7 +1121,7 @@ function CanvasTable({
                 <button
                   onClick={() => onRemoveIngredient(staged.id)}
                   aria-label={`Remove ${staged.ingredient.name}`}
-                  className="rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500 dark:hover:text-red-400 transition-all"
+                  className="rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-feedback-error)] transition-all"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1192,7 +1147,7 @@ function CanvasTable({
                     onChange={(v) => onRecipeQuantityChange(staged.id, v)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Quantity of ${staged.recipe.name}`}
-                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:border-green-400 focus:outline-none"
+                    className="w-14 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-center tabular-nums text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     min={0.001}
                   />
                   <button
@@ -1226,7 +1181,7 @@ function CanvasTable({
                 <button
                   onClick={() => onRemoveRecipe(staged.id)}
                   aria-label={`Remove ${staged.recipe.name}`}
-                  className="rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500 dark:hover:text-red-400 transition-all"
+                  className="rounded p-1 text-muted-foreground/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-[var(--color-feedback-error)] transition-all"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1514,8 +1469,8 @@ function CanvasContent({
               return (
                 <span className={cn(
                   'text-xs font-medium rounded-full px-2.5 py-1 tabular-nums',
-                  isProfit && 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-                  isLoss && 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+                  isProfit && 'bg-[var(--color-feedback-success-tint)] text-[var(--color-feedback-success)]',
+                  isLoss && 'bg-[var(--color-feedback-error-tint)] text-[var(--color-feedback-error)]',
                   !isProfit && !isLoss && 'bg-secondary text-foreground/80'
                 )}>
                   {isProfit ? '+' : ''}{formatCurrency(profitPerPortion)}/{metadata.yield_unit}
@@ -1548,7 +1503,7 @@ function CanvasContent({
           <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-4 gap-y-3">
             {/* Yield */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Yield</label>
+              <label className="text-xs font-medium text-muted-foreground">Yield</label>
               <div className="flex items-center gap-1.5">
                 <NumericInput
                   value={metadata.yield_quantity}
@@ -1567,7 +1522,7 @@ function CanvasContent({
 
             {/* Status */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</label>
+              <label className="text-xs font-medium text-muted-foreground">Status</label>
               <Select
                 value={metadata.status}
                 onChange={(e) => onMetadataChange({ status: e.target.value as RecipeStatus })}
@@ -1578,7 +1533,7 @@ function CanvasContent({
 
             {/* Selling Price */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Selling Price</label>
+              <label className="text-xs font-medium text-muted-foreground">Selling price</label>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">$</span>
                 <NumericInput
@@ -1592,7 +1547,7 @@ function CanvasContent({
 
             {/* Toggles */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Options</label>
+              <label className="text-xs font-medium text-muted-foreground">Options</label>
               <div className="flex items-center gap-3 h-8">
                 <Checkbox
                   checked={metadata.is_public}
@@ -1604,7 +1559,7 @@ function CanvasContent({
 
             {/* View Mode */}
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">View</label>
+              <label className="text-xs font-medium text-muted-foreground">View</label>
               <div className="flex items-center gap-1 h-8" role="group" aria-label="Canvas view mode">
                 <button
                   onClick={() => onViewModeChange('grid')}
@@ -1686,7 +1641,7 @@ function CanvasContent({
             {hasUnsavedChanges && (
               <>
                 <span className="text-muted-foreground/40">·</span>
-                <span className="font-medium text-amber-600 dark:text-amber-400">Unsaved</span>
+                <span className="font-medium text-[var(--color-feedback-warning)]">Unsaved</span>
               </>
             )}
           </div>
@@ -1698,7 +1653,7 @@ function CanvasContent({
               variant="ghost"
               size="sm"
               onClick={onClearAll}
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
+              className="text-[var(--color-feedback-error)] hover:bg-[var(--color-feedback-error-tint)] hover:text-[var(--color-feedback-error)]"
             >
               Clear
             </Button>
@@ -1708,7 +1663,6 @@ function CanvasContent({
                 size="sm"
                 onClick={onFork}
                 disabled={!hasItems || isForking}
-                className="border-purple-500 text-purple-500 hover:bg-purple-50 hover:text-purple-600 dark:border-purple-500 dark:text-purple-500 dark:hover:bg-purple-950 dark:hover:text-purple-400"
               >
                 {isForking ? 'Forking...' : 'Fork'}
               </Button>
@@ -3110,7 +3064,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       <Modal
         isOpen={showAddIngredientsModal}
         onClose={() => setShowAddIngredientsModal(false)}
-        title="Add Ingredients"
+        title="Add ingredients"
         maxWidth="max-w-2xl"
       >
         <div className="space-y-4">
@@ -3215,7 +3169,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
                 setShowAddIngredientsModal(false);
               }}
             >
-              Add Ingredients
+              Add ingredients
             </Button>
           </div>
         </div>

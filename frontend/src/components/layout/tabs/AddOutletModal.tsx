@@ -55,8 +55,8 @@ export function AddOutletModal({ isOpen, onClose, recipeId, outlets = [] }: AddO
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="relative w-full max-w-md rounded-lg bg-card p-6 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-scrim)]">
+      <div className="relative w-full max-w-md rounded-2xl bg-popover p-6 shadow-elevation-3">
         {/* Close button */}
         <button
           onClick={onClose}

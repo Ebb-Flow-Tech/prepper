@@ -8,7 +8,7 @@ export default function FinancePage() {
     <div className="h-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
-          title="Finance Reporting"
+          title="Finance reporting"
           description="Sales data combined with COGS from recipes"
         >
           <div className="flex items-center gap-2">
@@ -27,15 +27,15 @@ export default function FinancePage() {
         </PageHeader>
 
         {/* Dependency Notice */}
-        <Card className="mb-6 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30">
+        <Card className="mb-6 border-[var(--color-feedback-warning)] bg-[var(--color-feedback-warning-tint)]">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <Building2 className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5" />
+              <Building2 className="h-5 w-5 text-[var(--color-feedback-warning)] mt-0.5" />
               <div>
-                <h3 className="font-semibold text-amber-800 dark:text-amber-300">
-                  Atlas Integration Required
+                <h3 className="font-medium text-[var(--color-feedback-warning)]">
+                  Atlas integration required
                 </h3>
-                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                <p className="text-sm text-[var(--color-feedback-warning)] mt-1">
                   This page requires integration with Atlas POS to display sales data.
                   COGS calculations will be available once Atlas integration is complete (Plan 04).
                 </p>
@@ -50,8 +50,8 @@ export default function FinancePage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Sales</p>
-                  <p className="text-2xl font-bold text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground">Total sales</p>
+                  <p className="text-[30px] font-medium tabular-nums text-muted-foreground mt-1">
                     $--,---
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -70,7 +70,7 @@ export default function FinancePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total COGS</p>
-                  <p className="text-2xl font-bold text-muted-foreground mt-1">
+                  <p className="text-[30px] font-medium tabular-nums text-muted-foreground mt-1">
                     $--,---
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -88,8 +88,8 @@ export default function FinancePage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Gross Margin</p>
-                  <p className="text-2xl font-bold text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground">Gross margin</p>
+                  <p className="text-[30px] font-medium tabular-nums text-muted-foreground mt-1">
                     --.-%
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -107,8 +107,8 @@ export default function FinancePage() {
         {/* Sales by Recipe Table - Placeholder */}
         <Card className="mb-6">
           <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">
-              Sales + COGS by Recipe
+            <h2 className="text-xl font-medium text-foreground mb-4">
+              Sales + COGS by recipe
             </h2>
 
             <div className="overflow-x-auto">
@@ -166,15 +166,15 @@ export default function FinancePage() {
         {/* Margin Bandwidth Chart - Placeholder */}
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">
-              Margin Bandwidth
+            <h2 className="text-xl font-medium text-foreground mb-4">
+              Margin bandwidth
             </h2>
 
             <p className="text-sm text-muted-foreground mb-6">
               Showing margin range per recipe based on supplier price variations (best/worst case)
             </p>
 
-            <div className="h-64 bg-secondary rounded-lg flex items-center justify-center">
+            <div className="h-64 bg-secondary rounded-xl flex items-center justify-center">
               <div className="text-center">
                 <PieChart className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground">
