@@ -18,6 +18,20 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
+def get_bearer_token(authorization: str | None = Header(None)) -> str:
+    """The caller's raw Supabase access token.
+
+    Needed for Passport write-back, which forwards the END USER's own JWT (``X-End-User-Token``)
+    so the acting user is proved rather than asserted. Never log this value.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    return authorization.replace("Bearer ", "")
+
+
 def get_current_user(
     authorization: str | None = Header(None),
     session: Session = Depends(get_session),
@@ -45,10 +59,11 @@ def get_current_user(
             detail="Invalid or expired token",
         )
 
-    # Passport org-level kill switch: if the org's entitlement is synced and not active,
-    # block the whole org regardless of the user's role. Fails open when Passport is not
-    # configured or entitlements are not yet synced (see app.passport.access).
-    if is_org_blocked(session):
+    # Passport org-level kill switch: if the entitlement of every org this user belongs to is
+    # synced and not active, block them regardless of their role. Rule 9 — evaluated against the
+    # user's OWN orgs, not a configured one. Fails open when the user is not linked yet or
+    # entitlements have not synced (see app.passport.access).
+    if is_org_blocked(session, user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Organization access is currently suspended",

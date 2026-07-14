@@ -16,16 +16,25 @@ this IS the version guard, and it is race-free against concurrent deliveries. ``
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import (
+    Outlet,
     PassportEntitlement,
     PassportIdentityLink,
     PassportMembership,
     PassportOrganization,
+    PassportUnit,
+    PassportUnitAppAccess,
+    PassportUnitAppMembership,
+    PassportUnitRelation,
 )
+
+_BRAND = "brand"
 
 
 def is_newer(incoming_version: int, stored_version: int | None) -> bool:
@@ -38,7 +47,7 @@ def is_newer(incoming_version: int, stored_version: int | None) -> bool:
     return stored_version is None or incoming_version >= stored_version
 
 
-def _insert(session: Session):
+def _insert(session: Session) -> Any:
     """Pick the dialect-specific ``insert`` that supports ``ON CONFLICT``.
 
     Both Postgres and SQLite expose ``on_conflict_do_update`` / ``on_conflict_do_nothing``
@@ -48,7 +57,7 @@ def _insert(session: Session):
     return pg_insert if dialect == "postgresql" else sqlite_insert
 
 
-def _versioned_upsert(session: Session, model, values: dict) -> None:
+def _versioned_upsert(session: Session, model: Any, values: dict[str, Any]) -> None:
     """Atomic ``INSERT ... ON CONFLICT (id) DO UPDATE ... WHERE excluded.version >=
     existing.version`` for a mutable aggregate. Commits."""
     table = model.__table__
@@ -62,7 +71,7 @@ def _versioned_upsert(session: Session, model, values: dict) -> None:
     session.commit()
 
 
-def _insert_if_absent(session: Session, model, values: dict) -> None:
+def _insert_if_absent(session: Session, model: Any, values: dict[str, Any]) -> None:
     """Immutable aggregate: ``INSERT ... ON CONFLICT (id) DO NOTHING``. Commits."""
     table = model.__table__
     stmt = _insert(session)(table).values(**values).on_conflict_do_nothing(
@@ -72,7 +81,7 @@ def _insert_if_absent(session: Session, model, values: dict) -> None:
     session.commit()
 
 
-def _delete_if_present(session: Session, model, pk: str) -> None:
+def _delete_if_present(session: Session, model: Any, pk: str) -> None:
     """Immutable aggregate removal: delete the row if it exists. Commits."""
     row = session.get(model, pk)
     if row is not None:
@@ -82,26 +91,46 @@ def _delete_if_present(session: Session, model, pk: str) -> None:
 
 # --- mutable aggregates -------------------------------------------------------------------
 
-def apply_org(session: Session, values: dict) -> None:
+def apply_org(session: Session, values: dict[str, Any]) -> None:
     """``org.upserted`` / ``org.archived`` — archived is carried in ``status``."""
     _versioned_upsert(session, PassportOrganization, values)
 
 
-def apply_membership(session: Session, values: dict) -> None:
+def apply_membership(session: Session, values: dict[str, Any]) -> None:
     """``membership.upserted`` AND ``membership.removed`` (trap 1: removed keeps the row
     with ``status="removed"`` — the payload carries that status and a bumped version)."""
     _versioned_upsert(session, PassportMembership, values)
 
 
-def apply_entitlement(session: Session, values: dict) -> None:
+def apply_entitlement(session: Session, values: dict[str, Any]) -> None:
     """``entitlement.upserted`` — revocations (``status != "active"``) arrive here too
     (trap 2) and are applied like any other state; never filtered out."""
     _versioned_upsert(session, PassportEntitlement, values)
 
 
+def apply_unit(session: Session, values: dict[str, Any]) -> None:
+    """``unit.upserted`` / ``unit.archived`` — archived is carried in ``status``.
+
+    Also (re-)resolves the brand -> outlet link, so a brand that gains an ``external_ref``
+    later still links without a backfill.
+    """
+    _versioned_upsert(session, PassportUnit, values)
+    link_outlet(session, values)
+
+
+def apply_unit_app_membership(session: Session, values: dict[str, Any]) -> None:
+    """``unit_app_membership.upserted`` AND ``.removed``.
+
+    Same shape as trap 1: ``removed`` carries ``status="removed"`` plus a bumped version and
+    KEEPS the row. Deleting it would lose the roster permanently — a revoked-then-restored
+    entitlement must come back losslessly, and access dies by arithmetic in the meantime.
+    """
+    _versioned_upsert(session, PassportUnitAppMembership, values)
+
+
 # --- immutable aggregates -----------------------------------------------------------------
 
-def create_identity_link(session: Session, values: dict) -> None:
+def create_identity_link(session: Session, values: dict[str, Any]) -> None:
     """``identity_link.created`` — insert-if-absent."""
     _insert_if_absent(session, PassportIdentityLink, values)
 
@@ -109,3 +138,53 @@ def create_identity_link(session: Session, values: dict) -> None:
 def remove_identity_link(session: Session, link_id: str) -> None:
     """``identity_link.removed`` — delete-if-present."""
     _delete_if_present(session, PassportIdentityLink, link_id)
+
+
+def create_relation(session: Session, values: dict[str, Any]) -> None:
+    """``unit_relation.created`` — insert-if-absent."""
+    _insert_if_absent(session, PassportUnitRelation, values)
+
+
+def remove_relation(session: Session, relation_id: str) -> None:
+    """``unit_relation.removed`` — delete-if-present."""
+    _delete_if_present(session, PassportUnitRelation, relation_id)
+
+
+def create_unit_app_access(session: Session, values: dict[str, Any]) -> None:
+    """``unit_app_access.created`` — insert-if-absent (the brand-app switch, no version)."""
+    _insert_if_absent(session, PassportUnitAppAccess, values)
+
+
+def remove_unit_app_access(session: Session, access_id: str) -> None:
+    """``unit_app_access.removed`` — delete-if-present.
+
+    Unlike the role rows this IS a real delete: the switch is immutable and its absence is
+    exactly what makes the brand confer nothing.
+    """
+    _delete_if_present(session, PassportUnitAppAccess, access_id)
+
+
+# --- brand -> outlet link -----------------------------------------------------------------
+
+def link_outlet(session: Session, unit_values: dict[str, Any]) -> None:
+    """Point the local outlet at its Passport brand, keyed on ``external_ref == outlets.code``.
+
+    NON-DESTRUCTIVE by design: a unit that is not a brand, carries no ``external_ref``, or
+    whose ref matches no outlet leaves every outlet untouched. Until Passport populates
+    ``external_ref``, no outlet is linked and no Passport-driven outlet scope is derived —
+    Prepper's existing outlet grants keep working unchanged.
+    """
+    if unit_values.get("type") != _BRAND:
+        return
+
+    external_ref = unit_values.get("external_ref")
+    if not external_ref:
+        return
+
+    outlet = session.exec(select(Outlet).where(Outlet.code == external_ref)).first()
+    if outlet is None or outlet.passport_unit_id == unit_values["id"]:
+        return
+
+    outlet.passport_unit_id = unit_values["id"]
+    session.add(outlet)
+    session.commit()

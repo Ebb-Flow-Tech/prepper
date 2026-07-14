@@ -9,7 +9,6 @@ private ``passport_client`` SDK: the store operates on plain dicts and a SQLMode
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from sqlmodel import Session, select
 
@@ -170,26 +169,26 @@ def _seed_user(session: Session) -> User:
     return user
 
 
-def test_project_role_noop_without_identity_link(session: Session):
+def test_project_user_noop_without_identity_link(session: Session):
     _seed_user(session)
     store.apply_membership(session, _membership_values(version=1, role="Admin"))
     # No identity link yet -> membership can't resolve to a local user -> no change.
-    role_projection.project_role(session, platform_user_id=PU, org_id=ORG)
+    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     session.expire_all()
     assert session.get(User, SUBJECT).user_type == UserType.NORMAL
 
 
-def test_project_role_maps_admin_and_member(session: Session):
+def test_project_user_maps_admin_and_member(session: Session):
     _seed_user(session)
     store.create_identity_link(session, _link_values())
 
     store.apply_membership(session, _membership_values(version=1, role="Member"))
-    role_projection.project_role(session, platform_user_id=PU, org_id=ORG)
+    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     session.expire_all()
     assert session.get(User, SUBJECT).user_type == UserType.NORMAL
 
     store.apply_membership(session, _membership_values(version=2, role="Admin"))
-    role_projection.project_role(session, platform_user_id=PU, org_id=ORG)
+    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     session.expire_all()
     assert session.get(User, SUBJECT).user_type == UserType.ADMIN
 
@@ -198,13 +197,13 @@ def test_removed_membership_demotes_and_revokes_grants(session: Session):
     _seed_user(session)
     store.create_identity_link(session, _link_values())
     store.apply_membership(session, _membership_values(version=1, role="Admin"))
-    role_projection.project_role(session, platform_user_id=PU, org_id=ORG)
+    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     session.expire_all()
     assert session.get(User, SUBJECT).user_type == UserType.ADMIN
 
     # Membership removed -> keep tombstone, demote to normal, revoke unit-scoped grants.
     store.apply_membership(session, _membership_values(version=2, status="removed"))
-    role_projection.project_role(session, platform_user_id=PU, org_id=ORG)
+    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     role_projection.revoke_local_grants(session, platform_user_id=PU)
     session.expire_all()
 
@@ -218,42 +217,43 @@ def test_removed_membership_demotes_and_revokes_grants(session: Session):
 
 # --- entitlement kill switch (request-path gate) ------------------------------------------
 
-def _with_org(org_id):
-    """Patch the access gate's settings to a given configured org id."""
-    return patch.object(
-        access, "get_settings", return_value=SimpleNamespace(passport_org_id=org_id)
-    )
+def _link_member(session: Session) -> None:
+    """Link SUBJECT -> PU and make them an active member of ORG.
+
+    Rule 9: the kill switch is evaluated against the orgs the USER actually belongs to, resolved
+    from the projection — there is no configured org to patch.
+    """
+    store.create_identity_link(session, _link_values())
+    store.apply_membership(session, _membership_values(version=1))
 
 
-def test_org_not_blocked_when_passport_unconfigured(session: Session):
-    # Even with a revoked entitlement present, an unconfigured org fails open.
+def test_org_not_blocked_when_user_is_not_linked(session: Session):
+    # Even with a revoked entitlement present, an unlinked user fails open: Passport is not yet
+    # authoritative for them, so turning the projection on must not lock them out.
     store.apply_entitlement(session, _entitlement_values(version=1, status="inactive"))
-    with _with_org(None):
-        assert access.is_org_blocked(session) is False
+    assert access.is_org_blocked(session, SUBJECT) is False
 
 
 def test_org_not_blocked_when_no_entitlement_synced(session: Session):
-    # Configured org but no entitlement rows yet -> fail open (do not block).
-    with _with_org(ORG):
-        assert access.is_org_blocked(session) is False
+    # Linked member, but no entitlement rows yet -> fail open (do not block).
+    _link_member(session)
+    assert access.is_org_blocked(session, SUBJECT) is False
 
 
 def test_org_blocked_when_entitlement_inactive(session: Session):
+    _link_member(session)
     store.apply_entitlement(session, _entitlement_values(version=1, status="active"))
-    with _with_org(ORG):
-        assert access.is_org_blocked(session) is False
+    assert access.is_org_blocked(session, SUBJECT) is False
 
-    # Kill switch thrown: entitlement flips non-active -> whole org blocked.
+    # Kill switch thrown: entitlement flips non-active -> the user's whole org is blocked.
     store.apply_entitlement(session, _entitlement_values(version=2, status="suspended"))
     session.expire_all()
-    with _with_org(ORG):
-        assert access.is_org_blocked(session) is True
+    assert access.is_org_blocked(session, SUBJECT) is True
 
-    # Restored -> unblocked.
+    # Restored -> unblocked. TRAP 2: revocation deletes nothing, so restoring is lossless.
     store.apply_entitlement(session, _entitlement_values(version=3, status="active"))
     session.expire_all()
-    with _with_org(ORG):
-        assert access.is_org_blocked(session) is False
+    assert access.is_org_blocked(session, SUBJECT) is False
 
 
 # --- resync_org fan-out (the manual re-sync bundle, SDK 0.2.0+) ---------------------------
@@ -276,8 +276,18 @@ def _record_handlers(monkeypatch, handlers_obj, names):
 _ALL_HANDLER_NAMES = (
     "upsert_org", "upsert_unit", "create_relation", "upsert_membership",
     "create_identity_link", "upsert_entitlement",
+    "create_unit_app_access", "upsert_unit_app_membership",
     "remove_membership", "remove_identity_link", "remove_relation",
+    "remove_unit_app_access", "remove_unit_app_membership",
 )
+
+_REMOVAL_HANDLERS = {
+    "remove_membership",
+    "remove_identity_link",
+    "remove_relation",
+    "remove_unit_app_access",
+    "remove_unit_app_membership",
+}
 
 
 def _resync_bundle(*, org_id=ORG, memberships=1):
@@ -292,20 +302,21 @@ def _resync_bundle(*, org_id=ORG, memberships=1):
         memberships=[SimpleNamespace() for _ in range(memberships)],
         identity_links=[SimpleNamespace()],
         entitlements=[SimpleNamespace()],
+        unit_app_accesses=[SimpleNamespace()],
+        unit_app_memberships=[SimpleNamespace()],
     )
 
 
 def test_resync_org_fans_out_in_fk_order_upsert_only(monkeypatch):
     from app.passport import handlers as handlers_mod
 
-    monkeypatch.setattr(handlers_mod, "_org_id", lambda: ORG)
     h = handlers_mod.PassportHandlers()
     calls = _record_handlers(monkeypatch, h, _ALL_HANDLER_NAMES)
 
     asyncio.run(h.resync_org(_resync_bundle(memberships=2)))
 
-    # FK-safe order (org -> units -> relations -> memberships -> links -> entitlements),
-    # every collection element applied through its per-aggregate handler.
+    # FK-safe order across all EIGHT collections: the brand-app switch must land before the
+    # role row that depends on it, and the role row references a unit, a user and an app.
     assert calls == [
         "upsert_org",
         "upsert_unit",
@@ -314,18 +325,27 @@ def test_resync_org_fans_out_in_fk_order_upsert_only(monkeypatch):
         "upsert_membership",
         "create_identity_link",
         "upsert_entitlement",
+        "create_unit_app_access",
+        "upsert_unit_app_membership",
     ]
     # TRAP 3: upsert-only — a resync never deletes / removes local rows.
-    assert not ({"remove_membership", "remove_identity_link", "remove_relation"} & set(calls))
+    assert not (_REMOVAL_HANDLERS & set(calls))
 
 
-def test_resync_org_drops_mis_routed_bundle(monkeypatch):
+def test_resync_org_applies_every_org_it_is_delivered(monkeypatch):
+    """RULE 9 — a bundle for another org is APPLIED, not dropped.
+
+    This test previously asserted the opposite (drop anything != the configured org). That filter
+    was the single-org bug: Prepper receives events for every org it is entitled to, and discarding
+    a "foreign" org's bundle silently puts permanent holes in the read model. Nothing errors when
+    it does.
+    """
     from app.passport import handlers as handlers_mod
 
-    monkeypatch.setattr(handlers_mod, "_org_id", lambda: ORG)
     h = handlers_mod.PassportHandlers()
     calls = _record_handlers(monkeypatch, h, _ALL_HANDLER_NAMES)
 
-    # A bundle for a different org is dropped wholesale (own-app routing is per-org).
     asyncio.run(h.resync_org(_resync_bundle(org_id="other-org")))
-    assert calls == []
+
+    assert calls, "a bundle for another entitled org must be projected, not dropped"
+    assert not (_REMOVAL_HANDLERS & set(calls)), "resync is upsert-only"

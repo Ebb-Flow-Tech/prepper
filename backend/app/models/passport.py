@@ -21,10 +21,17 @@ These are a **read-only projection**: only the sync backend (service-role / BYPA
 writes them. The migration enables + forces RLS with no client policies (default-deny) so
 ``anon`` / ``authenticated`` can never read member emails directly.
 
-Only the aggregates Prepper actually reads are projected here: organization, membership,
-entitlement, identity link. Passport *units* / *relations* are intentionally NOT projected
-(Prepper keeps its own serial-PK ``outlets`` table, untouched) — the corresponding sync
-handlers are conforming no-ops.
+All eight aggregates are projected: organization, unit, unit relation, membership,
+entitlement, identity link, unit-app access, unit-app membership. The last two ARE the
+access model — app access is DERIVED from the entitlement, the org role (the Owner/Admin
+ladder), the brand-app switch (``unit_app_access``) and the (user, brand, app) role row
+(``unit_app_membership``); there is no per-user app grant. Units are needed too, because the
+derivation checks ``unit.status`` and the unit's org.
+
+Prepper's own ``outlets`` table (serial int PK, its own hierarchy + cycle detection) is a
+TOOL-LOCAL table and stays exactly as it is — never re-keyed to a UUID. It is linked to a
+projected brand by ``outlets.passport_unit_id``, resolved from ``PassportUnit.external_ref``
+matching ``outlets.code``.
 """
 
 from sqlmodel import Field, SQLModel
@@ -77,6 +84,84 @@ class PassportEntitlement(SQLModel, table=True):
     status: str  # active | inactive | suspended  (status != active blocks the org)
     tier: str | None = None
     source: str  # admin | stripe
+    version: int
+
+
+class PassportUnit(SQLModel, table=True):
+    """Projected from ``unit.upserted`` / ``unit.archived``. Mutable (version-guarded).
+
+    A unit is a brand, outlet or entity (``type``). Only BRANDS hold people and apps, but
+    every unit is projected because the access derivation checks a brand's ``status`` and
+    ``organization_id``.
+
+    ``external_ref`` is Passport's free-form pointer back into the consuming tool. Prepper
+    populates a brand's ``external_ref`` with the local ``outlets.code`` (e.g. ``"CS"``);
+    that is the ONLY link between a Passport brand UUID and a Prepper outlet id.
+    """
+
+    __tablename__ = "passport_unit"
+
+    id: str = Field(primary_key=True)
+    organization_id: str = Field(index=True)
+    type: str = Field(index=True)  # brand | outlet | entity  (payload field is `type`)
+    name: str
+    external_ref: str | None = Field(default=None, index=True)  # -> outlets.code
+    status: str  # active | archived
+    version: int
+
+
+class PassportUnitRelation(SQLModel, table=True):
+    """Projected from ``unit_relation.created`` / ``.removed``. IMMUTABLE — no version.
+
+    Structure edges between units (e.g. an outlet ``belongs_to_brand``). The payload field
+    is ``relation`` (not ``relation_type``).
+    """
+
+    __tablename__ = "passport_unit_relation"
+
+    id: str = Field(primary_key=True)
+    organization_id: str = Field(index=True)
+    from_unit_id: str = Field(index=True)
+    to_unit_id: str = Field(index=True)
+    relation: str
+
+
+class PassportUnitAppAccess(SQLModel, table=True):
+    """Projected from ``unit_app_access.created`` / ``.removed``. IMMUTABLE — no version.
+
+    The brand-app switch: a brand that carries NO row for this app confers nothing, not
+    even to an org Owner. Delivery is own-app scoped, so every row here names Prepper —
+    never filter by ``app_id`` locally.
+    """
+
+    __tablename__ = "passport_unit_app_access"
+
+    id: str = Field(primary_key=True)
+    organization_id: str = Field(index=True)
+    unit_id: str = Field(index=True)  # always a BRAND
+    app_id: str
+
+
+class PassportUnitAppMembership(SQLModel, table=True):
+    """Projected from ``unit_app_membership.upserted`` / ``.removed``. Mutable.
+
+    The (user, brand, app) role row. ``status="removed"`` is a KEPT tombstone (same as trap
+    1 on org membership) — never a delete; the row going dormant is what lets a restored
+    entitlement bring access back losslessly.
+
+    ``role`` is ``Manager`` | ``Staff`` — a DIFFERENT vocabulary from the org membership's
+    ``Owner`` | ``Admin`` | ``Member``. Do not conflate them.
+    """
+
+    __tablename__ = "passport_unit_app_membership"
+
+    id: str = Field(primary_key=True)
+    organization_id: str = Field(index=True)
+    platform_user_id: str = Field(index=True)
+    unit_id: str = Field(index=True)  # always a BRAND
+    app_id: str
+    role: str  # Manager | Staff
+    status: str  # active | removed  (removed = kept tombstone)
     version: int
 
 

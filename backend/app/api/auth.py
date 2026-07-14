@@ -69,8 +69,9 @@ def login(
             detail="User not found in database",
         )
 
-    # Report the identity link to Passport (best-effort, no-op if unconfigured).
-    report_identity_link_safe(subject=user.id, email=user.email)
+    # Report the identity link to Passport (best-effort, no-op if unconfigured). Forwards the
+    # end user's own token — Passport takes sub + email from the verified claims.
+    report_identity_link_safe(auth_result["access_token"])
 
     return LoginResponse(
         user=UserRead.model_validate(user),
@@ -157,8 +158,9 @@ def register(
             detail="User created but failed to generate tokens. Please login separately.",
         )
 
-    # Report the identity link to Passport (best-effort, no-op if unconfigured).
-    report_identity_link_safe(subject=user.id, email=user.email)
+    # Report the identity link to Passport (best-effort, no-op if unconfigured). Forwards the
+    # end user's own token — Passport takes sub + email from the verified claims.
+    report_identity_link_safe(auth_result["access_token"])
 
     return LoginResponse(
         user=UserRead.model_validate(user),
@@ -215,7 +217,7 @@ def oauth_complete(
     # Fast path: user already provisioned.
     existing = user_service.get_user(user_id)
     if existing:
-        report_identity_link_safe(subject=existing.id, email=existing.email)
+        report_identity_link_safe(token)
         return UserRead.model_validate(existing)
 
     # Fetch Supabase profile for email + Google-supplied metadata.
@@ -271,8 +273,9 @@ def oauth_complete(
             detail="An account with this email already exists",
         )
 
-    # Report the identity link to Passport (best-effort, no-op if unconfigured).
-    report_identity_link_safe(subject=user.id, email=user.email)
+    # Report the identity link to Passport (best-effort, no-op if unconfigured). Forwards the
+    # end user's own token — Passport takes sub + email from the verified claims.
+    report_identity_link_safe(token)
 
     return UserRead.model_validate(user)
 

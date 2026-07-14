@@ -1,0 +1,63 @@
+name: passport-reconcile
+
+# Rule 4 — nightly snapshot reconciliation, the backstop for the sync projection.
+#
+# Webhook delivery is at-least-once, not exactly-once: a delivery can be lost while the app is
+# down, mid-deploy, or during a Passport outage, and NOTHING in the read model will tell you. The
+# projection just quietly serves a stale answer forever. `snapshot()` is the fix: one call, eight
+# collections, byte-identical to the sync payloads, re-applied through the SAME version-guarded
+# handlers — so re-applying an already-current row is a no-op at the DB level and this is safe to
+# run against a healthy read model.
+#
+# It runs INSIDE the deployed machine (`flyctl ssh console`), so it reuses that environment's
+# secrets (DATABASE_URL, PASSPORT_API_URL, PASSPORT_API_KEY). No new credentials, and no scheduler
+# thread inside the web process. This is a server-side job — never client polling.
+
+on:
+  schedule:
+    # 18:00 UTC = 02:00 SGT (both apps run in `sin`). Off-peak for a kitchen app.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which app to reconcile"
+        type: choice
+        options:
+          - both
+          - production
+          - staging
+        default: both
+
+concurrency:
+  # Never let two reconciliations of the same app overlap.
+  group: passport-reconcile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # Do not let a failure on one app cancel the other — they reconcile independently.
+      fail-fast: false
+      matrix:
+        include:
+          - name: production
+            app: reciperepo
+          - name: staging
+            app: reciperepo-stage
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Reconcile ${{ matrix.name }}
+        # On a schedule, `inputs.target` is empty -> both run.
+        if: |
+          github.event_name == 'schedule' ||
+          inputs.target == 'both' ||
+          inputs.target == matrix.name
+        # Let a failure surface as a RED build. A reconciliation that silently fails is worse than
+        # none at all: it is the one thing that would have caught the drift.
+        run: flyctl ssh console -a ${{ matrix.app }} -C "python -m app.passport.reconcile"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

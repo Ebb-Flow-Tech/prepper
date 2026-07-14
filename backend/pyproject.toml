@@ -19,10 +19,10 @@ dependencies = [
     "PyJWT[crypto]>=2.10.0",
     "ebb-flow-tech-auth @ git+https://github.com/missiongroupsystems/auth.git@v0.1.0#subdirectory=python",
     # Passport sync-consumer SDK — PRIVATE, not on PyPI. Installed like the auth dep above.
-    # STAGING BRANCH = prerelease channel: pinned to a prerelease (rc) tag so Renovate keeps this
-    # branch on release candidates. The `main`/stable branch pins the matching stable tag
-    # (passport-client-v0.2.0). Ref is monorepo-scoped so future *service* tags don't collide.
-    "passport-client[fastapi] @ git+https://github.com/missiongroupsystems/passport.git@passport-client-v0.1.0rc1#subdirectory=packages/passport-client/python",
+    # STAGING BRANCH = prerelease channel: Renovate tracks the newest tag INCLUDING rcN. The
+    # current newest on that channel is the stable 1.1.0 (pep440: 1.1.0 supersedes 1.1.0rc), which
+    # is also what `main` pins. Ref is monorepo-scoped so future *service* tags don't collide.
+    "passport-client[fastapi] @ git+https://github.com/missiongroupsystems/passport.git@passport-client-v1.1.0#subdirectory=packages/passport-client/python",
     "cachetools>=5.3.0",
     "openpyxl>=3.1.0",
     "python-multipart>=0.0.9",

@@ -23,6 +23,7 @@ from app.api import (
     menu_sketches,
     menus,
     outlets,
+    passport_roles,
     recipe_allergens,
     recipe_categories,
     recipe_images,
@@ -198,6 +199,13 @@ def create_app() -> FastAPI:
         allergens.router,
         prefix=f"{settings.api_v1_prefix}/allergens",
         tags=["allergens"],
+    )
+    # Brand-app roles: write-back to Passport, which owns these rows. Mutations go UP via the
+    # SDK and come back DOWN through sync — nothing here writes the local projection.
+    app.include_router(
+        passport_roles.router,
+        prefix=f"{settings.api_v1_prefix}/passport/brand-roles",
+        tags=["passport-roles"],
     )
     app.include_router(
         ingredient_allergens.router,

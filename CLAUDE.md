@@ -2,7 +2,7 @@
 
 Kitchen-first recipe workspace for chefs and operators. Recipes are living objects on a "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing with wastage tracking. Principles: clarity, immediacy, reversibility — no save buttons, only autosave.
 
-Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe versioning (forking + version tree via `root_id` / `version`), multi-outlet with hierarchy + cycle detection + per-outlet price overrides, wastage-adjusted costing, AI agents (categorization, tasting feedback summarization), Passport sync consumer (projects org/membership/entitlement/identity-link facts into local read-model tables).
+Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe versioning (forking + version tree via `root_id` / `version`), multi-outlet with hierarchy + cycle detection + per-outlet price overrides, wastage-adjusted costing, AI agents (categorization, tasting feedback summarization), Passport sync consumer (multi-org projection of all eight aggregates — org, unit, unit-relation, membership, entitlement, identity-link, unit-app-access, unit-app-membership — with brand-scoped access derived via the SDK, plus role write-back).
 
 ## Stack
 - Backend: FastAPI, SQLModel, Alembic, pytest, ruff, mypy
@@ -17,7 +17,7 @@ Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe
 - `backend/app/domain/` — service layer (one file per resource: recipe, costing, sub-recipes, outlets, tasting, suppliers, categories, menu-sketch, users, Supabase auth)
 - `backend/app/api/` — FastAPI routers (one per resource) + `deps.py`
 - `backend/app/agents/` — AI features: `base_agent.py`, `category_agent.py`, `feedback_summary_agent.py`
-- `backend/app/passport/` — Passport sync consumer: read-model projection (`store`, `handlers`, `sync_router`), role projection, entitlement kill switch (`access`), identity reporting, nightly `reconcile`
+- `backend/app/passport/` — Passport sync consumer: eight-aggregate read-model projection (`store`, `handlers`, `sync_router`), derived brand-scoped access + entitlement kill switch (`access`), role write-back (`writeback`), identity reporting, nightly `reconcile`. **Multi-org: every org Passport delivers is projected; `org_id` is resolved per-request from the acting user's membership, never from config.**
 - `backend/app/utils/` — unit conversion helpers
 - `frontend/src/app/` — Next.js App Router pages
 - `frontend/src/lib/api.ts` — typed fetch wrapper (40+ endpoints)

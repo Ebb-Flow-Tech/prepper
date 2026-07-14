@@ -37,6 +37,12 @@ class Outlet(OutletBase, table=True):
     is_active: bool = Field(default=True)
     source: str = Field(default="manual")
 
+    # Link to the projected Passport brand (``passport_unit.id``), resolved by matching that
+    # unit's ``external_ref`` against this outlet's ``code``. NULL until Passport carries the
+    # ref — an unlinked outlet simply derives no Passport-driven scope. This is a LINK, not a
+    # re-key: ``outlets.id`` stays a serial int and Prepper keeps owning this table.
+    passport_unit_id: str | None = Field(default=None, index=True)
+
     # Optional: Parent outlet for hierarchical structures (franchises)
     parent_outlet_id: int | None = Field(
         default=None, foreign_key="outlets.id", index=True

@@ -41,14 +41,16 @@ def _secret_provider() -> tuple[str, str | None]:
 def mount_passport_sync(app: FastAPI, *, api_prefix: str) -> bool:
     """Mount the sync receive endpoint if Passport is configured.
 
-    Returns ``True`` if mounted, ``False`` if skipped (not configured). Requires both a
-    webhook secret (to verify signatures) and an org id (to filter deliveries).
+    Returns ``True`` if mounted, ``False`` if skipped (not configured). Requires only a webhook
+    secret, to verify signatures.
+
+    Rule 9: an org id is NOT required and is NOT a delivery filter. Passport delivers every org
+    Prepper is entitled to and all of them are projected; the org is resolved per-request from the
+    acting user's membership, never from config.
     """
     settings = get_settings()
-    if not settings.passport_webhook_secret or not settings.passport_org_id:
-        logger.info(
-            "Passport sync not mounted: PASSPORT_WEBHOOK_SECRET / PASSPORT_ORG_ID unset"
-        )
+    if not settings.passport_webhook_secret:
+        logger.info("Passport sync not mounted: PASSPORT_WEBHOOK_SECRET unset")
         return False
 
     app.include_router(

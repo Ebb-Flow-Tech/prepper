@@ -1,14 +1,17 @@
 """Nightly reconciliation via ``snapshot()`` — a server-side job, never client polling.
 
-``snapshot()`` is ONE call returning six collections that mirror the sync payloads
+``snapshot()`` is ONE call returning EIGHT collections that mirror the sync payloads
 byte-for-byte. The snapshot scope == the delivery filter, so a correct receiver at steady
-state has a read model EQUAL to the snapshot per collection. Re-applying the snapshot
-through the SAME handler logic is idempotent (the version guard makes already-current rows
-a no-op), so this corrects any drift from a missed or out-of-order delivery.
+state has a read model EQUAL to the snapshot per collection. Re-applying the snapshot through
+the SAME handler logic is idempotent (the ``>=`` version guard makes already-current rows a
+no-op), so this repairs drift from a missed or out-of-order delivery.
 
-There is NO ``users`` collection in the snapshot (memberships embed the user fields) and no
-per-aggregate list endpoints — do not reach for ``list_entitlements()`` etc.; they do not
-exist.
+Do NOT reconcile by fanning out per-aggregate list endpoints — there are none
+(``list_entitlements()`` etc. do not exist). One ``snapshot()``, eight collections, applied in
+FK-safe order (org -> units -> relations -> memberships -> links -> entitlements ->
+unit_app_access -> unit_app_membership) so a role row never lands before the brand it names.
+
+There is NO ``users`` collection in the snapshot — memberships embed the user fields.
 
 Invoke from a scheduled server-side job (cron / scheduled task). Prepper does not ship a
 scheduler in-process, so wire this to your infra's nightly runner:
@@ -27,13 +30,16 @@ logger = logging.getLogger(__name__)
 
 
 async def reconcile_nightly() -> None:
-    """Fetch the snapshot, filter to the configured org, and re-apply through the live
-    handler logic. Drift is only visible as rows that actually changed; counts are logged
-    without any PII (no emails, no payload bodies)."""
-    from passport_client import PassportClient  # lazy: SDK is an optional private dep
+    """Fetch the snapshot and re-apply it ENTIRELY through the live handler logic.
+
+    Rule 9 — no org filter. The snapshot's scope IS the delivery filter, so a correct receiver's
+    read model equals the snapshot per collection, across EVERY org Prepper is entitled to.
+    Filtering to one configured org would report permanent phantom drift on every other and never
+    heal it. Counts are logged without any PII (no emails, no payload bodies).
+    """
+    from passport_client import PassportClient  # lazy: keeps CLI import light
 
     settings = get_settings()
-    org_id = str(settings.passport_org_id)
 
     async with PassportClient(
         base_url=settings.passport_api_url, api_key=settings.passport_api_key
@@ -42,21 +48,35 @@ async def reconcile_nightly() -> None:
 
     handlers = PassportHandlers()
 
-    for org in (o for o in snap.organizations if o.id == org_id):
+    # FK-safe order — the same order ``ResyncFanoutMixin`` uses for the resync bundle.
+    for org in snap.organizations:
         await handlers.upsert_org(org)
-    for membership in (m for m in snap.memberships if m.organization_id == org_id):
+    for unit in snap.units:
+        await handlers.upsert_unit(unit)
+    for relation in snap.unit_relations:
+        await handlers.create_relation(relation)
+    for membership in snap.memberships:
         await handlers.upsert_membership(membership)
-    for entitlement in (e for e in snap.entitlements if e.organization_id == org_id):
-        await handlers.upsert_entitlement(entitlement)
-    for link in snap.identity_links:  # already scoped to this app
+    for link in snap.identity_links:
         await handlers.create_identity_link(link)
+    for entitlement in snap.entitlements:
+        await handlers.upsert_entitlement(entitlement)
+    for app_access in snap.unit_app_accesses:
+        await handlers.create_unit_app_access(app_access)
+    for role in snap.unit_app_memberships:
+        await handlers.upsert_unit_app_membership(role)
 
     logger.info(
-        "Passport reconciliation complete: orgs=%d memberships=%d entitlements=%d links=%d",
-        sum(1 for o in snap.organizations if o.id == org_id),
-        sum(1 for m in snap.memberships if m.organization_id == org_id),
-        sum(1 for e in snap.entitlements if e.organization_id == org_id),
+        "Passport reconciliation complete: orgs=%d units=%d relations=%d memberships=%d "
+        "links=%d entitlements=%d app_accesses=%d app_memberships=%d",
+        len(snap.organizations),
+        len(snap.units),
+        len(snap.unit_relations),
+        len(snap.memberships),
         len(snap.identity_links),
+        len(snap.entitlements),
+        len(snap.unit_app_accesses),
+        len(snap.unit_app_memberships),
     )
 
 

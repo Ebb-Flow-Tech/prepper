@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.53](#0053---2026-07-14)** — Passport Sync Consumer: Complete the Eight-Aggregate Projection (Units, Relations, Brand-App Switches & Roles), Derived Brand-Scoped Access, Role Write-Back, Multi-Org Projection & a Scheduled Nightly Reconciliation
 - **[0.0.52](#0052---2026-07-09)** — Build Fix: Python 3.12 Floor Across Image, CI & Package Metadata — Unblocks the Staging Deploy `ResolutionTooDeep` Caused by `passport-client`'s `requires-python >=3.12`
 - **[0.0.51](#0051---2026-07-09)** — Passport Sync Consumer: Adopt the `org.resync` Manual Re-Sync Handler (SDK 0.2.0, Upsert-Only Fan-Out) with Forward-Compatible Type-Only SDK Imports
 - **[0.0.50](#0050---2026-07-08)** — Passport Sync Consumer: Read-Model Projection of Org/Membership/Entitlement/Identity-Link Events, Signed Sync Receive Endpoint, Role Projection, Entitlement Kill Switch & Nightly Reconciliation
@@ -58,6 +59,44 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.53] - 2026-07-14
+
+### Fixed
+
+#### Passport — the Projection Was Silently Dropping Half the Contract
+
+The consumer shipped in 0.0.50 projected only **four** of Passport's **eight** aggregates. `upsert_unit`, `archive_unit`, `create_relation` and `remove_relation` were explicit no-ops (`return  # conforming no-op`), and there were **no** `unit_app_access` / `unit_app_membership` handlers at all — so the SDK's `getattr` dispatch skipped them silently. Nothing errored; the receiver returned `200` to every event and discarded it.
+
+The consequence was total, and invisible: Passport's access model is **derived** from the entitlement, the org role, the brand-app switch (`unit_app_access`) and the (user, brand, app) role row (`unit_app_membership`). Projecting none of the last three means `has_app_access` could only ever return `False`, and no Passport role could ever be derived for anyone.
+
+- **`p1rtaccess1x2y`** — adds `passport_unit`, `passport_unit_relation`, `passport_unit_app_access`, `passport_unit_app_membership` (RLS enabled + forced, no client policies, Passport UUIDs adopted verbatim as PKs), plus a nullable `outlets.passport_unit_id` link column.
+- **All 17 handlers** now exist and are asserted by `test_every_dispatched_handler_exists` / `test_no_dead_handlers`, which diff the class against the SDK's `_DISPATCH` table. A misnamed handler is a silent no-op, so this test is the only thing that catches one.
+- **Access is derived via `passport_client.access`**, never hand-rolled — `has_app_access` / `roles_at_brands` are called with both `org_id` **and** `org_role`. Omitting `org_role` silently denies every org `Owner`/`Admin` (they hold `Manager` everywhere via the ladder, with zero role rows); `test_owner_with_no_role_rows_has_access` is the only check that catches it.
+
+#### Passport — Nightly Reconciliation Was Never Actually Scheduled
+
+`reconcile_nightly()` existed and was never invoked by anything. Webhook delivery is at-least-once, so a delivery lost during a deploy or outage left the projection permanently stale with no error. Added `.github/workflows/passport-reconcile.yml`: runs `python -m app.passport.reconcile` **inside** the deployed machine via `flyctl ssh console` (reusing its secrets — no new credentials, no scheduler thread in the web process), nightly at 02:00 SGT, failing red.
+
+### Changed
+
+#### Passport — Multi-Org Projection (No Single-Org Pin)
+
+The receive path dropped every event whose `organization_id` differed from a configured `PASSPORT_ORG_ID` (11 `_wrong_org` guards). That is data loss the moment a second org is entitled — and it is silent. Passport's delivery filter has already decided what the app may see; re-deciding it locally only puts holes in the read model.
+
+- Removed every org filter from the receive path and from reconciliation (the snapshot's scope **is** the delivery filter — filtering it to one org guarantees permanent phantom drift on every other).
+- `org_id` is now a **request-path argument**, resolved from the acting user's membership in the projection, never a setting. The kill switch (`is_org_blocked`) is evaluated against the user's own orgs; `brand_roles` unions across them (safe — a brand UUID belongs to exactly one org, so no "active org" concept is needed); write-back derives the org from its **target** (a brand names its org; an assignment names its org), which makes acting across an org boundary unrepresentable rather than merely checked.
+- `test_owner_of_one_org_gets_nothing_at_another_orgs_brands` covers the cross-org grant this prevents. Nothing else catches it.
+
+### Added
+
+#### Passport — Brand-App Role Write-Back
+
+`app/passport/writeback.py` + `app/api/passport_roles.py`: list / assign / change / remove `Manager`|`Staff` at a brand, via the SDK's four `unit_app_membership` methods. Prepper enforces its own local role check first, then forwards the **end user's own** Supabase JWT (`end_user_token` → `X-End-User-Token`) so the acting user is *proved*, not asserted. A `403` (authority matrix) and a `409` (target is not a brand) are normal outcomes, surfaced verbatim. Requires Prepper's `issuer_url` to be registered in Passport — unregistered means every write-back, **and every identity-link report**, fails closed with a silently-swallowed `403`.
+
+**Files changed:** `backend/alembic/versions/p1rtaccess1x2y_*.py`, `backend/app/models/passport.py`, `backend/app/passport/{handlers,store,access,identity,reconcile,role_projection,sync_router,writeback}.py`, `backend/app/api/{deps,auth,passport_roles}.py`, `backend/app/main.py`, `backend/tests/test_passport_{sync,access,writeback}.py`, `.github/workflows/passport-reconcile.yml`
+
 ---
 
 ## [0.0.52] - 2026-07-09
