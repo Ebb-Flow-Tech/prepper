@@ -14,10 +14,8 @@ from app.models import (
     Outlet,
     PassportUnitAppAccess,
     PassportUnitAppMembership,
-    User,
-    UserType,
 )
-from app.passport import access, role_projection, store
+from app.passport import access, store
 
 ORG = "org-1"
 PU = "pu-1"          # Passport platform_user_id
@@ -282,60 +280,6 @@ def test_outlet_link_is_non_destructive_without_a_matching_ref(session: Session)
     assert session.get(Outlet, 3).passport_unit_id is None
 
 
-def test_project_user_derives_is_manager_and_outlet_from_brand_roles(session: Session):
-    session.add(
-        User(
-            id=SUBJECT,
-            email="chef@acme.test",
-            username="chef",
-            user_type=UserType.NORMAL,
-            is_manager=False,
-            outlet_id=None,
-        )
-    )
-    session.commit()
-
-    _seed_outlet(session, code="CS", outlet_id=3)
-    store.apply_entitlement(session, _entitlement_values(version=1))
-    store.apply_unit(session, _unit_values(version=1, external_ref="CS"))
-    store.create_unit_app_access(session, _app_access_values())
-    store.create_identity_link(session, _link_values())
-    store.apply_membership(session, _membership_values(version=1, role="Member"))
-    store.apply_unit_app_membership(session, _role_values(version=1, role="Manager"))
-
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-
-    session.expire_all()
-    user = session.get(User, SUBJECT)
-    assert user.is_manager is True            # Manager at a brand
-    assert user.outlet_id == 3                # scoped to the mapped outlet
-    assert user.user_type == UserType.NORMAL  # the ORG role is still Member
-
-
-def test_project_user_leaves_local_grants_alone_when_nothing_derives(session: Session):
-    """Non-destructive: switching Passport on must not wipe existing grants before the data
-    lands. Nothing derives (no entitlement synced) -> local grants survive untouched."""
-    session.add(
-        User(
-            id=SUBJECT,
-            email="chef@acme.test",
-            username="chef",
-            user_type=UserType.NORMAL,
-            is_manager=True,
-            outlet_id=7,
-        )
-    )
-    session.commit()
-
-    store.create_identity_link(session, _link_values())
-    store.apply_membership(session, _membership_values(version=1, role="Member"))
-
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-
-    session.expire_all()
-    user = session.get(User, SUBJECT)
-    assert user.is_manager is True
-    assert user.outlet_id == 7
 
 
 # --- rule 9: multi-org ---------------------------------------------------------------------

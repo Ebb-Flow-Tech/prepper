@@ -19,7 +19,7 @@ from sqlmodel import Session
 
 from app.api.deps import get_bearer_token, get_current_user, get_session
 from app.models import User
-from app.passport import writeback
+from app.passport import directory, writeback
 
 router = APIRouter()
 
@@ -37,15 +37,41 @@ class SetRoleRequest(BaseModel):
 
 
 @router.get("")
-async def list_brand_roles(
+def list_brand_roles(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    token: str = Depends(get_bearer_token),
 ) -> list[Any]:
-    """Every brand-app role row for the configured org (own-app scoped by delivery)."""
-    return await writeback.list_brand_roles(
-        session, actor=current_user, end_user_token=token
-    )
+    """The brand-app role roster, READ FROM THE PROJECTION — not from Passport.
+
+    Deliberately does not call Passport on the request path: the projection IS the model, so this
+    survives a Passport outage, adds no network hop, and does not ``403`` for a user who has no
+    identity link yet. Mutations below still go up via write-back.
+    """
+    return list(directory.roster(session, current_user.id))
+
+
+@router.get("/brands")
+def list_brands(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[Any]:
+    """Active brands carrying Prepper, in the caller's orgs, with the caller's role at each.
+
+    Brands are where people are assigned — outlets and entities never hold roles. A brand with no
+    ``unit_app_access`` row is omitted: it confers access to nobody, so it is not somewhere a role
+    can be given.
+    """
+    return list(directory.brands_for_user(session, current_user.id))
+
+
+@router.get("/members")
+def list_members(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[Any]:
+    """Org members who can be given a brand role — from Passport's membership roster, NOT from
+    Prepper's local ``users`` table (which may hold accounts Passport has never heard of)."""
+    return list(directory.assignable_members(session, current_user.id))
 
 
 @router.post("", status_code=201)

@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from passport_client import ResyncFanoutMixin
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.database import engine
 from app.models import PassportMembership
@@ -63,21 +63,6 @@ def _session() -> Iterator[Session]:
     with Session(engine) as session:
         yield session
 
-
-def _orgs_for(session: Session, platform_user_id: str) -> list[str]:
-    """Every org this platform user is a member of, read from the PROJECTION.
-
-    Rule 9: the org comes from the DATA, never from a configured constant. Used by the identity-link
-    handler, whose payload carries no ``organization_id`` (an identity link is (app, subject) ->
-    platform user; it names no org).
-    """
-    return list(
-        session.exec(
-            select(PassportMembership.organization_id).where(
-                PassportMembership.platform_user_id == platform_user_id
-            )
-        ).all()
-    )
 
 
 class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no type stubs
@@ -144,13 +129,6 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
     async def create_identity_link(self, payload: IdentityLinkPayload) -> None:
         with _session() as session:
             store.create_identity_link(session, payload.model_dump())
-            # An identity link names NO org, so re-derive in every org the user is a member of.
-            for org_id in _orgs_for(session, payload.platform_user_id):
-                role_projection.project_user(
-                    session,
-                    platform_user_id=payload.platform_user_id,
-                    org_id=org_id,
-                )
 
     async def remove_identity_link(self, payload: IdentityLinkPayload) -> None:
         with _session() as session:
@@ -160,22 +138,13 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
     async def upsert_membership(self, payload: MembershipPayload) -> None:
         with _session() as session:
             store.apply_membership(session, payload.model_dump())
-            role_projection.project_user(
-                session,
-                platform_user_id=payload.platform_user_id,
-                org_id=payload.organization_id,
-            )
 
     async def remove_membership(self, payload: MembershipPayload) -> None:
         # TRAP 1: version-guarded UPSERT that KEEPS the row (status=removed), NOT a delete.
         with _session() as session:
             store.apply_membership(session, payload.model_dump())
-            # Rule 6: recompute the projection (demotes to normal) + revoke unit-scoped grants.
-            role_projection.project_user(
-                session,
-                platform_user_id=payload.platform_user_id,
-                org_id=payload.organization_id,
-            )
+            # Rule 6: revoke this user's local unit-scoped grants. Granting is NOT projected
+            # onto the user row any more (rule 8) — roles are read per-brand at the check.
             role_projection.revoke_local_grants(
                 session, platform_user_id=payload.platform_user_id
             )
@@ -205,11 +174,6 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
         # is idempotent under the >= version guard, so never suppress the echo.
         with _session() as session:
             store.apply_unit_app_membership(session, payload.model_dump())
-            role_projection.project_user(
-                session,
-                platform_user_id=payload.platform_user_id,
-                org_id=payload.organization_id,
-            )
 
     async def remove_unit_app_membership(
         self, payload: UnitAppMembershipPayload
@@ -218,8 +182,3 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
         # delete. The projection below re-derives the user's roles without this brand.
         with _session() as session:
             store.apply_unit_app_membership(session, payload.model_dump())
-            role_projection.project_user(
-                session,
-                platform_user_id=payload.platform_user_id,
-                org_id=payload.organization_id,
-            )

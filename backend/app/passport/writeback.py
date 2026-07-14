@@ -151,27 +151,6 @@ def _reraise(exc: PassportAPIError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=str(exc.detail))
 
 
-async def list_brand_roles(
-    session: Session, *, actor: User, end_user_token: str
-) -> list[Any]:
-    """Every brand-app role row across every org the actor belongs to (own-app scoped by
-    delivery). Rule 9: fanned out over the actor's orgs, not a configured one."""
-    base_url, api_key = _require_configured()
-    _require_local_authority(actor)
-
-    rows: list[Any] = []
-    try:
-        async with _client(base_url, api_key) as pc:
-            for org_id in _actor_orgs(session, actor):
-                page = await pc.list_unit_app_memberships(
-                    org_id, end_user_token=end_user_token
-                )
-                rows.extend(page.items)
-    except PassportAPIError as exc:
-        raise _reraise(exc) from exc
-
-    return rows
-
 
 async def assign_brand_role(
     session: Session,

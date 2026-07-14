@@ -3,18 +3,21 @@
 import { useState } from 'react';
 import { useAppState } from '@/lib/store';
 import { OutletManagementTab } from '@/components/recipes';
-import { UserManagementTab } from '@/components/admin';
+import { UserManagementTab, BrandRolesTab } from '@/components/admin';
 import { UserProfileTab } from '@/components/settings/UserProfileTab';
 import DesignSystemPage from '@/app/design-system/page';
 import { cn } from '@/lib/utils';
 
-type SettingsTab = 'users' | 'outlets' | 'admin' | 'design';
+type SettingsTab = 'users' | 'outlets' | 'brand-roles' | 'admin' | 'design';
 
 const SETTINGS_TABS: { id: SettingsTab; label: string; adminOnly?: boolean }[] = [
-  { id: 'users',   label: 'Users'   },
-  { id: 'outlets', label: 'Outlets' },
-  { id: 'admin',   label: 'Admin',  adminOnly: true },
-  { id: 'design',  label: 'Design'  },
+  { id: 'users',       label: 'Users'       },
+  { id: 'outlets',     label: 'Outlets'     },
+  // Passport's brand roles. Visible to everyone: a brand Manager may assign Staff at their own
+  // brand, so this is not admin-only. Passport applies the real authority matrix on the write.
+  { id: 'brand-roles', label: 'Brand Roles' },
+  { id: 'admin',       label: 'Admin',  adminOnly: true },
+  { id: 'design',      label: 'Design'      },
 ];
 
 export default function SettingsPage() {
@@ -27,6 +30,8 @@ export default function SettingsPage() {
     switch (tab) {
       case 'outlets':
         return <OutletManagementTab userType={userType} />;
+      case 'brand-roles':
+        return <BrandRolesTab />;
       case 'admin':
         if (userType !== 'admin') {
           return (

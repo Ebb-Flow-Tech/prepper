@@ -1,5 +1,12 @@
 import type { FMHImportResult } from '@/types';
 import type {
+  AssignBrandRoleRequest,
+  BrandRole,
+  PassportBrand,
+  PassportBrandRole,
+  PassportMember,
+} from '@/types';
+import type {
   Recipe,
   Ingredient,
   RecipeIngredient,
@@ -1765,4 +1772,50 @@ export async function getSupplierIngredientsPaginated(
   return fetchApi<PaginatedResponse<SupplierIngredientItem>>(
     `/supplier-ingredients${query ? `?${query}` : ''}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// Passport — brand-app roles
+//
+// READS come from Prepper's projection of Passport (local, and they survive a Passport outage).
+// WRITES go UP to Passport and come back DOWN via sync — they are not applied locally, so the list
+// refreshes from the projection once the event lands. A 403 (Passport's authority matrix) and a 409
+// (the target unit is not a brand) are NORMAL outcomes, surfaced verbatim.
+// ---------------------------------------------------------------------------
+
+export async function getPassportBrands(): Promise<PassportBrand[]> {
+  return fetchApi<PassportBrand[]>('/passport/brand-roles/brands');
+}
+
+export async function getPassportBrandRoles(): Promise<PassportBrandRole[]> {
+  return fetchApi<PassportBrandRole[]>('/passport/brand-roles');
+}
+
+export async function getPassportMembers(): Promise<PassportMember[]> {
+  return fetchApi<PassportMember[]>('/passport/brand-roles/members');
+}
+
+export async function assignPassportBrandRole(
+  data: AssignBrandRoleRequest
+): Promise<PassportBrandRole> {
+  return fetchApi<PassportBrandRole>('/passport/brand-roles', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function setPassportBrandRole(
+  assignmentId: string,
+  role: BrandRole
+): Promise<PassportBrandRole> {
+  return fetchApi<PassportBrandRole>(`/passport/brand-roles/${assignmentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function removePassportBrandRole(assignmentId: string): Promise<PassportBrandRole> {
+  return fetchApi<PassportBrandRole>(`/passport/brand-roles/${assignmentId}`, {
+    method: 'DELETE',
+  });
 }

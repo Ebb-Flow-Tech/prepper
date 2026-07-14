@@ -1000,3 +1000,49 @@ export interface SupplierIngredientTag {
 export interface CreateSupplierIngredientTagRequest {
   name: string;
 }
+
+// ---------------------------------------------------------------------------
+// Passport — brand-app roles
+//
+// Passport's vocabulary is used VERBATIM: `Manager` | `Staff` at a BRAND (people are never held at
+// an outlet or entity). These are NOT Prepper's `user_type`/`is_manager` — the two vocabularies are
+// distinct and must never be conflated. A user may hold different roles at different brands, so a
+// role is always read per-brand; there is no single "effective role".
+// ---------------------------------------------------------------------------
+
+export type BrandRole = 'Manager' | 'Staff';
+
+export interface PassportBrand {
+  id: string;
+  name: string;
+  organization_id: string;
+  /** The current user's role AT THIS BRAND — null means no access here (they may hold one elsewhere). */
+  my_role: BrandRole | null;
+}
+
+export interface PassportBrandRole {
+  assignment_id: string;
+  platform_user_id: string;
+  email: string;
+  display_name: string | null;
+  unit_id: string;
+  unit_name: string;
+  role: BrandRole;
+  /** The person's ORG role (`Owner`|`Admin`|`Member`) — a different vocabulary; shown for context. */
+  org_role: string;
+  organization_id: string;
+}
+
+export interface PassportMember {
+  platform_user_id: string;
+  email: string;
+  display_name: string | null;
+  org_role: string;
+  organization_id: string;
+}
+
+export interface AssignBrandRoleRequest {
+  platform_user_id: string;
+  unit_id: string;
+  role: BrandRole;
+}

@@ -31,7 +31,7 @@ from passport_client.models import (
     UnitAppMembershipPayload,
     UnitPayload,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import (
     PassportEntitlement,
@@ -40,6 +40,7 @@ from app.models import (
     PassportUnit,
     PassportUnitAppAccess,
     PassportUnitAppMembership,
+    PassportUnitRelation,
 )
 
 _ACTIVE = "active"
@@ -217,3 +218,95 @@ def has_prepper_access(session: Session, subject: str) -> bool:
         has_app_access(**_derivation_inputs(session, platform_user_id, org_id))
         for org_id in scoped
     )
+
+
+def org_role(session: Session, subject: str) -> str | None:
+    """The user's strongest ACTIVE org role across their orgs: ``Owner`` | ``Admin`` | ``Member``.
+
+    Rule 8: Passport's vocabulary, read verbatim. This replaces Prepper's `user_type` — but note it
+    is NOT the same question. `user_type == admin` used to mean "superuser of this app"; the org role
+    means "governs the ORGANISATION in Passport". Passport's own model says an org Owner/Admin holds
+    `Manager` **in** each app (the ladder) — it does not make them an app superuser. Use this only
+    for genuinely org-wide administration; for anything that touches a brand's data, ask
+    ``role_at_unit`` instead.
+    """
+    platform_user_id = platform_user_id_for(session, subject)
+    if platform_user_id is None:
+        return None
+
+    roles = {
+        r
+        for r in session.exec(
+            select(PassportMembership.role).where(
+                PassportMembership.platform_user_id == platform_user_id,
+                PassportMembership.status == _ACTIVE,
+            )
+        ).all()
+    }
+    for strongest in ("Owner", "Admin", "Member"):
+        if strongest in roles:
+            return strongest
+    return None
+
+
+def is_org_admin(session: Session, subject: str) -> bool:
+    """``True`` for an org ``Owner`` or ``Admin`` — the people who administer the organisation."""
+    return org_role(session, subject) in ("Owner", "Admin")
+
+
+def _brand_of(session: Session, unit_id: str) -> str | None:
+    """The brand a unit belongs to. A brand IS its own brand; an outlet resolves through its
+    ``belongs_to_brand`` edge. Entities hold no people and resolve to nothing.
+
+    People are assigned to BRANDS only — an outlet is a physical site that *inherits* its brand's
+    apps. So any question about a role at an outlet is really a question about its brand.
+    """
+    unit = session.get(PassportUnit, unit_id)
+    if unit is None:
+        return None
+    if unit.type == "brand":
+        return unit_id
+
+    return session.exec(
+        select(PassportUnitRelation.to_unit_id).where(
+            PassportUnitRelation.from_unit_id == unit_id,
+            PassportUnitRelation.relation == "belongs_to_brand",
+        )
+    ).first()
+
+
+def role_at_unit(session: Session, subject: str, unit_id: str) -> str | None:
+    """``Manager`` | ``Staff`` | ``None`` for this user AT THIS UNIT (brand or outlet).
+
+    **The request-path check.** ``None`` means no access *here* — the user may well be `Manager`
+    somewhere else, which is exactly why a single global flag cannot express this and why
+    ``is_manager`` is being deleted.
+    """
+    brand_id = _brand_of(session, unit_id)
+    if brand_id is None:
+        return None
+    return brand_roles(session, subject).get(brand_id)
+
+
+def accessible_unit_ids(session: Session, subject: str) -> set[str]:
+    """Every unit whose data this user may see: the brands they hold a role at, plus the OUTLETS
+    under those brands.
+
+    This replaces the old `outlets` hierarchy walk. An outlet inherits its brand — that is Passport's
+    structure, not a convention Prepper invents — so holding a role at a brand grants sight of its
+    sites. Empty means "no access anywhere", which for a user with no identity link is the correct,
+    fail-closed answer.
+    """
+    brand_ids = set(brand_roles(session, subject))
+    if not brand_ids:
+        return set()
+
+    outlet_ids = set(
+        session.exec(
+            select(PassportUnitRelation.from_unit_id).where(
+                col(PassportUnitRelation.to_unit_id).in_(brand_ids),
+                PassportUnitRelation.relation == "belongs_to_brand",
+            )
+        ).all()
+    )
+    return brand_ids | outlet_ids

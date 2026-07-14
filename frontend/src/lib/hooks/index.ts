@@ -20,3 +20,4 @@ export * from './useMenuSketches';
 export * from './useDebouncedValue';
 export * from './useSupplierIngredients';
 export * from './useSupplierIngredientTags';
+export * from './usePassportRoles';

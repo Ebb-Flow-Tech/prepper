@@ -17,14 +17,14 @@ Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe
 - `backend/app/domain/` — service layer (one file per resource: recipe, costing, sub-recipes, outlets, tasting, suppliers, categories, menu-sketch, users, Supabase auth)
 - `backend/app/api/` — FastAPI routers (one per resource) + `deps.py`
 - `backend/app/agents/` — AI features: `base_agent.py`, `category_agent.py`, `feedback_summary_agent.py`
-- `backend/app/passport/` — Passport sync consumer: eight-aggregate read-model projection (`store`, `handlers`, `sync_router`), derived brand-scoped access + entitlement kill switch (`access`), role write-back (`writeback`), identity reporting, nightly `reconcile`. **Multi-org: every org Passport delivers is projected; `org_id` is resolved per-request from the acting user's membership, never from config.**
+- `backend/app/passport/` — Passport sync consumer: eight-aggregate read-model projection (`store`, `handlers`, `sync_router`), derived brand-scoped access + entitlement kill switch (`access`), read-model queries for brands/roster (`directory`), role write-back (`writeback`), identity reporting (`identity`), grant revocation only (`role_projection`), nightly `reconcile`. **Multi-org: every org Passport delivers is projected; `org_id` is resolved per-request from the acting user's membership, never from config.** **Roles are read per-brand at the point of the check — never projected onto the `users` row.**
 - `backend/app/utils/` — unit conversion helpers
 - `frontend/src/app/` — Next.js App Router pages
 - `frontend/src/lib/api.ts` — typed fetch wrapper (40+ endpoints)
 - `frontend/src/lib/hooks/` — TanStack Query hooks, one file per resource with cache invalidation
 - `frontend/src/lib/providers.tsx` — `QueryClientProvider` + `AppProvider` + `AuthGuard`
 - `frontend/src/lib/store.tsx` — React Context (selected recipe, canvas tab, auth)
-- `frontend/src/components/` — layout, recipe, ingredients, suppliers, outlets, categories, tasting, ui primitives
+- `frontend/src/components/` — layout, recipe, ingredients, suppliers, outlets, categories, tasting, admin (incl. `BrandRolesTab` — Passport brand roles), ui primitives
 
 ## Commands
 ```

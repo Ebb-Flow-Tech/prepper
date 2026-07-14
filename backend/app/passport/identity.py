@@ -35,11 +35,29 @@ async def _report(token: str) -> None:
         PassportClient,  # lazy: keeps the login path import-light
     )
 
+    from app.database import engine
+    from app.passport import store
+
     settings = get_settings()
     async with PassportClient(
         base_url=settings.passport_api_url, api_key=settings.passport_api_key
     ) as pc:
-        await pc.report_identity_link(token=token)
+        link = await pc.report_identity_link(token=token)
+
+    # Apply the returned link to the projection IMMEDIATELY — do not wait for the webhook.
+    #
+    # The link is the ONLY bridge from this app's Supabase `sub` to a Passport platform user: with no
+    # link, the user resolves to no orgs, no brands and no roles, and every brand-scoped check denies
+    # them. Webhook delivery is asynchronous, so relying on it alone leaves a window right after login
+    # in which the user is authenticated but has no access — the worst possible moment for it.
+    #
+    # This is an insert-if-absent upsert, exactly like the `identity_link.created` handler, so the
+    # webhook re-applying it moments later is a harmless no-op. Provision user-facing state
+    # synchronously; let the webhook be the backstop, not the primary path.
+    from sqlmodel import Session
+
+    with Session(engine) as session:
+        store.create_identity_link(session, link.model_dump())
 
 
 def report_identity_link_safe(token: str) -> None:

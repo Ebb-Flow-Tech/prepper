@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.54](#0054---2026-07-15)** — Passport: Disarm the Silent Admin Promotion (Delete the Role Projection), Brand-Roles UI, Projection-Backed Reads, Synchronous Identity Linking & the Rule-7 Re-Key Migration
 - **[0.0.53](#0053---2026-07-14)** — Passport Sync Consumer: Complete the Eight-Aggregate Projection (Units, Relations, Brand-App Switches & Roles), Derived Brand-Scoped Access, Role Write-Back, Multi-Org Projection & a Scheduled Nightly Reconciliation
 - **[0.0.52](#0052---2026-07-09)** — Build Fix: Python 3.12 Floor Across Image, CI & Package Metadata — Unblocks the Staging Deploy `ResolutionTooDeep` Caused by `passport-client`'s `requires-python >=3.12`
 - **[0.0.51](#0051---2026-07-09)** — Passport Sync Consumer: Adopt the `org.resync` Manual Re-Sync Handler (SDK 0.2.0, Upsert-Only Fan-Out) with Forward-Compatible Type-Only SDK Imports
@@ -59,6 +60,43 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.54] - 2026-07-15
+
+### Fixed
+
+#### Passport — an Armed, Silent Promotion to Global Admin
+
+`role_projection.project_user()` derived Prepper's local flags from Passport and was **armed**: with brands now projected, the next login of any Passport org `Admin` (17 of 19 members are) would have silently made them a **global Prepper admin** — ingredient CRUD, every outlet, tasting bypass. Nothing would have errored.
+
+It did two things rule 8 forbids by name:
+
+- **Conflated the vocabularies.** `_ROLE_MAP` mapped the Passport **org** role onto `user_type`. Passport's model says an org `Owner`/`Admin` holds `Manager` **in** an app (the ladder) — not "admin **of**" it. The mapping invented a privilege Passport never granted.
+- **Collapsed a per-brand MAP into one global flag.** `is_manager = "Manager" in roles.values()` — so a `Member` given `Manager` at *one* brand became a manager at *every* brand.
+
+`project_user` and `_ROLE_MAP` are **deleted**. `revoke_local_grants` stays (rule 6): a removed member still loses their grants — revocation can only ever *reduce* access, which is the direction that is always safe. Nobody's current access changed.
+
+#### Passport — Identity Links Applied Synchronously, Not via the Webhook
+
+`report_identity_link` **returns** the link; Prepper discarded it and waited for the webhook. The link is the only bridge from Prepper's Supabase `sub` to a Passport platform user — without it a user resolves to no orgs, no brands and no roles. Waiting on asynchronous delivery left a window immediately after login where a user was authenticated with **zero access**. The returned link is now applied to the projection at once (insert-if-absent, so the webhook re-applying it is a harmless no-op).
+
+### Added
+
+#### Passport — Brand Roles UI + Projection-Backed Reads
+
+`app/passport/directory.py` and three read endpoints (`/passport/brand-roles/{,brands,members}`) plus a **Brand Roles** tab in Settings: assign / change / remove `Manager`|`Staff` at a brand.
+
+Reads come from the **projection**, not Passport's API. Proxying to Passport on the request path would defeat the point of projecting — the page would die during a Passport outage, add a network hop per render, and `403` for any user without an identity link. Writes still go **up** via write-back and come back **down** through sync; the UI never applies a mutation locally, because that would make Prepper the source of truth for a row it does not own.
+
+Access helpers for the coming rule-8 switch: `org_role`, `is_org_admin`, `role_at_unit` (resolves an outlet through `belongs_to_brand` — people are held at brands; outlets *inherit*), `accessible_unit_ids`.
+
+### Migration (written, NOT yet applied)
+
+`p2rtunit3k4l` — **rule 7**: re-keys `recipe_outlets` / `menu_outlets` / `outlet_supplier_ingredient` (**8,637 rows**) from the serial `outlets.id` onto Passport unit UUIDs via the `external_ref` bridge, adds `organization_id` (rule 9, while the backfill is still a constant), drops `users.outlet_id` and the `outlets` shadow table. It **aborts rather than strand a single row**. The dependent code refactor (24 backend + ~10 frontend files) is not yet done, so this is not applied.
+
+**Files changed:** `backend/app/passport/{access,directory,handlers,identity,role_projection,writeback}.py`, `backend/app/api/passport_roles.py`, `backend/alembic/versions/p2rtunit3k4l_*.py`, `backend/tests/test_passport_{directory,access,sync}.py`, `frontend/src/components/admin/BrandRolesTab.tsx`, `frontend/src/lib/hooks/usePassportRoles.ts`, `frontend/src/lib/api.ts`, `frontend/src/types/index.ts`, `frontend/src/app/settings/page.tsx`
+
 ---
 
 ## [0.0.53] - 2026-07-14

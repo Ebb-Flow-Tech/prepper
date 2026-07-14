@@ -169,49 +169,33 @@ def _seed_user(session: Session) -> User:
     return user
 
 
-def test_project_user_noop_without_identity_link(session: Session):
-    _seed_user(session)
-    store.apply_membership(session, _membership_values(version=1, role="Admin"))
-    # No identity link yet -> membership can't resolve to a local user -> no change.
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-    session.expire_all()
-    assert session.get(User, SUBJECT).user_type == UserType.NORMAL
 
 
-def test_project_user_maps_admin_and_member(session: Session):
-    _seed_user(session)
-    store.create_identity_link(session, _link_values())
+def test_removed_membership_revokes_local_grants_and_keeps_the_tombstone(session: Session):
+    """RULE 6 — a removed member loses their local unit-scoped grants.
 
-    store.apply_membership(session, _membership_values(version=1, role="Member"))
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-    session.expire_all()
-    assert session.get(User, SUBJECT).user_type == UserType.NORMAL
-
-    store.apply_membership(session, _membership_values(version=2, role="Admin"))
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-    session.expire_all()
-    assert session.get(User, SUBJECT).user_type == UserType.ADMIN
-
-
-def test_removed_membership_demotes_and_revokes_grants(session: Session):
+    It does NOT demote `user_type`: that projection was a rule-8 violation (it conflated the org
+    vocabulary with Prepper's) and is deleted. Roles are read per-brand at the point of the check
+    now, so there is nothing to demote. Revocation survives because it can only ever REDUCE access,
+    which is the direction that is always safe.
+    """
     _seed_user(session)
     store.create_identity_link(session, _link_values())
     store.apply_membership(session, _membership_values(version=1, role="Admin"))
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
-    session.expire_all()
-    assert session.get(User, SUBJECT).user_type == UserType.ADMIN
 
-    # Membership removed -> keep tombstone, demote to normal, revoke unit-scoped grants.
+    user = session.get(User, SUBJECT)
+    user.is_manager = True
+    session.add(user)
+    session.commit()
+
     store.apply_membership(session, _membership_values(version=2, status="removed"))
-    role_projection.project_user(session, platform_user_id=PU, org_id=ORG)
     role_projection.revoke_local_grants(session, platform_user_id=PU)
     session.expire_all()
 
     user = session.get(User, SUBJECT)
-    assert user.user_type == UserType.NORMAL
-    assert user.is_manager is False
+    assert user.is_manager is False, "rule 6: unit-scoped grants are revoked"
     assert user.outlet_id is None
-    # The membership row itself is kept as a tombstone.
+    # TRAP 1: the membership row is KEPT as a tombstone, never deleted.
     assert session.get(PassportMembership, "m-1").status == "removed"
 
 
