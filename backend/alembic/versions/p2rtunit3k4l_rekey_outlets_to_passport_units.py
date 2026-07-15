@@ -40,10 +40,14 @@ Junk: outlet 707 ("Outlet X", inactive, unmappable) has its two `menu_outlets` L
 two test menus themselves are kept — deleting them dragged in `menu_sections` ON DELETE NO ACTION
 and aborted the first attempt). 707 is the only row in the whole database that cannot bridge.
 
-VERIFIED 2026-07-15: the data operations were dry-run against staging inside a rolled-back
-transaction — junk cleanup succeeded, and all 8,637 `outlet_supplier_ingredient` rows plus
-`recipe_outlets`/`menu_outlets` resolved through the `external_ref` bridge with **0 stranded**.
-Nothing was committed; the abort-guard (step 3) would stop the real run if that ever changed.
+VERIFIED 2026-07-15: the FULL `upgrade()` — every DDL op, not just the backfill — was run against
+staging inside a rolled-back transaction via alembic's own Operations machinery. All 8,637
+`outlet_supplier_ingredient` rows plus `recipe_outlets`/`menu_outlets` re-keyed through the
+`external_ref` bridge (0 stranded), `outlets` dropped, the user role columns dropped, and the new
+`uq_outlet_supplier_ingredient_si_unit` constraint created — no error, nothing committed. (An earlier
+run exercised only the backfill and missed a DDL bug: it tried to drop the unique constraint by
+Postgres's auto-generated name when the constraint had an EXPLICIT name — and `DROP COLUMN outlet_id`
+had already removed it anyway. The explicit drop is gone; the column drop handles it.)
 """
 
 from collections.abc import Sequence
@@ -136,12 +140,11 @@ def upgrade() -> None:
         op.create_index(f"ix_{table}_unit_id", table, ["unit_id"])
         op.create_index(f"ix_{table}_organization_id", table, ["organization_id"])
 
-    # outlet_supplier_ingredient's uniqueness was (supplier_ingredient_id, outlet_id).
-    op.drop_constraint(
-        "outlet_supplier_ingredient_supplier_ingredient_id_outlet_id_key",
-        "outlet_supplier_ingredient",
-        type_="unique",
-    )
+    # outlet_supplier_ingredient's old uniqueness was (supplier_ingredient_id, outlet_id). It is
+    # NOT dropped explicitly: `DROP COLUMN outlet_id` above already removed it — Postgres drops any
+    # constraint that references a dropped column. (An explicit drop by name additionally failed
+    # because the constraint was created with an EXPLICIT name `uq_outlet_supplier_ingredient`, not
+    # Postgres's auto-generated `<table>_<cols>_key`.) Only the new pairing is created here.
     op.create_unique_constraint(
         "uq_outlet_supplier_ingredient_si_unit",
         "outlet_supplier_ingredient",

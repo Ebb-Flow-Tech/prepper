@@ -23,6 +23,10 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite:///./recipe_builder.db"
+    # TLS mode for the Postgres connection (psycopg2/libpq). "require" encrypts and refuses
+    # plaintext instead of psycopg2's default "prefer", which silently downgrades. Upgrade to
+    # "verify-full" (with a CA cert) for MITM protection. Ignored for SQLite (local/tests).
+    database_sslmode: str = "require"
 
     # API
     api_v1_prefix: str = "/api/v1"

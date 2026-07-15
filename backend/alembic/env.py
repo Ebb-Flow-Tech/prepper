@@ -41,10 +41,19 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    # Match app/database.py: require TLS for Postgres. Migrations run on every deploy via
+    # the Fly release_command, so this connection must be encrypted too. SQLite (local/tests)
+    # doesn't accept sslmode, so omit it there.
+    connect_args = (
+        {}
+        if settings.database_url.startswith("sqlite")
+        else {"sslmode": settings.database_sslmode}
+    )
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:

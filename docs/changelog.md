@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.56](#0056---2026-07-15)** — Fix: the Rules-7/8 Re-Key Migration Broke the Staging Deploy — Drop the `outlet_supplier_ingredient` Unique Constraint via the Column Drop, Not a Wrong Explicit Name
 - **[0.0.55](#0055---2026-07-15)** — Rules 7 + 8: Retire the `outlets` Shadow Table & the Local Role Vocabulary — Re-Key Onto Passport Units, Brand-Scoped Access Everywhere, plus SSO Dual-Verify (Dark) & a Recipe-Unit Batch Endpoint
 - **[0.0.54](#0054---2026-07-15)** — Passport: Disarm the Silent Admin Promotion (Delete the Role Projection), Brand-Roles UI, Projection-Backed Reads, Synchronous Identity Linking & the Rule-7 Re-Key Migration
 - **[0.0.53](#0053---2026-07-14)** — Passport Sync Consumer: Complete the Eight-Aggregate Projection (Units, Relations, Brand-App Switches & Roles), Derived Brand-Scoped Access, Role Write-Back, Multi-Org Projection & a Scheduled Nightly Reconciliation
@@ -61,6 +62,26 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.56] - 2026-07-15
+
+### Fixed
+
+#### The rules-7/8 re-key migration broke the staging deploy
+
+`p2rtunit3k4l` (0.0.55) failed the Fly `release_command` with `constraint
+"outlet_supplier_ingredient_supplier_ingredient_id_outlet_id_key" does not exist`. Two compounding mistakes:
+
+1. **Wrong name.** The migration dropped Postgres's *auto-generated* unique-constraint name, but the table's constraint has an **explicit** name (`uq_outlet_supplier_ingredient`) from the model's `UniqueConstraint(..., name=...)`. The name it tried to drop never existed.
+2. **Redundant.** Even the correct name would have failed — the loop drops the `outlet_id` **column** first, and Postgres auto-drops any constraint referencing a dropped column, so the unique constraint was already gone.
+
+Fix: remove the `drop_constraint` entirely (the column drop handles it) and keep only the `create_unique_constraint` for the new `(supplier_ingredient_id, unit_id)` pairing. The failed deploy rolled back cleanly (Postgres transactional DDL — DB stayed at `p1rtaccess1x2y`, no partial state).
+
+**Why 0.0.55's dry-run missed it:** that dry-run exercised only the backfill (the "0 stranded" claim was true), never the DDL constraint drops. This fix was verified by running the **entire** `upgrade()` — every DDL op — against staging inside a rolled-back transaction via alembic's own machinery: 8,637 rows re-keyed, `outlets` + user role columns dropped, new constraint created, no error, nothing committed. The migration docstring now records that the full DDL was verified.
+
+**Files changed:** `backend/alembic/versions/p2rtunit3k4l_rekey_outlets_to_passport_units.py`
+
 ---
 
 ## [0.0.55] - 2026-07-15

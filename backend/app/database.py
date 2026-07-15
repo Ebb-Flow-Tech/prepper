@@ -16,6 +16,10 @@ is_sqlite = settings.database_url.startswith("sqlite")
 if is_sqlite:
     connect_args["check_same_thread"] = False
 else:
+    # Enforce TLS: fail loudly rather than silently connecting in plaintext. Supabase
+    # requires SSL; psycopg2 defaults to sslmode=prefer, which would fall back to
+    # unencrypted if enforcement were ever off. See app.config.Settings.database_sslmode.
+    connect_args["sslmode"] = settings.database_sslmode
     # Connection pooling for PostgreSQL / non-SQLite databases
     engine_kwargs.update(
         pool_size=20,
