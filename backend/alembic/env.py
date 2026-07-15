@@ -24,6 +24,18 @@ if config.config_file_name is not None:
 
 target_metadata = SQLModel.metadata
 
+# The projected Passport read-model tables live in the `passport` schema (design 2026-07-15), so
+# autogenerate must scan across schemas. But this is a Supabase database — `include_schemas=True`
+# alone would also scan `auth`, `storage`, `graphql`, etc. and emit DROPs for tables alembic doesn't
+# know about. Restrict autogenerate to the only two schemas this app owns.
+_MANAGED_SCHEMAS = {None, "public", "passport"}
+
+
+def include_name(name, type_, parent_names):
+    if type_ == "schema":
+        return name in _MANAGED_SCHEMAS
+    return True
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
@@ -33,6 +45,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+        include_name=include_name,
     )
 
     with context.begin_transaction():
@@ -57,7 +71,12 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            include_name=include_name,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

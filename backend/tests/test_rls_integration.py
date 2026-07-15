@@ -83,16 +83,18 @@ def check_rls_prerequisites(pg_engine):
 
 
 def _load_rls_migration():
-    """Load the p3 migration module so the tests use ITS is_admin/is_manager_or_admin SQL verbatim
-    — one source of truth. This decouples the tests from deploy timing: they verify the projection-
-    derived functions regardless of what is currently live on the target DB."""
+    """Load the p4 migration module so the tests use ITS is_admin/is_manager_or_admin SQL verbatim
+    — one source of truth. p4 re-qualifies the helpers for the `passport` schema (design 2026-07-15);
+    the p3 bodies referenced the pre-move `public.passport_*` names and no longer resolve. This
+    decouples the tests from deploy timing: they verify the current projection-derived functions
+    regardless of what is live on the target DB."""
     path = (
         pathlib.Path(__file__).resolve().parent.parent
         / "alembic"
         / "versions"
-        / "p3rtrls5m6n7_rls_functions_from_passport_projection.py"
+        / "p4rtschema7n8o_move_passport_projection_to_schema.py"
     )
-    spec = importlib.util.spec_from_file_location("_p3_rls", path)
+    spec = importlib.util.spec_from_file_location("_p4_rls", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -123,9 +125,9 @@ def _install_rls_functions(connection) -> None:
     """Redefine is_admin/is_manager_or_admin (projection-derived, from the p3 migration) inside the
     caller's transaction. Any connection that will evaluate RLS must call this — including a second
     connection a test opens to probe a policy violation without corrupting the primary one."""
-    p3 = _load_rls_migration()
-    connection.execute(text(p3._IS_ADMIN_FROM_PROJECTION))
-    connection.execute(text(p3._IS_MANAGER_OR_ADMIN_FROM_PROJECTION))
+    rls = _load_rls_migration()
+    connection.execute(text(rls._IS_ADMIN_SCHEMA))
+    connection.execute(text(rls._IS_MANAGER_OR_ADMIN_SCHEMA))
 
 
 # =============================================================================
@@ -200,7 +202,7 @@ def insert_user(
     platform_user_id = str(uuid.uuid4())
     conn.execute(
         text("""
-            INSERT INTO passport_identity_link (id, platform_user_id, app_id, subject, linked_via)
+            INSERT INTO passport.identity_link (id, platform_user_id, app_id, subject, linked_via)
             VALUES (:id, :pu, :app, :subject, 'test')
         """),
         {"id": str(uuid.uuid4()), "pu": platform_user_id, "app": str(uuid.uuid4()),
@@ -209,7 +211,7 @@ def insert_user(
     if user_type == "ADMIN":
         conn.execute(
             text("""
-                INSERT INTO passport_membership
+                INSERT INTO passport.membership
                     (id, organization_id, platform_user_id, role, status, version, email)
                 VALUES (:id, :org, :pu, 'Admin', 'active', 1, :email)
             """),
@@ -219,7 +221,7 @@ def insert_user(
     if is_manager:
         conn.execute(
             text("""
-                INSERT INTO passport_unit_app_membership
+                INSERT INTO passport.unit_app_membership
                     (id, organization_id, platform_user_id, unit_id, app_id, role, status, version)
                 VALUES (:id, :org, :pu, :unit, :app, 'Manager', 'active', 1)
             """),

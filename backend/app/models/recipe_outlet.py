@@ -17,7 +17,7 @@ from sqlmodel import Field, SQLModel
 class RecipeOutletBase(SQLModel):
     """Shared fields for RecipeOutlet."""
 
-    unit_id: str = Field(foreign_key="passport_unit.id", index=True)
+    unit_id: str = Field(foreign_key="passport.unit.id", index=True)
     organization_id: str = Field(index=True)
     is_active: bool = Field(
         default=True, description="Can deactivate a recipe for a specific unit"
@@ -33,7 +33,7 @@ class RecipeOutlet(RecipeOutletBase, table=True):
     __tablename__ = "recipe_outlets"
 
     recipe_id: int = Field(foreign_key="recipes.id", primary_key=True)
-    unit_id: str = Field(foreign_key="passport_unit.id", primary_key=True)
+    unit_id: str = Field(foreign_key="passport.unit.id", primary_key=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

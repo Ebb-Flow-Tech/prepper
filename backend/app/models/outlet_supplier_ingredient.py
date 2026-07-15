@@ -23,7 +23,7 @@ class OutletSupplierIngredient(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     supplier_ingredient_id: int = Field(foreign_key="supplier_ingredients.id", index=True)
-    unit_id: str = Field(foreign_key="passport_unit.id", index=True)
+    unit_id: str = Field(foreign_key="passport.unit.id", index=True)
     organization_id: str = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

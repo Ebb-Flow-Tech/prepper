@@ -21,6 +21,13 @@ These are a **read-only projection**: only the sync backend (service-role / BYPA
 writes them. The migration enables + forces RLS with no client policies (default-deny) so
 ``anon`` / ``authenticated`` can never read member emails directly.
 
+**Schema namespace (design 2026-07-15).** Every projected table lives in a dedicated ``passport``
+Postgres schema (``passport.organization``, ``passport.membership`` …) rather than a ``passport_``
+name prefix. Postgres has no schema on SQLite, so the app + test engines carry a
+``schema_translate_map`` that collapses ``passport`` → the default schema on SQLite (see
+``app/database.py`` and ``tests/conftest.py``); on Postgres the real schema is used. The relocation
+migration also re-qualifies the two ``SECURITY DEFINER`` RLS helpers that read this projection.
+
 All eight aggregates are projected: organization, unit, unit relation, membership,
 entitlement, identity link, unit-app access, unit-app membership. The last two ARE the
 access model — app access is DERIVED from the entitlement, the org role (the Owner/Admin
@@ -40,7 +47,9 @@ from sqlmodel import Field, SQLModel
 class PassportOrganization(SQLModel, table=True):
     """Projected from ``org.upserted`` / ``org.archived``. Mutable (version-guarded)."""
 
-    __tablename__ = "passport_organization"
+    __tablename__ = "organization"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     name: str
@@ -57,7 +66,9 @@ class PassportMembership(SQLModel, table=True):
     embedded in the payload — no separate user table is required for matching (trap 4).
     """
 
-    __tablename__ = "passport_membership"
+    __tablename__ = "membership"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -76,7 +87,9 @@ class PassportEntitlement(SQLModel, table=True):
     switch, not a separate remove event. The incoming non-active state is always applied.
     """
 
-    __tablename__ = "passport_entitlement"
+    __tablename__ = "entitlement"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -99,7 +112,9 @@ class PassportUnit(SQLModel, table=True):
     that is the ONLY link between a Passport brand UUID and a Prepper outlet id.
     """
 
-    __tablename__ = "passport_unit"
+    __tablename__ = "unit"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -117,7 +132,9 @@ class PassportUnitRelation(SQLModel, table=True):
     is ``relation`` (not ``relation_type``).
     """
 
-    __tablename__ = "passport_unit_relation"
+    __tablename__ = "unit_relation"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -134,7 +151,9 @@ class PassportUnitAppAccess(SQLModel, table=True):
     never filter by ``app_id`` locally.
     """
 
-    __tablename__ = "passport_unit_app_access"
+    __tablename__ = "unit_app_access"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -153,7 +172,9 @@ class PassportUnitAppMembership(SQLModel, table=True):
     ``Owner`` | ``Admin`` | ``Member``. Do not conflate them.
     """
 
-    __tablename__ = "passport_unit_app_membership"
+    __tablename__ = "unit_app_membership"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     organization_id: str = Field(index=True)
@@ -173,7 +194,9 @@ class PassportIdentityLink(SQLModel, table=True):
     this app, so there is at most one link per platform user here.
     """
 
-    __tablename__ = "passport_identity_link"
+    __tablename__ = "identity_link"
+
+    __table_args__ = {"schema": "passport"}
 
     id: str = Field(primary_key=True)
     platform_user_id: str = Field(index=True)

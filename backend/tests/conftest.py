@@ -23,6 +23,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 from app.api.deps import get_current_user, get_session
+from app.database import SQLITE_SCHEMA_TRANSLATE_MAP
 from app.database import get_session as db_get_session
 from app.main import app
 from app.models import User
@@ -265,6 +266,9 @@ def session_fixture():
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
+        # Collapse the `passport` schema to the default on SQLite (design 2026-07-15); the projection
+        # models declare {"schema": "passport"}, which has no meaning on schemaless SQLite.
+        execution_options={"schema_translate_map": SQLITE_SCHEMA_TRANSLATE_MAP},
     )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
