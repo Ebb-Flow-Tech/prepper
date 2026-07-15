@@ -35,10 +35,10 @@ ladder), the brand-app switch (``unit_app_access``) and the (user, brand, app) r
 (``unit_app_membership``); there is no per-user app grant. Units are needed too, because the
 derivation checks ``unit.status`` and the unit's org.
 
-Prepper's own ``outlets`` table (serial int PK, its own hierarchy + cycle detection) is a
-TOOL-LOCAL table and stays exactly as it is — never re-keyed to a UUID. It is linked to a
-projected brand by ``outlets.passport_unit_id``, resolved from ``PassportUnit.external_ref``
-matching ``outlets.code``.
+Outlets are Passport units, not a local table: Prepper keeps NO ``outlets`` table and no local
+role vocabulary (rules 7 + 8). A role held at a brand grants sight of that brand's outlets
+through the projected ``belongs_to_brand`` relation (see ``app/passport/access.py``), not a
+local hierarchy walk — so there is nothing here to key back to a Prepper outlet id.
 """
 
 from sqlmodel import Field, SQLModel
@@ -105,11 +105,11 @@ class PassportUnit(SQLModel, table=True):
 
     A unit is a brand, outlet or entity (``type``). Only BRANDS hold people and apps, but
     every unit is projected because the access derivation checks a brand's ``status`` and
-    ``organization_id``.
+    ``organization_id``, and an outlet resolves to its brand via ``belongs_to_brand``.
 
     ``external_ref`` is Passport's free-form pointer back into the consuming tool. Prepper
-    populates a brand's ``external_ref`` with the local ``outlets.code`` (e.g. ``"CS"``);
-    that is the ONLY link between a Passport brand UUID and a Prepper outlet id.
+    does not read it — outlet-to-brand structure comes from the projected ``unit_relation``
+    edges, not from this field.
     """
 
     __tablename__ = "unit"

@@ -108,11 +108,7 @@ def apply_entitlement(session: Session, values: dict[str, Any]) -> None:
 
 
 def apply_unit(session: Session, values: dict[str, Any]) -> None:
-    """``unit.upserted`` / ``unit.archived`` — archived is carried in ``status``.
-
-    Also (re-)resolves the brand -> outlet link, so a brand that gains an ``external_ref``
-    later still links without a backfill.
-    """
+    """``unit.upserted`` / ``unit.archived`` — archived is carried in ``status``."""
     _versioned_upsert(session, PassportUnit, values)
 
 
@@ -160,7 +156,4 @@ def remove_unit_app_access(session: Session, access_id: str) -> None:
     exactly what makes the brand confer nothing.
     """
     _delete_if_present(session, PassportUnitAppAccess, access_id)
-
-
-# --- brand -> outlet link -----------------------------------------------------------------
 
