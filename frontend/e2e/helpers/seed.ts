@@ -13,7 +13,8 @@ export interface SeedUserData {
 }
 
 export interface SeedAdminData {
-  outletId: number;
+  /** A Passport brand unit UUID the seed user manages — replaces the old local outletId. */
+  unitId: string;
   menuId?: number;
 }
 

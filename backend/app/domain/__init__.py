@@ -5,7 +5,7 @@ from app.domain.recipe_service import RecipeService
 from app.domain.instructions_service import InstructionsService
 from app.domain.costing_service import CostingService
 from app.domain.subrecipe_service import SubRecipeService, CycleDetectedError
-from app.domain.outlet_service import OutletService
+from app.domain.recipe_unit_service import RecipeUnitService
 from app.domain.tasting_session_service import TastingSessionService
 from app.domain.tasting_note_service import TastingNoteService
 from app.domain.supplier_service import SupplierService
@@ -24,7 +24,7 @@ __all__ = [
     "CostingService",
     "SubRecipeService",
     "CycleDetectedError",
-    "OutletService",
+    "RecipeUnitService",
     "TastingSessionService",
     "TastingNoteService",
     "SupplierService",

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import (
     Ingredient,
@@ -11,12 +11,17 @@ from app.models import (
     IngredientUpdate,
     FoodCategory,
     IngredientSource,
+    PassportUnit,
     SupplierIngredient,
     SupplierIngredientCreate,
     SupplierIngredientUpdate,
     SupplierIngredientRead,
 )
 from app.models.supplier import Supplier
+from app.passport import access
+
+UNIT_NOT_FOUND = "Unit not found"
+SKU_ALREADY_EXISTS = "SKU already exists"
 
 
 class IngredientService:
@@ -24,17 +29,34 @@ class IngredientService:
 
     def __init__(self, session: Session):
         self.session = session
-        self._accessible_outlet_ids_cache: dict[int, set[int]] = {}
+        self._accessible_unit_ids_cache: dict[str, set[str]] = {}
 
-    def _get_accessible_outlet_ids(self, user_outlet_id: int) -> set[int]:
-        """Cached wrapper using centralized OutletService (per-request)."""
-        if user_outlet_id not in self._accessible_outlet_ids_cache:
-            from app.domain.outlet_service import OutletService
-            outlet_service = OutletService(self.session)
-            self._accessible_outlet_ids_cache[user_outlet_id] = outlet_service.get_accessible_outlet_ids(
-                user_outlet_id
+    def _get_accessible_unit_ids(self, subject: str) -> set[str]:
+        """Every Passport unit the user may see, cached for the life of the request.
+
+        Prepper no longer walks a local outlet hierarchy: Passport owns structure, so the
+        brand->outlet expansion happens once, in ``access.accessible_unit_ids``.
+        """
+        if subject not in self._accessible_unit_ids_cache:
+            self._accessible_unit_ids_cache[subject] = access.accessible_unit_ids(
+                self.session, subject
             )
-        return self._accessible_outlet_ids_cache[user_outlet_id]
+        return self._accessible_unit_ids_cache[subject]
+
+    def _unit_names(self, unit_ids: set[str]) -> dict[str, str]:
+        """``{unit_id: name}`` for the given units, in one query.
+
+        Unit names live in the Passport projection, not on a local join row, so they are
+        batch-loaded here rather than lazily traversed per link (N+1).
+        """
+        if not unit_ids:
+            return {}
+        rows = self.session.exec(
+            select(PassportUnit.id, PassportUnit.name).where(
+                col(PassportUnit.id).in_(unit_ids)
+            )
+        ).all()
+        return {unit_id: name for unit_id, name in rows}
 
     def create_ingredient(self, data: IngredientCreate) -> Ingredient:
         """Create a new ingredient."""
@@ -258,37 +280,36 @@ class IngredientService:
     def _build_supplier_ingredient_read(
         self,
         si: SupplierIngredient,
-        accessible_outlet_ids: set[int] | None = None,
+        unit_names: dict[str, str],
+        accessible_unit_ids: set[str] | None = None,
     ) -> SupplierIngredientRead:
         """Build a SupplierIngredientRead DTO from a SupplierIngredient row.
 
-        If accessible_outlet_ids is provided, the outlet shown is the first link
-        whose outlet_id is in that set (non-admin scoping).
+        If accessible_unit_ids is provided, the unit shown is the first link whose unit_id
+        is in that set (non-admin scoping).
         """
         supplier_name = si.supplier.name if si.supplier else None
         ingredient_name = si.ingredient.name if si.ingredient else None
 
-        # Derive outlet_id and outlet_name from outlet links.
-        # When scoped to accessible outlets, pick the first matching link.
-        outlet_id = None
-        outlet_name = None
+        # Derive unit_id and unit_name from the unit links.
+        # When scoped to accessible units, pick the first matching link.
+        unit_id = None
+        unit_name = None
         if si.outlet_links:
             links = (
-                [lnk for lnk in si.outlet_links if lnk.outlet_id in accessible_outlet_ids]
-                if accessible_outlet_ids is not None
+                [lnk for lnk in si.outlet_links if lnk.unit_id in accessible_unit_ids]
+                if accessible_unit_ids is not None
                 else si.outlet_links
             )
             if links:
-                first_link = links[0]
-                outlet_id = first_link.outlet_id
-                if first_link.outlet:
-                    outlet_name = first_link.outlet.name
+                unit_id = links[0].unit_id
+                unit_name = unit_names.get(unit_id)
 
         return SupplierIngredientRead(
             id=si.id,
             ingredient_id=si.ingredient_id,
             supplier_id=si.supplier_id,
-            outlet_id=outlet_id,
+            unit_id=unit_id,
             sku=si.sku,
             pack_size=si.pack_size,
             pack_unit=si.pack_unit,
@@ -300,13 +321,25 @@ class IngredientService:
             updated_at=si.updated_at,
             supplier_name=supplier_name,
             ingredient_name=ingredient_name,
-            outlet_name=outlet_name,
+            unit_name=unit_name,
         )
 
+    def _build_reads(
+        self,
+        rows: list[SupplierIngredient],
+        accessible_unit_ids: set[str] | None = None,
+    ) -> list[SupplierIngredientRead]:
+        """Build DTOs for several rows, resolving every referenced unit name in one query."""
+        linked_unit_ids = {lnk.unit_id for si in rows for lnk in si.outlet_links}
+        unit_names = self._unit_names(linked_unit_ids)
+        return [
+            self._build_supplier_ingredient_read(si, unit_names, accessible_unit_ids)
+            for si in rows
+        ]
+
     def _load_si_with_relations(self, si_id: int) -> SupplierIngredient | None:
-        """Reload a SupplierIngredient with all relationships eagerly loaded."""
+        """Reload a SupplierIngredient with its supplier, ingredient and unit links loaded."""
         from sqlalchemy.orm import selectinload
-        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
         stmt = (
             select(SupplierIngredient)
@@ -314,23 +347,20 @@ class IngredientService:
             .options(
                 selectinload(SupplierIngredient.supplier),
                 selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet_links).selectinload(
-                    OutletSupplierIngredient.outlet
-                ),
+                selectinload(SupplierIngredient.outlet_links),
             )
         )
         return self.session.exec(stmt).first()
 
     def get_ingredient_suppliers(
-        self,
-        ingredient_id: int,
-        user_outlet_id: int | None = None,
-        is_admin: bool = False,
+        self, ingredient_id: int, subject: str
     ) -> list[SupplierIngredientRead] | None:
-        """Get all supplier links for an ingredient.
+        """Get all supplier links for an ingredient, scoped to what the user may see.
 
-        Returns None if ingredient not found, empty list if no suppliers.
-        Filters by outlet tree when user_outlet_id is provided (non-admin).
+        Returns None if the ingredient does not exist, an empty list if it has no suppliers
+        the user may see. Org admins see every link; everyone else sees only links attached
+        to a unit in ``access.accessible_unit_ids`` — no local hierarchy walk, Passport's
+        brand->outlet structure decides.
         """
         ingredient = self.get_ingredient(ingredient_id)
         if not ingredient:
@@ -345,37 +375,35 @@ class IngredientService:
             .options(
                 selectinload(SupplierIngredient.supplier),
                 selectinload(SupplierIngredient.ingredient),
-                selectinload(SupplierIngredient.outlet_links).selectinload(
-                    OutletSupplierIngredient.outlet
-                ),
+                selectinload(SupplierIngredient.outlet_links),
             )
         )
 
-        accessible: set[int] | None = None
-        if not is_admin:
-            if user_outlet_id is None:
+        accessible: set[str] | None = None
+        if not access.is_org_admin(self.session, subject):
+            accessible = self._get_accessible_unit_ids(subject)
+            if not accessible:
                 return []
-            accessible = self._get_accessible_outlet_ids(user_outlet_id)
-            # Filter to supplier_ingredients that have at least one outlet link in accessible set
+            # Keep only links attached to at least one unit the user may see
             statement = statement.where(
-                SupplierIngredient.id.in_(
+                col(SupplierIngredient.id).in_(
                     select(OutletSupplierIngredient.supplier_ingredient_id).where(
-                        OutletSupplierIngredient.outlet_id.in_(accessible)
+                        col(OutletSupplierIngredient.unit_id).in_(accessible)
                     )
                 )
             )
 
-        rows = self.session.exec(statement).all()
-        return [self._build_supplier_ingredient_read(si, accessible_outlet_ids=accessible) for si in rows]
+        rows = list(self.session.exec(statement).all())
+        return self._build_reads(rows, accessible_unit_ids=accessible)
 
     def add_ingredient_supplier(
         self, ingredient_id: int, data: SupplierIngredientCreate
     ) -> SupplierIngredientRead | None | str:
-        """Add a supplier link to an ingredient.
+        """Add a supplier link to an ingredient, optionally scoped to a Passport unit.
 
         Returns:
             SupplierIngredientRead on success, None if ingredient/supplier not found,
-            or an error string if a duplicate link or SKU exists.
+            or an error string if the SKU is a duplicate or the unit is unknown.
         """
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
@@ -383,22 +411,25 @@ class IngredientService:
         if not ingredient:
             return None
 
-        # Verify supplier exists
         supplier = self.session.get(Supplier, data.supplier_id)
         if not supplier:
             return None
 
-        # Check for duplicate SKU
         if data.sku:
             sku_exists = self.session.exec(
-                select(SupplierIngredient).where(
-                    SupplierIngredient.sku == data.sku,
-                )
+                select(SupplierIngredient).where(SupplierIngredient.sku == data.sku)
             ).first()
             if sku_exists:
-                return "SKU already exists"
+                return SKU_ALREADY_EXISTS
 
-        # If this is marked as preferred, unset preferred on others
+        # Resolve the unit BEFORE writing anything: the link row must carry the unit's org
+        # (rule 9 — every scoped row is org-stamped) and an unknown unit is a client error.
+        unit: PassportUnit | None = None
+        if data.unit_id is not None:
+            unit = self.session.get(PassportUnit, data.unit_id)
+            if unit is None:
+                return UNIT_NOT_FOUND
+
         if data.is_preferred:
             self._unset_preferred(ingredient_id)
 
@@ -416,23 +447,30 @@ class IngredientService:
         self.session.add(si)
         self.session.flush()  # get si.id before committing
 
-        # Create outlet link if outlet_id provided
-        if data.outlet_id is not None:
-            outlet_link = OutletSupplierIngredient(
-                supplier_ingredient_id=si.id,
-                outlet_id=data.outlet_id,
+        if unit is not None:
+            self.session.add(
+                OutletSupplierIngredient(
+                    supplier_ingredient_id=si.id,
+                    unit_id=unit.id,
+                    organization_id=unit.organization_id,
+                )
             )
-            self.session.add(outlet_link)
 
         self.session.commit()
 
         refreshed = self._load_si_with_relations(si.id)
-        return self._build_supplier_ingredient_read(refreshed) if refreshed else None
+        if not refreshed:
+            return None
+        return self._build_reads([refreshed])[0]
 
     def update_ingredient_supplier(
         self, supplier_ingredient_id: int, data: SupplierIngredientUpdate
-    ) -> SupplierIngredientRead | None:
-        """Update a supplier-ingredient link."""
+    ) -> SupplierIngredientRead | None | str:
+        """Update a supplier-ingredient link.
+
+        Returns None if the link does not exist, or an error string if a supplied unit_id
+        names no Passport unit.
+        """
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
         si = self.session.get(SupplierIngredient, supplier_ingredient_id)
@@ -441,25 +479,30 @@ class IngredientService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # Handle outlet_id separately (lives in OutletSupplierIngredient)
-        new_outlet_id = update_data.pop("outlet_id", None)
-        if new_outlet_id is not None:
-            # Replace the first outlet link (or add one if none exists)
+        # unit_id is not a column on SupplierIngredient — it lives on the link row.
+        new_unit_id = update_data.pop("unit_id", None)
+        if new_unit_id is not None:
+            unit = self.session.get(PassportUnit, new_unit_id)
+            if unit is None:
+                return UNIT_NOT_FOUND
             existing_link = self.session.exec(
                 select(OutletSupplierIngredient).where(
                     OutletSupplierIngredient.supplier_ingredient_id == supplier_ingredient_id
                 )
             ).first()
             if existing_link:
-                existing_link.outlet_id = new_outlet_id
+                existing_link.unit_id = unit.id
+                existing_link.organization_id = unit.organization_id
                 self.session.add(existing_link)
             else:
-                self.session.add(OutletSupplierIngredient(
-                    supplier_ingredient_id=supplier_ingredient_id,
-                    outlet_id=new_outlet_id,
-                ))
+                self.session.add(
+                    OutletSupplierIngredient(
+                        supplier_ingredient_id=supplier_ingredient_id,
+                        unit_id=unit.id,
+                        organization_id=unit.organization_id,
+                    )
+                )
 
-        # If setting as preferred, unset others first
         if update_data.get("is_preferred"):
             self._unset_preferred(si.ingredient_id)
 
@@ -471,7 +514,9 @@ class IngredientService:
         self.session.commit()
 
         refreshed = self._load_si_with_relations(si.id)
-        return self._build_supplier_ingredient_read(refreshed) if refreshed else None
+        if not refreshed:
+            return None
+        return self._build_reads([refreshed])[0]
 
     def remove_ingredient_supplier(self, supplier_ingredient_id: int) -> bool:
         """Remove a supplier-ingredient link."""
@@ -484,16 +529,12 @@ class IngredientService:
         return True
 
     def get_preferred_supplier(
-        self,
-        ingredient_id: int,
-        user_outlet_id: int | None = None,
-        is_admin: bool = False,
+        self, ingredient_id: int, subject: str
     ) -> SupplierIngredientRead | None:
-        """Get the preferred supplier for an ingredient.
+        """Get the preferred supplier for an ingredient, scoped to what the user may see.
 
-        Returns the supplier link marked as preferred, or the first one
-        if none is marked, or None if no suppliers exist.
-        Filters by outlet tree when user_outlet_id is provided (non-admin).
+        Returns the link marked preferred, else the first one, else None. Org admins are
+        unscoped; everyone else only sees links attached to a unit they have access to.
         """
         ingredient = self.get_ingredient(ingredient_id)
         if not ingredient:
@@ -503,33 +544,30 @@ class IngredientService:
 
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
-        accessible: set[int] | None = None
-        if not is_admin:
-            if user_outlet_id is None:
+        accessible: set[str] | None = None
+        if not access.is_org_admin(self.session, subject):
+            accessible = self._get_accessible_unit_ids(subject)
+            if not accessible:
                 return None
-            accessible = self._get_accessible_outlet_ids(user_outlet_id)
 
-        def _outlet_filter(stmt):
-            if accessible is not None:
-                return stmt.where(
-                    SupplierIngredient.id.in_(
-                        select(OutletSupplierIngredient.supplier_ingredient_id).where(
-                            OutletSupplierIngredient.outlet_id.in_(accessible)
-                        )
+        def _unit_filter(stmt):
+            if accessible is None:
+                return stmt
+            return stmt.where(
+                col(SupplierIngredient.id).in_(
+                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                        col(OutletSupplierIngredient.unit_id).in_(accessible)
                     )
                 )
-            return stmt
+            )
 
         base_options = (
             selectinload(SupplierIngredient.supplier),
             selectinload(SupplierIngredient.ingredient),
-            selectinload(SupplierIngredient.outlet_links).selectinload(
-                OutletSupplierIngredient.outlet
-            ),
+            selectinload(SupplierIngredient.outlet_links),
         )
 
-        # Try preferred first
-        statement = _outlet_filter(
+        statement = _unit_filter(
             select(SupplierIngredient)
             .where(
                 SupplierIngredient.ingredient_id == ingredient_id,
@@ -539,17 +577,18 @@ class IngredientService:
         )
         preferred = self.session.exec(statement).first()
         if preferred:
-            return self._build_supplier_ingredient_read(preferred, accessible_outlet_ids=accessible)
+            return self._build_reads([preferred], accessible_unit_ids=accessible)[0]
 
-        # Fall back to first supplier
-        statement = _outlet_filter(
+        statement = _unit_filter(
             select(SupplierIngredient)
             .where(SupplierIngredient.ingredient_id == ingredient_id)
             .options(*base_options)
             .limit(1)
         )
         first = self.session.exec(statement).first()
-        return self._build_supplier_ingredient_read(first, accessible_outlet_ids=accessible) if first else None
+        if not first:
+            return None
+        return self._build_reads([first], accessible_unit_ids=accessible)[0]
 
     def _unset_preferred(self, ingredient_id: int) -> None:
         """Unset is_preferred on all supplier links for an ingredient."""

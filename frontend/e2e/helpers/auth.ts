@@ -2,15 +2,17 @@ import type { Page } from '@playwright/test';
 
 const AUTH_KEY = 'prepper_auth';
 
+/**
+ * Auth state carries NO role. Prepper has no `user_type`/`is_manager`/`outlet_id` any more —
+ * roles live in Passport and are read per-brand. This mirrors the app's stored auth shape
+ * (see `src/lib/store.tsx`).
+ */
 export interface AuthState {
   userId: string;
   jwt: string;
-  userType: 'normal' | 'admin';
   refreshToken: string;
   username: string;
   email: string;
-  isManager: boolean;
-  outletId: number | null;
 }
 
 /** Inject auth state directly into localStorage without going through login UI */

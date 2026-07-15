@@ -1,11 +1,11 @@
 """Tests for authentication endpoints."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models import User, UserType
+from app.models import User
 
 
 class MockSupabaseUser:
@@ -55,6 +55,10 @@ def mock_supabase_client(monkeypatch):
         supabase_url = "https://test.supabase.co"
         supabase_key = "test_key"
         supabase_jwt_secret = None
+        # SSO issuer cutover is dark by default — mirrors the real Settings so the Passport
+        # verification path is inert in these tests (they exercise the Prepper issuer).
+        sso_enabled = False
+        passport_supabase_url = None
 
     monkeypatch.setattr(
         "app.domain.supabase_auth_service.get_settings",
@@ -243,7 +247,6 @@ def test_login_success(client: TestClient, mock_supabase_client, session):
         id="user-admin-001",
         email="admin@prepper.com",
         username="admin",
-        user_type=UserType.ADMIN,
     )
     session.add(user)
     session.commit()
@@ -295,7 +298,6 @@ def test_login_creates_user_on_first_login(
         id="user-admin-001",
         email="admin@prepper.com",
         username="admin",
-        user_type=UserType.ADMIN,
     )
     session.add(user)
     session.commit()
@@ -324,7 +326,6 @@ def test_register_success(client: TestClient, mock_supabase_client):
             "email": "newuser@prepper.com",
             "password": "password123",
             "username": "newuser",
-            "user_type": "normal",
         },
     )
 
@@ -333,7 +334,6 @@ def test_register_success(client: TestClient, mock_supabase_client):
     assert data["user"]["id"] == "user-new-003"
     assert data["user"]["email"] == "newuser@prepper.com"
     assert data["user"]["username"] == "newuser"
-    assert data["user"]["user_type"] == "normal"
     assert data["access_token"] == "valid_token_new"
     assert data["refresh_token"] == "refresh_token_new"
 
@@ -429,9 +429,9 @@ def test_logout_invalid_token(client: TestClient, mock_supabase_client):
 @pytest.fixture
 def auth_client(session, mock_supabase_client):
     """Client without get_current_user override — uses real auth flow for /me tests."""
-    from app.main import app
     from app.api.deps import get_session
     from app.database import get_session as db_get_session
+    from app.main import app
 
     def get_session_override():
         return session
@@ -452,7 +452,6 @@ def test_get_current_user_success(auth_client: TestClient, session):
         id="user-admin-001",
         email="admin@prepper.com",
         username="admin",
-        user_type=UserType.ADMIN,
     )
     session.add(user)
     session.commit()
@@ -467,7 +466,6 @@ def test_get_current_user_success(auth_client: TestClient, session):
     assert data["id"] == "user-admin-001"
     assert data["email"] == "admin@prepper.com"
     assert data["username"] == "admin"
-    assert data["user_type"] == "admin"
 
 
 def test_get_current_user_missing_token(auth_client: TestClient):
@@ -514,7 +512,6 @@ def test_oauth_complete_existing_user(auth_client: TestClient, session):
         id="user-admin-001",
         email="admin@prepper.com",
         username="admin",
-        user_type=UserType.ADMIN,
     )
     session.add(user)
     session.commit()
@@ -529,7 +526,6 @@ def test_oauth_complete_existing_user(auth_client: TestClient, session):
     assert data["id"] == "user-admin-001"
     assert data["email"] == "admin@prepper.com"
     assert data["username"] == "admin"
-    assert data["user_type"] == "admin"
 
 
 def test_oauth_complete_provisions_new_user_with_google_metadata(
@@ -548,9 +544,6 @@ def test_oauth_complete_provisions_new_user_with_google_metadata(
     assert data["id"] == "user-google-010"
     assert data["email"] == "alice@gmail.com"
     assert data["username"] == "Alice Example"
-    assert data["user_type"] == "normal"
-    assert data["is_manager"] is False
-    assert data["outlet_id"] is None
 
     # Row actually persisted
     row = session.get(UserModel, "user-google-010")
@@ -583,7 +576,6 @@ def test_oauth_complete_email_conflict_returns_409(
             id="user-admin-001",
             email="admin@prepper.com",
             username="admin",
-            user_type=UserType.ADMIN,
         )
     )
     session.commit()

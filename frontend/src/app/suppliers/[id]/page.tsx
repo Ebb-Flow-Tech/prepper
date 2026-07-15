@@ -12,9 +12,8 @@ import {
   useAddSupplierIngredient,
   useUpdateSupplierIngredient,
   useRemoveSupplierIngredient,
-  useOutlets,
 } from '@/lib/hooks';
-import { useAppState } from '@/lib/store';
+import { BrandSelect } from '@/components/units';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
@@ -36,7 +35,7 @@ interface IngredientRowEdit {
   pack_unit?: string;
   price_per_pack?: string;
   is_preferred?: boolean;
-  outlet_id?: number;
+  unit_id?: string;
 }
 
 interface SupplierPageProps {
@@ -48,15 +47,10 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const supplierId = parseInt(id, 10);
   const router = useRouter();
 
-  const { outletId, userType } = useAppState();
-  const isAdmin = userType === 'admin';
-
   const { data: supplier, isLoading, error } = useSupplier(supplierId);
   const { data: availableIngredientsData } = useIngredients({ active_only: false, page_size: 30 }); // Include inactive too
   const availableIngredients = availableIngredientsData?.items;
   const { data: supplierIngredients = [] } = useSupplierIngredients(supplierId);
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items ?? [];
 
   const updateSupplierMutation = useUpdateSupplier();
   const deactivateSupplierMutation = useDeactivateSupplier();
@@ -75,7 +69,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
     unit_cost: '',
     pack_unit: '',
     is_preferred: false,
-    outlet_id: outletId ? outletId.toString() : '',
+    unit_id: '',
   });
 
   const handleUpdateSupplier = (data: { name?: string; code?: string | null; address?: string | null; phone_number?: string | null; email?: string | null; shipping_company_name?: string | null }) => {
@@ -120,7 +114,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
   const handleAddIngredient = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.ingredient_id || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.outlet_id) {
+    if (!formData.ingredient_id || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.unit_id) {
       return;
     }
 
@@ -137,7 +131,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
         data: {
           ingredient_id: parseInt(formData.ingredient_id, 10),
           supplier_id: supplierId,
-          outlet_id: parseInt(formData.outlet_id, 10),
+          unit_id: formData.unit_id,
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
@@ -155,7 +149,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
             unit_cost: '',
             pack_unit: '',
             is_preferred: false,
-            outlet_id: outletId ? outletId.toString() : '',
+            unit_id: '',
           });
           setShowAddModal(false);
           toast.success(`${selectedIngredient?.name || 'Ingredient'} added`);
@@ -369,21 +363,13 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Outlet
+                        Brand
                       </label>
-                      <Select
-                        value={formData.outlet_id}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, outlet_id: e.target.value }))
+                      <BrandSelect
+                        value={formData.unit_id}
+                        onChange={(unitId) =>
+                          setFormData((prev) => ({ ...prev, unit_id: unitId }))
                         }
-                        disabled={!!outletId}
-                        options={[
-                          { value: '', label: 'Select outlet...' },
-                          ...outlets.map((o) => ({
-                            value: o.id.toString(),
-                            label: o.name,
-                          })),
-                        ]}
                       />
                     </div>
                     <div>
@@ -479,7 +465,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                         type="submit"
                         disabled={
                           !formData.ingredient_id ||
-                          !formData.outlet_id ||
+                          !formData.unit_id ||
                           !formData.pack_unit ||
                           !formData.pack_size ||
                           !formData.price_per_pack ||
@@ -503,7 +489,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                             Ingredient
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Outlet
+                            Brand
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
                             SKU
@@ -538,7 +524,7 @@ export default function SupplierPage({ params }: SupplierPageProps) {
                               </Link>
                             </td>
                             <td className="py-3 px-2 text-muted-foreground text-xs">
-                              {ingredient.outlet_name ?? '-'}
+                              {ingredient.unit_name ?? '-'}
                             </td>
                             <td className="py-3 px-2 text-muted-foreground font-mono text-xs">
                               {editingIngredient === ingredient.id ? (

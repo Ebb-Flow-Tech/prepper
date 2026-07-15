@@ -3,7 +3,8 @@
 from collections.abc import Generator
 
 from fastapi import Depends, Header, HTTPException, status
-from sqlmodel import Session
+from sqlalchemy import func
+from sqlmodel import Session, select
 
 from app.database import engine
 from app.domain.supabase_auth_service import get_auth_service
@@ -51,8 +52,24 @@ def get_current_user(
     token = authorization.replace("Bearer ", "")
     auth_service = get_auth_service()
 
-    # Verify token and get user ID
-    user_id = auth_service.verify_token(token)
+    # SSO issuer cutover (P3, dark). If the token is signed by PASSPORT's Supabase project, resolve
+    # the local user by its VERIFIED email — the shared issuer's sub is not this app's sub, and
+    # `platform_user.supabase_id` is never synced, so email is the only key a consumer holds. This
+    # ADDS an accepted issuer; a Prepper-issued token still resolves by the fallback below, so 5.1
+    # is safe to ship off and flip on. See passport docs/specs/2026-07-15-sso-issuer-cutover-*.
+    user_id: str | None = None
+    passport_email = auth_service.verify_passport_email(token)
+    if passport_email:
+        matched = session.exec(
+            select(User).where(func.lower(User.email) == passport_email.lower())
+        ).first()
+        if matched is not None:
+            user_id = matched.id
+        # A verified member with no local account yet is provisioned at login (§5.2), not here —
+        # in the dark phase they simply fall through to the primary issuer and 401 if unknown.
+
+    if user_id is None:
+        user_id = auth_service.verify_token(token)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

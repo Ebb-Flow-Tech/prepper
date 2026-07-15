@@ -19,7 +19,6 @@ from app.models import (
     User,
     UserCreate,
     UserRead,
-    UserType,
 )
 from app.passport.identity import report_identity_link_safe
 
@@ -128,14 +127,14 @@ def register(
             detail="Authentication service unavailable",
         )
 
-    # Create user in database
+    # Create user in database. The row carries NO role and NO unit: registration cannot grant
+    # anything. Roles live in Passport and are read per-brand at the point of the check, so a
+    # self-registering user starts with access to nothing until Passport says otherwise.
     try:
         user_create = UserCreate(
             id=supabase_user_id,
             email=data.email,
             username=data.username,
-            user_type=UserType(data.user_type),
-            outlet_id=data.outlet_id,
         )
         user = user_service.create_user(user_create)
     except Exception as e:
@@ -185,9 +184,9 @@ def oauth_complete(
     user's Supabase profile (email + `user_metadata`) and either return
     the existing DB row or create one seeded from the Google profile.
 
-    Defaults for new users: user_type=normal, is_manager=False, outlet_id=None.
-    Username is taken from `user_metadata.full_name`, `user_metadata.name`,
-    or the email local-part — in that order.
+    A new row carries no role and no unit — Passport owns both, and they are read per-brand at
+    the point of the check. Username is taken from `user_metadata.full_name`,
+    `user_metadata.name`, or the email local-part — in that order.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -261,9 +260,6 @@ def oauth_complete(
                 id=user_id,
                 email=email,
                 username=username,
-                user_type=UserType.NORMAL,
-                is_manager=False,
-                outlet_id=None,
             )
         )
     except ValueError:

@@ -37,13 +37,11 @@ export function BuyCatalogueImportModal({ isOpen, onClose }: BuyCatalogueImportM
       const res = await importIngredientsBuyCatalogue(file);
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['outlets'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       const parts = [
         `${res.ingredients_created} ingredient${res.ingredients_created !== 1 ? 's' : ''} created`,
         ...(res.ingredients_updated > 0 ? [`${res.ingredients_updated} updated`] : []),
         `${res.suppliers_created} supplier${res.suppliers_created !== 1 ? 's' : ''} created`,
-        `${res.outlets_created} outlet${res.outlets_created !== 1 ? 's' : ''} created`,
         `${res.categories_created} categor${res.categories_created !== 1 ? 'ies' : 'y'} created`,
         `${res.supplier_ingredients_created} supplier link${res.supplier_ingredients_created !== 1 ? 's' : ''} created`,
         ...(res.supplier_ingredients_updated > 0 ? [`${res.supplier_ingredients_updated} pricing record${res.supplier_ingredients_updated !== 1 ? 's' : ''} updated`] : []),

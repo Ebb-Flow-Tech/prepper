@@ -15,20 +15,22 @@ export function getCanvasSaveHandler(): (() => Promise<void>) | null {
   return _canvasSaveHandler;
 }
 
+/**
+ * Auth state carries NO role. Prepper has no `user_type`/`is_manager` any more: roles live in
+ * Passport and are read PER BRAND (`usePassportBrands()` -> `my_role`). A cached global flag is
+ * exactly the bug that removal fixed — do not add one back.
+ */
 interface StoredAuth {
   userId: string | null;
   jwt: string | null;
-  userType: 'normal' | 'admin' | null;
   refreshToken: string | null;
   username: string | null;
   email: string | null;
-  isManager: boolean;
-  outletId: number | null;
 }
 
 function getStoredAuth(): StoredAuth {
   if (typeof window === 'undefined') {
-    return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null };
+    return { userId: null, jwt: null, refreshToken: null, username: null, email: null };
   }
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -38,19 +40,19 @@ function getStoredAuth(): StoredAuth {
   } catch {
     // Ignore parse errors
   }
-  return { userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null };
+  return { userId: null, jwt: null, refreshToken: null, username: null, email: null };
 }
 
 function setStoredAuth(auth: StoredAuth) {
   if (typeof window === 'undefined') return;
-  if (auth.userId && auth.jwt && auth.userType && auth.username) {
+  if (auth.userId && auth.jwt && auth.username) {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
   } else {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }
 }
 
-export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'outlets' | 'instructions' | 'tasting' | 'versions';
+export type CanvasTab = 'canvas' | 'overview' | 'ingredients' | 'costs' | 'units' | 'instructions' | 'tasting' | 'versions';
 export type IngredientTab = 'ingredients' | 'products' | 'categories' | 'allergens' | 'suppliers';
 export type RecipeTab = 'management' | 'categories';
 export type CanvasViewMode = 'grid' | 'list' | 'table';
@@ -66,12 +68,9 @@ interface AppState {
   canvasViewMode: CanvasViewMode;
   userId: string | null;
   jwt: string | null;
-  userType: 'normal' | 'admin' | null;
   refreshToken: string | null;
   username: string | null;
   email: string | null;
-  isManager: boolean;
-  outletId: number | null;
 }
 
 interface AppContextValue extends AppState {
@@ -85,13 +84,10 @@ interface AppContextValue extends AppState {
   setCanvasViewMode: (mode: CanvasViewMode) => void;
   setUserId: (id: string | null) => void;
   setJwt: (jwt: string | null) => void;
-  setUserType: (userType: 'normal' | 'admin' | null) => void;
   setRefreshToken: (token: string | null) => void;
   setUsername: (username: string | null) => void;
   setEmail: (email: string | null) => void;
-  setIsManager: (isManager: boolean) => void;
-  setOutletId: (outletId: number | null) => void;
-  login: (userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager?: boolean, outletId?: number | null) => void;
+  login: (userId: string, jwt: string, refreshToken: string, username: string, email: string) => void;
   logout: () => void;
 }
 
@@ -110,12 +106,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     canvasViewMode: 'grid',
     userId: null,
     jwt: null,
-    userType: null,
     refreshToken: null,
     username: null,
-    email: null,
-    isManager: false,
-    outletId: null
+    email: null
   });
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -126,12 +119,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       userId: storedAuth.userId,
       jwt: storedAuth.jwt,
-      userType: storedAuth.userType,
       refreshToken: storedAuth.refreshToken,
       username: storedAuth.username,
-      email: storedAuth.email,
-      isManager: storedAuth.isManager,
-      outletId: storedAuth.outletId
+      email: storedAuth.email
     }));
     setIsHydrated(true);
   }, []);
@@ -143,12 +133,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         userId: null,
         jwt: null,
-        userType: null,
         refreshToken: null,
         username: null,
-        email: null,
-        isManager: false,
-        outletId: null
+        email: null
       }));
       // Clear TanStack Query cache so next user doesn't see stale data
       getQueryClient()?.clear();
@@ -161,14 +148,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStoredAuth({
       userId: state.userId,
       jwt: state.jwt,
-      userType: state.userType,
       refreshToken: state.refreshToken,
       username: state.username,
-      email: state.email,
-      isManager: state.isManager,
-      outletId: state.outletId
+      email: state.email
     });
-  }, [state.userId, state.jwt, state.userType, state.refreshToken, state.username, state.email, state.isManager, state.outletId, isHydrated]);
+  }, [state.userId, state.jwt, state.refreshToken, state.username, state.email, isHydrated]);
 
   const selectRecipe = useCallback((id: number | null) => {
     setState((prev) => ({ ...prev, selectedRecipeId: id }));
@@ -210,10 +194,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, jwt }));
   }, []);
 
-  const setUserType = useCallback((userType: 'normal' | 'admin' | null) => {
-    setState((prev) => ({ ...prev, userType }));
-  }, []);
-
   const setRefreshToken = useCallback((token: string | null) => {
     setState((prev) => ({ ...prev, refreshToken: token }));
   }, []);
@@ -226,22 +206,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, email }));
   }, []);
 
-  const setIsManager = useCallback((isManager: boolean) => {
-    setState((prev) => ({ ...prev, isManager }));
-  }, []);
-
-  const setOutletId = useCallback((outletId: number | null) => {
-    setState((prev) => ({ ...prev, outletId }));
-  }, []);
-
-  const login = useCallback((userId: string, jwt: string, userType: 'normal' | 'admin', refreshToken: string, username: string, email: string, isManager: boolean = false, outletId: number | null = null) => {
+  const login = useCallback((userId: string, jwt: string, refreshToken: string, username: string, email: string) => {
     // Clear any data cached from previous user session before setting new auth
     getQueryClient()?.clear();
-    setState((prev) => ({ ...prev, userId, jwt, userType, refreshToken, username, email, isManager, outletId }));
+    setState((prev) => ({ ...prev, userId, jwt, refreshToken, username, email }));
   }, []);
 
   const logout = useCallback(() => {
-    setState((prev) => ({ ...prev, userId: null, jwt: null, userType: null, refreshToken: null, username: null, email: null, isManager: false, outletId: null }));
+    setState((prev) => ({ ...prev, userId: null, jwt: null, refreshToken: null, username: null, email: null }));
     // Clear TanStack Query cache so the next user doesn't see stale data
     getQueryClient()?.clear();
   }, []);
@@ -260,12 +232,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCanvasViewMode,
         setUserId,
         setJwt,
-        setUserType,
         setRefreshToken,
         setUsername,
         setEmail,
-        setIsManager,
-        setOutletId,
         login,
         logout
       }}

@@ -174,21 +174,16 @@ interface AddSubRecipeFormProps {
   existingChildIds: number[];
   recipes: Recipe[];
   userId: string | null;
-  userType: string | null;
 }
 
-function AddSubRecipeForm({ recipeId, existingChildIds, recipes, userId, userType }: AddSubRecipeFormProps) {
+function AddSubRecipeForm({ recipeId, existingChildIds, recipes, userId }: AddSubRecipeFormProps) {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState<SubRecipeUnit>('portion');
   const addSubRecipe = useAddSubRecipe();
 
-  // Filter recipes based on user access:
-  // - Admins see all recipes
-  // - Others see only public recipes or recipes they own
-  const accessibleRecipes = userType === 'admin'
-    ? recipes
-    : recipes.filter((r) => r.is_public || r.owner_id === userId);
+  // Public recipes, or ones this user owns
+  const accessibleRecipes = recipes.filter((r) => r.is_public || r.owner_id === userId);
 
   // Further filter out the current recipe and already added sub-recipes
   const availableRecipes = accessibleRecipes.filter(
@@ -301,7 +296,7 @@ function AddSubRecipeForm({ recipeId, existingChildIds, recipes, userId, userTyp
 }
 
 export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
-  const { userId, userType } = useAppState();
+  const { userId } = useAppState();
   const { data: subRecipes, isLoading, error } = useSubRecipes(recipeId);
   const { data: recipesData } = useRecipes({ page_size: 30 });
   const { data: costing } = useCosting(recipeId);
@@ -422,7 +417,6 @@ export function SubRecipesList({ recipeId, canEdit }: SubRecipesListProps) {
           existingChildIds={existingChildIds}
           recipes={recipes}
           userId={userId}
-          userType={userType}
         />
       )}
 

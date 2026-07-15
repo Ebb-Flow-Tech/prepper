@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     # supabase_service_role_key: str | None = None
     supabase_jwt_secret: str | None = None
 
+    # SSO issuer cutover (P3, dark-launched). When enabled, a token signed by PASSPORT's
+    # Supabase project is accepted and the local user is resolved by the token's VERIFIED
+    # email (platform_user.supabase_id is never synced, so sub-matching is impossible in a
+    # consumer). Prepper's own project stays a valid issuer too until 5.3 — this only ADDS an
+    # accepted issuer, so it is safe to ship off and flip on. See
+    # passport docs/specs/2026-07-15-sso-issuer-cutover-prepper-pilot-design.md.
+    passport_supabase_url: str | None = None
+    sso_enabled: bool = False
+
     # Anthropic API
     anthropic_api_key: str | None = None
 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { SearchInput, Skeleton, PageHeader, Button } from '@/components/ui';
-import { useUsers, useUpdateUser, useOutlets } from '@/lib/hooks';
+import { useUsers, useUpdateUser } from '@/lib/hooks';
 import { AddUserModal } from './AddUserModal';
 import { toast } from 'sonner';
 
@@ -13,8 +13,6 @@ export function UserManagementTab() {
   const [editingPhoneValue, setEditingPhoneValue] = useState('');
   const updateUser = useUpdateUser();
   const { data: users, isLoading, error } = useUsers();
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items;
 
   const filteredUsers = useMemo(() => {
     if (!users) return [];
@@ -30,40 +28,12 @@ export function UserManagementTab() {
     });
   }, [users, search]);
 
-  const handleOutletChange = (userId: string, outletId: number | null) => {
-    updateUser.mutate(
-      { userId, data: { outlet_id: outletId } },
-      {
-        onSuccess: () => {
-          toast.success('User outlet updated');
-        },
-        onError: () => {
-          toast.error('Failed to update user');
-        },
-      }
-    );
-  };
-
   const handlePhoneChange = (userId: string, phoneNumber: string) => {
     updateUser.mutate(
       { userId, data: { phone_number: phoneNumber || null } },
       {
         onSuccess: () => {
           toast.success('User phone number updated');
-        },
-        onError: () => {
-          toast.error('Failed to update user');
-        },
-      }
-    );
-  };
-
-  const handleManagerToggle = (userId: string, isManager: boolean) => {
-    updateUser.mutate(
-      { userId, data: { is_manager: !isManager } },
-      {
-        onSuccess: () => {
-          toast.success(!isManager ? 'Manager status granted' : 'Manager status revoked');
         },
         onError: () => {
           toast.error('Failed to update user');
@@ -86,8 +56,8 @@ export function UserManagementTab() {
     <div className="h-full w-full overflow-auto">
       <div className="p-6 max-w-7xl mx-auto">
         <PageHeader
-          title="Users"
-          description="Manage user roles and outlet assignments"
+          title="Accounts"
+          description="Login accounts and contact details. Roles are assigned per brand in the Brand Roles tab — Passport owns them, Prepper cannot set them here."
         />
 
         {/* Toolbar */}
@@ -138,15 +108,6 @@ export function UserManagementTab() {
                   <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
                     Phone
                   </th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Manager
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Branch
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -194,58 +155,6 @@ export function UserManagementTab() {
                         >
                           {user.phone_number || '—'}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 text-sm">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          user.user_type === 'admin'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                        }`}
-                      >
-                        {user.user_type === 'admin' ? 'Admin' : 'Normal'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-sm">
-                      {user.user_type === 'admin' ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <button
-                          onClick={() => handleManagerToggle(user.id, user.is_manager)}
-                          disabled={updateUser.isPending}
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            user.is_manager
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-800'
-                              : 'bg-secondary text-secondary-foreground hover:bg-muted'
-                          }`}
-                        >
-                          {user.is_manager ? 'Manager' : 'Not Manager'}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 text-sm">
-                      {user.user_type === 'admin' ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <select
-                          value={user.outlet_id || ''}
-                          onChange={(e) =>
-                            handleOutletChange(
-                              user.id,
-                              e.target.value ? parseInt(e.target.value) : null
-                            )
-                          }
-                          disabled={updateUser.isPending}
-                          className="px-2 py-1 text-sm border border-input rounded bg-card text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="">None</option>
-                          {outlets?.map((outlet) => (
-                            <option key={outlet.id} value={outlet.id}>
-                              {outlet.name}
-                            </option>
-                          ))}
-                        </select>
                       )}
                     </td>
                   </tr>

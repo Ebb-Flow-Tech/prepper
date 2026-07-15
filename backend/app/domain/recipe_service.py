@@ -1,29 +1,40 @@
-"""Recipe lifecycle and ingredient management operations."""
+"""Recipe lifecycle and ingredient management operations.
+
+Visibility is derived from the Passport projection (``app.passport.access``), never from a
+column on the ``users`` row. Prepper no longer owns an ``outlets`` table, so the old
+"load the user's outlet, add its parent, filter on those two ids" walk is gone: the brands a
+user holds a role at — and the outlets under them — are computed once by
+``access.accessible_unit_ids`` and matched against ``recipe_outlets.unit_id``.
+"""
 
 from datetime import datetime
 
-from sqlalchemy.orm import selectinload, joinedload
-from sqlmodel import Session, select
+from sqlalchemy import false, func, or_
+from sqlalchemy.orm import selectinload
+from sqlmodel import Session, col, select
 
 from app.models import (
+    AllergenInfo,
+    Ingredient,
+    IngredientAllergen,
+    IngredientNested,
     Recipe,
     RecipeCreate,
     RecipeIngredient,
     RecipeIngredientCreate,
+    RecipeIngredientRead,
     RecipeIngredientUpdate,
     RecipeOutlet,
     RecipeRecipe,
     RecipeStatus,
     RecipeUpdate,
     User,
-    UserType,
-    Ingredient,
-    IngredientAllergen,
-    Allergen,
-    RecipeIngredientRead,
-    IngredientNested,
-    AllergenInfo,
 )
+from app.models.recipe_category import RecipeCategory
+from app.models.recipe_recipe_category import RecipeRecipeCategory
+from app.passport import access
+
+_FORK_NAME_SUFFIX = "(Fork)"
 
 
 class RecipeService:
@@ -42,149 +53,173 @@ class RecipeService:
         self.session.refresh(recipe)
         return recipe
 
-    def list_recipes(
-        self, status: RecipeStatus | None = None, current_user: User | None = None
-    ) -> list[Recipe]:
-        """List all recipes, optionally filtering by status and user permissions.
+    def _visible_recipe_conditions(self, current_user: User) -> list:  # type: ignore[type-arg]
+        """The OR-conditions that make a recipe visible to ``current_user``.
 
-        Access control for non-admin users:
-        - Can see recipes they created (owner_id)
-        - Can see public recipes (is_public)
-        - Can see recipes assigned to their outlet:
-          - If user is in parent outlet (brand): only their outlet's recipes
-          - If user is in child outlet (location): their outlet + parent outlet's recipes
+        A recipe is visible when the user owns it, when it is public, or when it is assigned
+        to a unit the user may see. The unit set comes from Passport: the brands the user
+        holds a role at, plus the outlets under those brands.
 
-        Admin users see all recipes.
+        **Fail closed.** An empty unit set means the user holds no role at any brand, so the
+        unit condition is simply omitted — they fall back to their own and public recipes.
+        The old model's `outlet_id IS NULL` = "see everything" is deliberately NOT preserved;
+        it was an artefact of the local outlets table. An org Owner/Admin needs no special
+        case here — Passport's ladder gives them Manager at every brand, so their unit set is
+        populated automatically.
         """
-        from sqlalchemy import or_
-
-        statement = select(Recipe)
-        if status:
-            statement = statement.where(Recipe.status == status)
-
-        # Admin users see all recipes
-        if current_user and current_user.user_type == UserType.ADMIN:
-            return list(self.session.exec(statement).all())
-
-        # No user = no access
-        if not current_user:
-            return []
-
-        # Build SQL-level access control filters
         conditions = [
             Recipe.owner_id == current_user.id,
-            Recipe.is_public == True,
+            col(Recipe.is_public).is_(True),
         ]
 
-        # Add outlet-based access
-        if current_user.outlet_id:
-            from app.domain.outlet_service import OutletService
+        unit_ids = access.accessible_unit_ids(self.session, current_user.id)
+        if not unit_ids:
+            return conditions
 
-            outlet_service = OutletService(self.session)
-            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
-            if user_outlet:
-                accessible_outlet_ids = {current_user.outlet_id}
-                if user_outlet.outlet_type.value != "brand" and user_outlet.parent_outlet_id:
-                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
+        unit_recipe_ids = select(RecipeOutlet.recipe_id).where(
+            col(RecipeOutlet.unit_id).in_(unit_ids),
+            col(RecipeOutlet.is_active).is_(True),
+        )
+        conditions.append(col(Recipe.id).in_(unit_recipe_ids))
+        return conditions
 
-                # Subquery: recipe IDs accessible via outlets
-                outlet_recipe_ids = (
-                    select(RecipeOutlet.recipe_id)
-                    .where(
-                        RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-                        RecipeOutlet.is_active,
-                    )
-                )
-                conditions.append(Recipe.id.in_(outlet_recipe_ids))
-
-        statement = statement.where(or_(*conditions))
-        return list(self.session.exec(statement).all())
-
-    def _build_list_query(self, status=None, current_user=None, search=None, category_ids=None):
-        """Build base query for recipe listing with filters."""
-        from sqlalchemy import or_
+    def _build_list_query(
+        self,
+        status: RecipeStatus | None = None,
+        current_user: User | None = None,
+        search: str | None = None,
+        category_ids: list[int] | None = None,
+    ):  # type: ignore[no-untyped-def]
+        """Build the base recipe-listing query with search, category and access filters."""
         statement = select(Recipe)
         if status:
             statement = statement.where(Recipe.status == status)
+
         if search:
-            from sqlalchemy import or_ as sql_or
-            from app.models.recipe_recipe_category import RecipeRecipeCategory
-            from app.models.recipe_category import RecipeCategory as RCat
-            cat_match = (
+            category_match = (
                 select(RecipeRecipeCategory.recipe_id)
-                .join(RCat, RecipeRecipeCategory.category_id == RCat.id)
-                .where(RCat.name.ilike(f"%{search}%"), RecipeRecipeCategory.is_active == True)
+                .join(
+                    RecipeCategory,
+                    col(RecipeRecipeCategory.category_id) == RecipeCategory.id,
+                )
+                .where(
+                    col(RecipeCategory.name).ilike(f"%{search}%"),
+                    col(RecipeRecipeCategory.is_active).is_(True),
+                )
                 .distinct()
             )
-            sub_match = (
+            sub_recipe_match = (
                 select(RecipeRecipe.parent_recipe_id)
                 .where(
-                    RecipeRecipe.child_recipe_id.in_(
-                        select(Recipe.id).where(Recipe.name.ilike(f"%{search}%"))
+                    col(RecipeRecipe.child_recipe_id).in_(
+                        select(Recipe.id).where(col(Recipe.name).ilike(f"%{search}%"))
                     )
                 )
                 .distinct()
             )
             statement = statement.where(
-                sql_or(
-                    Recipe.name.ilike(f"%{search}%"),
-                    Recipe.id.in_(cat_match),
-                    Recipe.id.in_(sub_match),
+                or_(
+                    col(Recipe.name).ilike(f"%{search}%"),
+                    col(Recipe.id).in_(category_match),
+                    col(Recipe.id).in_(sub_recipe_match),
                 )
             )
-        if category_ids:
-            from app.models.recipe_recipe_category import RecipeRecipeCategory
-            category_subquery = select(RecipeRecipeCategory.recipe_id).where(
-                RecipeRecipeCategory.category_id.in_(category_ids),
-                RecipeRecipeCategory.is_active == True,
-            ).distinct()
-            statement = statement.where(Recipe.id.in_(category_subquery))
-        # Access control
-        if current_user and current_user.user_type == UserType.ADMIN:
-            return statement
-        if not current_user:
-            return statement.where(Recipe.id == None)  # return nothing
-        conditions = [Recipe.owner_id == current_user.id, Recipe.is_public == True]
-        if current_user.outlet_id:
-            from app.domain.outlet_service import OutletService
-            outlet_service = OutletService(self.session)
-            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
-            if user_outlet:
-                accessible_outlet_ids = {current_user.outlet_id}
-                if user_outlet.outlet_type.value != "brand" and user_outlet.parent_outlet_id:
-                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
-                outlet_recipe_ids = select(RecipeOutlet.recipe_id).where(
-                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids), RecipeOutlet.is_active)
-                conditions.append(Recipe.id.in_(outlet_recipe_ids))
-        statement = statement.where(or_(*conditions))
-        return statement
 
-    def list_paginated(self, offset: int, limit: int, status=None, current_user=None, search: str | None = None, category_ids=None) -> list[Recipe]:
-        statement = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
-        statement = statement.order_by(Recipe.id.desc()).offset(offset).limit(limit)
+        if category_ids:
+            category_subquery = (
+                select(RecipeRecipeCategory.recipe_id)
+                .where(
+                    col(RecipeRecipeCategory.category_id).in_(category_ids),
+                    col(RecipeRecipeCategory.is_active).is_(True),
+                )
+                .distinct()
+            )
+            statement = statement.where(col(Recipe.id).in_(category_subquery))
+
+        # Anonymous callers see nothing — there is no unauthenticated recipe catalogue.
+        if not current_user:
+            return statement.where(false())
+
+        # Explicit admin bypass: an org Owner/Admin administers the ORGANISATION and is
+        # expected to see every recipe in it, including drafts owned by other people that
+        # are not yet assigned to any unit.
+        if access.is_org_admin(self.session, current_user.id):
+            return statement
+
+        return statement.where(or_(*self._visible_recipe_conditions(current_user)))
+
+    def list_recipes(
+        self, status: RecipeStatus | None = None, current_user: User | None = None
+    ) -> list[Recipe]:
+        """List recipes visible to the user, optionally filtered by status."""
+        statement = self._build_list_query(status=status, current_user=current_user)
         return list(self.session.exec(statement).all())
 
-    def count(self, status=None, current_user=None, search: str | None = None, category_ids=None) -> int:
-        from sqlalchemy import func
-        statement = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
-        count_stmt = select(func.count()).select_from(statement.subquery())
-        return self.session.exec(count_stmt).one()
+    def list_paginated(
+        self,
+        offset: int,
+        limit: int,
+        status: RecipeStatus | None = None,
+        current_user: User | None = None,
+        search: str | None = None,
+        category_ids: list[int] | None = None,
+    ) -> list[Recipe]:
+        """Return one page of visible recipes, newest first."""
+        statement = self._build_list_query(
+            status=status,
+            current_user=current_user,
+            search=search,
+            category_ids=category_ids,
+        )
+        statement = statement.order_by(col(Recipe.id).desc()).offset(offset).limit(limit)
+        return list(self.session.exec(statement).all())
 
-    def list_paginated_with_count(self, offset: int, limit: int, status=None, current_user=None, search: str | None = None, category_ids=None) -> tuple[list[Recipe], int]:
+    def count(
+        self,
+        status: RecipeStatus | None = None,
+        current_user: User | None = None,
+        search: str | None = None,
+        category_ids: list[int] | None = None,
+    ) -> int:
+        """Count the recipes visible to the user under the same filters as the listing."""
+        statement = self._build_list_query(
+            status=status,
+            current_user=current_user,
+            search=search,
+            category_ids=category_ids,
+        )
+        count_statement = select(func.count()).select_from(statement.subquery())
+        return self.session.exec(count_statement).one()
+
+    def list_paginated_with_count(
+        self,
+        offset: int,
+        limit: int,
+        status: RecipeStatus | None = None,
+        current_user: User | None = None,
+        search: str | None = None,
+        category_ids: list[int] | None = None,
+    ) -> tuple[list[Recipe], int]:
         """Return paginated items and total count, reusing the same base filter."""
-        from sqlalchemy import func
-        base = self._build_list_query(status=status, current_user=current_user, search=search, category_ids=category_ids)
+        base = self._build_list_query(
+            status=status,
+            current_user=current_user,
+            search=search,
+            category_ids=category_ids,
+        )
         total = self.session.exec(select(func.count()).select_from(base.subquery())).one()
-        items = list(self.session.exec(base.order_by(Recipe.id.desc()).offset(offset).limit(limit)).all())
+        items = list(
+            self.session.exec(
+                base.order_by(col(Recipe.id).desc()).offset(offset).limit(limit)
+            ).all()
+        )
         return items, total
 
     def get_recipe(self, recipe_id: int) -> Recipe | None:
         """Get a recipe by ID."""
         return self.session.get(Recipe, recipe_id)
 
-    def update_recipe_metadata(
-        self, recipe_id: int, data: RecipeUpdate
-    ) -> Recipe | None:
+    def update_recipe_metadata(self, recipe_id: int, data: RecipeUpdate) -> Recipe | None:
         """Update recipe metadata fields."""
         recipe = self.get_recipe(recipe_id)
         if not recipe:
@@ -200,9 +235,7 @@ class RecipeService:
         self.session.refresh(recipe)
         return recipe
 
-    def set_recipe_status(
-        self, recipe_id: int, status: RecipeStatus
-    ) -> Recipe | None:
+    def set_recipe_status(self, recipe_id: int, status: RecipeStatus) -> Recipe | None:
         """Update a recipe's status."""
         recipe = self.get_recipe(recipe_id)
         if not recipe:
@@ -230,19 +263,16 @@ class RecipeService:
         - Copy all recipe ingredients
         - Copy all sub-recipe links (referencing original child recipes)
         - Copy instructions (raw and structured)
+
+        Unit assignments are NOT copied: a fork starts unassigned and is placed on units
+        explicitly, so a draft never leaks onto a live site by inheritance.
         """
         original = self.get_recipe(recipe_id)
         if not original:
             return None
 
-        # Determine root_id and version for the fork
-        # root_id points to the recipe this was forked from
-        # Version increments based on the original's version
-        new_version = original.version + 1
-
-        # Create the forked recipe
         forked = Recipe(
-            name=f"{original.name} (Fork)",
+            name=f"{original.name} {_FORK_NAME_SUFFIX}",
             yield_quantity=original.yield_quantity,
             yield_unit=original.yield_unit,
             is_prep_recipe=original.is_prep_recipe,
@@ -253,39 +283,37 @@ class RecipeService:
             is_public=False,  # Forked recipes start as private
             owner_id=new_owner_id if new_owner_id else original.owner_id,
             created_by=new_owner_id,
-            version=new_version,
+            version=original.version + 1,
             root_id=original.id,
         )
         self.session.add(forked)
         self.session.commit()
         self.session.refresh(forked)
 
-        # Copy all recipe ingredients
-        original_ingredients = self.get_recipe_ingredients(recipe_id)
-        for ri in original_ingredients:
-            new_ri = RecipeIngredient(
-                recipe_id=forked.id,
-                ingredient_id=ri.ingredient_id,
-                quantity=ri.quantity,
-                unit=ri.unit,
-                unit_price=ri.unit_price,
-                base_unit=ri.base_unit,
-                supplier_id=ri.supplier_id,
-                wastage_percentage=ri.wastage_percentage,
+        for ri in self.get_recipe_ingredients(recipe_id):
+            self.session.add(
+                RecipeIngredient(
+                    recipe_id=forked.id,
+                    ingredient_id=ri.ingredient_id,
+                    quantity=ri.quantity,
+                    unit=ri.unit,
+                    unit_price=ri.unit_price,
+                    base_unit=ri.base_unit,
+                    supplier_id=ri.supplier_id,
+                    wastage_percentage=ri.wastage_percentage,
+                )
             )
-            self.session.add(new_ri)
 
-        # Copy all sub-recipe links (referencing original child recipes)
-        original_sub_recipes = self._get_sub_recipes(recipe_id)
-        for rr in original_sub_recipes:
-            new_rr = RecipeRecipe(
-                parent_recipe_id=forked.id,
-                child_recipe_id=rr.child_recipe_id,
-                quantity=rr.quantity,
-                unit=rr.unit,
-                position=rr.position,
+        for rr in self._get_sub_recipes(recipe_id):
+            self.session.add(
+                RecipeRecipe(
+                    parent_recipe_id=forked.id,
+                    child_recipe_id=rr.child_recipe_id,
+                    quantity=rr.quantity,
+                    unit=rr.unit,
+                    position=rr.position,
+                )
             )
-            self.session.add(new_rr)
 
         self.session.commit()
         self.session.refresh(forked)
@@ -296,7 +324,7 @@ class RecipeService:
         statement = (
             select(RecipeRecipe)
             .where(RecipeRecipe.parent_recipe_id == recipe_id)
-            .order_by(RecipeRecipe.position)
+            .order_by(col(RecipeRecipe.position))
         )
         return list(self.session.exec(statement).all())
 
@@ -306,8 +334,7 @@ class RecipeService:
         """Build a RecipeIngredientRead from RecipeIngredient with allergen data."""
         ingredient_nested = None
         if ri.ingredient:
-            # Build allergen list from ingredient_allergens
-            allergens = []
+            allergens: list[AllergenInfo] = []
             if ri.ingredient.ingredient_allergens:
                 allergens = [
                     AllergenInfo(id=ia.allergen.id, name=ia.allergen.name)
@@ -338,12 +365,27 @@ class RecipeService:
             ingredient=ingredient_nested,
         )
 
+    def _ingredient_with_allergens(self, recipe_ingredient_id: int) -> RecipeIngredient | None:
+        """Reload a recipe ingredient with its ingredient + allergens eagerly loaded."""
+        statement = (
+            select(RecipeIngredient)
+            .where(RecipeIngredient.id == recipe_ingredient_id)
+            .options(
+                selectinload(RecipeIngredient.ingredient).options(
+                    selectinload(Ingredient.ingredient_allergens).options(
+                        selectinload(IngredientAllergen.allergen)
+                    )
+                )
+            )
+        )
+        return self.session.exec(statement).first()
+
     def get_recipe_ingredients(self, recipe_id: int) -> list[RecipeIngredientRead]:
         """Get all ingredients for a recipe, ordered by id (insertion order)."""
         statement = (
             select(RecipeIngredient)
             .where(RecipeIngredient.recipe_id == recipe_id)
-            .order_by(RecipeIngredient.id)
+            .order_by(col(RecipeIngredient.id))
             .options(
                 selectinload(RecipeIngredient.ingredient).options(
                     selectinload(Ingredient.ingredient_allergens).options(
@@ -359,14 +401,12 @@ class RecipeService:
         self, recipe_id: int, data: RecipeIngredientCreate
     ) -> RecipeIngredientRead | None:
         """Add an ingredient to a recipe (no duplicates allowed)."""
-        # Check for duplicates
         existing = self.session.exec(
             select(RecipeIngredient).where(
                 RecipeIngredient.recipe_id == recipe_id,
                 RecipeIngredient.ingredient_id == data.ingredient_id,
             )
         ).first()
-
         if existing:
             return None  # Duplicate not allowed
 
@@ -384,20 +424,10 @@ class RecipeService:
         self.session.commit()
         self.session.refresh(recipe_ingredient)
 
-        # Reload with allergen data
-        statement = select(RecipeIngredient).where(
-            RecipeIngredient.id == recipe_ingredient.id
-        ).options(
-            selectinload(RecipeIngredient.ingredient).options(
-                selectinload(Ingredient.ingredient_allergens).options(
-                    selectinload(IngredientAllergen.allergen)
-                )
-            )
-        )
-        refreshed = self.session.exec(statement).first()
-        if refreshed:
-            return self._build_recipe_ingredient_read(refreshed)
-        return None
+        refreshed = self._ingredient_with_allergens(recipe_ingredient.id)
+        if not refreshed:
+            return None
+        return self._build_recipe_ingredient_read(refreshed)
 
     def update_recipe_ingredient(
         self, recipe_ingredient_id: int, data: RecipeIngredientUpdate
@@ -414,20 +444,10 @@ class RecipeService:
         self.session.add(ri)
         self.session.commit()
 
-        # Reload with allergen data
-        statement = select(RecipeIngredient).where(
-            RecipeIngredient.id == recipe_ingredient_id
-        ).options(
-            selectinload(RecipeIngredient.ingredient).options(
-                selectinload(Ingredient.ingredient_allergens).options(
-                    selectinload(IngredientAllergen.allergen)
-                )
-            )
-        )
-        refreshed = self.session.exec(statement).first()
-        if refreshed:
-            return self._build_recipe_ingredient_read(refreshed)
-        return None
+        refreshed = self._ingredient_with_allergens(recipe_ingredient_id)
+        if not refreshed:
+            return None
+        return self._build_recipe_ingredient_read(refreshed)
 
     def remove_ingredient_from_recipe(self, recipe_ingredient_id: int) -> bool:
         """Remove an ingredient from a recipe."""
@@ -441,70 +461,32 @@ class RecipeService:
 
     # --- Versioning Operations ---
 
-    def _get_outlet_accessible_recipe_ids(
-        self, user_id: str, tree_ids: set[int]
-    ) -> set[int]:
+    def _unit_accessible_recipe_ids(self, subject: str, tree_ids: set[int]) -> set[int]:
+        """Recipe IDs within ``tree_ids`` that ``subject`` can reach through a Passport unit.
+
+        The old hierarchy walk (read `users.outlet_id`, load the outlet, add its parent brand)
+        is gone with the local outlets table. `access.accessible_unit_ids` answers the same
+        question from the projection — the brands the user holds a role at, plus the outlets
+        under them — in one place, so the rule cannot drift between call sites.
+
+        An empty unit set means no role at any brand: fail closed, nothing is reachable by unit.
         """
-        Get recipe IDs from the tree that are accessible to the user via outlet hierarchy.
-
-        Steps:
-        1. Look up the user by user_id to get their outlet_id
-        2. If user has outlet_id, query their outlet to determine type (brand/location)
-        3. Build accessible_outlet_ids:
-           - Always include user's own outlet
-           - If outlet is "location" and has parent_outlet_id, also include parent
-           - If outlet is "brand", only include own outlet (no children)
-        4. Batch-query RecipeOutlet for recipes in tree_ids assigned to accessible_outlet_ids
-        5. Return set of accessible recipe IDs
-
-        Args:
-            user_id: The user ID to check
-            tree_ids: The set of recipe IDs in the version tree
-
-        Returns:
-            Set of recipe IDs that are accessible via outlet
-        """
-        from app.domain.outlet_service import OutletService
-        from app.domain.user_service import UserService
-
-        # Look up user to get outlet assignment
-        user_service = UserService(self.session)
-        user = user_service.get_user(user_id)
-
-        # If user not found or has no outlet, return empty set
-        if not user or not user.outlet_id:
+        unit_ids = access.accessible_unit_ids(self.session, subject)
+        if not unit_ids:
             return set()
 
-        # Get user's outlet to determine type
-        outlet_service = OutletService(self.session)
-        user_outlet = outlet_service.get_outlet(user.outlet_id)
-
-        if not user_outlet:
-            return set()
-
-        # Build accessible outlet IDs based on hierarchy
-        accessible_outlet_ids = {user.outlet_id}
-
-        # Location users can also see recipes from their parent brand
-        if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
-            accessible_outlet_ids.add(user_outlet.parent_outlet_id)
-        # Brand users can only see their own outlet (not children)
-
-        # Query RecipeOutlet for recipes in tree assigned to accessible outlets
-        statement = select(RecipeOutlet).where(
-            RecipeOutlet.recipe_id.in_(tree_ids),
-            RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-            RecipeOutlet.is_active,
+        statement = select(RecipeOutlet.recipe_id).where(
+            col(RecipeOutlet.recipe_id).in_(tree_ids),
+            col(RecipeOutlet.unit_id).in_(unit_ids),
+            col(RecipeOutlet.is_active).is_(True),
         )
-        recipe_outlets = self.session.exec(statement).all()
-
-        return {ro.recipe_id for ro in recipe_outlets if ro.recipe_id is not None}
+        return {rid for rid in self.session.exec(statement).all() if rid is not None}
 
     def _is_recipe_authorized(
         self,
         recipe: Recipe,
         user_id: str | None,
-        outlet_accessible_ids: set[int] | None = None,
+        unit_accessible_ids: set[int] | None = None,
     ) -> bool:
         """
         Check if a recipe is authorized for the given user.
@@ -512,21 +494,13 @@ class RecipeService:
         Authorization is granted if:
         - Recipe is public, OR
         - User owns the recipe, OR
-        - Recipe is accessible via user's outlet hierarchy
-
-        Args:
-            recipe: The recipe to check
-            user_id: The user ID (used for ownership check)
-            outlet_accessible_ids: Optional set of recipe IDs accessible via outlet
-
-        Returns:
-            True if user is authorized, False otherwise
+        - Recipe is assigned to a unit the user may see
         """
         if recipe.is_public:
             return True
         if user_id is not None and recipe.owner_id == user_id:
             return True
-        if outlet_accessible_ids and recipe.id in outlet_accessible_ids:
+        if unit_accessible_ids and recipe.id in unit_accessible_ids:
             return True
         return False
 
@@ -563,7 +537,7 @@ class RecipeService:
         If user_id is provided, recipes are filtered based on:
         - Recipe ownership (owner_id matches user_id)
         - Recipe is public (is_public == True)
-        - Recipe is accessible via user's outlet hierarchy (user's outlet or parent outlet if location)
+        - Recipe is assigned to a Passport unit the user may see
 
         Full recipe data is returned for authorized recipes. Unauthorized recipes are returned
         as masked recipes with only id, root_id, version, and status. If a recipe's parent is
@@ -575,7 +549,7 @@ class RecipeService:
         if not recipe:
             return []
 
-        # Find root by traversing up - only fetch id and root_id for efficiency
+        # Find root by traversing up - only fetch root_id for efficiency
         root_id = recipe_id
         current_root_id = recipe.root_id
         while current_root_id is not None:
@@ -586,16 +560,12 @@ class RecipeService:
                 break
             current_root_id = result
 
-        # Single recursive CTE query to get all descendants from root
-        # For databases that support it, this is much more efficient
-        # Fallback: batch query all recipes with root_id in tree
+        # Batch-walk down from the root, one query per level
         tree_ids: set[int] = {root_id}
         frontier = {root_id}
-
         while frontier:
-            # Batch query: find all children of current frontier
             statement = select(Recipe.id, Recipe.root_id).where(
-                Recipe.root_id.in_(frontier)
+                col(Recipe.root_id).in_(frontier)
             )
             children = list(self.session.exec(statement).all())
             frontier = set()
@@ -604,30 +574,25 @@ class RecipeService:
                     tree_ids.add(child_id)
                     frontier.add(child_id)
 
-        # Fetch all recipes in a single query, sorted
         statement = (
             select(Recipe)
-            .where(Recipe.id.in_(tree_ids))
-            .order_by(Recipe.version, Recipe.created_at)
+            .where(col(Recipe.id).in_(tree_ids))
+            .order_by(col(Recipe.version), col(Recipe.created_at))
         )
         all_recipes = list(self.session.exec(statement).all())
 
-        # If no user_id provided, return all recipes unfiltered
         if user_id is None:
             return all_recipes
 
-        # Get recipes accessible via user's outlet hierarchy
-        outlet_accessible_ids = self._get_outlet_accessible_recipe_ids(user_id, tree_ids)
+        unit_accessible_ids = self._unit_accessible_recipe_ids(user_id, tree_ids)
 
-        # Build lookup structures in a single pass
         recipe_map: dict[int, Recipe] = {}
         authorized_ids: set[int] = set()
         for r in all_recipes:
             recipe_map[r.id] = r
-            if self._is_recipe_authorized(r, user_id, outlet_accessible_ids):
+            if self._is_recipe_authorized(r, user_id, unit_accessible_ids):
                 authorized_ids.add(r.id)
 
-        # Memoized ancestor lookup to avoid redundant traversals
         ancestor_cache: dict[int, int | None] = {}
 
         def find_last_authorized_ancestor(r: Recipe) -> int | None:
@@ -646,34 +611,33 @@ class RecipeService:
                 if parent.id in authorized_ids:
                     result = parent.id
                     break
-                # Check if parent's result is already cached
                 if parent.id in ancestor_cache:
                     result = ancestor_cache[parent.id]
                     break
                 path.append(current.id)
                 current = parent
 
-            # Cache results for all recipes in the path
             for rid in path:
                 ancestor_cache[rid] = result
             ancestor_cache[r.id] = result
 
             return result
 
-        # Build result list
         result: list[Recipe] = []
         for r in all_recipes:
-            if r.id in authorized_ids:
-                # Authorized: return full recipe, adjust root_id if parent unauthorized
-                if r.root_id is not None and r.root_id not in authorized_ids:
-                    new_root_id = find_last_authorized_ancestor(r)
-                    adjusted_recipe = r.model_copy(update={"root_id": new_root_id})
-                    result.append(adjusted_recipe)
-                else:
-                    result.append(r)
-            else:
-                # Unauthorized: return masked recipe
-                new_root_id = find_last_authorized_ancestor(r)
-                result.append(self._create_masked_recipe(r, new_root_id))
+            if r.id not in authorized_ids:
+                result.append(
+                    self._create_masked_recipe(r, find_last_authorized_ancestor(r))
+                )
+                continue
+
+            # Authorized, but its parent may not be — re-point it at the nearest visible one
+            if r.root_id is not None and r.root_id not in authorized_ids:
+                result.append(
+                    r.model_copy(update={"root_id": find_last_authorized_ancestor(r)})
+                )
+                continue
+
+            result.append(r)
 
         return result

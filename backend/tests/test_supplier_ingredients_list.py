@@ -1,80 +1,32 @@
-"""Tests for GET /api/v1/supplier-ingredients (cross-supplier product listing)."""
+"""Tests for GET /api/v1/supplier-ingredients (cross-supplier product listing).
+
+Visibility is the set of Passport units the caller can reach — the brands they hold a role at,
+plus the outlets under them. A user with no role reaches nothing: the list FAILS CLOSED.
+"""
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
-from sqlmodel.pool import StaticPool
-from unittest.mock import patch, MagicMock
+from sqlmodel import Session
 
-from app.main import app
-from app.api.deps import get_session, get_current_user
-from app.database import get_session as db_get_session
-from app.models import User, UserType
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(name="session")
-def session_fixture():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-
-
-def _make_client(session: Session, user: User):
-    """Yield a TestClient authenticated as *user*."""
-    app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[db_get_session] = lambda: session
-    app.dependency_overrides[get_current_user] = lambda: user
-
-    storage_patches = [
-        patch("app.api.recipe_images.is_storage_configured", return_value=True),
-        patch("app.api.recipe_images.StorageService"),
-    ]
-    with storage_patches[0]:
-        with storage_patches[1] as mock_storage_class:
-            mock_storage = MagicMock()
-
-            async def async_upload(*args, **kwargs):
-                return "https://example.com/fake.png"
-
-            mock_storage.upload_image_from_base64 = MagicMock(side_effect=async_upload)
-            mock_storage_class.return_value = mock_storage
-            yield TestClient(app)
-
-    app.dependency_overrides.clear()
+from tests.conftest import (
+    STAFF,
+    create_user,
+    make_brand_user,
+    seed_brand,
+    seed_outlet_unit,
+    use_user,
+)
 
 
 @pytest.fixture
-def admin_user():
-    return User(id="admin-1", email="admin@test.com", username="admin", user_type=UserType.ADMIN, outlet_id=None)
-
-
-@pytest.fixture
-def admin_client(session, admin_user):
-    yield from _make_client(session, admin_user)
+def admin_client(client: TestClient) -> TestClient:
+    """The org-admin client — the ladder makes them Manager at every brand of the org."""
+    return client
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _create_outlet(client: TestClient, name: str, code: str, parent_id: int | None = None) -> int:
-    data: dict = {"name": name, "code": code, "outlet_type": "brand"}
-    if parent_id:
-        data["parent_outlet_id"] = parent_id
-    resp = client.post("/api/v1/outlets", json=data)
-    assert resp.status_code == 201
-    return resp.json()["id"]
 
 
 def _create_category(client: TestClient, name: str) -> int:
@@ -102,7 +54,7 @@ def _add_supplier_ingredient(
     client: TestClient,
     ing_id: int,
     sup_id: int,
-    outlet_id: int,
+    unit_id: str,
     pack_unit: str = "kg",
     price: float = 10.0,
     sku: str | None = None,
@@ -110,7 +62,7 @@ def _add_supplier_ingredient(
     body: dict = {
         "ingredient_id": ing_id,
         "supplier_id": sup_id,
-        "outlet_id": outlet_id,
+        "unit_id": unit_id,
         "pack_size": 5.0,
         "pack_unit": pack_unit,
         "price_per_pack": price,
@@ -144,13 +96,13 @@ class TestSupplierIngredientsListEndpoint:
         assert data["total_pages"] == 0
         assert data["page_number"] == 1
 
-    def test_response_shape(self, session, admin_user, admin_client: TestClient):
+    def test_response_shape(self, session: Session, admin_client: TestClient):
         """Each item contains all expected fields."""
-        outlet_id = _create_outlet(admin_client, "Shop A", "SA")
+        unit_id = seed_brand(session, "Shop A")
         cat_id = _create_category(admin_client, "Vegetables")
         ing_id = _create_ingredient(admin_client, "Carrot", category_id=cat_id)
         sup_id = _create_supplier(admin_client, "Farm Direct")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id, price=12.5, sku="CARR-001")
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id, price=12.5, sku="CARR-001")
 
         resp = admin_client.get(self.URL)
         assert resp.status_code == 200
@@ -166,18 +118,18 @@ class TestSupplierIngredientsListEndpoint:
         assert item["unit"] == "kg"
         assert item["price_per_pack"] == 12.5
 
-    # --- admin visibility ---
+    # --- org-admin visibility ---
 
-    def test_admin_sees_all_entries(self, session, admin_user, admin_client: TestClient):
-        """Admin user sees supplier ingredients from all outlets."""
-        outlet_a = _create_outlet(admin_client, "Outlet A", "OA")
-        outlet_b = _create_outlet(admin_client, "Outlet B", "OB")
+    def test_org_admin_sees_all_entries(self, session: Session, admin_client: TestClient):
+        """An org admin holds Manager at every brand, so every unit's entries are visible."""
+        unit_a = seed_brand(session, "Outlet A")
+        unit_b = seed_brand(session, "Outlet B")
         ing_a = _create_ingredient(admin_client, "Apple")
         ing_b = _create_ingredient(admin_client, "Banana")
         sup_a = _create_supplier(admin_client, "Sup A")
         sup_b = _create_supplier(admin_client, "Sup B")
-        _add_supplier_ingredient(admin_client, ing_a, sup_a, outlet_a)
-        _add_supplier_ingredient(admin_client, ing_b, sup_b, outlet_b)
+        _add_supplier_ingredient(admin_client, ing_a, sup_a, unit_a)
+        _add_supplier_ingredient(admin_client, ing_b, sup_b, unit_b)
 
         resp = admin_client.get(self.URL)
         assert resp.status_code == 200
@@ -185,84 +137,82 @@ class TestSupplierIngredientsListEndpoint:
 
     # --- access control ---
 
-    def test_normal_user_no_outlet_sees_nothing(self, session, admin_client: TestClient):
-        """Non-admin with no outlet_id gets an empty list."""
-        outlet_id = _create_outlet(admin_client, "Outlet X", "OX")
+    def test_user_with_no_passport_role_sees_nothing(
+        self, session: Session, admin_client: TestClient
+    ):
+        """FAIL CLOSED — no role anywhere means no units, and an empty scope shows nothing.
+
+        The old model read a null `outlet_id` as "see every outlet". That is deliberately gone.
+        """
+        unit_id = seed_brand(session, "Outlet X")
         ing_id = _create_ingredient(admin_client, "Pepper")
         sup_id = _create_supplier(admin_client, "Pepper Farm")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
-        no_outlet_user = User(
-            id="no-outlet", email="no@test.com", username="nooutlet",
-            user_type=UserType.NORMAL, outlet_id=None,
-        )
-        for client in _make_client(session, no_outlet_user):
-            resp = client.get(self.URL)
-            assert resp.status_code == 200
-            assert resp.json()["total_count"] == 0
+        use_user(admin_client, create_user(session, "no-role", "norole"))
 
-    def test_normal_user_sees_own_outlet(self, session, admin_client: TestClient):
-        """Non-admin user sees supplier ingredients assigned to their outlet."""
-        outlet_id = _create_outlet(admin_client, "My Outlet", "MY")
+        resp = admin_client.get(self.URL)
+        assert resp.status_code == 200
+        assert resp.json()["total_count"] == 0
+
+    def test_user_sees_their_own_brands_entries(
+        self, session: Session, admin_client: TestClient
+    ):
+        unit_id = seed_brand(session, "My Outlet")
         ing_id = _create_ingredient(admin_client, "Garlic")
         sup_id = _create_supplier(admin_client, "Herb Co")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
-        user = User(
-            id="user-my", email="my@test.com", username="myuser",
-            user_type=UserType.NORMAL, outlet_id=outlet_id,
-        )
-        for client in _make_client(session, user):
-            resp = client.get(self.URL)
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["total_count"] == 1
-            assert data["items"][0]["ingredient_name"] == "Garlic"
+        use_user(admin_client, make_brand_user(session, "user-my", unit_id, STAFF, "myuser"))
 
-    def test_cross_tree_isolation(self, session, admin_client: TestClient):
-        """User in tree A cannot see supplier ingredients from tree B."""
-        tree_a = _create_outlet(admin_client, "Tree A", "TA")
-        tree_b = _create_outlet(admin_client, "Tree B", "TB")
+        resp = admin_client.get(self.URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["ingredient_name"] == "Garlic"
+
+    def test_cross_brand_isolation(self, session: Session, admin_client: TestClient):
+        """A role at brand A shows nothing of brand B."""
+        brand_a = seed_brand(session, "Brand A")
+        brand_b = seed_brand(session, "Brand B")
         ing_id = _create_ingredient(admin_client, "Rice")
         sup_id = _create_supplier(admin_client, "Rice Co")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, tree_b)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, brand_b)
 
-        user_a = User(
-            id="user-a", email="a@test.com", username="usera",
-            user_type=UserType.NORMAL, outlet_id=tree_a,
-        )
-        for client in _make_client(session, user_a):
-            resp = client.get(self.URL)
-            assert resp.status_code == 200
-            assert resp.json()["total_count"] == 0
+        use_user(admin_client, make_brand_user(session, "user-a", brand_a, STAFF, "usera"))
 
-    def test_child_user_sees_parent_outlet_entries(self, session, admin_client: TestClient):
-        """User assigned to a child outlet can see supplier ingredients from the parent."""
-        parent_id = _create_outlet(admin_client, "Parent Brand", "PB")
-        child_id = _create_outlet(admin_client, "Child Location", "CL", parent_id=parent_id)
+        resp = admin_client.get(self.URL)
+        assert resp.status_code == 200
+        assert resp.json()["total_count"] == 0
+
+    def test_brand_role_reaches_entries_at_its_outlets(
+        self, session: Session, admin_client: TestClient
+    ):
+        """An outlet inherits its brand, so a role at the brand reaches the outlet's entries."""
+        brand_id = seed_brand(session, "Parent Brand")
+        outlet_id = seed_outlet_unit(session, brand_id, "Child Location")
         ing_id = _create_ingredient(admin_client, "Onion")
         sup_id = _create_supplier(admin_client, "Onion Farm")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, parent_id)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
 
-        child_user = User(
-            id="child-user", email="child@test.com", username="childuser",
-            user_type=UserType.NORMAL, outlet_id=child_id,
+        use_user(
+            admin_client, make_brand_user(session, "child-user", brand_id, STAFF, "childuser")
         )
-        for client in _make_client(session, child_user):
-            resp = client.get(self.URL)
-            assert resp.status_code == 200
-            assert resp.json()["total_count"] == 1
+
+        resp = admin_client.get(self.URL)
+        assert resp.status_code == 200
+        assert resp.json()["total_count"] == 1
 
     # --- search ---
 
-    def test_search_by_ingredient_name(self, admin_client: TestClient):
+    def test_search_by_ingredient_name(self, session: Session, admin_client: TestClient):
         """search param filters by ingredient name (case-insensitive)."""
-        outlet_id = _create_outlet(admin_client, "Shop S", "SS")
+        unit_id = seed_brand(session, "Shop S")
         ing_a = _create_ingredient(admin_client, "Chicken Breast")
         ing_b = _create_ingredient(admin_client, "Beef Tenderloin")
         sup = _create_supplier(admin_client, "Meat Co")
-        _add_supplier_ingredient(admin_client, ing_a, sup, outlet_id)
-        _add_supplier_ingredient(admin_client, ing_b, sup, outlet_id)
+        _add_supplier_ingredient(admin_client, ing_a, sup, unit_id)
+        _add_supplier_ingredient(admin_client, ing_b, sup, unit_id)
 
         resp = admin_client.get(self.URL, params={"search": "chicken"})
         assert resp.status_code == 200
@@ -270,12 +220,12 @@ class TestSupplierIngredientsListEndpoint:
         assert data["total_count"] == 1
         assert data["items"][0]["ingredient_name"] == "Chicken Breast"
 
-    def test_search_by_sku(self, admin_client: TestClient):
+    def test_search_by_sku(self, session: Session, admin_client: TestClient):
         """search param filters by SKU (case-insensitive)."""
-        outlet_id = _create_outlet(admin_client, "Shop K", "SK")
+        unit_id = seed_brand(session, "Shop K")
         ing_id = _create_ingredient(admin_client, "Salmon")
         sup_id = _create_supplier(admin_client, "Fish Market")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id, sku="FISH-SAL-001")
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id, sku="FISH-SAL-001")
 
         resp = admin_client.get(self.URL, params={"search": "sal"})
         assert resp.status_code == 200
@@ -283,12 +233,12 @@ class TestSupplierIngredientsListEndpoint:
         assert data["total_count"] == 1
         assert data["items"][0]["sku"] == "FISH-SAL-001"
 
-    def test_search_no_match_returns_empty(self, admin_client: TestClient):
+    def test_search_no_match_returns_empty(self, session: Session, admin_client: TestClient):
         """search with no match returns an empty list."""
-        outlet_id = _create_outlet(admin_client, "Shop E", "SE")
+        unit_id = seed_brand(session, "Shop E")
         ing_id = _create_ingredient(admin_client, "Milk")
         sup_id = _create_supplier(admin_client, "Dairy Co")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
         resp = admin_client.get(self.URL, params={"search": "xyznotexist"})
         assert resp.status_code == 200
@@ -296,13 +246,13 @@ class TestSupplierIngredientsListEndpoint:
 
     # --- pagination ---
 
-    def test_pagination_page_size(self, admin_client: TestClient):
+    def test_pagination_page_size(self, session: Session, admin_client: TestClient):
         """page_size limits results per page."""
-        outlet_id = _create_outlet(admin_client, "Shop P", "SP")
+        unit_id = seed_brand(session, "Shop P")
         sup_id = _create_supplier(admin_client, "Bulk Sup")
         for i in range(5):
             ing_id = _create_ingredient(admin_client, f"Ingredient {i}")
-            _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+            _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
         resp = admin_client.get(self.URL, params={"page_size": 3, "page_number": 1})
         assert resp.status_code == 200
@@ -311,13 +261,13 @@ class TestSupplierIngredientsListEndpoint:
         assert data["total_pages"] == 2
         assert len(data["items"]) == 3
 
-    def test_pagination_second_page(self, admin_client: TestClient):
+    def test_pagination_second_page(self, session: Session, admin_client: TestClient):
         """page_number=2 returns the second page of results."""
-        outlet_id = _create_outlet(admin_client, "Shop Q", "SQ")
+        unit_id = seed_brand(session, "Shop Q")
         sup_id = _create_supplier(admin_client, "Page Sup")
         for i in range(5):
             ing_id = _create_ingredient(admin_client, f"Product {i}")
-            _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+            _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
         resp = admin_client.get(self.URL, params={"page_size": 3, "page_number": 2})
         assert resp.status_code == 200
@@ -334,12 +284,14 @@ class TestSupplierIngredientsListEndpoint:
 
     # --- category name ---
 
-    def test_category_name_is_null_when_uncategorised(self, admin_client: TestClient):
+    def test_category_name_is_null_when_uncategorised(
+        self, session: Session, admin_client: TestClient
+    ):
         """category_name is None for ingredients without a category."""
-        outlet_id = _create_outlet(admin_client, "Shop NC", "NC")
+        unit_id = seed_brand(session, "Shop NC")
         ing_id = _create_ingredient(admin_client, "Mystery Herb")  # no category_id
         sup_id = _create_supplier(admin_client, "Herb Supply")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+        _add_supplier_ingredient(admin_client, ing_id, sup_id, unit_id)
 
         resp = admin_client.get(self.URL)
         assert resp.status_code == 200

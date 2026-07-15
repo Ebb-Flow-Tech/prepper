@@ -1,10 +1,11 @@
 """Tests for tasting sessions and notes endpoints."""
 
 from datetime import datetime
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import User, UserType
+from app.models import User
 
 
 def test_create_tasting_session(client: TestClient):
@@ -649,8 +650,6 @@ def test_create_session_with_participant_ids(
         id="user-123",
         email="chef@example.com",
         username="Chef Marco",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
     )
     session.add(user)
     session.commit()
@@ -695,15 +694,11 @@ def test_update_session_participant_ids_replaces_participants(
         id="user-1",
         email="chef1@example.com",
         username="Chef One",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
     )
     user2 = User(
         id="user-2",
         email="chef2@example.com",
         username="Chef Two",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
     )
     session.add(user1)
     session.add(user2)
@@ -741,8 +736,6 @@ def test_update_session_without_participant_ids_preserves_participants(
         id="user-1",
         email="chef@example.com",
         username="Chef One",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
     )
     session.add(user)
     session.commit()
@@ -777,8 +770,9 @@ def test_nonadmin_cannot_access_session_they_are_not_invited_to(
     # Create a session with admin user (using default client/admin context)
     # We need to use the normal_user_client to make the GET request
     # Create an unrelated session first - create it via SQL to avoid auth issues
-    from app.models import TastingSession
     from datetime import datetime
+
+    from app.models import TastingSession
 
     unrelated_session = TastingSession(
         name="Not Mine",
@@ -953,7 +947,7 @@ def test_noncreator_cannot_remove_recipe_from_session(
     client: TestClient, session: Session
 ):
     """Non-creator cannot remove a recipe from session."""
-    from app.models import TastingSession, RecipeTasting
+    from app.models import RecipeTasting, TastingSession
 
     # Create recipe
     recipe_resp = client.post(
@@ -1015,7 +1009,7 @@ def test_noncreator_cannot_remove_ingredient_from_session(
     client: TestClient, session: Session
 ):
     """Non-creator cannot remove an ingredient from session."""
-    from app.models import TastingSession, IngredientTasting
+    from app.models import IngredientTasting, TastingSession
 
     ing_resp = client.post(
         "/api/v1/ingredients",
@@ -1132,7 +1126,7 @@ def test_nonparticipant_cannot_add_recipe_note(
     session: Session, normal_user_client: TestClient
 ):
     """Non-participant cannot add a tasting note."""
-    from app.models import TastingSession, Recipe
+    from app.models import Recipe, TastingSession
 
     recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
     session.add(recipe)
@@ -1161,7 +1155,7 @@ def test_admin_nonparticipant_cannot_add_recipe_note(
     client: TestClient, session: Session
 ):
     """Admin who is not a participant cannot add a tasting note."""
-    from app.models import TastingSession, Recipe
+    from app.models import Recipe, TastingSession
 
     recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
     session.add(recipe)

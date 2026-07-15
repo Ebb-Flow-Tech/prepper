@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAppState } from '@/lib/store';
 import { completeOAuth } from '@/lib/api';
 
-const DEFAULT_DESTINATION = '/outlets';
+const DEFAULT_DESTINATION = '/recipes';
 const BRIDGE_TIMEOUT_MS = 15_000;
 
 function isValidRedirectPath(path: string | null): path is string {
@@ -45,12 +45,9 @@ export default function AuthCallbackPage() {
         login(
           user.id,
           session.access_token,
-          user.user_type,
           session.refresh_token,
           user.username,
-          user.email,
-          user.is_manager,
-          user.outlet_id ?? null
+          user.email
         );
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not complete sign-in');

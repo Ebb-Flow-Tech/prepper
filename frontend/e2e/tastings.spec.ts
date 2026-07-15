@@ -38,7 +38,7 @@ test.describe('Tasting Sessions List Page (/tastings)', () => {
       return;
     }
     const url = `/tastings/${seed.sessionId}`;
-    // Ensure AuthGuard race condition redirects back to our target (not /outlets)
+    // Ensure AuthGuard race condition redirects back to our target (not the default route)
     await page.addInitScript((target: string) => {
       window.localStorage.setItem('prepper_last_route', target);
     }, url);

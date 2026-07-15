@@ -1,32 +1,27 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useCreateUser, useOutlets } from '@/lib/hooks';
-import { Button, Input, Select, Modal } from '@/components/ui';
+import { useCreateUser, useUpdateUser } from '@/lib/hooks';
+import { Button, Input, Modal } from '@/components/ui';
 import { toast } from 'sonner';
-import type { UserType } from '@/types';
 
 interface AddUserModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const USER_TYPE_OPTIONS = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'admin', label: 'Admin' },
-];
-
+/**
+ * Creates a login account. It grants nothing: a new account holds no role anywhere until someone
+ * assigns one AT A BRAND in the Brand Roles tab, which writes back to Passport.
+ */
 export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
   const createUser = useCreateUser();
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items ?? [];
+  const updateUser = useUpdateUser();
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [userType, setUserType] = useState<UserType>('normal');
-  const [outletId, setOutletId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = useCallback(() => {
@@ -34,8 +29,6 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
     setUsername('');
     setPassword('');
     setPhoneNumber('');
-    setUserType('normal');
-    setOutletId('');
     setIsSubmitting(false);
   }, []);
 
@@ -58,16 +51,21 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
     setIsSubmitting(true);
 
     try {
-      await createUser.mutateAsync({
+      const created = await createUser.mutateAsync({
         email: email.trim(),
         username: username.trim(),
         password: password.trim(),
-        phone_number: phoneNumber || undefined,
-        user_type: userType,
-        outlet_id: outletId ? parseInt(outletId) : null,
       });
 
-      toast.success('User created successfully');
+      // Registration only takes credentials; the phone number is a profile field set afterwards.
+      if (phoneNumber.trim()) {
+        await updateUser.mutateAsync({
+          userId: created.user.id,
+          data: { phone_number: phoneNumber.trim() },
+        });
+      }
+
+      toast.success('User created. Assign a brand role in the Brand Roles tab.');
       resetForm();
       onClose();
     } catch (error) {
@@ -128,34 +126,9 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">
-            User Type
-          </label>
-          <Select
-            value={userType}
-            onChange={(e) => setUserType(e.target.value as UserType)}
-            options={USER_TYPE_OPTIONS}
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Branch (optional)
-          </label>
-          <select
-            value={outletId}
-            onChange={(e) => setOutletId(e.target.value)}
-            className="w-full px-3 py-2 border border-input rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- None --</option>
-            {outlets.map((outlet) => (
-              <option key={outlet.id} value={outlet.id}>
-                {outlet.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Roles and brand access are assigned in the Brand Roles tab — Prepper does not set them.
+        </p>
 
         {/* Footer */}
         <div className="flex justify-end gap-3 pt-4 border-t border-border">

@@ -13,9 +13,9 @@ interface RecipeCardProps {
   costPerPortion?: number | null;
   isOwned?: boolean;
   href?: string;
-  outletNames?: string[];
   categoryNames?: string[];
   allergenNames?: string[];
+  unitNames?: string[];
   matchedViaSubDish?: boolean;
 }
 
@@ -25,7 +25,7 @@ const STATUS_VARIANTS: Record<RecipeStatus, 'default' | 'success' | 'warning' | 
   archived: 'warning',
 };
 
-export const RecipeCard = memo(function RecipeCard({ recipe, costPerPortion, isOwned, href, outletNames = [], categoryNames = [], allergenNames = [], matchedViaSubDish }: RecipeCardProps) {
+export const RecipeCard = memo(function RecipeCard({ recipe, costPerPortion, isOwned, href, categoryNames = [], allergenNames = [], unitNames = [], matchedViaSubDish }: RecipeCardProps) {
   return (
     <Link href={href ?? `/recipes/${recipe.id}`} className="block">
       <Card interactive className="mb-4 h-full">
@@ -71,13 +71,13 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costPerPortion, isO
               )}
             </div>
 
-            {/* Outlets */}
-            {outletNames.length > 0 && (
+            {/* Categories */}
+            {unitNames.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-muted-foreground">Outlets</p>
+                <p className="text-xs font-medium text-muted-foreground">Brands</p>
                 <div className="flex flex-wrap gap-1">
-                  {outletNames.map((name) => (
-                    <Badge key={name} variant="secondary" className="text-xs">
+                  {unitNames.map((name) => (
+                    <Badge key={name} variant="default" className="text-xs">
                       {name}
                     </Badge>
                   ))}
@@ -85,7 +85,6 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costPerPortion, isO
               </div>
             )}
 
-            {/* Categories */}
             {categoryNames.length > 0 && (
               <div className="flex flex-col gap-1">
                 <p className="text-xs font-medium text-muted-foreground">Categories</p>

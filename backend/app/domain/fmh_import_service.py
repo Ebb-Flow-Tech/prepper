@@ -8,19 +8,23 @@ from __future__ import annotations
 
 import re
 
-import openpyxl
 from openpyxl.workbook import Workbook
 from sqlalchemy import func
 from sqlmodel import Session, SQLModel, col, select
 
 from app.models.category import Category
 from app.models.ingredient import Ingredient
-from app.models.outlet import Outlet, OutletType
 from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+from app.models.passport import PassportUnit
 from app.models.supplier import Supplier
 from app.models.supplier_ingredient import SupplierIngredient
 
 PRODUCT_CODE_COL = "Product code (Do not edit this field, this is for your reference)"
+
+# Passport owns structure. An import may only LINK to units Passport already knows;
+# entities hold no stock, so only brands and outlets are linkable.
+LINKABLE_UNIT_TYPES = ("brand", "outlet")
+UNIT_STATUS_ACTIVE = "active"
 
 _UNIT_MAP: dict[str, str] = {
     "g": "g", "gm": "g", "gms": "g", "gr": "g", "gram": "g", "grams": "g",
@@ -33,9 +37,11 @@ _UNIT_MAP: dict[str, str] = {
 
 
 class FMHImportResult(SQLModel):
+    """Counts of what an import wrote. No `outlets_created`: Passport is the only place a
+    brand or outlet can be born, so a branch name it does not know is a warning, not a row."""
+
     suppliers_created: int = 0
     suppliers_updated: int = 0
-    outlets_created: int = 0
     categories_created: int = 0
     ingredients_created: int = 0
     ingredients_updated: int = 0
@@ -94,6 +100,39 @@ def _parse_pack_from_name(name: str) -> tuple[float, str]:
         raw_unit = match.group(2).lower()
         return float(match.group(1)), _UNIT_MAP.get(raw_unit, "pcs")
     return 1.0, "pcs"
+
+
+def _resolve_units_by_name(
+    session: Session, names: set[str], result: FMHImportResult
+) -> dict[str, PassportUnit]:
+    """Map ``lower(branch name) -> PassportUnit`` for the branches an FMH sheet mentions.
+
+    The sheet names a branch in free text; Passport holds the real unit. We therefore MATCH
+    rather than create — a branch Passport does not know (or that is archived) yields a
+    warning and its links are skipped, because Prepper may not invent structure.
+    """
+    if not names:
+        return {}
+
+    lowered = [n.lower() for n in names]
+    units = session.exec(
+        select(PassportUnit).where(
+            func.lower(PassportUnit.name).in_(lowered),
+            PassportUnit.status == UNIT_STATUS_ACTIVE,
+            col(PassportUnit.type).in_(LINKABLE_UNIT_TYPES),
+        )
+    ).all()
+
+    resolved: dict[str, PassportUnit] = {}
+    for unit in units:
+        resolved.setdefault(unit.name.lower(), unit)
+
+    for name in sorted(names):
+        if name.lower() not in resolved:
+            result.warnings.append(
+                f"Branch '{name}' matches no active Passport unit — links skipped"
+            )
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -190,11 +229,14 @@ def import_ingredients(
     session: Session,
     products_wb: Workbook,
 ) -> FMHImportResult:
-    """Import outlets, categories, ingredients, and supplier-ingredient links.
+    """Import categories, ingredients, and supplier-ingredient links (scoped to Passport units).
 
     Phase 0 (guard): ensures suppliers with codes exist.
     Phase 1 (map): reads product workbook into memory — no DB writes.
     Phase 2 (upsert): writes to DB only after mapping is complete.
+
+    Branch names are RESOLVED against the Passport projection, never created: Passport owns
+    brands and outlets.
 
     Raises:
         ValueError: if no suppliers with codes are found in the DB.
@@ -220,16 +262,16 @@ def import_ingredients(
 
     product_rows = _read_sheet(products_wb)
 
-    outlet_names: set[str] = set()
+    branch_names: set[str] = set()
     category_names: set[str] = set()
     ingredient_shapes: dict[str, dict] = {}
     si_shapes: dict[str, dict] = {}
 
     for row in product_rows:
-        # Collect outlet branch names (from all rows, no product_code requirement)
+        # Collect branch names (from all rows, no product_code requirement)
         branch_raw = str(row.get("Branch") or "").strip()
         branches = [b.strip() for b in branch_raw.split(",") if b.strip()]
-        outlet_names.update(branches)
+        branch_names.update(branches)
 
         # Collect category names (from all rows)
         tag = str(row.get("Tags") or "").strip()
@@ -293,31 +335,8 @@ def import_ingredients(
     # Phase 2 — Upsert (batch inserts: 1 flush per entity type)
     # ------------------------------------------------------------------
 
-    # 5. Upsert outlets — bulk pre-load, then add_all + single flush
-    outlet_by_name: dict[str, Outlet] = {}
-    if outlet_names:
-        existing_outlets = session.exec(
-            select(Outlet).where(col(Outlet.name).in_(outlet_names))
-        ).all()
-        outlet_by_name = {o.name: o for o in existing_outlets}
-    new_outlets: list[tuple[str, Outlet]] = [
-        (branch, Outlet(
-            name=branch,
-            code=None,  # type: ignore[arg-type]
-            outlet_type=OutletType.BRAND,
-            parent_outlet_id=None,
-            is_active=True,
-            source="fmh",
-        ))
-        for branch in outlet_names
-        if branch not in outlet_by_name
-    ]
-    if new_outlets:
-        session.add_all([o for _, o in new_outlets])
-        session.flush()
-        for branch, outlet in new_outlets:
-            outlet_by_name[branch] = outlet
-        result.outlets_created = len(new_outlets)
+    # 5. Resolve branches to Passport units — match only, never create
+    unit_by_name = _resolve_units_by_name(session, branch_names, result)
 
     # 6. Upsert categories — bulk pre-load, then add_all + single flush
     category_by_tag: dict[str, Category] = {}
@@ -451,14 +470,14 @@ def import_ingredients(
 
     # Upsert OutletSupplierIngredients — bulk pre-load, add_all, no per-row flush
     all_si_ids = [si.id for si in si_by_sku.values() if si.id is not None]
-    existing_osi_keys: set[tuple[int, int]] = set()
+    existing_osi_keys: set[tuple[int, str]] = set()
     if all_si_ids:
         existing_osis = session.exec(
             select(OutletSupplierIngredient).where(
                 col(OutletSupplierIngredient.supplier_ingredient_id).in_(all_si_ids)
             )
         ).all()
-        existing_osi_keys = {(o.supplier_ingredient_id, o.outlet_id) for o in existing_osis}
+        existing_osi_keys = {(o.supplier_ingredient_id, o.unit_id) for o in existing_osis}
 
     new_osis: list[OutletSupplierIngredient] = []
     for product_code, shape in si_shapes.items():
@@ -466,15 +485,16 @@ def import_ingredients(
         if si is None or si.id is None:
             continue
         for branch in shape["branches"]:
-            outlet = outlet_by_name.get(branch)
-            if outlet is None or outlet.id is None:
+            unit = unit_by_name.get(branch.lower())
+            if unit is None:
                 continue
-            key = (si.id, outlet.id)
+            key = (si.id, unit.id)
             if key in existing_osi_keys:
                 continue
             new_osis.append(OutletSupplierIngredient(
                 supplier_ingredient_id=si.id,
-                outlet_id=outlet.id,
+                unit_id=unit.id,
+                organization_id=unit.organization_id,
             ))
             existing_osi_keys.add(key)
     if new_osis:
@@ -486,11 +506,14 @@ def import_ingredients(
 
 
 def import_buy_catalogue(session: Session, wb: Workbook) -> FMHImportResult:
-    """Import outlets, categories, suppliers, ingredients, and supplier-ingredient links
-    from an EXPORT_BUY_CATALOGUE Excel sheet.
+    """Import categories, suppliers, ingredients, and supplier-ingredient links from an
+    EXPORT_BUY_CATALOGUE Excel sheet, scoped to the Passport units the sheet's branches name.
 
     Phase 1 (map): reads workbook into memory — no DB writes.
     Phase 2 (upsert): bulk writes per entity type, single commit at the end.
+
+    Branches are RESOLVED against the Passport projection, never created: Passport owns brands
+    and outlets.
     """
     result = FMHImportResult()
 
@@ -500,11 +523,11 @@ def import_buy_catalogue(session: Session, wb: Workbook) -> FMHImportResult:
 
     rows = _read_sheet(wb, "EXPORT_BUY_CATALOGUE")
 
-    outlet_names: set[str] = set()
+    branch_names: set[str] = set()
     category_keys: dict[str, str] = {}      # lower → title-cased
     supplier_shapes: dict[str, dict] = {}   # lower(name) → {name, code}
     ingredient_shapes: dict[str, dict] = {} # sku → {name, base_unit, cost_per_base_unit, category_lower, pack_size}
-    si_shapes: dict[str, dict] = {}         # sku → {supplier_lower, pack_size, pack_unit, price_per_pack, currency, outlet_name}
+    si_shapes: dict[str, dict] = {}         # sku → {supplier_lower, pack_size, pack_unit, price_per_pack, currency, branch_name}
 
     for row in rows:
         sku = str(row.get("Sku") or "").strip()
@@ -513,7 +536,7 @@ def import_buy_catalogue(session: Session, wb: Workbook) -> FMHImportResult:
 
         branch_name = str(row.get("Branch Name") or "").strip()
         if branch_name:
-            outlet_names.add(branch_name)
+            branch_names.add(branch_name)
 
         cat_raw = str(row.get("Category Name") or "").strip()
         if cat_raw:
@@ -560,39 +583,15 @@ def import_buy_catalogue(session: Session, wb: Workbook) -> FMHImportResult:
             "pack_unit": uom,
             "price_per_pack": price_per_pack,
             "currency": str(row.get("Currency") or "SGD").strip(),
-            "outlet_name": branch_name,
+            "branch_name": branch_name,
         }
 
     # ------------------------------------------------------------------
     # Phase 2 — Upsert (1 bulk SELECT + add_all per entity type, 1 commit)
     # ------------------------------------------------------------------
 
-    # 1. Outlets — filter by lower(name) IN (...) instead of full table scan
-    outlet_by_lower: dict[str, Outlet] = {}
-    if outlet_names:
-        outlet_lower_map = {n.lower(): n for n in outlet_names}
-        existing_outlets = session.exec(
-            select(Outlet).where(func.lower(Outlet.name).in_(list(outlet_lower_map.keys())))
-        ).all()
-        outlet_by_lower = {o.name.lower(): o for o in existing_outlets}
-        new_outlets = [
-            Outlet(
-                name=outlet_lower_map[lower],
-                code=None,  # type: ignore[arg-type]
-                outlet_type=OutletType.BRAND,
-                parent_outlet_id=None,
-                is_active=True,
-                source="fmh",
-            )
-            for lower in outlet_lower_map
-            if lower not in outlet_by_lower
-        ]
-        if new_outlets:
-            session.add_all(new_outlets)
-            session.flush()
-            for o in new_outlets:
-                outlet_by_lower[o.name.lower()] = o
-            result.outlets_created = len(new_outlets)
+    # 1. Branches — resolve to Passport units, match only, never create
+    unit_by_lower = _resolve_units_by_name(session, branch_names, result)
 
     # 2. Categories — filter by lower(name) IN (...)
     category_by_lower: dict[str, Category] = {}
@@ -742,32 +741,33 @@ def import_buy_catalogue(session: Session, wb: Workbook) -> FMHImportResult:
 
     # 6. OutletSupplierIngredient links
     all_si_ids_buy = [si.id for si in si_by_sku.values() if si.id is not None]
-    existing_osi_keys_buy: set[tuple[int, int]] = set()
+    existing_osi_keys_buy: set[tuple[int, str]] = set()
     if all_si_ids_buy:
         existing_osis_buy = session.exec(
             select(OutletSupplierIngredient).where(
                 col(OutletSupplierIngredient.supplier_ingredient_id).in_(all_si_ids_buy)
             )
         ).all()
-        existing_osi_keys_buy = {(o.supplier_ingredient_id, o.outlet_id) for o in existing_osis_buy}
+        existing_osi_keys_buy = {(o.supplier_ingredient_id, o.unit_id) for o in existing_osis_buy}
 
     new_osis_buy: list[OutletSupplierIngredient] = []
     for sku, shape in si_shapes.items():
         si = si_by_sku.get(sku)
         if si is None or si.id is None:
             continue
-        outlet_name = shape["outlet_name"]
-        if not outlet_name:
+        branch_name = shape["branch_name"]
+        if not branch_name:
             continue
-        outlet = outlet_by_lower.get(outlet_name.lower())
-        if outlet is None or outlet.id is None:
+        unit = unit_by_lower.get(branch_name.lower())
+        if unit is None:
             continue
-        key = (si.id, outlet.id)
+        key = (si.id, unit.id)
         if key in existing_osi_keys_buy:
             continue
         new_osis_buy.append(OutletSupplierIngredient(
             supplier_ingredient_id=si.id,
-            outlet_id=outlet.id,
+            unit_id=unit.id,
+            organization_id=unit.organization_id,
         ))
         existing_osi_keys_buy.add(key)
     if new_osis_buy:

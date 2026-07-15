@@ -11,7 +11,6 @@ it.
 from sqlmodel import Session, select
 
 from app.models import (
-    Outlet,
     PassportUnitAppAccess,
     PassportUnitAppMembership,
 )
@@ -252,34 +251,50 @@ def test_access_fails_open_before_entitlements_sync(session: Session):
     assert access.has_prepper_access(session, SUBJECT) is True
 
 
-# --- brand -> outlet link + full role projection -------------------------------------------
+# --- an outlet INHERITS its brand ----------------------------------------------------------
+# Prepper owns no `outlets` table any more. An outlet is a Passport unit that resolves through
+# `belongs_to_brand`; people are only ever held at BRANDS.
 
-def _seed_outlet(session: Session, *, code: str = "CS", outlet_id: int = 3) -> Outlet:
-    outlet = Outlet(id=outlet_id, name="Coffee Shop", code=code)
-    session.add(outlet)
-    session.commit()
-    return outlet
+OUTLET = "outlet-1"
 
 
-def test_outlet_link_resolves_from_external_ref(session: Session):
-    _seed_outlet(session, code="CS", outlet_id=3)
-
-    # A brand whose external_ref matches the outlet's code links the two.
-    store.apply_unit(session, _unit_values(version=1, external_ref="CS"))
-    session.expire_all()
-    assert session.get(Outlet, 3).passport_unit_id == BRAND
-
-
-def test_outlet_link_is_non_destructive_without_a_matching_ref(session: Session):
-    _seed_outlet(session, code="CS", outlet_id=3)
-
-    # No external_ref, or one matching no outlet -> nothing linked, nothing cleared.
-    store.apply_unit(session, _unit_values(version=1, external_ref=None))
-    store.apply_unit(session, _unit_values(version=2, external_ref="NOPE"))
-    session.expire_all()
-    assert session.get(Outlet, 3).passport_unit_id is None
+def _seed_outlet_unit(session: Session) -> None:
+    store.apply_unit(session, _unit_values(version=1, unit_id=OUTLET, type="outlet"))
+    store.create_relation(
+        session,
+        {
+            "id": "rel-1",
+            "organization_id": ORG,
+            "from_unit_id": OUTLET,
+            "to_unit_id": BRAND,
+            "relation": "belongs_to_brand",
+        },
+    )
 
 
+def test_role_at_an_outlet_resolves_through_its_brand(session: Session):
+    _seed_entitled_brand(session)
+    _seed_outlet_unit(session)
+    store.apply_membership(session, _membership_values(version=1, role="Member"))
+    store.apply_unit_app_membership(session, _role_values(version=1, role="Staff"))
+
+    # The role row names the BRAND; asking at the outlet must resolve to it.
+    assert access.role_at_unit(session, SUBJECT, OUTLET) == "Staff"
+    assert access.accessible_unit_ids(session, SUBJECT) == {BRAND, OUTLET}
+
+
+def test_no_role_means_no_units_at_all(session: Session):
+    """FAIL CLOSED — a user with no Passport role sees nothing.
+
+    The old model read a null `outlet_id` as "see everything". An empty derivation now means an
+    empty scope, and every list endpoint is filtered by it.
+    """
+    _seed_entitled_brand(session)
+    _seed_outlet_unit(session)
+
+    assert access.brand_roles(session, "nobody") == {}
+    assert access.role_at_unit(session, "nobody", BRAND) is None
+    assert access.accessible_unit_ids(session, "nobody") == set()
 
 
 # --- rule 9: multi-org ---------------------------------------------------------------------

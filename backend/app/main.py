@@ -22,7 +22,7 @@ from app.api import (
     menu_sketch_sections,
     menu_sketches,
     menus,
-    outlets,
+    recipe_units,
     passport_roles,
     recipe_allergens,
     recipe_categories,
@@ -115,15 +115,12 @@ def create_app() -> FastAPI:
         prefix=f"{settings.api_v1_prefix}/recipes",
         tags=["sub-recipes"],
     )
+    # No /outlets router: brands and outlets are created and edited in PASSPORT, and Prepper only
+    # projects them (rule 7). What remains is which units a recipe is served at.
     app.include_router(
-        outlets.router,
-        prefix=f"{settings.api_v1_prefix}/outlets",
-        tags=["outlets"],
-    )
-    app.include_router(
-        outlets.recipe_outlets_router,
+        recipe_units.router,
         prefix=f"{settings.api_v1_prefix}/recipes",
-        tags=["recipe-outlets"],
+        tags=["recipe-units"],
     )
     app.include_router(
         tastings.router,

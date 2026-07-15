@@ -142,15 +142,16 @@ class MenuOutletBase(SQLModel):
     """Shared fields for MenuOutlet."""
 
     menu_id: int = Field(foreign_key="menus.id")
-    outlet_id: int = Field(foreign_key="outlets.id")
+    unit_id: str = Field(foreign_key="passport_unit.id", index=True)
+    organization_id: str = Field(index=True)
 
 
 class MenuOutlet(MenuOutletBase, table=True):
-    """
-    Links menus to outlets (many-to-many).
+    """Links menus to Passport UNITS (many-to-many).
 
-    A menu can be assigned to multiple outlets.
-    If outlet is a brand, all its child locations can access it.
+    A unit is a brand or an outlet, projected from Passport (rule 5: its UUID is the key). An outlet
+    inherits its brand through `belongs_to_brand`, so a menu on a brand reaches that brand's sites —
+    which is Passport's structure, not a convention Prepper maintains.
     """
 
     __tablename__ = "menu_outlets"
@@ -160,10 +161,10 @@ class MenuOutlet(MenuOutletBase, table=True):
 
 
 class MenuOutletCreate(SQLModel):
-    """Schema for adding a menu to an outlet."""
+    """Schema for adding a menu to a unit."""
 
     menu_id: int
-    outlet_id: int
+    unit_id: str
 
 
 # ---------------------------------------------------------------------------

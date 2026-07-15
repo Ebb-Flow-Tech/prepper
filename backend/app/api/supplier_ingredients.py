@@ -1,18 +1,22 @@
 """Supplier ingredients listing API — cross-supplier product view."""
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from app.api.deps import get_session, get_current_user
+from app.api.deps import get_current_user, get_session
 from app.models.ingredient import Ingredient
+from app.models.pagination import PaginatedResponse
 from app.models.supplier import Supplier
 from app.models.supplier_ingredient import SupplierIngredient
-from app.models.user import User, UserType
-from app.models.pagination import PaginatedResponse
-from pydantic import BaseModel
+from app.models.user import User
+from app.passport import access
 
 router = APIRouter()
+
+# Sentinel id that no row can carry — the "see nothing" filter for a user scoped to no unit.
+_MATCHES_NOTHING = -1
 
 
 class SupplierIngredientItem(BaseModel):
@@ -30,10 +34,13 @@ class SupplierIngredientItem(BaseModel):
 
 
 def _build_query(search: str | None, user: User, session: Session):
-    """Build the base SELECT with joins, applying outlet filter for non-admins."""
-    from app.models.category import Category
+    """Build the base SELECT with joins, scoped to the Passport units the caller can see.
+
+    `accessible_unit_ids` is empty for a user who holds a role at no brand, and an empty scope
+    means "sees nothing" — fail closed. Org Owners/Admins hold a role at every brand, so their
+    scope already covers every unit and needs no bypass branch.
+    """
     from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
-    from app.domain.outlet_service import OutletService
 
     stmt = (
         select(
@@ -55,21 +62,17 @@ def _build_query(search: str | None, user: User, session: Session):
             Ingredient.name.ilike(f"%{search}%") | SupplierIngredient.sku.ilike(f"%{search}%")
         )
 
-    if user.user_type != UserType.ADMIN:
-        if user.outlet_id is None:
-            # Non-admin with no outlet sees nothing
-            stmt = stmt.where(SupplierIngredient.id == -1)
-        else:
-            accessible = OutletService(session).get_accessible_outlet_ids(user.outlet_id)
-            stmt = stmt.where(
-                SupplierIngredient.id.in_(
-                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
-                        OutletSupplierIngredient.outlet_id.in_(accessible)
-                    )
-                )
-            )
+    accessible_unit_ids = access.accessible_unit_ids(session, user.id)
+    if not accessible_unit_ids:
+        return stmt.where(SupplierIngredient.id == _MATCHES_NOTHING)
 
-    return stmt
+    return stmt.where(
+        col(SupplierIngredient.id).in_(
+            select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                col(OutletSupplierIngredient.unit_id).in_(accessible_unit_ids)
+            )
+        )
+    )
 
 
 @router.get("", response_model=PaginatedResponse[SupplierIngredientItem])

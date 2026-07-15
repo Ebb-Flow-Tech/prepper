@@ -2,7 +2,7 @@
 
 Kitchen-first recipe workspace for chefs and operators. Recipes are living objects on a "recipe canvas" with drag-and-drop ingredients, freeform-to-structured instructions, and automatic costing with wastage tracking. Principles: clarity, immediacy, reversibility — no save buttons, only autosave.
 
-Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe versioning (forking + version tree via `root_id` / `version`), multi-outlet with hierarchy + cycle detection + per-outlet price overrides, wastage-adjusted costing, AI agents (categorization, tasting feedback summarization), Passport sync consumer (multi-org projection of all eight aggregates — org, unit, unit-relation, membership, entitlement, identity-link, unit-app-access, unit-app-membership — with brand-scoped access derived via the SDK, plus role write-back).
+Features: Supabase auth with **brand-scoped roles derived from Passport** (no local role vocabulary), recipe versioning (forking + version tree via `root_id` / `version`), recipes/menus served at **Passport brand/outlet units** with per-unit price overrides, wastage-adjusted costing, AI agents (categorization, tasting feedback summarization), Passport sync consumer (multi-org projection of all eight aggregates — org, unit, unit-relation, membership, entitlement, identity-link, unit-app-access, unit-app-membership — with brand-scoped access derived via the SDK, plus role write-back).
 
 ## Stack
 - Backend: FastAPI, SQLModel, Alembic, pytest, ruff, mypy
@@ -13,8 +13,8 @@ Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe
 
 ## Project map
 - `backend/app/main.py` — FastAPI factory (lifespan, CORS, routers)
-- `backend/app/models/` — SQLModel entities (Recipe, Ingredient, Outlet, TastingSession, MenuSketch, User, etc.)
-- `backend/app/domain/` — service layer (one file per resource: recipe, costing, sub-recipes, outlets, tasting, suppliers, categories, menu-sketch, users, Supabase auth)
+- `backend/app/models/` — SQLModel entities (Recipe, Ingredient, TastingSession, MenuSketch, User, etc.). **No local `Outlet` — brands/outlets are `passport_unit` (Passport-owned, projected).**
+- `backend/app/domain/` — service layer (one file per resource: recipe, recipe-unit links, costing, sub-recipes, tasting, suppliers, categories, menu-sketch, users, Supabase auth)
 - `backend/app/api/` — FastAPI routers (one per resource) + `deps.py`
 - `backend/app/agents/` — AI features: `base_agent.py`, `category_agent.py`, `feedback_summary_agent.py`
 - `backend/app/passport/` — Passport sync consumer: eight-aggregate read-model projection (`store`, `handlers`, `sync_router`), derived brand-scoped access + entitlement kill switch (`access`), read-model queries for brands/roster (`directory`), role write-back (`writeback`), identity reporting (`identity`), grant revocation only (`role_projection`), nightly `reconcile`. **Multi-org: every org Passport delivers is projected; `org_id` is resolved per-request from the acting user's membership, never from config.** **Roles are read per-brand at the point of the check — never projected onto the `users` row.**
@@ -24,7 +24,7 @@ Features: Supabase auth (normal/admin, hierarchical outlet-based access), recipe
 - `frontend/src/lib/hooks/` — TanStack Query hooks, one file per resource with cache invalidation
 - `frontend/src/lib/providers.tsx` — `QueryClientProvider` + `AppProvider` + `AuthGuard`
 - `frontend/src/lib/store.tsx` — React Context (selected recipe, canvas tab, auth)
-- `frontend/src/components/` — layout, recipe, ingredients, suppliers, outlets, categories, tasting, admin (incl. `BrandRolesTab` — Passport brand roles), ui primitives
+- `frontend/src/components/` — layout, recipe, ingredients, suppliers, units (brand pickers), categories, tasting, admin (incl. `BrandRolesTab` — Passport brand roles), ui primitives
 
 ## Commands
 ```
@@ -47,12 +47,12 @@ API routes under `/api/v1`. Swagger at `http://localhost:8000/docs`.
 
 ## Key patterns
 - **Backend**: services receive SQLModel `Session` and return domain objects. Routers call services via function calls (no DI framework). Tests use SQLite in-memory via `conftest.py`.
-- **Frontend**: all server data flows through TanStack Query hooks — no local state for server data. Drag-and-drop via `dnd-kit` (wrapped in AppShell's `DndContext`). Debounced autosave on every editable field — no save buttons. `useAppState()` for global UI state. Canvas tabs: `canvas | overview | ingredients | costs | instructions | tasting | outlets | versions`. Version tree via `@xyflow/react`. Inline edit via `EditableCell`. Modals for complex forms.
+- **Frontend**: all server data flows through TanStack Query hooks — no local state for server data. Drag-and-drop via `dnd-kit` (wrapped in AppShell's `DndContext`). Debounced autosave on every editable field — no save buttons. `useAppState()` for global UI state. Canvas tabs: `canvas | overview | ingredients | costs | instructions | tasting | units | versions`. Version tree via `@xyflow/react`. Inline edit via `EditableCell`. Modals for complex forms.
 
 ## Domain invariants
 - **Versioning**: every recipe has `version` and `root_id` (parent). Forking copies ingredients + instructions, increments version, excludes image.
 - **Costing**: `RecipeIngredient.wastage_percentage` (0–100) factors into unit prices and cost breakdowns. Costing carries `adjusted_cost_per_unit`.
-- **Outlets**: cycle detection on parent-child hierarchies. Non-admin users restricted to outlets within their hierarchy.
+- **Units (brands/outlets)**: owned by Passport, projected read-only. Structure + cycle detection live in Passport, not Prepper. Access is brand-scoped (see below), not a local hierarchy walk.
 - **Sub-recipes**: cycle detection on BOM tree.
 - **Tasting access**: non-admin users can only access sessions they participate in (403 otherwise); admins bypass.
 - **Categories + suppliers**: soft-delete supported; archived records remain for historical reference.
@@ -73,8 +73,8 @@ API routes under `/api/v1`. Swagger at `http://localhost:8000/docs`.
 - Commit messages: single line, conventional format `type(scope): summary` — no body, no `Co-Authored-By` trailer (see `/commit`).
 - Ask before destructive actions (applied migrations, bulk deletes).
 - Never print secrets.
-- Cycle detection on outlet hierarchies and sub-recipes — don't bypass.
-- Access control is hierarchical: enforce outlet scope for non-admin users.
+- Cycle detection on sub-recipes — don't bypass. (Outlet-hierarchy cycle detection is Passport's now.)
+- Access control is **brand-scoped, derived from Passport** (`app.passport.access.role_at_unit` / `accessible_unit_ids`). There is no local role flag; never reintroduce one.
 
 ## Testing
 - `pytest` for backend (SQLite in-memory). Bug fixes include a regression test.

@@ -2,32 +2,52 @@
 
 import io
 
+import openpyxl
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlmodel import Session
 
-import openpyxl
-
-from app.api.deps import get_session, get_current_user
-from app.domain.storage_service import StorageService, StorageError, is_storage_configured
-from app.models import (
-    Ingredient,
-    IngredientCreate,
-    IngredientUpdate,
-    FoodCategory,
-    IngredientSource,
-    SupplierIngredientCreate,
-    SupplierIngredientUpdate,
-    SupplierIngredientRead,
-    Category,
-    User,
-    UserType,
-)
+from app.api.deps import get_current_user, get_session
 from app.domain import IngredientService
 from app.domain.category_service import CategoryService
-from app.domain.fmh_import_service import FMHImportResult, import_ingredients, import_buy_catalogue
+from app.domain.fmh_import_service import (
+    FMHImportResult,
+    import_buy_catalogue,
+    import_ingredients,
+)
+from app.domain.storage_service import (
+    StorageError,
+    StorageService,
+    is_storage_configured,
+)
+from app.models import (
+    Category,
+    FoodCategory,
+    Ingredient,
+    IngredientCreate,
+    IngredientSource,
+    IngredientUpdate,
+    SupplierIngredientCreate,
+    SupplierIngredientRead,
+    SupplierIngredientUpdate,
+    User,
+)
+from app.passport import access
 
 router = APIRouter()
+
+
+def _require_org_admin(session: Session, current_user: User) -> None:
+    """403 unless the caller administers the ORGANISATION.
+
+    Ingredients are org-wide master data — a bulk import rewrites the catalogue for every brand at
+    once, so there is no single unit to scope it to and no brand-level `Manager` check to make.
+    """
+    if not access.is_org_admin(session, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only organisation administrators can perform this action",
+        )
 
 
 @router.post("", response_model=Ingredient, status_code=status.HTTP_201_CREATED)
@@ -79,9 +99,8 @@ async def import_ingredients_fmh(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Import FMH outlets, categories, ingredients, and supplier links. Admin only."""
-    if current_user.user_type != UserType.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    """Import FMH categories, ingredients, and supplier links. Org administrators only."""
+    _require_org_admin(session, current_user)
     if not (products_file.filename or "").lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -103,9 +122,8 @@ async def import_ingredients_buy_catalogue(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Import Buy Catalogue XLSX (single-sheet format with inline supplier + SKU). Admin only."""
-    if current_user.user_type != UserType.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    """Import Buy Catalogue XLSX (single-sheet, inline supplier + SKU). Org administrators only."""
+    _require_org_admin(session, current_user)
     if not (products_file.filename or "").lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -121,8 +139,9 @@ async def import_ingredients_buy_catalogue(
 @router.get("/buy-catalogue-template")
 def download_buy_catalogue_template() -> Response:
     """Return a blank Buy Catalogue XLSX template with header row and one example row."""
-    import openpyxl as _openpyxl
     import io as _io
+
+    import openpyxl as _openpyxl
 
     wb_out = _openpyxl.Workbook()
     ws = wb_out.active
@@ -255,12 +274,11 @@ def get_ingredient_suppliers(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all suppliers for an ingredient (filtered by user's outlet tree)."""
+    """Get all suppliers for an ingredient, restricted to the units the caller can see."""
     service = IngredientService(session)
     result = service.get_ingredient_suppliers(
         ingredient_id,
-        user_outlet_id=current_user.outlet_id,
-        is_admin=current_user.user_type == UserType.ADMIN,
+        subject=current_user.id,
     )
     if result is None:
         raise HTTPException(
@@ -310,13 +328,14 @@ def update_ingredient_supplier(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a supplier-ingredient link."""
-    # Only admins can change the outlet
-    if data.outlet_id is not None and current_user.user_type != UserType.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can change the outlet",
-        )
+    """Update a supplier-ingredient link.
+
+    Moving a link to a different unit stays org-admin-only: the old rule was `user_type == ADMIN`,
+    with no manager involved, so it maps straight onto `is_org_admin` and gains no brand scope.
+    """
+    if data.unit_id is not None:
+        _require_org_admin(session, current_user)
+
     service = IngredientService(session)
     result = service.update_ingredient_supplier(supplier_ingredient_id, data)
     if not result:
@@ -356,7 +375,7 @@ def get_preferred_supplier(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the preferred supplier for an ingredient (filtered by user's outlet tree)."""
+    """Get the preferred supplier for an ingredient, restricted to the units the caller can see."""
     service = IngredientService(session)
     ingredient = service.get_ingredient(ingredient_id)
     if not ingredient:
@@ -366,6 +385,5 @@ def get_preferred_supplier(
         )
     return service.get_preferred_supplier(
         ingredient_id,
-        user_outlet_id=current_user.outlet_id,
-        is_admin=current_user.user_type == UserType.ADMIN,
+        subject=current_user.id,
     )

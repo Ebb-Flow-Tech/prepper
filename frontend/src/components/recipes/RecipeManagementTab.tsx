@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useOutlets, useRecipeOutletsBatch, useRecipeAllergensBatch, useSubRecipesBatch, useDebouncedValue } from '@/lib/hooks';
+import type { RecipeUnitChip } from '@/lib/api';
+import { useRecipes, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeAllergensBatch, useRecipeUnitsBatch, useSubRecipesBatch, useDebouncedValue } from '@/lib/hooks';
 import { RecipeCard } from './RecipeCard';
 import { RecipeListRow } from './RecipeListRow';
 import { RecipeCategoryFilterButtons } from './RecipeCategoryFilterButtons';
@@ -118,7 +119,7 @@ function groupRecipes(
 
 export function RecipeManagementTab() {
   const router = useRouter();
-  const { userId, userType, selectRecipe } = useAppState();
+  const { userId, selectRecipe } = useAppState();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -143,8 +144,6 @@ export function RecipeManagementTab() {
   const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 30 });
   const recipeCategories = Array.isArray(recipeCategoriesData?.items) ? recipeCategoriesData.items : (Array.isArray(recipeCategoriesData) ? recipeCategoriesData : []);
   const { data: recipeCategoryLinks } = useAllRecipeRecipeCategories();
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items ?? [];
 
   // Memoize recipe IDs to prevent unstable references triggering refetches
   const recipeIds = useMemo(
@@ -152,11 +151,12 @@ export function RecipeManagementTab() {
     [recipes]
   );
 
-  // Fetch outlets for all recipes (with TanStack Query caching)
-  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(recipeIds);
-
   // Fetch allergens for all recipes (with TanStack Query caching)
   const { data: recipeAllergens = new Map() } = useRecipeAllergensBatch(recipeIds);
+
+  // Brand/outlet chips per recipe — one batch call, names resolved server-side (a recipe may
+  // be served at a brand OR an outlet), scoped to the units this user may see.
+  const { data: recipeUnits = new Map<number, RecipeUnitChip[]>() } = useRecipeUnitsBatch(recipeIds);
 
   // Fetch sub-dish presence for all recipes (with TanStack Query caching)
   const { data: recipeSubDishMap = {} } = useSubRecipesBatch(recipeIds);
@@ -189,19 +189,11 @@ export function RecipeManagementTab() {
     return new Map(recipeCategories.map((c) => [c.id, c.name]));
   }, [recipeCategories]);
 
-  // Map outlet_id -> name
-  const outletNameMap = useMemo(() => {
-    return new Map(outlets.map((o) => [o.id, o.name]));
-  }, [outlets]);
-
-  // Get outlet names for a recipe
-  const getOutletNamesForRecipe = (recipeId: number): string[] => {
-    const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
-    return recipeOutletLinks
-      .filter((link: { is_active: boolean; outlet_id: number }) => link.is_active)
-      .map((link: { is_active: boolean; outlet_id: number }) => outletNameMap.get(link.outlet_id))
-      .filter((name: string | undefined): name is string => name !== undefined);
-  };
+  const getUnitNamesForRecipe = (recipeId: number): string[] =>
+    (recipeUnits.get(recipeId) ?? [])
+      .filter((chip) => chip.is_active)
+      .map((chip) => chip.unit_name)
+      .filter((name) => name.length > 0);
 
   // Get category names for a recipe
   const getCategoryNamesForRecipe = (recipeId: number): string[] => {
@@ -342,9 +334,9 @@ export function RecipeManagementTab() {
                       key={recipe.id}
                       recipe={recipe}
                       isOwned={userId !== null && recipe.owner_id === userId}
-                      outletNames={getOutletNamesForRecipe(recipe.id)}
                       categoryNames={getCategoryNamesForRecipe(recipe.id)}
                       allergenNames={getAllergenNamesForRecipe(recipe.id)}
+                      unitNames={getUnitNamesForRecipe(recipe.id)}
                       matchedViaSubDish={matchedViaSubDish(recipe)}
                     />
                   ))}
@@ -358,6 +350,7 @@ export function RecipeManagementTab() {
                       isOwned={userId !== null && recipe.owner_id === userId}
                       categoryNames={getCategoryNamesForRecipe(recipe.id)}
                       allergenNames={getAllergenNamesForRecipe(recipe.id)}
+                      unitNames={getUnitNamesForRecipe(recipe.id)}
                       matchedViaSubDish={matchedViaSubDish(recipe)}
                     />
                   ))}

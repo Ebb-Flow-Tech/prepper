@@ -5,23 +5,31 @@ const USER_AUTH_FILE = 'e2e/.auth/user.json';
 const ADMIN_AUTH_FILE = 'e2e/.auth/admin.json';
 const MANAGER_AUTH_FILE = 'e2e/.auth/manager.json';
 
-// Inject auth state directly into localStorage to avoid depending on login UI
-// Each test user must exist in the backend before running tests.
+// Inject auth state directly into localStorage to avoid depending on login UI.
+// Each test user must exist in the backend before running tests, AND — since Prepper's access
+// is now derived entirely from Passport (fail closed) — each user's Passport projection must be
+// seeded in the backend too: an identity_link, an active membership, an entitlement, a brand
+// unit with app access, and (for a plain brand user) a unit_app_membership. See
+// backend/tests/conftest.py for the exact chain. This harness talks to the live API only; it
+// does not write those rows itself, so the backend test environment is responsible for them.
+//
+//   - Admin user  → org Admin (Manager at every brand via the ladder).
+//   - Manager user → holds Manager at ONE brand (brand-scoped; no global flag exists any more).
+//   - Normal user  → holds Staff at a brand (read/limited).
+//
 // Set credentials via env vars:
 //   TEST_USER_EMAIL / TEST_USER_PASSWORD
-//   TEST_MANAGER_EMAIL / TEST_MANAGER_PASSWORD  (normal user, is_manager=true)
+//   TEST_MANAGER_EMAIL / TEST_MANAGER_PASSWORD  (holds Manager at a brand in Passport)
 //   TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD
 //   TEST_API_URL (default: http://localhost:8000/api/v1)
 
+// The stored auth shape carries NO role — it mirrors the app's `StoredAuth` (src/lib/store.tsx).
 interface AuthResult {
   userId: string;
   jwt: string;
-  userType: 'normal' | 'admin';
   refreshToken: string;
   username: string;
   email: string;
-  isManager: boolean;
-  outletId: number | null;
 }
 
 async function loginViaApi(
@@ -45,12 +53,9 @@ async function loginViaApi(
   return {
     userId: data.user.id,
     jwt: data.access_token,
-    userType: data.user.user_type,
     refreshToken: data.refresh_token,
     username: data.user.username,
     email: data.user.email,
-    isManager: data.user.is_manager ?? false,
-    outletId: data.user.outlet_id ?? null,
   };
 }
 
@@ -179,66 +184,40 @@ async function seedUserData(
   return { recipeId, sessionId, ingredientId, supplierId };
 }
 
-/** Promote manager user to is_manager=true. Idempotent, no auth required. */
-async function seedManagerData(
-  userId: string,
-  apiUrl: string
-): Promise<void> {
-  // The users endpoint has no auth guard — promote is safe without admin JWT
-  const promoteRes = await fetch(`${apiUrl}/users/${userId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ is_manager: true }),
-  });
-  if (promoteRes.ok) {
-    console.log(`[seed] Promoted manager user ${userId} to is_manager=true`);
-  } else {
-    console.warn(`[seed] Could not promote manager user: ${promoteRes.status}`);
-  }
+interface PassportBrand {
+  id: string;
+  name: string;
+  organization_id: string;
+  my_role: 'Manager' | 'Staff' | null;
 }
 
-/** Seed admin-only data (outlets, menus) and assign outlet to test users. Idempotent.
+/** Seed admin-only data (a menu at a Passport brand). Idempotent.
  *
- * This step is parallel-safe: it looks up test users by email (no file deps)
- * and writes seed-manager-data.json with the admin-created menu ID.
+ * Structure (brands/outlets) and roles are Passport's now — there is no `/outlets` endpoint and
+ * no user role flags to set. The admin is an org Admin, so they hold Manager at every brand of
+ * their org via the ladder; we just pick the first brand Passport projects for them and attach a
+ * menu to it. Access itself is seeded in the backend (the Passport projection), not here.
  */
 async function seedAdminData(
   jwt: string,
   apiUrl: string,
-  normalUserEmail: string,
-  managerEmail: string,
-): Promise<{ outletId: number; menuId: number } | null> {
+): Promise<{ unitId: string; menuId: number } | null> {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${jwt}`,
   };
-  const noAuthHeaders = { 'Content-Type': 'application/json' };
 
-  // ── 1. Ensure at least one outlet exists ─────────────────────────────────
-  const outletsRes = await fetch(`${apiUrl}/outlets`, { headers });
-  const outletsData = outletsRes.ok ? await outletsRes.json() : {};
-  const outlets: { id: number }[] = outletsData.items ?? outletsData ?? [];
-  let outletId: number;
-
-  if (outlets.length > 0) {
-    outletId = outlets[0].id;
-    console.log(`[seed] Using existing outlet id=${outletId}`);
-  } else {
-    const createRes = await fetch(`${apiUrl}/outlets`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ name: 'E2E Seed Outlet', code: 'E2E001' }),
-    });
-    if (!createRes.ok) {
-      console.warn(`[seed] Could not create outlet: ${createRes.status} ${await createRes.text()}`);
-      return null;
-    }
-    const outlet = await createRes.json();
-    outletId = outlet.id;
-    console.log(`[seed] Created outlet id=${outletId}`);
+  // ── 1. Resolve a brand the admin manages (from the Passport projection) ──
+  const brandsRes = await fetch(`${apiUrl}/passport/brand-roles/brands`, { headers });
+  const brands: PassportBrand[] = brandsRes.ok ? await brandsRes.json() : [];
+  if (brands.length === 0) {
+    console.warn('[seed] No Passport brands available for the admin — cannot seed a menu.');
+    return null;
   }
+  const unitId = brands[0].id;
+  console.log(`[seed] Using Passport brand unit id=${unitId} (${brands[0].name})`);
 
-  // ── 2. Ensure a menu exists and is associated with the outlet ────────────
+  // ── 2. Ensure a menu exists and is associated with that brand unit ───────
   const menusRes = await fetch(`${apiUrl}/menus`, { headers });
   const menus: { id: number }[] = menusRes.ok ? await menusRes.json() : [];
   let menuId: number;
@@ -246,11 +225,11 @@ async function seedAdminData(
   if (menus.length > 0) {
     menuId = menus[0].id;
     console.log(`[seed] Using existing admin menu id=${menuId}`);
-    // Ensure it's associated with the outlet
+    // Ensure it's associated with the brand unit
     await fetch(`${apiUrl}/menus/${menuId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ outlet_ids: [outletId] }),
+      body: JSON.stringify({ unit_ids: [unitId] }),
     });
   } else {
     const createRes = await fetch(`${apiUrl}/menus`, {
@@ -259,7 +238,7 @@ async function seedAdminData(
       body: JSON.stringify({
         name: 'E2E Seed Menu',
         is_published: false,
-        outlet_ids: [outletId],
+        unit_ids: [unitId],
         sections: [],
       }),
     });
@@ -280,31 +259,7 @@ async function seedAdminData(
     console.log(`[seed] Wrote seed-manager-data.json: menuId=${menuId}`);
   }
 
-  // ── 3. Assign outlet to normal test user and manager (by email lookup) ───
-  // The users GET/PATCH endpoints have no auth guard, so no JWT needed.
-  for (const [role, email, extra] of [
-    ['normal', normalUserEmail, { outlet_id: outletId }],
-    ['manager', managerEmail, { outlet_id: outletId, is_manager: true }],
-  ] as [string, string, Record<string, unknown>][]) {
-    const usersRes = await fetch(`${apiUrl}/users?email=${encodeURIComponent(email)}`, { headers: noAuthHeaders });
-    const users: { id: string }[] = usersRes.ok ? await usersRes.json() : [];
-    if (users.length > 0) {
-      const patchRes = await fetch(`${apiUrl}/users/${users[0].id}`, {
-        method: 'PATCH',
-        headers: noAuthHeaders,
-        body: JSON.stringify(extra),
-      });
-      if (patchRes.ok) {
-        console.log(`[seed] Updated ${role} user (${email}) with outlet_id=${outletId}`);
-      } else {
-        console.warn(`[seed] Could not update ${role} user: ${patchRes.status}`);
-      }
-    } else {
-      console.warn(`[seed] Could not find ${role} user by email: ${email}`);
-    }
-  }
-
-  return { outletId, menuId };
+  return { unitId, menuId };
 }
 
 setup('authenticate as normal user', async ({ page }) => {
@@ -329,7 +284,7 @@ setup('authenticate as normal user', async ({ page }) => {
   }, auth);
 
   // Verify auth works by navigating to a protected page
-  await page.goto('/outlets');
+  await page.goto('/recipes');
   await expect(page).not.toHaveURL(/\/login/);
 
   await page.context().storageState({ path: USER_AUTH_FILE });
@@ -340,10 +295,9 @@ setup('authenticate as manager user', async ({ page }) => {
   const email = process.env.TEST_MANAGER_EMAIL || 'manager@prepper.test';
   const password = process.env.TEST_MANAGER_PASSWORD || 'managerpassword123';
 
+  // This user holds Manager at a brand in Passport (seeded in the backend). Prepper has no local
+  // role flag to set, so there is nothing to promote here — just sign in.
   const auth = await loginViaApi(email, password, apiUrl);
-
-  // Promote is_manager=true (parallel-safe: no file deps, no auth needed)
-  await seedManagerData(auth.userId, apiUrl);
 
   await page.goto('/');
   await page.evaluate((authData) => {
@@ -360,17 +314,15 @@ setup('authenticate as admin user', async ({ page }) => {
   const apiUrl = process.env.TEST_API_URL || 'http://localhost:8000/api/v1';
   const email = process.env.TEST_ADMIN_EMAIL || 'admin@prepper.test';
   const password = process.env.TEST_ADMIN_PASSWORD || 'adminpassword123';
-  const normalUserEmail = process.env.TEST_USER_EMAIL || 'testuser@prepper.test';
-  const managerEmail = process.env.TEST_MANAGER_EMAIL || 'manager@prepper.test';
 
   const auth = await loginViaApi(email, password, apiUrl);
 
-  // Seed admin-only data: outlet + menu + assign outlet to test users
-  const adminSeedData = await seedAdminData(auth.jwt, apiUrl, normalUserEmail, managerEmail);
+  // Seed admin-only data: a menu attached to a Passport brand the admin manages
+  const adminSeedData = await seedAdminData(auth.jwt, apiUrl);
   if (adminSeedData) {
     fs.mkdirSync('e2e/.auth', { recursive: true });
     fs.writeFileSync('e2e/.auth/seed-admin-data.json', JSON.stringify(adminSeedData, null, 2));
-    console.log(`[seed] Wrote seed-admin-data.json: outletId=${adminSeedData.outletId} menuId=${adminSeedData.menuId ?? 'n/a'}`);
+    console.log(`[seed] Wrote seed-admin-data.json: unitId=${adminSeedData.unitId} menuId=${adminSeedData.menuId ?? 'n/a'}`);
   }
 
   await page.goto('/');
@@ -378,7 +330,7 @@ setup('authenticate as admin user', async ({ page }) => {
     localStorage.setItem('prepper_auth', JSON.stringify(authData));
   }, auth);
 
-  await page.goto('/outlets');
+  await page.goto('/recipes');
   await expect(page).not.toHaveURL(/\/login/);
 
   await page.context().storageState({ path: ADMIN_AUTH_FILE });

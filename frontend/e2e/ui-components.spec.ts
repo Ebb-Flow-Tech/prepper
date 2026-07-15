@@ -606,37 +606,35 @@ test.describe('Authorization & Access Control', () => {
     await context.close();
   });
 
-  test('admin-only nav item (/admin/users) is not visible to normal users', async ({ page }) => {
+  test('no role-gated or /outlets nav item exists', async ({ page }) => {
     await page.goto('/recipes');
     await page.waitForLoadState('load');
 
-    // Only /admin/users is adminOnly: true in TopNav
-    const adminUsersLink = page.locator('nav a[href*="/admin/users"]');
-    const isVisible = await adminUsersLink.isVisible().catch(() => false);
-    expect(isVisible).toBe(false);
+    // Prepper has no local roles, so the nav is not role-gated, and structure lives in Passport —
+    // there is no /admin/users or /outlets entry.
+    expect(await page.locator('nav a[href*="/admin/users"]').isVisible().catch(() => false)).toBe(false);
+    expect(await page.locator('nav a[href="/outlets"]').isVisible().catch(() => false)).toBe(false);
   });
 
   test.describe('Edge Cases', () => {
-    test('token with admin role but expired signature is rejected', async ({ page }) => {
+    test('expired/invalid token is rejected', async ({ page }) => {
       // Use /login as the initial page (stable — no redirect) before setting localStorage
       await page.goto('/login');
       await page.waitForLoadState('load');
-      // Set an obviously invalid/expired JWT
+      // Set an obviously invalid/expired JWT. The token carries no role — authority is derived
+      // per-brand from Passport server-side, never trusted from a client claim.
       await page.evaluate(() => {
         localStorage.setItem('prepper_auth', JSON.stringify({
           userId: 'some-user',
-          jwt: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcl90eXBlIjoiYWRtaW4iLCJleHAiOjF9.INVALID',
-          userType: 'admin',
+          jwt: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxfQ.INVALID',
           refreshToken: 'expired-refresh',
           username: 'hacker',
           email: 'hacker@example.com',
-          isManager: false,
-          outletId: null,
         }));
       });
 
       // Try to access a protected page
-      await page.goto('/outlets');
+      await page.goto('/recipes');
       await page.waitForLoadState('load');
       await page.waitForTimeout(3_000);
       // App may redirect to /login if it detects invalid JWT, or show an error state

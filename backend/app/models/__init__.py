@@ -70,11 +70,7 @@ from app.models.menu_sketch import (
     MenuSketchRead,
     MenuSketchUpdate,
 )
-from app.models.outlet import (
-    Outlet,
-    OutletCreate,
-    OutletType,
-    OutletUpdate,
+from app.models.recipe_outlet import (
     RecipeOutlet,
     RecipeOutletCreate,
     RecipeOutletUpdate,
@@ -186,7 +182,6 @@ from app.models.user import (
     User,
     UserCreate,
     UserRead,
-    UserType,
     UserUpdate,
 )
 
@@ -221,11 +216,7 @@ __all__ = [
     "RecipeRecipeUpdate",
     "RecipeRecipeReorder",
     "SubRecipeUnit",
-    # Outlet
-    "Outlet",
-    "OutletCreate",
-    "OutletUpdate",
-    "OutletType",
+    # Recipe <-> Passport unit
     "RecipeOutlet",
     "RecipeOutletCreate",
     "RecipeOutletUpdate",
@@ -313,7 +304,6 @@ __all__ = [
     "UserCreate",
     "UserUpdate",
     "UserRead",
-    "UserType",
     # Auth
     "LoginRequest",
     "RegisterRequest",

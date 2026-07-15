@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.55](#0055---2026-07-15)** — Rules 7 + 8: Retire the `outlets` Shadow Table & the Local Role Vocabulary — Re-Key Onto Passport Units, Brand-Scoped Access Everywhere, plus SSO Dual-Verify (Dark) & a Recipe-Unit Batch Endpoint
 - **[0.0.54](#0054---2026-07-15)** — Passport: Disarm the Silent Admin Promotion (Delete the Role Projection), Brand-Roles UI, Projection-Backed Reads, Synchronous Identity Linking & the Rule-7 Re-Key Migration
 - **[0.0.53](#0053---2026-07-14)** — Passport Sync Consumer: Complete the Eight-Aggregate Projection (Units, Relations, Brand-App Switches & Roles), Derived Brand-Scoped Access, Role Write-Back, Multi-Org Projection & a Scheduled Nightly Reconciliation
 - **[0.0.52](#0052---2026-07-09)** — Build Fix: Python 3.12 Floor Across Image, CI & Package Metadata — Unblocks the Staging Deploy `ResolutionTooDeep` Caused by `passport-client`'s `requires-python >=3.12`
@@ -60,6 +61,32 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.55] - 2026-07-15
+
+### Changed
+
+#### Rules 7 + 8 — the `outlets` shadow table and the local role vocabulary are gone
+
+Prepper kept its own `outlets` table (name/status/type/hierarchy — all facts Passport owns) and its own role flags (`user_type`, `is_manager`, `outlet_id`). Both drift silently against Passport and both are now deleted. Structure and roles come from the projection; nothing local shadows them.
+
+- **`outlets` retired.** The model, `outlet_service` (360 lines), the `/outlets` router (367 lines), the parent hierarchy and its cycle detection are all deleted — Passport owns structure and enforces `REQUIRED_PAIRING` server-side, so the cycle detection was removed, not ported. `recipe_outlets` / `menu_outlets` / `outlet_supplier_ingredient` re-key from the serial `outlets.id` onto **Passport unit UUIDs** (`recipe.unit_id`, etc.) via migration `p2rtunit3k4l`, which also adds `organization_id` (rule 9) and drops `users.outlet_id`. The migration aborts rather than strand a row; **dry-run against staging resolved all 8,637 dependent rows with 0 stranded.**
+- **Role vocabulary retired (rule 8).** `user_type`, `is_manager`, `UserType`, and `role_projection.py` are deleted. Permissions are now **brand-scoped**: `access.role_at_unit(user, unit)` / `is_org_admin` / `accessible_unit_ids`, read per request from the projection. A manager at one brand can no longer act on another brand's data — the global flag conflated them. Org Owners/Admins keep org-wide reach automatically via Passport's ladder. Access **fails closed**: a user with no derived brand role sees nothing (previously a null outlet meant "see everything").
+- **Frontend** follows: the outlets CRUD UI is deleted, outlet pickers become Passport brand pickers (`components/units`, `usePassportBrands`), and `UserManagementTab` no longer sets roles (they're assigned in the Brand Roles tab, which writes to Passport). No global admin/manager flag remains anywhere.
+
+### Added
+
+#### SSO issuer cutover — dual-verify, dark-launched (P3 §5.1)
+
+Behind `sso_enabled` (default off), `get_current_user` also accepts a token signed by **Passport's** Supabase project, resolving the local user by the token's **verified email** (Passport never syncs `supabase_id`, so email is the only key a consumer holds). A Prepper-issued token still resolves as before — this only ADDS an accepted issuer, so it ships off and flips on. Reversible by the flag; a bad Passport token falls through, never 500s. See `passport docs/specs/2026-07-15-sso-issuer-cutover-prepper-pilot-design.md`.
+
+#### Recipe → unit chips, batched
+
+`POST /recipes/units/batch` returns `{recipe_id: [{unit_id, unit_name, is_active}]}` in one query (no N+1), names resolved server-side, scoped to the caller's accessible units so a card list never leaks another tenant's brand. Restores the per-recipe brand chips on the recipe management grid/list and the recipe library panel.
+
+**Files changed:** `backend/app/{models,domain,api,passport}/*` (outlets deletion + re-key + brand-scoped auth), `backend/alembic/versions/p2rtunit3k4l_*.py`, `backend/app/domain/supabase_auth_service.py` + `app/api/deps.py` + `app/config.py` (SSO dual-verify), `backend/tests/*` (rewritten to the projection model; +`test_sso_dual_verify`, `test_recipe_units_batch`), `frontend/src/**` (outlets UI removed, brand pickers, unit chips), `frontend/e2e/**` (harness migrated)
+
 ---
 
 ## [0.0.54] - 2026-07-15

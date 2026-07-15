@@ -46,12 +46,12 @@ test.describe('Login Page (/login)', () => {
     await expect(loginPage.submitButton).toBeDisabled();
   });
 
-  test('successful login redirects to /outlets', async ({ page }) => {
+  test('successful login redirects to /recipes', async ({ page }) => {
     const loginPage = new LoginPage(page);
     await loginPage.goto();
     await loginPage.login(TEST_USER.email, TEST_USER.password);
-    await page.waitForURL(/\/outlets/, { timeout: 30_000 });
-    expect(page.url()).toContain('/outlets');
+    await page.waitForURL(/\/recipes/, { timeout: 30_000 });
+    expect(page.url()).toContain('/recipes');
   });
 
   test('invalid credentials show an error message below the form', async ({ page }) => {
@@ -130,7 +130,7 @@ test.describe('Login Page (/login)', () => {
       await loginPage.emailInput.fill(TEST_USER.email);
       await loginPage.passwordInput.fill(TEST_USER.password);
       await loginPage.passwordInput.press('Enter');
-      await page.waitForURL(/\/outlets/, { timeout: 15_000 });
+      await page.waitForURL(/\/recipes/, { timeout: 15_000 });
     });
 
     test('login failure does not clear the email field', async ({ page }) => {
@@ -197,24 +197,24 @@ test.describe('Login Page (/login)', () => {
       const loginPage = new LoginPage(page);
       await loginPage.goto();
       await loginPage.login(TEST_USER.email, TEST_USER.password);
-      await page.waitForURL(/\/outlets/, { timeout: 15_000 });
+      await page.waitForURL(/\/recipes/, { timeout: 15_000 });
 
       await page.goBack();
       await page.waitForTimeout(1000);
-      // Should redirect back to /outlets, not stay on /login
+      // Should redirect back to /recipes, not stay on /login
       expect(page.url()).not.toContain('/login');
     });
 
-    test('malformed stored redirect URL falls back to /outlets safely', async ({ page }) => {
+    test('malformed stored redirect URL falls back to /recipes safely', async ({ page }) => {
       await page.goto('/login');
       await page.evaluate(() => {
         localStorage.setItem('prepper_last_route', 'javascript:alert(1)');
       });
       const loginPage = new LoginPage(page);
       await loginPage.login(TEST_USER.email, TEST_USER.password);
-      await page.waitForURL(/\/outlets/, { timeout: 15_000 });
-      // Should land on /outlets (safe fallback), not execute the malicious URL
-      expect(page.url()).toContain('/outlets');
+      await page.waitForURL(/\/recipes/, { timeout: 15_000 });
+      // Should land on /recipes (safe fallback), not execute the malicious URL
+      expect(page.url()).toContain('/recipes');
     });
   });
 });
@@ -364,12 +364,9 @@ test.describe('Auth Guard', () => {
         localStorage.setItem('prepper_auth', JSON.stringify({
           userId: 'expired-user',
           jwt: 'expired.jwt.token',
-          userType: 'normal',
           refreshToken: 'expired-refresh',
           username: 'olduser',
           email: 'old@example.com',
-          isManager: false,
-          outletId: null,
         }));
       });
       await page.goto('/recipes');
@@ -386,12 +383,9 @@ test.describe('Auth Guard', () => {
       }, {
         userId: 'test-user',
         jwt: 'valid.mock.token',
-        userType: 'normal',
         refreshToken: 'valid-refresh',
         username: 'testuser',
         email: 'test@example.com',
-        isManager: false,
-        outletId: null,
       });
       await page.goto('/login');
       await page.waitForTimeout(2000);
@@ -408,12 +402,9 @@ test.describe('Auth Guard', () => {
       }, {
         userId: 'test-user',
         jwt: 'valid.mock.token',
-        userType: 'normal',
         refreshToken: 'valid-refresh',
         username: 'testuser',
         email: 'test@example.com',
-        isManager: false,
-        outletId: null,
       });
       await page.goto('/register');
       await page.waitForTimeout(2000);

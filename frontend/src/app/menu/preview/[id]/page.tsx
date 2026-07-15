@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { ChevronDown, ChevronUp, ArrowLeft, LayoutGrid, List } from 'lucide-react';
 import { useMenu, useRecipes, useRecipeAllergensBatch, useRecipeCategories, useAllRecipeRecipeCategories } from '@/lib/hooks';
 import { Skeleton, Button, Badge } from '@/components/ui';
-import { useAppState } from '@/lib/store';
+import { useSelectableBrands } from '@/components/units';
 
 interface PreviewMenuPageProps {
   params: Promise<{ id: string }>;
@@ -27,7 +27,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
     [menu]
   );
   const { data: allergenMap } = useRecipeAllergensBatch(recipeIds);
-  const { userType, isManager } = useAppState();
+  const { brands: manageableBrands } = useSelectableBrands(true);
 
   // Recipe category data
   const { data: recipeCategoriesData } = useRecipeCategories({ page_size: 100 });
@@ -125,7 +125,7 @@ export default function PreviewMenuPage({ params }: PreviewMenuPageProps) {
               Version {menu.version_no} •{' '}
               {menu.is_published ? 'Published' : 'Draft'}
             </p>
-            {(userType === 'admin' || isManager) && (
+            {menu.outlets?.some((unit) => manageableBrands.some((brand) => brand.id === unit.unit_id)) && (
               <Link href={`/menu/edit/${menuId}`}>
                 <Button size="sm" variant="default" className="mt-2">
                   Edit Menu

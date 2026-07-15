@@ -20,10 +20,9 @@ from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.models import (
-    Outlet,
     PassportEntitlement,
     PassportIdentityLink,
     PassportMembership,
@@ -115,7 +114,6 @@ def apply_unit(session: Session, values: dict[str, Any]) -> None:
     later still links without a backfill.
     """
     _versioned_upsert(session, PassportUnit, values)
-    link_outlet(session, values)
 
 
 def apply_unit_app_membership(session: Session, values: dict[str, Any]) -> None:
@@ -166,25 +164,3 @@ def remove_unit_app_access(session: Session, access_id: str) -> None:
 
 # --- brand -> outlet link -----------------------------------------------------------------
 
-def link_outlet(session: Session, unit_values: dict[str, Any]) -> None:
-    """Point the local outlet at its Passport brand, keyed on ``external_ref == outlets.code``.
-
-    NON-DESTRUCTIVE by design: a unit that is not a brand, carries no ``external_ref``, or
-    whose ref matches no outlet leaves every outlet untouched. Until Passport populates
-    ``external_ref``, no outlet is linked and no Passport-driven outlet scope is derived —
-    Prepper's existing outlet grants keep working unchanged.
-    """
-    if unit_values.get("type") != _BRAND:
-        return
-
-    external_ref = unit_values.get("external_ref")
-    if not external_ref:
-        return
-
-    outlet = session.exec(select(Outlet).where(Outlet.code == external_ref)).first()
-    if outlet is None or outlet.passport_unit_id == unit_values["id"]:
-        return
-
-    outlet.passport_unit_id = unit_values["id"]
-    session.add(outlet)
-    session.commit()

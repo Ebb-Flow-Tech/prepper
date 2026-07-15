@@ -2,23 +2,27 @@
 
 import io
 
+import openpyxl
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlmodel import Session
 
-import openpyxl
-
-from app.api.deps import get_session, get_current_user
-from app.domain.storage_service import StorageService, StorageError, is_storage_configured
+from app.api.deps import get_current_user, get_session
+from app.domain.fmh_import_service import FMHImportResult, import_suppliers
+from app.domain.storage_service import (
+    StorageError,
+    StorageService,
+    is_storage_configured,
+)
+from app.domain.supplier_service import SupplierService
 from app.models.supplier import (
     Supplier,
     SupplierCreate,
     SupplierUpdate,
 )
 from app.models.supplier_ingredient import SupplierIngredientRead
-from app.models.user import User, UserType
-from app.domain.supplier_service import SupplierService
-from app.domain.fmh_import_service import FMHImportResult, import_suppliers
+from app.models.user import User
+from app.passport import access
 
 router = APIRouter()
 
@@ -162,9 +166,16 @@ async def import_suppliers_fmh(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Import FMH suppliers and enrich with product codes. Admin only."""
-    if current_user.user_type != UserType.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    """Import FMH suppliers and enrich with product codes. Org administrators only.
+
+    Suppliers are org-wide master data — the import touches no single unit, so there is no brand to
+    be a `Manager` of and the check falls back to organisation administration.
+    """
+    if not access.is_org_admin(session, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only organisation administrators can import suppliers",
+        )
     for f in (suppliers_file, pricings_file):
         if not (f.filename or "").lower().endswith(".xlsx"):
             raise HTTPException(
@@ -182,9 +193,8 @@ def get_supplier_ingredients(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all ingredients associated with a supplier (filtered by user's outlet tree)."""
+    """Get all ingredients of a supplier, restricted to the units the caller can see."""
     service = SupplierService(session)
-    # Check if supplier exists
     supplier = service.get_supplier(supplier_id)
     if not supplier:
         raise HTTPException(
@@ -193,6 +203,5 @@ def get_supplier_ingredients(
         )
     return service.get_supplier_ingredients(
         supplier_id,
-        user_outlet_id=current_user.outlet_id,
-        is_admin=current_user.user_type == UserType.ADMIN,
+        subject=current_user.id,
     )

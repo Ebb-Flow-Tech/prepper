@@ -19,12 +19,15 @@ from fastapi import HTTPException
 from passport_client import PassportAPIError
 from sqlmodel import Session
 
-from app.models import User, UserType
+from app.models import User
 from app.passport import store, writeback
+from tests.conftest import grant_org_role, link_identity
 
 ORG = "org-1"
 BRAND = "brand-1"
 TOKEN = "the-end-user-jwt"
+ACTOR = "sub-1"
+ACTOR_PU = "pu-actor"
 
 
 class _FakeClient:
@@ -118,14 +121,18 @@ def _entitlement(session: Session) -> None:
     )
 
 
-def _actor(*, admin: bool = True, manager: bool = False) -> User:
-    return User(
-        id="sub-1",
-        email="chef@acme.test",
-        username="chef",
-        user_type=UserType.ADMIN if admin else UserType.NORMAL,
-        is_manager=manager,
-    )
+def _actor(session: Session, *, admin: bool = True) -> User:
+    """The acting user. Their authority is Passport's, derived from the projection — the `users`
+    row carries no role at all, so an admin actor is one we SEED an ``Admin`` membership for.
+
+    A non-admin actor is seeded with nothing: no identity link, no membership, no brand role. They
+    derive nothing and are refused — fail closed.
+    """
+    if admin:
+        link_identity(session, ACTOR, ACTOR_PU)
+        grant_org_role(session, ACTOR_PU, "Admin", org_id=ORG)
+
+    return User(id=ACTOR, email="chef@acme.test", username="chef")
 
 
 def test_assign_forwards_the_end_user_token_and_own_app_id(session: Session):
@@ -136,7 +143,7 @@ def test_assign_forwards_the_end_user_token_and_own_app_id(session: Session):
         asyncio.run(
             writeback.assign_brand_role(
                 session,
-                actor=_actor(),
+                actor=_actor(session),
                 platform_user_id="pu-1",
                 unit_id=BRAND,
                 role="Staff",
@@ -161,7 +168,7 @@ def test_local_role_check_runs_before_passport_is_called(session: Session):
             asyncio.run(
                 writeback.assign_brand_role(
                     session,
-                    actor=_actor(admin=False),
+                    actor=_actor(session, admin=False),
                     platform_user_id="pu-1",
                     unit_id=BRAND,
                     role="Staff",
@@ -186,7 +193,7 @@ def test_passport_403_surfaces_unchanged(session: Session):
             asyncio.run(
                 writeback.remove_brand_role(
                     session,
-                    actor=_actor(),
+                    actor=_actor(session),
                     assignment_id="uam-1",
                     end_user_token=TOKEN,
                 )
@@ -206,7 +213,7 @@ def test_invalid_role_is_rejected_before_the_call(session: Session):
             asyncio.run(
                 writeback.assign_brand_role(
                     session,
-                    actor=_actor(),
+                    actor=_actor(session),
                     platform_user_id="pu-1",
                     unit_id=BRAND,
                     role="Admin",

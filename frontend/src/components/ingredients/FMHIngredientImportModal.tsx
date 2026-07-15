@@ -38,11 +38,9 @@ export function FMHIngredientImportModal({ isOpen, onClose }: FMHIngredientImpor
       const res = await importIngredientsFMH(productsFile);
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['outlets'] });
       const parts = [
         `${res.ingredients_created} ingredient${res.ingredients_created !== 1 ? 's' : ''} created`,
         ...(res.ingredients_updated > 0 ? [`${res.ingredients_updated} ingredient${res.ingredients_updated !== 1 ? 's' : ''} updated`] : []),
-        `${res.outlets_created} outlet${res.outlets_created !== 1 ? 's' : ''} created`,
         `${res.categories_created} categor${res.categories_created !== 1 ? 'ies' : 'y'} created`,
         `${res.supplier_ingredients_created} supplier link${res.supplier_ingredients_created !== 1 ? 's' : ''} created`,
         ...(res.supplier_ingredients_updated > 0 ? [`${res.supplier_ingredients_updated} pricing record${res.supplier_ingredients_updated !== 1 ? 's' : ''} updated`] : []),

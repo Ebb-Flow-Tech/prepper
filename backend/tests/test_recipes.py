@@ -2,6 +2,18 @@
 
 from fastapi.testclient import TestClient
 
+from app.passport import access
+from tests.conftest import (
+    ADMIN_USER_ID,
+    MANAGER,
+    STAFF,
+    create_user,
+    make_brand_user,
+    seed_brand,
+    seed_outlet_unit,
+    use_user,
+)
+
 
 def test_create_recipe(client: TestClient):
     """Test creating a new recipe."""
@@ -223,7 +235,7 @@ def test_update_recipe_cost_price(client: TestClient):
     # Create recipe
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion", "owner_id": ADMIN_USER_ID},
     )
     recipe_id = create_response.json()["id"]
 
@@ -263,7 +275,7 @@ def test_update_recipe_rnd_started(client: TestClient):
     # Create recipe
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion", "owner_id": ADMIN_USER_ID},
     )
     recipe_id = create_response.json()["id"]
 
@@ -289,7 +301,7 @@ def test_update_recipe_review_ready(client: TestClient):
     # Create recipe
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion", "owner_id": ADMIN_USER_ID},
     )
     recipe_id = create_response.json()["id"]
 
@@ -315,7 +327,7 @@ def test_update_recipe_summary_feedback(client: TestClient):
     # Create recipe
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+        json={"name": "Test Recipe", "yield_quantity": 1, "yield_unit": "portion", "owner_id": ADMIN_USER_ID},
     )
     recipe_id = create_response.json()["id"]
 
@@ -522,7 +534,12 @@ def test_fork_recipe_copies_instructions(client: TestClient):
     # Create recipe
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Recipe with Instructions", "yield_quantity": 1, "yield_unit": "batch"},
+        json={
+            "name": "Recipe with Instructions",
+            "yield_quantity": 1,
+            "yield_unit": "batch",
+            "owner_id": ADMIN_USER_ID,
+        },
     )
     recipe_id = create_response.json()["id"]
 
@@ -598,7 +615,12 @@ def test_fork_recipe_preserves_selling_price(client: TestClient):
     # Create recipe with selling price
     create_response = client.post(
         "/api/v1/recipes",
-        json={"name": "Priced Recipe", "yield_quantity": 1, "yield_unit": "portion"},
+        json={
+            "name": "Priced Recipe",
+            "yield_quantity": 1,
+            "yield_unit": "portion",
+            "owner_id": ADMIN_USER_ID,
+        },
     )
     recipe_id = create_response.json()["id"]
 
@@ -1100,177 +1122,83 @@ def test_fork_recipe_preserves_wastage_percentage(client: TestClient):
 
 
 # ============ Access Control Tests (Version Tree & Recipe) ============
+# Structure is Passport's: a recipe is served at a UNIT (a brand, or an outlet under one), and a
+# user reaches a unit by holding a role at its brand. There is no local outlet hierarchy to walk.
 
 
-def test_version_tree_location_user_sees_parent_brand_recipes(client: TestClient, session):
-    """Test that location users can see parent brand recipes in full (not masked) in version tree."""
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
+def test_version_tree_outlet_user_sees_their_brands_recipes(client: TestClient, session):
+    """A user at an outlet sees its brand's recipes in full — the outlet INHERITS the brand."""
+    brand_id = seed_brand(session, "Main Brand")
+    outlet_id = seed_outlet_unit(session, brand_id, "Downtown Location")
 
-    # Create brand outlet
-    brand_response = client.post(
-        "/api/v1/outlets",
-        json={"name": "Main Brand", "code": "MB", "outlet_type": "brand"},
-    )
-    brand_id = brand_response.json()["id"]
-
-    # Create location outlet (child of brand)
-    location_response = client.post(
-        "/api/v1/outlets",
-        json={
-            "name": "Downtown Location",
-            "code": "DL",
-            "outlet_type": "location",
-            "parent_outlet_id": brand_id,
-        },
-    )
-    location_id = location_response.json()["id"]
-
-    # Create recipe owned by admin and assign to brand
     recipe = client.post(
         "/api/v1/recipes",
         json={"name": "Brand Recipe", "yield_quantity": 1, "yield_unit": "batch"},
     ).json()
-
     client.post(
-        f"/api/v1/recipes/{recipe['id']}/outlets",
-        json={"outlet_id": brand_id, "is_active": True},
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
     )
 
-    # Fork the recipe
     forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
-
-    # Create and save a location user to the database
-    location_user = User(
-        id="location-user-1",
-        email="location@test.com",
-        username="location_user",
-        user_type=UserType.NORMAL,
-        outlet_id=location_id,
+    client.post(
+        f"/api/v1/recipes/{forked['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
     )
-    session.add(location_user)
-    session.commit()
 
-    try:
-        # Also assign the fork to the brand outlet so location user can see it
-        client.post(
-            f"/api/v1/recipes/{forked['id']}/outlets",
-            json={"outlet_id": brand_id, "is_active": True},
-        )
+    make_brand_user(session, "location-user-1", brand_id, STAFF, "location_user")
+    assert outlet_id in access.accessible_unit_ids(session, "location-user-1")
 
-        # Get version tree from location user's perspective
-        response = client.get(
-            f"/api/v1/recipes/{recipe['id']}/versions",
-            params={"user_id": "location-user-1"},
-        )
-        assert response.status_code == 200
-        versions = response.json()
-
-        # Should see 2 recipes: original and fork
-        assert len(versions) == 2
-
-        # Both should be UNMASKED (full data, not masked) because location user
-        # can see parent brand's recipes via outlet access
-        original = next(v for v in versions if v["id"] == recipe["id"])
-        fork = next(v for v in versions if v["id"] == forked["id"])
-
-        # Unmasked recipes have the actual name
-        assert original["name"] == "Brand Recipe"
-        assert fork["name"] == "Brand Recipe (Fork)"
-
-    finally:
-        # Clean up the location user from the database
-        session.delete(location_user)
-        session.commit()
-
-
-def test_version_tree_brand_user_cannot_see_location_only_recipes(client: TestClient, session):
-    """Test that brand users cannot see location-only recipes (they appear masked)."""
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
-
-    # Create brand outlet
-    brand_response = client.post(
-        "/api/v1/outlets",
-        json={"name": "Brand A", "code": "BA", "outlet_type": "brand"},
+    response = client.get(
+        f"/api/v1/recipes/{recipe['id']}/versions",
+        params={"user_id": "location-user-1"},
     )
-    brand_id = brand_response.json()["id"]
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
 
-    # Create location outlet (child of brand)
-    location_response = client.post(
-        "/api/v1/outlets",
-        json={
-            "name": "Location A",
-            "code": "LA",
-            "outlet_type": "location",
-            "parent_outlet_id": brand_id,
-        },
-    )
-    location_id = location_response.json()["id"]
+    original = next(v for v in versions if v["id"] == recipe["id"])
+    fork = next(v for v in versions if v["id"] == forked["id"])
+    assert original["name"] == "Brand Recipe"
+    assert fork["name"] == "Brand Recipe (Fork)"
 
-    # Create recipe owned by admin and assign ONLY to location
+
+def test_version_tree_user_of_another_brand_sees_masked_recipes(client: TestClient, session):
+    """A role at brand A shows nothing of brand B — its recipes come back masked."""
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+
     recipe = client.post(
         "/api/v1/recipes",
-        json={"name": "Location Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+        json={"name": "Brand B Recipe", "yield_quantity": 1, "yield_unit": "batch"},
     ).json()
-
     client.post(
-        f"/api/v1/recipes/{recipe['id']}/outlets",
-        json={"outlet_id": location_id, "is_active": True},
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_b, "is_active": True},
     )
 
-    # Fork the recipe
     forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
 
-    # Create and save a brand user to the database
-    brand_user = User(
-        id="brand-user-1",
-        email="brand@test.com",
-        username="brand_user",
-        user_type=UserType.NORMAL,
-        outlet_id=brand_id,
+    make_brand_user(session, "brand-a-user", brand_a, MANAGER, "brand_a_user")
+
+    response = client.get(
+        f"/api/v1/recipes/{recipe['id']}/versions",
+        params={"user_id": "brand-a-user"},
     )
-    session.add(brand_user)
-    session.commit()
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
 
-    try:
-        # Get version tree from brand user's perspective
-        response = client.get(
-            f"/api/v1/recipes/{recipe['id']}/versions",
-            params={"user_id": "brand-user-1"},
-        )
-        assert response.status_code == 200
-        versions = response.json()
-
-        # Should see 2 recipes: original and fork
-        assert len(versions) == 2
-
-        # Both should be MASKED because brand user cannot see location-only recipes
-        original = next(v for v in versions if v["id"] == recipe["id"])
-        fork = next(v for v in versions if v["id"] == forked["id"])
-
-        # Masked recipes have empty names
-        assert original["name"] == ""
-        assert fork["name"] == ""
-        # But IDs and version should be present
-        assert original["version"] == 1
-        assert fork["version"] == 2
-
-    finally:
-        # Clean up the brand user from the database
-        session.delete(brand_user)
-        session.commit()
+    original = next(v for v in versions if v["id"] == recipe["id"])
+    fork = next(v for v in versions if v["id"] == forked["id"])
+    assert original["name"] == ""
+    assert fork["name"] == ""
+    assert original["version"] == 1
+    assert fork["version"] == 2
 
 
 def test_version_tree_owner_sees_own_recipe_unmasked(client: TestClient, session):
-    """Test that recipe owner always sees their own recipes unmasked in version tree."""
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
-
-    # Create recipe with specific owner
+    """The owner always sees their own recipe, whatever Passport says."""
     recipe = client.post(
         "/api/v1/recipes",
         json={
@@ -1281,51 +1209,35 @@ def test_version_tree_owner_sees_own_recipe_unmasked(client: TestClient, session
         },
     ).json()
 
-    # Fork with a different owner to test masking
     forked = client.post(
         f"/api/v1/recipes/{recipe['id']}/fork",
         json={"new_owner_id": "other-admin-user"},
     ).json()
 
-    # Create and save the owner user (not assigned to any outlet)
-    owner_user = User(
-        id="recipe-owner-user",
-        email="owner@test.com",
-        username="owner",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
+    create_user(session, "recipe-owner-user", "owner")
+
+    response = client.get(
+        f"/api/v1/recipes/{recipe['id']}/versions",
+        params={"user_id": "recipe-owner-user"},
     )
-    session.add(owner_user)
-    session.commit()
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
 
-    try:
-        # Get version tree from owner's perspective
-        response = client.get(
-            f"/api/v1/recipes/{recipe['id']}/versions",
-            params={"user_id": "recipe-owner-user"},
-        )
-        assert response.status_code == 200
-        versions = response.json()
+    original = next(v for v in versions if v["id"] == recipe["id"])
+    assert original["name"] == "Owned Recipe"
 
-        assert len(versions) == 2
-
-        # Owner's original recipe should be unmasked
-        original = next(v for v in versions if v["id"] == recipe["id"])
-        assert original["name"] == "Owned Recipe"
-
-        # Fork (owned by different user) should be masked
-        fork = next(v for v in versions if v["id"] == forked["id"])
-        assert fork["name"] == ""
-
-    finally:
-        # Clean up the owner user from the database
-        session.delete(owner_user)
-        session.commit()
+    fork = next(v for v in versions if v["id"] == forked["id"])
+    assert fork["name"] == ""
 
 
-def test_version_tree_unrelated_user_sees_masked_recipes(client: TestClient, session):
-    """Test that unrelated users see masked recipes (not owner, not public, not in outlet)."""
-    # Create recipe not owned by our user and not public
+def test_version_tree_user_with_no_passport_role_sees_masked_recipes(
+    client: TestClient, session
+):
+    """FAIL CLOSED — no identity link, no membership, no brand role: nothing is visible.
+
+    The old model treated an empty scope as "see everything". It now derives nothing.
+    """
     recipe = client.post(
         "/api/v1/recipes",
         json={
@@ -1337,182 +1249,181 @@ def test_version_tree_unrelated_user_sees_masked_recipes(client: TestClient, ses
         },
     ).json()
 
-    # Fork the recipe
     forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
 
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
+    create_user(session, "unrelated-user", "unrelated")
 
-    # Create and save an unrelated user
-    unrelated_user = User(
-        id="unrelated-user",
-        email="unrelated@test.com",
-        username="unrelated",
-        user_type=UserType.NORMAL,
-        outlet_id=None,
+    response = client.get(
+        f"/api/v1/recipes/{recipe['id']}/versions",
+        params={"user_id": "unrelated-user"},
     )
-    session.add(unrelated_user)
-    session.commit()
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
 
-    try:
-        # Get version tree from unrelated user's perspective
-        response = client.get(
-            f"/api/v1/recipes/{recipe['id']}/versions",
-            params={"user_id": "unrelated-user"},
-        )
-        assert response.status_code == 200
-        versions = response.json()
-
-        assert len(versions) == 2
-
-        # Both recipes should be masked
-        original = next(v for v in versions if v["id"] == recipe["id"])
-        fork = next(v for v in versions if v["id"] == forked["id"])
-
-        assert original["name"] == ""
-        assert fork["name"] == ""
-
-    finally:
-        # Clean up the unrelated user from the database
-        session.delete(unrelated_user)
-        session.commit()
+    original = next(v for v in versions if v["id"] == recipe["id"])
+    fork = next(v for v in versions if v["id"] == forked["id"])
+    assert original["name"] == ""
+    assert fork["name"] == ""
 
 
-def test_get_recipe_location_user_can_access_parent_brand_recipe(client: TestClient):
-    """Test that location users can access recipes from their parent brand outlet."""
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
+def test_get_recipe_outlet_user_can_access_their_brands_recipe(
+    client: TestClient, session
+):
+    """An outlet inherits its brand, so a recipe served at the brand is reachable from the site."""
+    brand_id = seed_brand(session, "Brand X")
+    seed_outlet_unit(session, brand_id, "Location X")
 
-    # Create brand outlet
-    brand_response = client.post(
-        "/api/v1/outlets",
-        json={"name": "Brand X", "code": "BX", "outlet_type": "brand"},
-    )
-    brand_id = brand_response.json()["id"]
-
-    # Create location outlet (child of brand)
-    location_response = client.post(
-        "/api/v1/outlets",
-        json={
-            "name": "Location X",
-            "code": "LX",
-            "outlet_type": "location",
-            "parent_outlet_id": brand_id,
-        },
-    )
-    location_id = location_response.json()["id"]
-
-    # Create recipe and assign to brand
     recipe = client.post(
         "/api/v1/recipes",
         json={"name": "Brand Recipe", "yield_quantity": 1, "yield_unit": "batch"},
     ).json()
-
     client.post(
-        f"/api/v1/recipes/{recipe['id']}/outlets",
-        json={"outlet_id": brand_id, "is_active": True},
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
     )
 
-    # Create a location user
-    location_user = User(
-        id="loc-user-1",
-        email="locuser@test.com",
-        username="locuser",
-        user_type=UserType.NORMAL,
-        outlet_id=location_id,
-    )
+    use_user(client, make_brand_user(session, "loc-user-1", brand_id, STAFF, "locuser"))
 
-    app.dependency_overrides[get_current_user] = lambda: location_user
-
-    try:
-        # Location user should be able to GET the recipe
-        response = client.get(f"/api/v1/recipes/{recipe['id']}")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["id"] == recipe["id"]
-        assert data["name"] == "Brand Recipe"
-
-    finally:
-        # Reset to admin user
-        from app.models import User, UserType
-
-        admin_user = User(
-            id="test-admin-user",
-            email="admin@test.com",
-            username="admin",
-            user_type=UserType.ADMIN,
-            outlet_id=None,
-        )
-        app.dependency_overrides[get_current_user] = lambda: admin_user
+    response = client.get(f"/api/v1/recipes/{recipe['id']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == recipe["id"]
+    assert data["name"] == "Brand Recipe"
 
 
-def test_get_recipe_brand_user_cannot_access_location_only_recipe(client: TestClient):
-    """Test that brand users cannot access recipes assigned only to child locations."""
-    from app.models import User, UserType
-    from app.api.deps import get_current_user
-    from app.main import app
+def test_get_recipe_user_of_another_brand_is_refused(client: TestClient, session):
+    """Brand scoping on the read path: brand A's role reaches nothing served only at brand B."""
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
 
-    # Create brand outlet
-    brand_response = client.post(
-        "/api/v1/outlets",
-        json={"name": "Brand Y", "code": "BY", "outlet_type": "brand"},
-    )
-    brand_id = brand_response.json()["id"]
-
-    # Create location outlet (child of brand)
-    location_response = client.post(
-        "/api/v1/outlets",
-        json={
-            "name": "Location Y",
-            "code": "LY",
-            "outlet_type": "location",
-            "parent_outlet_id": brand_id,
-        },
-    )
-    location_id = location_response.json()["id"]
-
-    # Create recipe and assign ONLY to location
     recipe = client.post(
         "/api/v1/recipes",
-        json={"name": "Location Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+        json={"name": "Brand B Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    client.post(
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_b, "is_active": True},
+    )
+
+    use_user(client, make_brand_user(session, "brand-a-user", brand_a, MANAGER, "branduser"))
+
+    response = client.get(f"/api/v1/recipes/{recipe['id']}")
+    assert response.status_code == 403
+    assert "do not have permission" in response.json()["detail"].lower()
+
+
+def test_get_recipe_user_with_no_passport_role_is_refused(client: TestClient, session):
+    """FAIL CLOSED — an empty unit scope reaches no recipe at all."""
+    brand_id = seed_brand(session, "Brand Z")
+
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Scoped Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    client.post(
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
+    )
+
+    use_user(client, create_user(session, "no-role-user", "norole"))
+
+    response = client.get(f"/api/v1/recipes/{recipe['id']}")
+    assert response.status_code == 403
+
+
+# ============ Recipe <-> Passport unit links ============
+
+
+def test_add_recipe_to_unit_requires_manager_at_that_unit(client: TestClient, session):
+    """`Staff` cannot place a recipe at a brand — that is a Manager's write."""
+    brand_id = seed_brand(session, "Brand M")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Unit Recipe", "yield_quantity": 1, "yield_unit": "batch"},
     ).json()
 
-    client.post(
-        f"/api/v1/recipes/{recipe['id']}/outlets",
-        json={"outlet_id": location_id, "is_active": True},
+    use_user(client, make_brand_user(session, "staff-user", brand_id, STAFF, "staffuser"))
+
+    response = client.post(
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
+    )
+    assert response.status_code == 403
+
+
+def test_manager_of_one_brand_cannot_place_a_recipe_at_another(client: TestClient, session):
+    """Brand-scoped, again: `Manager` at brand A grants nothing at brand B."""
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Unit Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+
+    use_user(client, make_brand_user(session, "manager-a", brand_a, MANAGER, "managera"))
+
+    assert (
+        client.post(
+            f"/api/v1/recipes/{recipe['id']}/units",
+            json={"unit_id": brand_b, "is_active": True},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/api/v1/recipes/{recipe['id']}/units",
+            json={"unit_id": brand_a, "is_active": True},
+        ).status_code
+        == 201
     )
 
-    # Create a brand user
-    brand_user = User(
-        id="brand-user-2",
-        email="branduser@test.com",
-        username="branduser",
-        user_type=UserType.NORMAL,
-        outlet_id=brand_id,
-    )
 
-    app.dependency_overrides[get_current_user] = lambda: brand_user
+def test_list_recipe_units_is_scoped_to_visible_units(client: TestClient, session):
+    """The links a caller may see are the ones at units they can reach."""
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Shared Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
 
-    try:
-        # Brand user should NOT be able to GET the recipe (403)
-        response = client.get(f"/api/v1/recipes/{recipe['id']}")
-        assert response.status_code == 403
-        assert "do not have permission" in response.json()["detail"].lower()
-
-    finally:
-        # Reset to admin user
-        from app.models import User, UserType
-
-        admin_user = User(
-            id="test-admin-user",
-            email="admin@test.com",
-            username="admin",
-            user_type=UserType.ADMIN,
-            outlet_id=None,
+    for brand in (brand_a, brand_b):
+        client.post(
+            f"/api/v1/recipes/{recipe['id']}/units",
+            json={"unit_id": brand, "is_active": True},
         )
-        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+    # The org admin manages both brands and sees both links.
+    assert len(client.get(f"/api/v1/recipes/{recipe['id']}/units").json()) == 2
+
+    use_user(client, make_brand_user(session, "user-a", brand_a, STAFF, "usera"))
+    links = client.get(f"/api/v1/recipes/{recipe['id']}/units").json()
+    assert [link["unit_id"] for link in links] == [brand_a]
+
+
+def test_update_and_remove_recipe_unit_link(client: TestClient, brand_id: str):
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Priced Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()
+    client.post(
+        f"/api/v1/recipes/{recipe['id']}/units",
+        json={"unit_id": brand_id, "is_active": True},
+    )
+
+    response = client.patch(
+        f"/api/v1/recipes/{recipe['id']}/units/{brand_id}",
+        json={"price_override": 12.5, "is_active": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["price_override"] == 12.5
+    assert response.json()["is_active"] is False
+
+    assert (
+        client.delete(f"/api/v1/recipes/{recipe['id']}/units/{brand_id}").status_code == 204
+    )
+    assert client.get(f"/api/v1/recipes/{recipe['id']}/units").json() == []
 
 
 # -------------------------------------------------------------------------

@@ -1,28 +1,31 @@
-"""Tests for menu endpoints."""
+"""Tests for menu endpoints.
+
+Menus hang off Passport UNITS and every write is authorised AT THE UNITS THE MENU TOUCHES. There
+is no global "manager" any more: `Manager` at brand A grants nothing at brand B. Two things are
+pinned here and nowhere else — that brand scoping, and the fail-closed default (a user with no
+Passport role sees nothing at all).
+"""
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import User, UserType, Outlet, OutletType, Recipe, RecipeStatus
-from app.api.deps import get_current_user
-
+from app.models import RecipeStatus
+from tests.conftest import (
+    MANAGER,
+    STAFF,
+    create_user,
+    make_brand_user,
+    seed_brand,
+    seed_outlet_unit,
+    use_user,
+)
 
 # =============================================================================
-# Helper Functions & Fixtures
+# Helper Functions
 # =============================================================================
 
 
-def _create_outlet(client: TestClient, name: str, code: str, outlet_type: str = "brand"):
-    """Helper to create an outlet."""
-    response = client.post(
-        "/api/v1/outlets",
-        json={"name": name, "code": code, "outlet_type": outlet_type},
-    )
-    return response.json()["id"]
-
-
-def _create_recipe(client: TestClient, name: str):
-    """Helper to create a recipe."""
+def _create_recipe(client: TestClient, name: str) -> int:
     response = client.post(
         "/api/v1/recipes",
         json={"name": name, "status": RecipeStatus.DRAFT},
@@ -30,24 +33,17 @@ def _create_recipe(client: TestClient, name: str):
     return response.json()["id"]
 
 
-def _setup_user(client: TestClient, session: Session, user_id: str, username: str, is_manager: bool = False, outlet_id: int | None = None, user_type: str = "normal"):
-    """Helper to override current user."""
-    user = User(
-        id=user_id,
-        email=f"{username}@test.com",
-        username=username,
-        user_type=UserType(user_type),
-        is_manager=is_manager,
-        outlet_id=outlet_id,
+def _create_menu(client: TestClient, name: str, unit_ids: list[str], sections=None) -> dict:
+    response = client.post(
+        "/api/v1/menus",
+        json={
+            "name": name,
+            "unit_ids": unit_ids,
+            "sections": sections if sections is not None else [],
+        },
     )
-    session.add(user)
-    session.commit()
-
-    def get_user_override():
-        return user
-
-    client.app.dependency_overrides[get_current_user] = get_user_override
-    return user
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 # =============================================================================
@@ -55,9 +51,8 @@ def _setup_user(client: TestClient, session: Session, user_id: str, username: st
 # =============================================================================
 
 
-def test_create_menu_as_admin(client: TestClient):
-    """Test creating a new menu as admin."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_create_menu_as_org_admin(client: TestClient, brand_id: str):
+    """An org Owner/Admin holds `Manager` at every brand through Passport's ladder."""
     recipe_id = _create_recipe(client, "Test Recipe")
 
     response = client.post(
@@ -65,7 +60,7 @@ def test_create_menu_as_admin(client: TestClient):
         json={
             "name": "Test Menu",
             "is_published": False,
-            "outlet_ids": [outlet_id],
+            "unit_ids": [brand_id],
             "sections": [
                 {
                     "name": "Appetizers",
@@ -91,101 +86,111 @@ def test_create_menu_as_admin(client: TestClient):
     assert len(data["sections"][0]["items"]) == 1
 
 
-def test_create_menu_as_manager(client: TestClient, session: Session):
-    """Test creating a menu as a manager."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_create_menu_as_brand_manager(client: TestClient, session: Session, brand_id: str):
+    """A `Manager` at the brand the menu is for may create it."""
     recipe_id = _create_recipe(client, "Test Recipe")
-
-    _setup_user(client, session, "manager-user", "manager", is_manager=True, outlet_id=outlet_id)
+    use_user(
+        client, make_brand_user(session, "manager-user", brand_id, MANAGER, "manager")
+    )
 
     response = client.post(
         "/api/v1/menus",
         json={
             "name": "Manager Menu",
-            "outlet_ids": [outlet_id],
+            "unit_ids": [brand_id],
             "sections": [
                 {
                     "name": "Mains",
                     "order_no": 1,
-                    "items": [
-                        {
-                            "recipe_id": recipe_id,
-                            "order_no": 1,
-                        }
-                    ],
+                    "items": [{"recipe_id": recipe_id, "order_no": 1}],
                 }
             ],
         },
     )
     assert response.status_code == 201
-    data = response.json()
-    assert data["name"] == "Manager Menu"
+    assert response.json()["name"] == "Manager Menu"
 
 
-def test_create_menu_as_normal_user_fails(client: TestClient, session: Session):
-    """Test that normal users cannot create menus."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-    recipe_id = _create_recipe(client, "Test Recipe")
-
-    _setup_user(client, session, "normal-user", "normaluser", outlet_id=outlet_id)
+def test_create_menu_as_staff_fails(client: TestClient, session: Session, brand_id: str):
+    """`Staff` at the brand is not `Manager` — writing a menu is refused."""
+    use_user(client, make_brand_user(session, "staff-user", brand_id, STAFF, "staffuser"))
 
     response = client.post(
         "/api/v1/menus",
-        json={
-            "name": "Should Fail",
-            "outlet_ids": [outlet_id],
-            "sections": [],
-        },
+        json={"name": "Should Fail", "unit_ids": [brand_id], "sections": []},
     )
     assert response.status_code == 403
-    assert "Only administrators and managers can create menus" in response.json()["detail"]
+    assert "not a manager" in response.json()["detail"]
 
 
-def test_create_menu_manager_inaccessible_outlet_fails(client: TestClient, session: Session):
-    """Test that managers cannot assign menus to inaccessible outlets."""
-    outlet1 = _create_outlet(client, "Outlet 1", "O1")
-    outlet2 = _create_outlet(client, "Outlet 2", "O2")
-
-    _setup_user(client, session, "manager-user", "manager", is_manager=True, outlet_id=outlet1)
+def test_create_menu_as_user_with_no_passport_role_fails(
+    client: TestClient, session: Session, brand_id: str
+):
+    """FAIL CLOSED — no Passport role, no access. A null scope is not a wildcard."""
+    use_user(client, create_user(session, "no-role-user", "norole"))
 
     response = client.post(
         "/api/v1/menus",
-        json={
-            "name": "Invalid Menu",
-            "outlet_ids": [outlet2],  # Different outlet
-            "sections": [],
-        },
+        json={"name": "Should Fail", "unit_ids": [brand_id], "sections": []},
     )
     assert response.status_code == 403
-    assert "Cannot assign menu to inaccessible outlets" in response.json()["detail"]
 
 
-def test_get_menu(client: TestClient):
-    """Test retrieving a single menu."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-    recipe_id = _create_recipe(client, "Test Recipe")
+def test_manager_of_one_brand_cannot_create_a_menu_at_another(
+    client: TestClient, session: Session
+):
+    """THE BUG THE GLOBAL `is_manager` FLAG CREATED — a manager at brand A must not reach brand B.
 
-    # Create menu
-    create_response = client.post(
+    A single boolean granted at every brand what was granted at one. Roles are brand-scoped now,
+    and this is the only test that catches a regression to the old behaviour.
+    """
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+
+    use_user(client, make_brand_user(session, "manager-a", brand_a, MANAGER, "managera"))
+
+    response = client.post(
         "/api/v1/menus",
-        json={
-            "name": "Get Test Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [
-                {
-                    "name": "Desserts",
-                    "order_no": 1,
-                    "items": [
-                        {"recipe_id": recipe_id, "order_no": 1, "display_price": 8.99}
-                    ],
-                }
-            ],
-        },
+        json={"name": "Invalid Menu", "unit_ids": [brand_b], "sections": []},
     )
-    menu_id = create_response.json()["id"]
+    assert response.status_code == 403
+    assert "not a manager" in response.json()["detail"]
 
-    # Get menu
-    response = client.get(f"/api/v1/menus/{menu_id}")
+
+def test_manager_of_one_brand_cannot_edit_another_brands_menu(
+    client: TestClient, session: Session
+):
+    """Same rule, on the update path: brand B's existing menu is not brand A's manager's to edit."""
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+
+    menu = _create_menu(client, "Brand B Menu", [brand_b])
+
+    use_user(client, make_brand_user(session, "manager-a", brand_a, MANAGER, "managera"))
+
+    response = client.patch(f"/api/v1/menus/{menu['id']}", json={"name": "Hijacked"})
+    assert response.status_code == 404  # brand B's menu is not even visible to brand A
+
+    response = client.patch(f"/api/v1/menus/{menu['id']}/delete")
+    assert response.status_code == 404
+
+
+def test_get_menu(client: TestClient, brand_id: str):
+    recipe_id = _create_recipe(client, "Test Recipe")
+    menu = _create_menu(
+        client,
+        "Get Test Menu",
+        [brand_id],
+        sections=[
+            {
+                "name": "Desserts",
+                "order_no": 1,
+                "items": [{"recipe_id": recipe_id, "order_no": 1, "display_price": 8.99}],
+            }
+        ],
+    )
+
+    response = client.get(f"/api/v1/menus/{menu['id']}")
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Get Test Menu"
@@ -193,97 +198,51 @@ def test_get_menu(client: TestClient):
 
 
 def test_get_menu_not_found(client: TestClient):
-    """Test retrieving a non-existent menu returns 404."""
     response = client.get("/api/v1/menus/99999")
     assert response.status_code == 404
     assert "Menu not found" in response.json()["detail"]
 
 
-def test_get_menu_inaccessible_fails(client: TestClient, session: Session):
-    """Test that normal users cannot access menus from inaccessible outlets."""
-    outlet1 = _create_outlet(client, "Outlet 1", "O1")
-    outlet2 = _create_outlet(client, "Outlet 2", "O2")
+def test_get_menu_at_another_brand_is_invisible(client: TestClient, session: Session):
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
     recipe_id = _create_recipe(client, "Test Recipe")
 
-    # Admin creates menu for outlet1
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Private Menu",
-            "outlet_ids": [outlet1],
-            "sections": [
-                {
-                    "name": "Items",
-                    "order_no": 1,
-                    "items": [{"recipe_id": recipe_id, "order_no": 1}],
-                }
-            ],
-        },
+    menu = _create_menu(
+        client,
+        "Private Menu",
+        [brand_a],
+        sections=[
+            {"name": "Items", "order_no": 1, "items": [{"recipe_id": recipe_id, "order_no": 1}]}
+        ],
     )
-    menu_id = create_response.json()["id"]
 
-    # Normal user with outlet2 tries to access
-    _setup_user(client, session, "user2", "user2", outlet_id=outlet2)
+    use_user(client, make_brand_user(session, "user-b", brand_b, STAFF, "userb"))
 
-    response = client.get(f"/api/v1/menus/{menu_id}")
+    response = client.get(f"/api/v1/menus/{menu['id']}")
     assert response.status_code == 404
 
 
-def test_list_menus_admin_sees_all(client: TestClient):
-    """Test that admin users see all menus."""
-    outlet1 = _create_outlet(client, "Outlet 1", "O1")
-    outlet2 = _create_outlet(client, "Outlet 2", "O2")
-    recipe_id = _create_recipe(client, "Test Recipe")
+def test_list_menus_org_admin_sees_all(client: TestClient, session: Session):
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
 
-    # Create two menus
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Menu 1",
-            "outlet_ids": [outlet1],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Menu 2",
-            "outlet_ids": [outlet2],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
+    _create_menu(client, "Menu 1", [brand_a], [{"name": "S1", "order_no": 1, "items": []}])
+    _create_menu(client, "Menu 2", [brand_b], [{"name": "S1", "order_no": 1, "items": []}])
 
     response = client.get("/api/v1/menus")
     assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
+    assert len(response.json()) == 2
 
 
-def test_list_menus_normal_user_filtered(client: TestClient, session: Session):
-    """Test that normal users see only menus from accessible outlets."""
-    outlet1 = _create_outlet(client, "Outlet 1", "O1")
-    outlet2 = _create_outlet(client, "Outlet 2", "O2")
+def test_list_menus_is_scoped_to_the_users_brand(client: TestClient, session: Session):
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
 
-    # Admin creates menus
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Menu 1",
-            "outlet_ids": [outlet1],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Menu 2",
-            "outlet_ids": [outlet2],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
+    _create_menu(client, "Menu 1", [brand_a], [{"name": "S1", "order_no": 1, "items": []}])
+    _create_menu(client, "Menu 2", [brand_b], [{"name": "S1", "order_no": 1, "items": []}])
 
-    # User with outlet1 access
-    _setup_user(client, session, "user1", "user1", outlet_id=outlet1)
+    use_user(client, make_brand_user(session, "user-a", brand_a, STAFF, "usera"))
 
     response = client.get("/api/v1/menus")
     assert response.status_code == 200
@@ -292,30 +251,27 @@ def test_list_menus_normal_user_filtered(client: TestClient, session: Session):
     assert data[0]["name"] == "Menu 1"
 
 
-def test_update_menu(client: TestClient):
-    """Test updating a menu."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-    recipe_id = _create_recipe(client, "Test Recipe")
+def test_list_menus_with_no_passport_role_is_empty(
+    client: TestClient, session: Session, brand_id: str
+):
+    """FAIL CLOSED — previously a null `outlet_id` meant "see every outlet". It now means none."""
+    _create_menu(client, "Menu 1", [brand_id], [{"name": "S1", "order_no": 1, "items": []}])
 
-    # Create menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Original Name",
-            "is_published": False,
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
+    use_user(client, create_user(session, "no-role-user", "norole"))
+
+    response = client.get("/api/v1/menus")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_update_menu(client: TestClient, brand_id: str):
+    menu = _create_menu(
+        client, "Original Name", [brand_id], [{"name": "S1", "order_no": 1, "items": []}]
     )
-    menu_id = create_response.json()["id"]
 
-    # Update menu
     response = client.patch(
-        f"/api/v1/menus/{menu_id}",
-        json={
-            "name": "Updated Name",
-            "is_published": True,
-        },
+        f"/api/v1/menus/{menu['id']}",
+        json={"name": "Updated Name", "is_published": True},
     )
     assert response.status_code == 200
     data = response.json()
@@ -323,110 +279,61 @@ def test_update_menu(client: TestClient):
     assert data["is_published"] is True
 
 
-def test_fork_menu(client: TestClient):
-    """Test forking a menu (creating new version)."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_fork_menu(client: TestClient, brand_id: str):
     recipe_id = _create_recipe(client, "Test Recipe")
-
-    # Create menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Original Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [
-                {
-                    "name": "Appetizers",
-                    "order_no": 1,
-                    "items": [{"recipe_id": recipe_id, "order_no": 1}],
-                }
-            ],
-        },
+    menu = _create_menu(
+        client,
+        "Original Menu",
+        [brand_id],
+        [
+            {
+                "name": "Appetizers",
+                "order_no": 1,
+                "items": [{"recipe_id": recipe_id, "order_no": 1}],
+            }
+        ],
     )
-    menu_id = create_response.json()["id"]
-    original_version = create_response.json()["version_no"]
 
-    # Fork menu
-    response = client.post(f"/api/v1/menus/{menu_id}/fork")
+    response = client.post(f"/api/v1/menus/{menu['id']}/fork")
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "Original Menu"
-    assert data["version_no"] == original_version + 1
+    assert data["version_no"] == menu["version_no"] + 1
     assert len(data["sections"]) == 1
 
 
-def test_delete_menu(client: TestClient):
-    """Test soft-deleting a menu."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-
-    # Create menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "To Delete",
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
+def test_delete_menu(client: TestClient, brand_id: str):
+    menu = _create_menu(
+        client, "To Delete", [brand_id], [{"name": "S1", "order_no": 1, "items": []}]
     )
-    menu_id = create_response.json()["id"]
 
-    # Delete menu
-    response = client.patch(f"/api/v1/menus/{menu_id}/delete")
+    response = client.patch(f"/api/v1/menus/{menu['id']}/delete")
     assert response.status_code == 200
-    data = response.json()
-    assert data["is_active"] is False
+    assert response.json()["is_active"] is False
 
 
 # =============================================================================
-# Menu-Outlet Tests
+# Menu-Unit Tests
 # =============================================================================
 
 
-def test_get_menus_by_outlet(client: TestClient):
-    """Test retrieving menus for an outlet."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_get_menus_by_unit(client: TestClient, brand_id: str):
+    _create_menu(client, "Unit Menu", [brand_id], [{"name": "S1", "order_no": 1, "items": []}])
 
-    # Create menu
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Outlet Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
-
-    response = client.get(f"/api/v1/menu-outlets/{outlet_id}")
+    response = client.get(f"/api/v1/menu-outlets/{brand_id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["name"] == "Outlet Menu"
+    assert data[0]["name"] == "Unit Menu"
 
 
-def test_location_outlet_inherits_brand_menus(client: TestClient):
-    """Test that location outlets inherit menus from parent brand."""
-    # Create brand and location
-    brand_id = _create_outlet(client, "Brand", "BR", "brand")
-    location_id = _create_outlet(client, "Location", "LO", "location")
+def test_outlet_inherits_brand_menus(client: TestClient, session: Session, brand_id: str):
+    """An outlet inherits its brand's menus through Passport's `belongs_to_brand` edge."""
+    outlet_id = seed_outlet_unit(session, brand_id, "Location")
 
-    # Set location parent to brand (need to update)
-    client.patch(
-        f"/api/v1/outlets/{location_id}",
-        json={"parent_outlet_id": brand_id},
-    )
+    _create_menu(client, "Brand Menu", [brand_id], [{"name": "S1", "order_no": 1, "items": []}])
 
-    # Create menu for brand
-    client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Brand Menu",
-            "outlet_ids": [brand_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
-    )
-
-    # Location should see brand's menus
-    response = client.get(f"/api/v1/menu-outlets/{location_id}")
+    response = client.get(f"/api/v1/menu-outlets/{outlet_id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -438,34 +345,22 @@ def test_location_outlet_inherits_brand_menus(client: TestClient):
 # =============================================================================
 
 
-def test_get_items_by_section(client: TestClient):
-    """Test retrieving items for a section."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_get_items_by_section(client: TestClient, brand_id: str):
     recipe_id = _create_recipe(client, "Test Recipe")
-
-    # Create menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Test Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [
-                {
-                    "name": "Appetizers",
-                    "order_no": 1,
-                    "items": [
-                        {
-                            "recipe_id": recipe_id,
-                            "order_no": 1,
-                            "display_price": 10.00,
-                        }
-                    ],
-                }
-            ],
-        },
+    menu = _create_menu(
+        client,
+        "Test Menu",
+        [brand_id],
+        [
+            {
+                "name": "Appetizers",
+                "order_no": 1,
+                "items": [{"recipe_id": recipe_id, "order_no": 1, "display_price": 10.00}],
+            }
+        ],
     )
 
-    section_id = create_response.json()["sections"][0]["id"]
+    section_id = menu["sections"][0]["id"]
 
     response = client.get(f"/api/v1/menu-items/{section_id}")
     assert response.status_code == 200
@@ -474,39 +369,31 @@ def test_get_items_by_section(client: TestClient):
     assert data[0]["display_price"] == 10.00
 
 
-def test_menu_item_with_substitution(client: TestClient):
-    """Test creating menu item with substitution field."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
+def test_menu_item_with_substitution(client: TestClient, brand_id: str):
     recipe_id = _create_recipe(client, "Test Recipe")
-
-    response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Menu with Substitution",
-            "outlet_ids": [outlet_id],
-            "sections": [
-                {
-                    "name": "Appetizers",
-                    "order_no": 1,
-                    "items": [
-                        {
-                            "recipe_id": recipe_id,
-                            "order_no": 1,
-                            "display_price": 12.00,
-                            "additional_info": "Served warm",
-                            "key_highlights": "House special",
-                            "substitution": "Can be made gluten-free",
-                        }
-                    ],
-                }
-            ],
-        },
+    menu = _create_menu(
+        client,
+        "Menu with Substitution",
+        [brand_id],
+        [
+            {
+                "name": "Appetizers",
+                "order_no": 1,
+                "items": [
+                    {
+                        "recipe_id": recipe_id,
+                        "order_no": 1,
+                        "display_price": 12.00,
+                        "additional_info": "Served warm",
+                        "key_highlights": "House special",
+                        "substitution": "Can be made gluten-free",
+                    }
+                ],
+            }
+        ],
     )
-    assert response.status_code == 201
-    data = response.json()
-    assert len(data["sections"]) == 1
-    assert len(data["sections"][0]["items"]) == 1
-    item = data["sections"][0]["items"][0]
+
+    item = menu["sections"][0]["items"][0]
     assert item["substitution"] == "Can be made gluten-free"
     assert item["additional_info"] == "Served warm"
     assert item["key_highlights"] == "House special"
@@ -517,70 +404,34 @@ def test_menu_item_with_substitution(client: TestClient):
 # =============================================================================
 
 
-def test_fork_menu_as_normal_user_fails(client: TestClient, session: Session):
-    """Test that normal users cannot fork menus."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-
-    # Admin creates menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Test Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
+def test_fork_menu_as_staff_fails(client: TestClient, session: Session, brand_id: str):
+    menu = _create_menu(
+        client, "Test Menu", [brand_id], [{"name": "S1", "order_no": 1, "items": []}]
     )
-    menu_id = create_response.json()["id"]
 
-    # Switch to normal user
-    _setup_user(client, session, "normal-user", "normaluser", outlet_id=outlet_id)
+    use_user(client, make_brand_user(session, "staff-user", brand_id, STAFF, "staffuser"))
 
-    response = client.post(f"/api/v1/menus/{menu_id}/fork")
+    response = client.post(f"/api/v1/menus/{menu['id']}/fork")
     assert response.status_code == 403
 
 
-def test_update_menu_as_normal_user_fails(client: TestClient, session: Session):
-    """Test that normal users cannot update menus."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-
-    # Admin creates menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Test Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
+def test_update_menu_as_staff_fails(client: TestClient, session: Session, brand_id: str):
+    menu = _create_menu(
+        client, "Test Menu", [brand_id], [{"name": "S1", "order_no": 1, "items": []}]
     )
-    menu_id = create_response.json()["id"]
 
-    # Switch to normal user
-    _setup_user(client, session, "normal-user", "normaluser", outlet_id=outlet_id)
+    use_user(client, make_brand_user(session, "staff-user", brand_id, STAFF, "staffuser"))
 
-    response = client.patch(
-        f"/api/v1/menus/{menu_id}",
-        json={"name": "Should Fail"},
-    )
+    response = client.patch(f"/api/v1/menus/{menu['id']}", json={"name": "Should Fail"})
     assert response.status_code == 403
 
 
-def test_delete_menu_as_normal_user_fails(client: TestClient, session: Session):
-    """Test that normal users cannot delete menus."""
-    outlet_id = _create_outlet(client, "Test Outlet", "TO")
-
-    # Admin creates menu
-    create_response = client.post(
-        "/api/v1/menus",
-        json={
-            "name": "Test Menu",
-            "outlet_ids": [outlet_id],
-            "sections": [{"name": "S1", "order_no": 1, "items": []}],
-        },
+def test_delete_menu_as_staff_fails(client: TestClient, session: Session, brand_id: str):
+    menu = _create_menu(
+        client, "Test Menu", [brand_id], [{"name": "S1", "order_no": 1, "items": []}]
     )
-    menu_id = create_response.json()["id"]
 
-    # Switch to normal user
-    _setup_user(client, session, "normal-user", "normaluser", outlet_id=outlet_id)
+    use_user(client, make_brand_user(session, "staff-user", brand_id, STAFF, "staffuser"))
 
-    response = client.patch(f"/api/v1/menus/{menu_id}/delete")
+    response = client.patch(f"/api/v1/menus/{menu['id']}/delete")
     assert response.status_code == 403

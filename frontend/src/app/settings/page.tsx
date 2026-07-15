@@ -1,49 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { useAppState } from '@/lib/store';
-import { OutletManagementTab } from '@/components/recipes';
 import { UserManagementTab, BrandRolesTab } from '@/components/admin';
 import { UserProfileTab } from '@/components/settings/UserProfileTab';
 import DesignSystemPage from '@/app/design-system/page';
 import { cn } from '@/lib/utils';
 
-type SettingsTab = 'users' | 'outlets' | 'brand-roles' | 'admin' | 'design';
+type SettingsTab = 'profile' | 'brand-roles' | 'accounts' | 'design';
 
-const SETTINGS_TABS: { id: SettingsTab; label: string; adminOnly?: boolean }[] = [
-  { id: 'users',       label: 'Users'       },
-  { id: 'outlets',     label: 'Outlets'     },
-  // Passport's brand roles. Visible to everyone: a brand Manager may assign Staff at their own
-  // brand, so this is not admin-only. Passport applies the real authority matrix on the write.
+// No tab is gated by a role flag: Prepper has none. Authority is per-brand and lives in Passport,
+// which applies the real matrix on every write.
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'profile',     label: 'Profile'     },
   { id: 'brand-roles', label: 'Brand Roles' },
-  { id: 'admin',       label: 'Admin',  adminOnly: true },
+  { id: 'accounts',    label: 'Accounts'    },
   { id: 'design',      label: 'Design'      },
 ];
 
 export default function SettingsPage() {
-  const { userType } = useAppState();
-  const [tab, setTab] = useState<SettingsTab>('users');
-
-  const visibleTabs = SETTINGS_TABS.filter((t) => !t.adminOnly || userType === 'admin');
+  const [tab, setTab] = useState<SettingsTab>('profile');
 
   function renderTabContent() {
     switch (tab) {
-      case 'outlets':
-        return <OutletManagementTab userType={userType} />;
       case 'brand-roles':
         return <BrandRolesTab />;
-      case 'admin':
-        if (userType !== 'admin') {
-          return (
-            <div className="p-6 text-sm text-muted-foreground">
-              You do not have permission to view this page.
-            </div>
-          );
-        }
+      case 'accounts':
         return <UserManagementTab />;
       case 'design':
         return <DesignSystemPage />;
-      case 'users':
+      case 'profile':
       default:
         return <UserProfileTab />;
     }
@@ -53,7 +38,7 @@ export default function SettingsPage() {
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-border bg-card">
         <nav className="flex gap-1 px-4" aria-label="Settings tabs">
-          {visibleTabs.map((t) => (
+          {SETTINGS_TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}

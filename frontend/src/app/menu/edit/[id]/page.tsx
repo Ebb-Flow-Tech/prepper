@@ -2,9 +2,9 @@
 
 import { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppState } from '@/lib/store';
 import { useMenu } from '@/lib/hooks';
 import { MenuBuilder } from '@/components/menu/MenuBuilder';
+import { useSelectableBrands } from '@/components/units';
 import { Skeleton } from '@/components/ui';
 
 interface EditMenuPageProps {
@@ -15,19 +15,24 @@ export default function EditMenuPage({ params }: EditMenuPageProps) {
   const { id } = use(params);
   const menuId = parseInt(id, 10);
   const router = useRouter();
-  const { userType, isManager } = useAppState();
   const { data: menu, isLoading, error } = useMenu(menuId);
+  const { brands: manageableBrands, isLoading: brandsLoading } = useSelectableBrands(true);
 
-  // Check authorization
+  // Editable only by a Manager AT ONE OF THE BRANDS this menu is served at — the same question the
+  // API asks per unit on the write.
+  const canEdit =
+    menu?.outlets?.some((unit) => manageableBrands.some((brand) => brand.id === unit.unit_id)) ??
+    false;
+
   useEffect(() => {
     if (!isLoading && (error || !menu)) {
       router.push('/menu');
       return;
     }
-    if (userType !== 'admin' && !isManager) {
+    if (!isLoading && !brandsLoading && menu && !canEdit) {
       router.push('/menu');
     }
-  }, [userType, isManager, router, isLoading, error, menu]);
+  }, [router, isLoading, brandsLoading, error, menu, canEdit]);
 
   if (isLoading) {
     return (

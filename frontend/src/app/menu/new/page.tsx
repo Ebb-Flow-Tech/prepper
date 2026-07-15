@@ -2,19 +2,20 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { useAppState } from '@/lib/store';
 import { MenuBuilder } from '@/components/menu/MenuBuilder';
+import { useSelectableBrands } from '@/components/units';
 
 export default function NewMenuPage() {
   const router = useRouter();
-  const { userType, isManager } = useAppState();
+  // A menu must be attached to a brand the user manages. "Manager" is asked per brand, so the
+  // question here is whether they manage ANY brand — not whether they hold a global flag.
+  const { brands: manageableBrands, isLoading } = useSelectableBrands(true);
 
-  // Check authorization
   useEffect(() => {
-    if (userType !== 'admin' && !isManager) {
+    if (!isLoading && manageableBrands.length === 0) {
       router.push('/menu');
     }
-  }, [userType, isManager, router]);
+  }, [isLoading, manageableBrands.length, router]);
 
   return (
     <div className="flex h-full flex-col">

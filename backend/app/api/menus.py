@@ -1,26 +1,34 @@
-"""Menu API routes for restaurant menu management."""
+"""Menu API routes for restaurant menu management.
+
+Menus hang off Passport UNITS (brands and outlets), and every write is authorised AT THE UNITS THE
+MENU TOUCHES — `Manager` at each of them (rule 8). There is no global "manager" any more: the old
+`is_manager` flag granted at every brand what was granted at one, so a manager at Temper could edit
+Willow's menus. That was the bug. An org Owner/Admin holds `Manager` everywhere through Passport's
+ladder, so they need no special case here.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.api.deps import get_session, get_current_user
+from app.api.deps import get_current_user, get_session
+from app.domain import MenuService
 from app.models import (
-    Menu,
     MenuCreate,
-    MenuUpdate,
-    MenuRead,
     MenuDetail,
-    MenuSection,
-    MenuSectionRead,
     MenuItem,
     MenuItemRead,
     MenuOutlet,
-    User,
-    UserType,
+    MenuRead,
+    MenuSection,
+    MenuSectionRead,
+    MenuUpdate,
     Recipe,
+    User,
 )
-from app.domain import MenuService
+from app.passport import access
+
+MANAGER = "Manager"
 
 
 # --- Request/Response DTOs ---
@@ -48,20 +56,20 @@ class MenuSectionInput(BaseModel):
 
 
 class CreateMenuRequest(BaseModel):
-    """Request body for creating a new menu."""
+    """Request body for creating a new menu. `unit_ids` are Passport unit UUIDs."""
 
     name: str
     is_published: bool = False
-    outlet_ids: list[int] = []
+    unit_ids: list[str] = []
     sections: list[MenuSectionInput] = []
 
 
 class UpdateMenuRequest(BaseModel):
-    """Request body for updating a menu."""
+    """Request body for updating a menu. `unit_ids` are Passport unit UUIDs."""
 
     name: str | None = None
     is_published: bool | None = None
-    outlet_ids: list[int] | None = None
+    unit_ids: list[str] | None = None
     sections: list[MenuSectionInput] | None = None
 
 
@@ -75,10 +83,49 @@ menu_items_router = APIRouter()
 # --- Helper Functions ---
 
 
+def _menu_units(menu_id: int, session: Session) -> list[MenuOutlet]:
+    """The Passport unit links of a menu — the units the menu lives at."""
+    return list(
+        session.exec(select(MenuOutlet).where(MenuOutlet.menu_id == menu_id)).all()
+    )
+
+
+def _require_manager_at_units(
+    unit_ids: list[str], current_user: User, session: Session
+) -> None:
+    """403 unless the caller is `Manager` at EVERY unit the operation touches.
+
+    A menu can be served at several units, and writing it writes all of them — so `Manager` at one
+    of them is not enough. With no unit in scope (a menu assigned nowhere) there is no brand to be a
+    manager of, so the fallback is org-wide administration.
+    """
+    if not unit_ids:
+        if not access.is_org_admin(session, current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only organisation administrators can manage a menu with no unit",
+            )
+        return
+
+    for unit_id in unit_ids:
+        if access.role_at_unit(session, current_user.id, unit_id) != MANAGER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a manager at every brand this menu belongs to",
+            )
+
+
+def _require_manager_for_menu(
+    menu_id: int, current_user: User, session: Session
+) -> None:
+    """403 unless the caller manages every unit the existing menu is served at."""
+    _require_manager_at_units(
+        [mo.unit_id for mo in _menu_units(menu_id, session)], current_user, session
+    )
+
+
 def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
     """Get menu with all sections, items, and recipe names in minimal queries."""
-    from sqlmodel import select
-
     service = MenuService(session)
     menu = service.get_menu(menu_id)
     if not menu:
@@ -133,8 +180,6 @@ def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
             )
         )
 
-    outlets = service._get_outlets_for_menu(menu_id)
-
     return MenuDetail(
         id=menu.id,
         name=menu.name,
@@ -145,38 +190,33 @@ def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
         created_at=menu.created_at,
         updated_at=menu.updated_at,
         sections=section_reads,
-        outlets=outlets,
+        outlets=_menu_units(menu_id, session),
     )
 
 
 def _check_menu_accessible(
     menu_id: int, current_user: User, session: Session
 ) -> bool:
-    """Check if menu is accessible to the current user."""
-    if current_user.user_type == UserType.ADMIN:
-        return True
+    """Whether the caller may see this menu: it must live at a unit they can see.
 
+    Org admins fall out of this naturally — they hold a role at every brand, so
+    `accessible_unit_ids` already covers every unit.
+    """
     service = MenuService(session)
     menu = service.get_menu(menu_id)
     if not menu or not menu.is_active:
         return False
 
-    # Check if menu is assigned to accessible outlets
-    accessible_outlet_ids = service._get_accessible_outlet_ids(current_user)
-    if not accessible_outlet_ids:
+    visible = access.accessible_unit_ids(session, current_user.id)
+    if not visible:
         return False
 
-    menu_outlets = service._get_outlets_for_menu(menu_id)
-    for mo in menu_outlets:
-        if mo.outlet_id in accessible_outlet_ids:
-            return True
-
-    return False
+    return any(mo.unit_id in visible for mo in _menu_units(menu_id, session))
 
 
 def _validate_menu_items(items: list[MenuItemInput], session: Session) -> bool:
     """Validate that all recipes exist."""
-    from sqlmodel import select, func
+    from sqlmodel import func
 
     recipe_ids = list({item.recipe_id for item in items})
     if not recipe_ids:
@@ -196,16 +236,14 @@ def list_menus(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all accessible menus.
+    """List the menus the caller may see — those served at a unit they hold a role at.
 
-    - Admin users see all menus
-    - Normal users see menus assigned to their accessible outlets
-    - include_archived: only admins/managers can include archived menus
+    `include_archived` spans every unit at once, so there is no single unit to scope it to: a user
+    may ask for archived menus if they manage AT LEAST ONE brand. That is not a hole — the service
+    still restricts the result to their accessible units, so a Temper manager sees Temper's archived
+    menus and nobody else's.
     """
-    # Only admins/managers can see archived menus
-    can_see_archived = (
-        current_user.user_type == UserType.ADMIN or current_user.is_manager
-    )
+    can_see_archived = MANAGER in access.brand_roles(session, current_user.id).values()
     effective_include_archived = include_archived and can_see_archived
 
     service = MenuService(session)
@@ -263,27 +301,13 @@ def create_menu(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new menu.
+    """Create a new menu, requiring `Manager` at every unit it is being created for.
 
-    Only admin and manager users can create menus.
+    The unit scope comes from the request body — the menu does not exist yet. This subsumes the old
+    "cannot assign menu to inaccessible outlets" check: being able to see a unit is no longer enough
+    to publish a menu there, you must manage it.
     """
-    # Check authorization
-    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and managers can create menus",
-        )
-
-    # Check outlet access for managers (admins can create for any outlet)
-    if current_user.user_type != UserType.ADMIN:
-        service = MenuService(session)
-        accessible_outlet_ids = service._get_accessible_outlet_ids(current_user)
-        for outlet_id in data.outlet_ids:
-            if outlet_id not in accessible_outlet_ids:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot assign menu to inaccessible outlets",
-                )
+    _require_manager_at_units(data.unit_ids, current_user, session)
 
     # Validate recipes
     for section in data.sections:
@@ -301,7 +325,7 @@ def create_menu(
         version_no=1,
         created_by=current_user.id,
     )
-    menu = service.create_menu(menu_create, data.outlet_ids)
+    menu = service.create_menu(menu_create, data.unit_ids)
 
     # Add sections and items
     for section_data in data.sections:
@@ -341,21 +365,15 @@ def fork_menu(
 ):
     """Fork a menu with version_no + 1.
 
-    Only admin and manager users can fork menus.
+    The fork copies the source menu's unit links, so it requires `Manager` at every one of them.
     """
-    # Check authorization
-    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and managers can fork menus",
-        )
-
-    # Check access
     if not _check_menu_accessible(menu_id, current_user, session):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
         )
+
+    _require_manager_for_menu(menu_id, current_user, session)
 
     service = MenuService(session)
     new_menu = service.fork_menu(menu_id)
@@ -381,21 +399,20 @@ def update_menu(
 ):
     """Update menu metadata and/or contents.
 
-    Only admin and manager users can update menus.
+    Two unit scopes are touched, and `Manager` is required at BOTH: the units the menu is served at
+    today (you are editing their menu) and any units it is being reassigned to (you are publishing
+    into them). A manager at Temper can no longer edit Willow's menu, nor push a menu onto Willow —
+    that was the bug the global `is_manager` flag created.
     """
-    # Check authorization
-    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and managers can update menus",
-        )
-
-    # Check access
     if not _check_menu_accessible(menu_id, current_user, session):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
         )
+
+    _require_manager_for_menu(menu_id, current_user, session)
+    if data.unit_ids:
+        _require_manager_at_units(data.unit_ids, current_user, session)
 
     # Validate recipes if sections provided
     if data.sections:
@@ -404,17 +421,6 @@ def update_menu(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid recipe ID in menu items",
-                )
-
-    # Validate outlets if provided (managers can only assign accessible outlets)
-    if data.outlet_ids and current_user.user_type != UserType.ADMIN:
-        service = MenuService(session)
-        accessible_outlet_ids = service._get_accessible_outlet_ids(current_user)
-        for outlet_id in data.outlet_ids:
-            if outlet_id not in accessible_outlet_ids:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot assign menu to inaccessible outlets",
                 )
 
     service = MenuService(session)
@@ -451,7 +457,7 @@ def update_menu(
         menu_id,
         menu_update,
         sections_data=sections_data,
-        outlet_ids=data.outlet_ids,
+        unit_ids=data.unit_ids,
     )
 
     if not updated:
@@ -474,21 +480,15 @@ def delete_menu(
 ):
     """Soft-delete a menu (set is_active to False).
 
-    Only admin and manager users can delete menus.
+    Requires `Manager` at every unit the menu is served at — archiving it removes it from all of them.
     """
-    # Check authorization
-    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and managers can delete menus",
-        )
-
-    # Check access
     if not _check_menu_accessible(menu_id, current_user, session):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
         )
+
+    _require_manager_for_menu(menu_id, current_user, session)
 
     service = MenuService(session)
     deleted = service.soft_delete_menu(menu_id)
@@ -522,18 +522,20 @@ def restore_menu(
 ):
     """Restore a soft-deleted menu (set is_active to True).
 
-    Only admin and manager users can restore menus.
+    Scoped to the archived menu's own units: restoring puts it back in front of those brands, so it
+    takes `Manager` at each. `_check_menu_accessible` cannot be used here — it deliberately rejects
+    archived menus.
     """
-    # Check authorization
-    if current_user.user_type != UserType.ADMIN and not current_user.is_manager:
+    service = MenuService(session)
+    if not service.get_menu(menu_id):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators and managers can restore menus",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Menu not found",
         )
 
-    service = MenuService(session)
-    restored = service.restore_menu(menu_id)
+    _require_manager_for_menu(menu_id, current_user, session)
 
+    restored = service.restore_menu(menu_id)
     if not restored:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -552,18 +554,24 @@ def restore_menu(
     )
 
 
-# --- GET /menu-outlets/{outlet_id} ---
+# --- GET /menu-outlets/{unit_id} ---
 
 
-@menu_outlets_router.get("/{outlet_id}", response_model=list[MenuRead])
-def get_menus_by_outlet(
-    outlet_id: int,
+@menu_outlets_router.get("/{unit_id}", response_model=list[MenuRead])
+def get_menus_by_unit(
+    unit_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all menus accessible to an outlet."""
+    """Get all menus served at a Passport unit — 404 if the caller cannot see that unit."""
+    if unit_id not in access.accessible_unit_ids(session, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unit not found",
+        )
+
     service = MenuService(session)
-    menus = service.get_menus_by_outlet(outlet_id)
+    menus = service.get_menus_by_unit(unit_id)
 
     return [
         MenuRead(
@@ -590,8 +598,6 @@ def get_items_by_section(
     current_user: User = Depends(get_current_user),
 ):
     """Get menu items for a section, ordered by order_no then name."""
-    from sqlmodel import select
-
     statement = (
         select(MenuItem, Recipe.name)
         .outerjoin(Recipe, Recipe.id == MenuItem.recipe_id)

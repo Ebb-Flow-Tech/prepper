@@ -2,8 +2,7 @@
 
 import { User as UserIcon, Store } from 'lucide-react';
 import { useAppState } from '@/lib/store';
-import { useUser } from '@/lib/hooks';
-import { useOutlet } from '@/lib/hooks';
+import { useUser, usePassportBrands } from '@/lib/hooks';
 import { Skeleton } from '@/components/ui';
 
 function timeAgo(dateStr: string): string {
@@ -30,17 +29,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/**
+ * The account, plus the brands the user actually holds a role at. There is no single "role" to
+ * show: the role is per brand, so the brands are the answer.
+ */
 export function UserProfileTab() {
-  const { userId, username, email, userType, isManager, outletId } = useAppState();
+  const { userId, username, email } = useAppState();
 
   const { data: user, isLoading: userLoading } = useUser(userId);
-  const { data: outlet, isLoading: outletLoading } = useOutlet(outletId);
-  const { data: parentOutlet } = useOutlet(outlet?.parent_outlet_id ?? null);
+  const { data: brands, isLoading: brandsLoading } = usePassportBrands();
 
-  const roleLabel = userType === 'admin' ? 'Administrator' : 'Normal';
-  const roleColor = userType === 'admin' ? 'bg-purple-500' : 'bg-blue-400';
-
-  const outletSubline = [parentOutlet?.name, outlet?.code].filter(Boolean).join(' \u2022 ');
+  const myBrands = (brands ?? []).filter((brand) => brand.my_role !== null);
 
   return (
     <div className="h-full w-full overflow-auto">
@@ -70,44 +69,44 @@ export function UserProfileTab() {
             {userLoading ? <Skeleton className="h-5 w-40 rounded" /> : (email ?? '—')}
           </Field>
 
-          <Field label="Role">
-            <span className="flex items-center gap-2">
-              <span className={`inline-block h-2.5 w-2.5 rounded-full ${roleColor}`} />
-              {roleLabel}
-            </span>
-          </Field>
-
-          <Field label="Managerial Status">
-            {`Manager: ${isManager ? 'Yes' : 'No'}`}
+          <Field label="Phone Number">
+            {userLoading ? <Skeleton className="h-5 w-28 rounded" /> : (user?.phone_number ?? '—')}
           </Field>
         </div>
 
-        {/* Assigned Outlet */}
+        {/* Brand access — held in Passport, per brand */}
         <div>
           <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase mb-3">
-            Assigned Outlet
+            Your Brands
           </p>
 
-          {outletLoading ? (
+          {brandsLoading ? (
             <Skeleton className="h-20 rounded-xl" />
-          ) : outlet ? (
-            <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
-                <Store className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{outlet.name}</p>
-                {outletSubline && (
-                  <p className="text-sm text-muted-foreground">{outletSubline}</p>
-                )}
-              </div>
-              <button className="text-xs font-bold tracking-widest text-muted-foreground hover:text-foreground transition-colors uppercase">
-                Change
-              </button>
+          ) : myBrands.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {myBrands.map((brand) => (
+                <div
+                  key={brand.id}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                    <Store className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground">{brand.name}</p>
+                    <p className="text-sm text-muted-foreground">{brand.my_role}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No outlet assigned</p>
+            <p className="text-sm text-muted-foreground">
+              You do not hold a role at any brand yet.
+            </p>
           )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Brands, outlets and roles are managed in Passport.
+          </p>
         </div>
       </div>
     </div>

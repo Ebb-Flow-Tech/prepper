@@ -9,9 +9,9 @@ import { useAppState } from '@/lib/store';
 const MENUS_QUERY_KEY = 'menus';
 
 export function useMenus(includeArchived?: boolean) {
-  const { userId, userType } = useAppState();
+  const { userId } = useAppState();
   return useQuery({
-    queryKey: [MENUS_QUERY_KEY, { userId, userType, includeArchived }],
+    queryKey: [MENUS_QUERY_KEY, { userId, includeArchived }],
     queryFn: () => api.getMenus(includeArchived),
     enabled: !!userId,
   });
@@ -97,11 +97,11 @@ export function useRestoreMenu() {
   });
 }
 
-export function useMenusByOutlet(outletId: number | null) {
+export function useMenusByUnit(unitId: string | null) {
   return useQuery({
-    queryKey: [MENUS_QUERY_KEY, 'outlet', outletId],
-    queryFn: () => api.getMenusByOutlet(outletId!),
-    enabled: outletId !== null,
+    queryKey: [MENUS_QUERY_KEY, 'unit', unitId],
+    queryFn: () => api.getMenusByUnit(unitId!),
+    enabled: unitId !== null,
   });
 }
 

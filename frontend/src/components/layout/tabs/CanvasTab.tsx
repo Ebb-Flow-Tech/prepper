@@ -31,11 +31,10 @@ import {
   useCategories,
   useRecipeCategories,
   useAllRecipeRecipeCategories,
-  useRecipeOutletsBatch,
 } from '@/lib/hooks';
 import { Button, Input, Select, ConfirmModal, Modal, Checkbox, NumericInput } from '@/components/ui';
 import { toast } from 'sonner';
-import type { RecipeStatus, Outlet, SupplierIngredient } from '@/types';
+import type { RecipeStatus, SupplierIngredient } from '@/types';
 import { RightPanel } from '../RightPanel';
 import { cn, formatCurrency, parseIngredientsText, fuzzyMatchIngredient } from '@/lib/utils';
 import type { Ingredient, Recipe } from '@/types';
@@ -550,14 +549,12 @@ function StagedRecipeListItem({
   onRemove,
   onQuantityChange,
   allRecipes,
-  outletNames = [],
   categoryNames = [],
 }: {
   staged: StagedRecipe;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   allRecipes?: Recipe[];
-  outletNames?: string[];
   categoryNames?: string[];
 }) {
   const { data: recipeIngredients } = useRecipeIngredients(staged.recipe.id);
@@ -574,12 +571,6 @@ function StagedRecipeListItem({
           <h4 className="font-medium text-sm text-foreground truncate">{staged.recipe.name}</h4>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-xs text-muted-foreground">{staged.recipe.yield_quantity} {staged.recipe.yield_unit}</span>
-            {outletNames.length > 0 && (
-              <>
-                <span className="text-muted-foreground/50 text-xs">·</span>
-                <span className="text-xs text-muted-foreground truncate">{outletNames.join(', ')}</span>
-              </>
-            )}
           </div>
         </div>
 
@@ -677,14 +668,12 @@ function StagedRecipeCard({
   onRemove,
   onQuantityChange,
   allRecipes,
-  outletNames = [],
   categoryNames = [],
 }: {
   staged: StagedRecipe;
   onRemove: () => void;
   onQuantityChange: (quantity: number) => void;
   allRecipes?: Recipe[];
-  outletNames?: string[];
   categoryNames?: string[];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -799,14 +788,9 @@ function StagedRecipeCard({
           Yield: {staged.recipe.yield_quantity} {staged.recipe.yield_unit}
         </div>
 
-        {/* Outlets and Categories */}
-        {(outletNames.length > 0 || categoryNames.length > 0) && (
+        {/* Categories */}
+        {categoryNames.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {outletNames.map((name) => (
-              <span key={name} className="inline-block text-xs bg-green-500/30 text-green-200 px-2 py-0.5 rounded">
-                {name}
-              </span>
-            ))}
             {categoryNames.map((name) => (
               <span key={name} className="inline-block text-xs bg-green-400/20 text-green-300 px-2 py-0.5 rounded">
                 {name}
@@ -1257,7 +1241,6 @@ function CanvasDropZone({
   allIngredients,
   viewMode = 'grid',
   categoryMap,
-  getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
 }: {
   stagedIngredients: StagedIngredient[];
@@ -1277,7 +1260,6 @@ function CanvasDropZone({
   allIngredients?: Ingredient[];
   viewMode?: 'grid' | 'list' | 'table';
   categoryMap: Record<number, string>;
-  getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -1342,7 +1324,6 @@ function CanvasDropZone({
               onRemove={() => onRemoveRecipe(staged.id)}
               onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
               allRecipes={allRecipes}
-              outletNames={getOutletNamesForRecipe(staged.recipe.id)}
               categoryNames={getCategoryNamesForRecipe(staged.recipe.id)}
             />
           ))}
@@ -1385,7 +1366,6 @@ function CanvasDropZone({
               onRemove={() => onRemoveRecipe(staged.id)}
               onQuantityChange={(q) => onRecipeQuantityChange(staged.id, q)}
               allRecipes={allRecipes}
-              outletNames={getOutletNamesForRecipe(staged.recipe.id)}
               categoryNames={getCategoryNamesForRecipe(staged.recipe.id)}
             />
           ))}
@@ -1434,7 +1414,6 @@ function CanvasContent({
   onViewModeChange,
   categoryMap,
   canvasCost,
-  getOutletNamesForRecipe,
   getCategoryNamesForRecipe,
   onShowAddIngredientsModal,
 }: {
@@ -1470,7 +1449,6 @@ function CanvasContent({
   onViewModeChange: (mode: 'grid' | 'list' | 'table') => void;
   categoryMap: Record<number, string>;
   canvasCost: number;
-  getOutletNamesForRecipe: (recipeId: number) => string[];
   getCategoryNamesForRecipe: (recipeId: number) => string[];
   onShowAddIngredientsModal: () => void;
 }) {
@@ -1671,7 +1649,6 @@ function CanvasContent({
           allIngredients={allIngredients}
           viewMode={viewMode}
           categoryMap={categoryMap}
-          getOutletNamesForRecipe={getOutletNamesForRecipe}
           getCategoryNamesForRecipe={getCategoryNamesForRecipe}
         />
       </div>
@@ -1795,13 +1772,9 @@ function calculateCanvasCost(
   return totalCost;
 }
 
-interface CanvasTabProps {
-  outlets?: Outlet[];
-}
-
-export function CanvasTab({ outlets }: CanvasTabProps) {
+export function CanvasTab() {
   const router = useRouter();
-  const { userId, selectedRecipeId, userType, isDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
+  const { userId, selectedRecipeId, isDragDropEnabled, canvasViewMode, setCanvasViewMode } = useAppState();
   const { data: recipesData } = useRecipes({ page_size: 30 });
   const recipes = recipesData?.items;
   const { data: selectedRecipeData } = useRecipe(selectedRecipeId);
@@ -1822,11 +1795,6 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       return acc;
     }, {});
   }, [categories]);
-
-  // Fetch outlets for all recipes (with TanStack Query caching)
-  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
-    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
-  );
 
   // Map category_id -> name
   const recipeCategoryNameMap = useMemo(() => {
@@ -1849,21 +1817,6 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
 
     return map;
   }, [recipeCategoryLinks]);
-
-  // Map outlet_id -> name
-  const outletNameMap = useMemo(() => {
-    if (!outlets) return new Map<number, string>();
-    return new Map(outlets.map((o) => [o.id, o.name]));
-  }, [outlets]);
-
-  // Get outlet names for a recipe
-  const getOutletNamesForRecipe = (recipeId: number): string[] => {
-    const recipeOutletLinks = recipeOutlets.get(recipeId) || [];
-    return recipeOutletLinks
-      .filter((link: { is_active: boolean; outlet_id: number }) => link.is_active)
-      .map((link: { is_active: boolean; outlet_id: number }) => outletNameMap.get(link.outlet_id))
-      .filter((name: string | undefined): name is string => name !== undefined);
-  };
 
   // Get category names for a recipe
   const getCategoryNamesForRecipe = (recipeId: number): string[] => {
@@ -3044,7 +2997,6 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       hasUnsavedChanges={hasUnsavedChanges}
       hasSelectedRecipe={selectedRecipeId !== null}
       isOwner={(() => {
-        if (userType === 'admin') return true; // Admins bypass ownership restrictions
         if (!selectedRecipeId) return true; // Creating new recipe, user is the owner
         const selectedRecipe = recipes?.find((r) => r.id === selectedRecipeId);
         return selectedRecipe?.owner_id === userId;
@@ -3053,7 +3005,6 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       onViewModeChange={setCanvasViewMode}
       categoryMap={categoryMap}
       canvasCost={canvasCost}
-      getOutletNamesForRecipe={getOutletNamesForRecipe}
       getCategoryNamesForRecipe={getCategoryNamesForRecipe}
       onShowAddIngredientsModal={() => setShowAddIngredientsModal(true)}
     />
@@ -3068,7 +3019,7 @@ export function CanvasTab({ outlets }: CanvasTabProps) {
       >
         <div className="flex h-full w-full">
           {canvasContent}
-          <RightPanel outlets={outlets} />
+          <RightPanel />
         </div>
         {isDragDropEnabled && (
           <DragOverlay>

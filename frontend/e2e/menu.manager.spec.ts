@@ -1,8 +1,10 @@
 /**
- * Section 10b: Menu Management — Manager Only
+ * Section 10b: Menu Management — Brand Manager Only
  * Covers: New Menu / Edit Menu Page
- * These tests run under the 'manager' project (storageState: manager.json)
- * Requires: normal user with is_manager=true
+ * These tests run under the 'manager' project (storageState: manager.json).
+ * Requires: a user holding Manager AT a brand in Passport (brand-scoped — there is no global
+ * manager flag). Such a user can create and edit menus for the brand(s) they manage; the menu
+ * API rejects (403) writes to any brand where they are not Manager.
  */
 import { test, expect } from '@playwright/test';
 import { unique } from './helpers/data';

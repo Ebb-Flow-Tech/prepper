@@ -18,8 +18,6 @@ const VALID_ROUTE_PATTERNS = [
   /^\/ingredients\/[^/]+$/,                  // Ingredient detail
   /^\/suppliers$/,                           // Suppliers list
   /^\/suppliers\/[^/]+$/,                    // Supplier detail
-  /^\/outlets$/,                             // Outlets list
-  /^\/outlets\/[^/]+$/,                      // Outlet detail
   /^\/recipe-categories\/[^/]+$/,            // Recipe category detail
   /^\/tastings$/,                            // Tastings list
   /^\/tastings\/new$/,                       // New tasting
@@ -69,58 +67,44 @@ function setLastRoute(route: string) {
 }
 
 // Separate component for search params to isolate Suspense boundary
-function RouteTracker({ pathname, isPublicRoute, isAdminRoute, isPassthroughRoute, userType }: { pathname: string; isPublicRoute: boolean; isAdminRoute: boolean; isPassthroughRoute: boolean; userType?: string | null }) {
+function RouteTracker({ pathname, isPublicRoute, isPassthroughRoute }: { pathname: string; isPublicRoute: boolean; isPassthroughRoute: boolean }) {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Only save the route if:
-    // 1. It's a valid route
-    // 2. It's not a public route
-    // 3. It's not an admin route for non-admin users
-    // 4. It's not a passthrough route
-    if (isValidRoute(pathname) && !isPublicRoute && !(isAdminRoute && userType !== 'admin') && !isPassthroughRoute) {
+    // Only remember real, private, non-passthrough routes
+    if (isValidRoute(pathname) && !isPublicRoute && !isPassthroughRoute) {
       const queryString = searchParams.toString();
       const fullRoute = queryString ? `${pathname}?${queryString}` : pathname;
       setLastRoute(fullRoute);
     }
-  }, [pathname, searchParams, isPublicRoute, isAdminRoute, isPassthroughRoute, userType]);
+  }, [pathname, searchParams, isPublicRoute, isPassthroughRoute]);
 
   return null;
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { userId, userType } = useAppState();
+  const { userId } = useAppState();
   const pathname = usePathname();
   const router = useRouter();
 
   const isAuthenticated = !!userId;
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
   const isNotFound = !isValidRoute(pathname);
-  const isAdminRoute = pathname.startsWith('/admin');
   const isPassthroughRoute = PASSTHROUGH_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
 
+  // Authentication only. Authorisation is per-brand and belongs to the API and to the components
+  // that read `my_role` from `usePassportBrands()` — never to a route-level role flag.
   useEffect(() => {
     if (isAuthenticated && isPublicRoute) {
       // Logged in user on login/register page -> redirect to last route
-      const lastRoute = getLastRoute();
-      // Check if lastRoute is an admin route and user is not admin
-      const lastRouteIsAdminRoute = lastRoute.startsWith('/admin');
-      if (lastRouteIsAdminRoute && userType !== 'admin') {
-        // Don't redirect to admin routes for non-admin users
-        router.replace('/recipes');
-      } else {
-        router.replace(lastRoute);
-      }
+      router.replace(getLastRoute());
     } else if (!isAuthenticated && !isPublicRoute && !isPassthroughRoute) {
       // Not logged in on protected page -> redirect to login
       // This includes session expiration (token refresh failed)
       // Passthrough routes handle their own auth logic
       router.replace('/login');
-    } else if (isAdminRoute && userType && userType !== 'admin') {
-      // Non-admin user on admin route -> redirect to outlets
-      router.replace('/recipes');
     }
-  }, [isAuthenticated, isPublicRoute, isAdminRoute, isPassthroughRoute, userType, router]);
+  }, [isAuthenticated, isPublicRoute, isPassthroughRoute, router]);
 
   // Show nothing while redirecting
   if (isNotFound) {
@@ -136,7 +120,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Suspense fallback={null}>
-        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} isAdminRoute={isAdminRoute} isPassthroughRoute={isPassthroughRoute} userType={userType} />
+        <RouteTracker pathname={pathname} isPublicRoute={isPublicRoute} isPassthroughRoute={isPassthroughRoute} />
       </Suspense>
       {children}
     </>

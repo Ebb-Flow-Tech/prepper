@@ -112,7 +112,7 @@ function RecipeListSkeleton() {
 }
 
 export function LeftPanel() {
-  const { selectedRecipeId, selectRecipe, userId, userType } = useAppState();
+  const { selectedRecipeId, selectRecipe, userId } = useAppState();
   const { data: recipesData, isLoading, error } = useRecipes({ page_size: 30 });
   const recipes = recipesData?.items;
   const createRecipe = useCreateRecipe();
@@ -131,11 +131,6 @@ export function LeftPanel() {
         }
       }
 
-      // Admin users can see all recipes
-      if (userType === 'admin') {
-        return true;
-      }
-
       // Show recipe if user is the owner OR if recipe is public
       const currUserId = userId ? userId : null;
       if (recipe.owner_id !== currUserId && !recipe.is_public) {
@@ -143,7 +138,7 @@ export function LeftPanel() {
       }
       return true;
     });
-  }, [recipes, search, userId, userType]);
+  }, [recipes, search, userId]);
 
   const handleCreate = () => {
     createRecipe.mutate(
@@ -230,8 +225,7 @@ export function LeftPanel() {
         ) : (
           <div className="space-y-2">
             {filteredRecipes.map((recipe) => {
-              const canEditRecipe =
-                userType === 'admin' || (userId !== null && recipe.owner_id === userId);
+              const canEditRecipe = userId !== null && recipe.owner_id === userId;
               const isOwned = userId !== null && recipe.owner_id === userId;
               return (
                 <RecipeCard

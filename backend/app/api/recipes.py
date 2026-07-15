@@ -2,11 +2,10 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import get_current_user, get_session
 from app.domain import RecipeService
-from app.domain.outlet_service import OutletService
 from app.models import (
     Recipe,
     RecipeCreate,
@@ -15,8 +14,8 @@ from app.models import (
     RecipeStatusUpdate,
     RecipeUpdate,
     User,
-    UserType,
 )
+from app.passport import access
 
 
 class ForkRecipeRequest(BaseModel):
@@ -88,12 +87,14 @@ def get_recipe(
     """Get a recipe by ID.
 
     Access control:
-    - Admin users: can access any recipe
     - Recipe owner: can always access their own recipe
     - Public recipes: accessible to all authenticated users
-    - Outlet-based access:
-      - Location users can access recipes from their own outlet AND their parent brand outlet
-      - Brand users can only access recipes from their own brand outlet (not from child locations)
+    - Otherwise: the recipe must be served at a unit the caller can see
+
+    The old hand-rolled outlet walk (location -> parent brand) is gone: `accessible_unit_ids`
+    already returns the brands the user holds a role at PLUS the outlets under them, which is
+    Passport's structure rather than a hierarchy Prepper maintains. Org Owners/Admins need no
+    special case — they hold a role at every brand, so every unit is visible to them.
     """
     service = RecipeService(session)
     recipe = service.get_recipe(recipe_id)
@@ -103,39 +104,25 @@ def get_recipe(
             detail="Recipe not found",
         )
 
-    # Check access control for normal users
-    if current_user.user_type != UserType.ADMIN:
-        can_access = False
+    if recipe.owner_id == current_user.id or recipe.is_public:
+        return recipe
 
-        # User's own recipe
-        if recipe.owner_id == current_user.id:
-            can_access = True
-        # Public recipe
-        elif recipe.is_public:
-            can_access = True
-        # Recipe from user's outlet
-        elif current_user.outlet_id:
-            outlet_service = OutletService(session)
-            user_outlet = outlet_service.get_outlet(current_user.outlet_id)
-
-            if user_outlet:
-                accessible_outlet_ids = {current_user.outlet_id}
-                if user_outlet.outlet_type.value == "location" and user_outlet.parent_outlet_id:
-                    accessible_outlet_ids.add(user_outlet.parent_outlet_id)
-
-                statement = select(RecipeOutlet).where(
-                    RecipeOutlet.recipe_id == recipe.id,
-                    RecipeOutlet.outlet_id.in_(accessible_outlet_ids),
-                    RecipeOutlet.is_active,
-                )
-                recipe_outlet = session.exec(statement).first()
-                can_access = bool(recipe_outlet)
-
-        if not can_access:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to access this recipe",
+    visible_unit_ids = access.accessible_unit_ids(session, current_user.id)
+    served_here = None
+    if visible_unit_ids:
+        served_here = session.exec(
+            select(RecipeOutlet).where(
+                RecipeOutlet.recipe_id == recipe.id,
+                col(RecipeOutlet.unit_id).in_(visible_unit_ids),
+                RecipeOutlet.is_active,
             )
+        ).first()
+
+    if not served_here:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this recipe",
+        )
 
     return recipe
 

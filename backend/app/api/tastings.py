@@ -3,21 +3,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import get_session, get_current_user
+from app.api.deps import get_current_user, get_session
+
+# Notes live in their own module but hang off the same /tasting-sessions prefix.
+from app.api.tasting_notes import router as notes_router
+from app.domain import TastingSessionService
 from app.models import (
     TastingSession,
-    TastingSessionRead,
     TastingSessionCreate,
+    TastingSessionRead,
     TastingSessionUpdate,
     User,
-    UserType,
 )
-from app.domain import TastingSessionService
-
-# Import routers from split modules for backwards compatibility
-from app.api.tasting_notes import router as notes_router
-from app.api.tasting_history import router as recipe_tastings_router
-
+from app.passport import access
 
 router = APIRouter()
 
@@ -26,10 +24,15 @@ router.include_router(notes_router)
 
 
 def _check_session_access(
-    tasting_session: TastingSessionRead, current_user: User
+    tasting_session: TastingSessionRead, current_user: User, session: Session
 ) -> None:
-    """Raise 403 if a non-admin user is neither the creator nor a participant."""
-    if current_user.user_type == UserType.ADMIN:
+    """Raise 403 unless the caller created the session, participates in it, or administers the org.
+
+    A tasting session hangs off no unit — it is a group of people around a recipe, not a brand's
+    data — so there is no brand to be a `Manager` of and the old admin bypass maps to the org-wide
+    check.
+    """
+    if access.is_org_admin(session, current_user.id):
         return
     if tasting_session.creator_id == current_user.id:
         return
@@ -43,10 +46,13 @@ def _check_session_access(
 
 
 def _check_session_access_raw(
-    tasting_session: TastingSession, current_user: User, service: TastingSessionService
+    tasting_session: TastingSession,
+    current_user: User,
+    service: TastingSessionService,
+    session: Session,
 ) -> None:
     """Lightweight access check using raw TastingSession (no full participant load)."""
-    if current_user.user_type == UserType.ADMIN:
+    if access.is_org_admin(session, current_user.id):
         return
     if tasting_session.creator_id == current_user.id:
         return
@@ -98,7 +104,10 @@ def list_tasting_sessions(
     from app.models.pagination import PaginatedResponse
     service = TastingSessionService(session)
     offset = (page_number - 1) * page_size
-    user_id = None if current_user.user_type == UserType.ADMIN else current_user.id
+    # `None` means "do not filter by participation" — the org administrator's view of every session.
+    user_id = (
+        None if access.is_org_admin(session, current_user.id) else current_user.id
+    )
     items, total = service.list_paginated_with_count(offset=offset, limit=page_size, search=search, user_id=user_id)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
@@ -121,7 +130,7 @@ def get_tasting_session(
             detail="Tasting session not found",
         )
 
-    _check_session_access(tasting_session, current_user)
+    _check_session_access(tasting_session, current_user, session)
     return tasting_session
 
 
@@ -143,7 +152,7 @@ def get_tasting_session_stats(
             detail="Tasting session not found",
         )
 
-    _check_session_access_raw(tasting_session, current_user, service)
+    _check_session_access_raw(tasting_session, current_user, service, session)
     return service.get_stats(session_id)
 
 

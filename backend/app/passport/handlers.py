@@ -41,7 +41,7 @@ from sqlmodel import Session
 
 from app.database import engine
 from app.models import PassportMembership
-from app.passport import role_projection, store
+from app.passport import store
 
 if TYPE_CHECKING:
     from passport_client import (
@@ -143,11 +143,9 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
         # TRAP 1: version-guarded UPSERT that KEEPS the row (status=removed), NOT a delete.
         with _session() as session:
             store.apply_membership(session, payload.model_dump())
-            # Rule 6: revoke this user's local unit-scoped grants. Granting is NOT projected
-            # onto the user row any more (rule 8) — roles are read per-brand at the check.
-            role_projection.revoke_local_grants(
-                session, platform_user_id=payload.platform_user_id
-            )
+            # Rule 6 needs no action now: the user row carries NO grant to revoke (rule 8).
+            # A removed membership means no active org role, so `access` derives no brand roles
+            # for them — access dies by arithmetic, and the tombstone row below is the record.
 
     # --- entitlements -----------------------------------------------------------------
     async def upsert_entitlement(self, payload: EntitlementPayload) -> None:

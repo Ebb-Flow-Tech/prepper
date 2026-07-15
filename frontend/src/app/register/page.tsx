@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { useAppState } from '@/lib/store';
-import { registerUser } from '@/lib/api';
+import { registerUser, updateUser } from '@/lib/api';
 import type { AuthApiError } from '@/types';
 
 const validateEmail = (email: string): boolean => {
@@ -66,20 +66,22 @@ export default function RegisterPage() {
         email,
         password,
         username: name,
-        phone_number: phoneNumber || undefined,
       });
+
+      // Registration only takes credentials; the phone number is a profile field set afterwards.
+      if (phoneNumber.trim()) {
+        await updateUser(response.user.id, { phone_number: phoneNumber.trim() });
+      }
 
       toast.success('Registration successful!');
       login(
         response.user.id,
         response.access_token,
-        response.user.user_type,
         response.refresh_token,
         response.user.username,
-        response.user.email,
-        response.user.is_manager
+        response.user.email
       );
-      router.push('/outlets');
+      router.push('/recipes');
     } catch (err: unknown) {
       console.error('Registration error:', err);
       const apiError = err as AuthApiError;

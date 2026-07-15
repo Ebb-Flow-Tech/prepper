@@ -6,12 +6,11 @@ import { Instructions } from '@/components/recipe/Instructions';
 import { Card, CardContent, Skeleton } from '@/components/ui';
 
 export function InstructionsTab() {
-  const { selectedRecipeId, userId, userType } = useAppState();
+  const { selectedRecipeId, userId } = useAppState();
 
   const { data: recipe, isLoading, error } = useRecipe(selectedRecipeId);
 
-  const canEdit =
-    userType === 'admin' || (userId !== null && recipe?.owner_id === userId);
+  const canEdit = userId !== null && recipe?.owner_id === userId;
 
   if (!selectedRecipeId) {
     return (

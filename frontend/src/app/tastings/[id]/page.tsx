@@ -567,7 +567,7 @@ export default function TastingSessionDetailPage() {
   const router = useRouter();
   const sessionId = params.id ? Number(params.id) : null;
 
-  const { userId, userType } = useAppState();
+  const { userId } = useAppState();
   const { data: session, isLoading: sessionLoading, error: sessionError } = useTastingSession(sessionId);
   const { data: sessionRecipes, isLoading: recipesLoading } = useSessionRecipes(sessionId);
   const { data: sessionNotes } = useSessionNotes(sessionId);
@@ -639,8 +639,9 @@ export default function TastingSessionDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Access control check
-  const isInvited = userType === 'admin' ||
+  // Access control check. The API is the authority (403s a non-participant); this only decides
+  // what to render.
+  const isInvited =
     (userId && session?.creator_id === userId) ||
     (userId && (session?.participants?.some(p => p.user_id === userId) ?? false)) || false;
 

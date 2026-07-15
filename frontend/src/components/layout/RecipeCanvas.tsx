@@ -69,11 +69,10 @@ interface RecipeCanvasProps {
 }
 
 export function RecipeCanvas({ children }: RecipeCanvasProps) {
-  const { selectedRecipeId, userId, userType } = useAppState();
+  const { selectedRecipeId, userId } = useAppState();
   const { data: recipe, isLoading, error } = useRecipe(selectedRecipeId);
 
-  const canEdit =
-    userType === 'admin' || (userId !== null && recipe?.owner_id === userId);
+  const canEdit = userId !== null && recipe?.owner_id === userId;
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'recipe-canvas',

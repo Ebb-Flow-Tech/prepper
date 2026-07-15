@@ -57,12 +57,9 @@ import type {
   Category,
   CreateCategoryRequest,
   UpdateCategoryRequest,
-  Outlet,
-  CreateOutletRequest,
-  UpdateOutletRequest,
-  RecipeOutlet,
-  CreateRecipeOutletRequest,
-  UpdateRecipeOutletRequest,
+  RecipeUnit,
+  CreateRecipeUnitRequest,
+  UpdateRecipeUnitRequest,
   RecipeCategory,
   CreateRecipeCategoryRequest,
   UpdateRecipeCategoryRequest,
@@ -78,6 +75,7 @@ import type {
   LoginResponse,
   RegisterRequest,
   User,
+  UpdateUserRequest,
   Menu,
   MenuDetail,
   MenuItem,
@@ -133,9 +131,6 @@ export interface SupplierListParams extends ListParams {
   active_only?: boolean;
 }
 
-export interface OutletListParams extends ListParams {
-  is_active?: boolean | null;
-}
 import { refreshAccessToken, triggerLogout, type RefreshTokenResult } from '@/lib/auth-interceptor';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -1104,115 +1099,43 @@ export async function getRecipeAllergensBatch(
   return map;
 }
 
-// ============ Outlets ============
+// ============ Recipe Units (Passport brands / outlets) ============
+//
+// Units are created and edited in Passport, never here. These endpoints only say which units a
+// recipe is served at. Use `getPassportBrands()` to obtain the units the caller may pick from.
 
-export async function getOutlets(params?: OutletListParams): Promise<PaginatedResponse<Outlet>> {
-  const searchParams = new URLSearchParams();
-  if (params?.page_number) searchParams.set('page_number', String(params.page_number));
-  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.is_active !== undefined && params.is_active !== null) searchParams.set('is_active', String(params.is_active));
-  const query = searchParams.toString();
-  return fetchApi<PaginatedResponse<Outlet>>(`/outlets${query ? `?${query}` : ''}`);
+export async function getRecipeUnits(recipeId: number): Promise<RecipeUnit[]> {
+  return fetchApi<RecipeUnit[]>(`/recipes/${recipeId}/units`);
 }
 
-export async function getOutlet(id: number): Promise<Outlet> {
-  return fetchApi<Outlet>(`/outlets/${id}`);
-}
-
-export async function createOutlet(data: CreateOutletRequest): Promise<Outlet> {
-  return fetchApi<Outlet>('/outlets', {
+export async function addRecipeToUnit(
+  recipeId: number,
+  data: CreateRecipeUnitRequest
+): Promise<RecipeUnit> {
+  return fetchApi<RecipeUnit>(`/recipes/${recipeId}/units`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function updateOutlet(
-  id: number,
-  data: UpdateOutletRequest
-): Promise<Outlet> {
-  return fetchApi<Outlet>(`/outlets/${id}`, {
+export async function updateRecipeUnit(
+  recipeId: number,
+  unitId: string,
+  data: UpdateRecipeUnitRequest
+): Promise<RecipeUnit> {
+  return fetchApi<RecipeUnit>(`/recipes/${recipeId}/units/${unitId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
-export async function deactivateOutlet(id: number): Promise<Outlet> {
-  return fetchApi<Outlet>(`/outlets/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function getOutletRecipes(outletId: number, isActive: boolean | null = null): Promise<RecipeOutlet[]> {
-  const params = new URLSearchParams();
-  if (isActive !== null) {
-    params.append('is_active', String(isActive));
-  }
-  return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/recipes?${params}`);
-}
-
-export async function getParentOutletRecipes(outletId: number, isActive: boolean | null = null): Promise<RecipeOutlet[]> {
-  const params = new URLSearchParams();
-  if (isActive !== null) {
-    params.append('is_active', String(isActive));
-  }
-  return fetchApi<RecipeOutlet[]>(`/outlets/${outletId}/parent-recipes?${params}`);
-}
-
-export async function getRecipeOutlets(recipeId: number): Promise<RecipeOutlet[]> {
-  return fetchApi<RecipeOutlet[]>(`/recipes/${recipeId}/outlets`);
-}
-
-export async function addRecipeToOutlet(
+export async function removeRecipeFromUnit(
   recipeId: number,
-  data: { outlet_id: number; is_active?: boolean; price_override?: number | null }
-): Promise<RecipeOutlet> {
-  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function updateRecipeOutlet(
-  recipeId: number,
-  outletId: number,
-  data: UpdateRecipeOutletRequest
-): Promise<RecipeOutlet> {
-  return fetchApi<RecipeOutlet>(`/recipes/${recipeId}/outlets/${outletId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function removeRecipeFromOutlet(
-  recipeId: number,
-  outletId: number
+  unitId: string
 ): Promise<void> {
-  return fetchApi<void>(`/recipes/${recipeId}/outlets/${outletId}`, {
+  return fetchApi<void>(`/recipes/${recipeId}/units/${unitId}`, {
     method: 'DELETE',
   });
-}
-
-// Fetch outlets for multiple recipes in a single batch request
-export async function getRecipeOutletsBatch(
-  recipeIds: number[]
-): Promise<Map<number, RecipeOutlet[]>> {
-  if (recipeIds.length === 0) {
-    return new Map();
-  }
-
-  const data = await fetchApi<Record<string, RecipeOutlet[]>>('/recipes/outlets/batch', {
-    method: 'POST',
-    body: JSON.stringify({ recipe_ids: recipeIds }),
-  });
-
-  // Convert the plain object to a Map
-  const outletMap = new Map<number, RecipeOutlet[]>();
-  for (const [recipeId, outlets] of Object.entries(data)) {
-    outletMap.set(parseInt(recipeId, 10), outlets);
-  }
-
-  return outletMap;
 }
 
 // ============ Recipe Categories ============
@@ -1465,7 +1388,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   return users.length > 0 ? users[0] : null;
 }
 
-export async function updateUser(userId: string, data: Partial<User>): Promise<User> {
+export async function updateUser(userId: string, data: UpdateUserRequest): Promise<User> {
   return fetchApi<User>(`/users/${userId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -1515,8 +1438,8 @@ export async function restoreMenu(menuId: number): Promise<Menu> {
   });
 }
 
-export async function getMenusByOutlet(outletId: number): Promise<Menu[]> {
-  return fetchApi<Menu[]>(`/menu-outlets/${outletId}`);
+export async function getMenusByUnit(unitId: string): Promise<Menu[]> {
+  return fetchApi<Menu[]>(`/menu-outlets/${unitId}`);
 }
 
 export async function getMenuItemsBySection(sectionId: number): Promise<MenuItemRead[]> {
@@ -1818,4 +1741,31 @@ export async function removePassportBrandRole(assignmentId: string): Promise<Pas
   return fetchApi<PassportBrandRole>(`/passport/brand-roles/${assignmentId}`, {
     method: 'DELETE',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Recipe -> unit chips, batched
+//
+// Replaces the deleted `/recipes/outlets/batch`. One call for a whole card/list view (never one
+// request per recipe). Server-scoped to the caller's accessible units, so a list never renders a
+// brand the user has no role at. Names are resolved server-side (a recipe may be served at a brand
+// OR an outlet, and the client's brand list carries only brands).
+// ---------------------------------------------------------------------------
+
+export interface RecipeUnitChip {
+  unit_id: string;
+  unit_name: string;
+  is_active: boolean;
+}
+
+export async function getRecipeUnitsBatch(
+  recipeIds: number[]
+): Promise<Map<number, RecipeUnitChip[]>> {
+  if (recipeIds.length === 0) return new Map();
+  // JSON object keys are strings; the sibling batch hooks all hand back a Map keyed by number.
+  const data = await fetchApi<Record<string, RecipeUnitChip[]>>('/recipes/units/batch', {
+    method: 'POST',
+    body: JSON.stringify({ recipe_ids: recipeIds }),
+  });
+  return new Map(Object.entries(data).map(([id, chips]) => [Number(id), chips]));
 }

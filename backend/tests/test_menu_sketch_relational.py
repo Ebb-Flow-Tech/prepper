@@ -4,6 +4,8 @@ import datetime
 
 from fastapi.testclient import TestClient
 
+from tests.conftest import ADMIN_USER_ID
+
 SKETCHES = "/api/v1/menu-sketches"
 SECTIONS = "/api/v1/menu-sketch-sections"
 ITEMS = "/api/v1/menu-sketch-section-items"
@@ -37,9 +39,19 @@ def _make_item(
 
 
 def _make_recipe(client: TestClient, name: str = "Dish") -> int:
+    """A recipe owned by the caller — the owner may always read their own recipe back.
+
+    Access is Passport's now and fails closed: an ownerless recipe served at no unit is visible
+    to nobody, org admin included.
+    """
     return client.post(
         RECIPES,
-        json={"name": name, "yield_quantity": 1, "yield_unit": "portion"},
+        json={
+            "name": name,
+            "yield_quantity": 1,
+            "yield_unit": "portion",
+            "owner_id": ADMIN_USER_ID,
+        },
     ).json()["id"]
 
 

@@ -43,7 +43,6 @@ from app.models import (
     PassportUnit,
     PassportUnitAppMembership,
     User,
-    UserType,
 )
 from app.passport import access
 
@@ -64,18 +63,31 @@ def _require_configured() -> tuple[str, str]:
     return settings.passport_api_url, settings.passport_api_key
 
 
-def _require_local_authority(actor: User) -> None:
+def _require_local_authority(session: Session, actor: User, unit_id: str | None) -> None:
     """Prepper's OWN check, applied before we ever call Passport.
 
-    Admins and managers may attempt a role change; everyone else is refused here. Passport
-    still re-checks against the verified end user — this gate only stops calls Prepper itself
-    would never sanction.
+    Rule 8: read Passport's vocabulary directly. An org Owner/Admin may manage roles anywhere; a
+    brand `Manager` may manage roles AT THAT BRAND. Everyone else is refused here.
+
+    ``unit_id`` is the brand the write targets — the check is brand-SCOPED, because there is no
+    global "manager": a Manager at Temper has no business assigning roles at Willow. When there is
+    no unit in scope (a pure read), org-admin is the only bar.
+
+    Passport re-checks all of this against the VERIFIED end user and applies its own §7 authority
+    matrix — a 403 from Passport is a normal outcome. This gate only stops calls Prepper itself
+    would never sanction, so that we do not ask Passport to refuse something we already know is
+    wrong.
     """
-    if actor.user_type != UserType.ADMIN and not actor.is_manager:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not permitted to manage roles",
-        )
+    if access.is_org_admin(session, actor.id):
+        return
+
+    if unit_id is not None and access.role_at_unit(session, actor.id, unit_id) == MANAGER:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not permitted to manage roles at this brand",
+    )
 
 
 def _app_id(session: Session, org_id: str) -> str:
@@ -124,6 +136,15 @@ def _org_for_assignment(session: Session, assignment_id: str) -> str:
     return org_id
 
 
+def _unit_of_assignment(session: Session, assignment_id: str) -> str | None:
+    """The brand an existing role row targets — so the local check can be brand-scoped."""
+    return session.exec(
+        select(PassportUnitAppMembership.unit_id).where(
+            PassportUnitAppMembership.id == assignment_id
+        )
+    ).first()
+
+
 def _actor_orgs(session: Session, actor: User) -> list[str]:
     """Every org the acting user belongs to (rule 9 — a user may belong to more than one)."""
     platform_user_id = access.platform_user_id_for(session, actor.id)
@@ -163,9 +184,9 @@ async def assign_brand_role(
 ) -> Any:
     """Assign ``role`` to a platform user at a BRAND. ``409`` if the unit is not a brand."""
     base_url, api_key = _require_configured()
-    _require_local_authority(actor)
-    _require_role(role)
     org_id = _org_for_unit(session, unit_id)  # rule 9: the brand names its org
+    _require_local_authority(session, actor, unit_id)
+    _require_role(role)
     app_id = _app_id(session, org_id)
 
     try:
@@ -193,9 +214,9 @@ async def change_brand_role(
     """Change an existing assignment's role. Brand Managers cannot do this (``403``) —
     changing a role is Owner/Admin territory. No ``app_id``: the server reads it off the row."""
     base_url, api_key = _require_configured()
-    _require_local_authority(actor)
-    _require_role(role)
     org_id = _org_for_assignment(session, assignment_id)  # rule 9: the row names its org
+    _require_local_authority(session, actor, _unit_of_assignment(session, assignment_id))
+    _require_role(role)
 
     try:
         async with _client(base_url, api_key) as pc:
@@ -212,8 +233,8 @@ async def remove_brand_role(
     """Remove an assignment. Returns ``200`` with the FINAL aggregate (``status="removed"``)
     — a tombstone, not a delete; the projection keeps the row."""
     base_url, api_key = _require_configured()
-    _require_local_authority(actor)
     org_id = _org_for_assignment(session, assignment_id)  # rule 9: the row names its org
+    _require_local_authority(session, actor, _unit_of_assignment(session, assignment_id))
 
     try:
         async with _client(base_url, api_key) as pc:

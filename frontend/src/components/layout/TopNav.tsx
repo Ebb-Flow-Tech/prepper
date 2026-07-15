@@ -14,7 +14,6 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -29,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId, username, userType, logout, canvasHasUnsavedChanges } = useAppState();
+  const { userId, username, logout, canvasHasUnsavedChanges } = useAppState();
 
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
@@ -138,10 +137,7 @@ export function TopNav() {
 
             {/* Navigation Links */}
             <div className="hidden md:flex flex-1 items-center gap-1">
-              {NAV_ITEMS.filter((item) => {
-                if (item.adminOnly && userType !== 'admin') return false;
-                return true;
-              }).map(({ href, label, icon: Icon }) => {
+              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
                 return (
                   <div key={href} className="group relative">
@@ -197,10 +193,7 @@ export function TopNav() {
           {/* Menu */}
           <div className="absolute top-16 left-0 right-0 z-50 border-b border-border bg-card shadow-lg md:hidden">
             <div className="flex flex-col py-2 px-2">
-              {NAV_ITEMS.filter((item) => {
-                if (item.adminOnly && userType !== 'admin') return false;
-                return true;
-              }).map(({ href, label, icon: Icon }) => {
+              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
                 return (
                   <Link

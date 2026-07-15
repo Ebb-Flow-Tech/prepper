@@ -2,11 +2,11 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useCreateIngredient, useAddIngredientSupplier, useSuppliers, useCategorizeIngredient, useOutlets } from '@/lib/hooks';
-import { useAppState } from '@/lib/store';
+import { useCreateIngredient, useAddIngredientSupplier, useSuppliers, useCategorizeIngredient } from '@/lib/hooks';
+import { BrandSelect } from '@/components/units';
 import { Button, Input, Select, Modal, Checkbox } from '@/components/ui';
 import { toast } from 'sonner';
-import type { Supplier, Outlet } from '@/types';
+import type { Supplier } from '@/types';
 
 const UNIT_OPTIONS = [
   { value: 'g', label: 'g (grams)' },
@@ -25,7 +25,8 @@ interface SupplierEntry {
   pack_unit: string;
   price_per_pack: string;
   is_preferred: boolean;
-  outlet_id: string;
+  /** Passport unit UUID the price belongs to. */
+  unit_id: string;
 }
 
 interface AddIngredientModalProps {
@@ -34,14 +35,11 @@ interface AddIngredientModalProps {
 }
 
 export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps) {
-  const { outletId } = useAppState();
   const createIngredient = useCreateIngredient();
   const addIngredientSupplier = useAddIngredientSupplier();
   const categorizeIngredient = useCategorizeIngredient();
   const { data: suppliersData } = useSuppliers({ page_size: 30 });
   const suppliers = suppliersData?.items ?? [];
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items ?? [];
 
   const [name, setName] = useState('');
   const [baseUnit, setBaseUnit] = useState('g');
@@ -84,7 +82,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
       pack_unit: baseUnit,
       price_per_pack: '',
       is_preferred: supplierEntries.length === 0, // First supplier is preferred by default
-      outlet_id: outletId ? outletId.toString() : '',
+      unit_id: '',
     };
     setSupplierEntries((prev) => [...prev, newEntry]);
   };
@@ -123,7 +121,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
   const isSupplierEntryValid = (entry: SupplierEntry) => {
     return (
       entry.supplier_id &&
-      entry.outlet_id &&
+      entry.unit_id &&
       entry.pack_size &&
       entry.pack_unit &&
       entry.price_per_pack
@@ -168,7 +166,7 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
           data: {
             ingredient_id: newIngredient.id,
             supplier_id: parseInt(entry.supplier_id, 10),
-            outlet_id: parseInt(entry.outlet_id, 10),
+            unit_id: entry.unit_id,
             sku: entry.sku || null,
             pack_size: parseFloat(entry.pack_size),
             pack_unit: entry.pack_unit,
@@ -279,8 +277,6 @@ export function AddIngredientModal({ isOpen, onClose }: AddIngredientModalProps)
                   entry={entry}
                   index={index}
                   suppliers={suppliers}
-                  outlets={outlets}
-                  userOutletId={outletId}
                   usedSupplierIds={supplierEntries.filter((e) => e.id !== entry.id).map((e) => e.supplier_id)}
                   baseUnit={baseUnit}
                   onChange={handleSupplierEntryChange}
@@ -309,8 +305,6 @@ interface SupplierEntryFormProps {
   entry: SupplierEntry;
   index: number;
   suppliers: Supplier[];
-  outlets: Outlet[];
-  userOutletId: number | null;
   usedSupplierIds: string[];
   baseUnit: string;
   onChange: (id: string, field: keyof SupplierEntry, value: string | boolean) => void;
@@ -321,8 +315,6 @@ function SupplierEntryForm({
   entry,
   index,
   suppliers,
-  outlets,
-  userOutletId,
   usedSupplierIds,
   baseUnit,
   onChange,
@@ -369,19 +361,11 @@ function SupplierEntryForm({
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Outlet *
+            Brand *
           </label>
-          <Select
-            value={entry.outlet_id}
-            onChange={(e) => onChange(entry.id, 'outlet_id', e.target.value)}
-            disabled={!!userOutletId}
-            options={[
-              { value: '', label: 'Select outlet...' },
-              ...outlets.map((o) => ({
-                value: o.id.toString(),
-                label: o.name,
-              })),
-            ]}
+          <BrandSelect
+            value={entry.unit_id}
+            onChange={(unitId) => onChange(entry.id, 'unit_id', unitId)}
           />
         </div>
 

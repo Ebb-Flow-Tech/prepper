@@ -22,8 +22,8 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useRecipes, useOutlets, useCreateMenu, useUpdateMenu, useForkMenu, useRecipeAllergensBatch, useInfiniteRecipes, useDebouncedValue } from '@/lib/hooks';
-import { useAppState } from '@/lib/store';
+import { useRecipes, useCreateMenu, useUpdateMenu, useForkMenu, useRecipeAllergensBatch, useInfiniteRecipes, useDebouncedValue } from '@/lib/hooks';
+import { useSelectableBrands } from '@/components/units';
 import { Button, Input, Select, Textarea, Badge, Checkbox } from '@/components/ui';
 import type { MenuDetail, Recipe } from '@/types';
 
@@ -610,19 +610,19 @@ function DraggableItem({
 
 export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
   const router = useRouter();
-  const { userType } = useAppState();
   const { data: recipesData } = useRecipes({ page_size: 30 });
   const recipes = recipesData?.items;
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items;
+  // Only brands where the caller is `Manager` AT THAT BRAND can carry a menu — the API enforces it
+  // per brand, so the picker offers exactly those.
+  const { brands: manageableBrands } = useSelectableBrands(true);
   const createMenuMutation = useCreateMenu();
   const updateMenuMutation = useUpdateMenu();
   const forkMenuMutation = useForkMenu();
 
   const [name, setName] = useState(menu?.name || '');
   const [isPublished, setIsPublished] = useState(menu?.is_published || false);
-  const [selectedOutletIds, setSelectedOutletIds] = useState<number[]>([]);
-  const [outletsOpen, setOutletsOpen] = useState(true);
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [unitsOpen, setUnitsOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
 
   // Multi-add state
@@ -716,17 +716,12 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
     })
   );
 
-  // Initialize selectedOutletIds from menu when editing
+  // Initialize selectedUnitIds from menu when editing
   useEffect(() => {
     if (mode === 'edit' && menu?.outlets) {
-      setSelectedOutletIds(menu.outlets.map((o) => o.outlet_id));
+      setSelectedUnitIds(menu.outlets.map((o) => o.unit_id));
     }
   }, [mode, menu?.outlets]);
-
-  const accessibleOutlets = useMemo(() => {
-    if (userType === 'admin') return outlets || [];
-    return outlets || [];
-  }, [outlets, userType]);
 
   const addSection = () => {
     const newSection: LocalSection = {
@@ -810,8 +805,8 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
       return;
     }
 
-    if (selectedOutletIds.length === 0) {
-      toast.error('At least one outlet must be selected');
+    if (selectedUnitIds.length === 0) {
+      toast.error('At least one brand must be selected');
       return;
     }
 
@@ -833,7 +828,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
         await createMenuMutation.mutateAsync({
           name,
           is_published: isPublished,
-          outlet_ids: selectedOutletIds,
+          unit_ids: selectedUnitIds,
           sections: createSectionData,
         });
         router.push('/menu');
@@ -858,7 +853,7 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
           data: {
             name,
             is_published: isPublished,
-            outlet_ids: selectedOutletIds,
+            unit_ids: selectedUnitIds,
             sections: updateSectionData,
           },
         });
@@ -901,31 +896,37 @@ export function MenuBuilder({ mode, menu }: MenuBuilderProps) {
         <div>
           <button
             type="button"
-            onClick={() => setOutletsOpen(!outletsOpen)}
+            onClick={() => setUnitsOpen(!unitsOpen)}
             className="flex items-center gap-2 text-sm font-medium mb-2 hover:text-foreground transition-colors"
           >
-            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${outletsOpen ? '' : '-rotate-90'}`} />
-            Outlets *
-            {selectedOutletIds.length > 0 && (
-              <span className="text-xs text-muted-foreground font-normal">({selectedOutletIds.length} selected)</span>
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${unitsOpen ? '' : '-rotate-90'}`} />
+            Brands *
+            {selectedUnitIds.length > 0 && (
+              <span className="text-xs text-muted-foreground font-normal">({selectedUnitIds.length} selected)</span>
             )}
           </button>
-          {outletsOpen && (
+          {unitsOpen && (
             <div className="space-y-2">
-              {accessibleOutlets.map((outlet) => (
-                <Checkbox
-                  key={outlet.id}
-                  checked={selectedOutletIds.includes(outlet.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedOutletIds([...selectedOutletIds, outlet.id]);
-                    } else {
-                      setSelectedOutletIds(selectedOutletIds.filter((id) => id !== outlet.id));
-                    }
-                  }}
-                  label={outlet.name}
-                />
-              ))}
+              {manageableBrands.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  You are not a manager at any brand. Brand roles are assigned in Passport.
+                </p>
+              ) : (
+                manageableBrands.map((brand) => (
+                  <Checkbox
+                    key={brand.id}
+                    checked={selectedUnitIds.includes(brand.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedUnitIds([...selectedUnitIds, brand.id]);
+                      } else {
+                        setSelectedUnitIds(selectedUnitIds.filter((id) => id !== brand.id));
+                      }
+                    }}
+                    label={brand.name}
+                  />
+                ))
+              )}
             </div>
           )}
         </div>

@@ -1,101 +1,45 @@
-"""Tests for outlet-scoped supplier ingredient visibility."""
+"""Tests for unit-scoped supplier-ingredient visibility.
 
-from unittest.mock import patch, MagicMock
+A supplier-ingredient link hangs off a Passport UNIT. Who may see it is decided by
+``access.accessible_unit_ids`` — the brands the caller holds a role at, plus the outlets under
+them. There is no local outlet hierarchy any more, and no user column to consult.
+"""
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
-from sqlmodel.pool import StaticPool
+from sqlmodel import Session
 
-from app.main import app
-from app.api.deps import get_session, get_current_user
-from app.database import get_session as db_get_session
-from app.models import User, UserType
-
-
-def _make_client(session: Session, user: User) -> TestClient:
-    """Create a test client with a specific user override."""
-    app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[db_get_session] = lambda: session
-    app.dependency_overrides[get_current_user] = lambda: user
-
-    storage_patches = [
-        patch("app.api.recipe_images.is_storage_configured", return_value=True),
-        patch("app.api.recipe_images.StorageService"),
-    ]
-
-    with storage_patches[0]:
-        with storage_patches[1] as mock_storage_class:
-            mock_storage = MagicMock()
-
-            async def async_upload(*args, **kwargs):
-                return "https://example.com/storage/recipe_images/test.png"
-
-            mock_storage.upload_image_from_base64 = MagicMock(side_effect=async_upload)
-            mock_storage_class.return_value = mock_storage
-
-            client = TestClient(app)
-            yield client
-
-    app.dependency_overrides.clear()
+from tests.conftest import (
+    ORG_ID,
+    STAFF,
+    create_user,
+    make_brand_user,
+    seed_brand,
+    seed_outlet_unit,
+    use_user,
+)
 
 
-@pytest.fixture(name="session")
-def session_fixture():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-
-
-@pytest.fixture
-def admin_user():
-    return User(
-        id="admin-user",
-        email="admin@test.com",
-        username="admin",
-        user_type=UserType.ADMIN,
-        outlet_id=None,
-    )
-
-
-@pytest.fixture
-def admin_client(session, admin_user):
-    yield from _make_client(session, admin_user)
-
-
-def _create_outlet(client, name, code, parent_id=None):
-    data = {"name": name, "code": code, "outlet_type": "brand"}
-    if parent_id:
-        data["parent_outlet_id"] = parent_id
-    resp = client.post("/api/v1/outlets", json=data)
-    assert resp.status_code == 201
-    return resp.json()["id"]
-
-
-def _create_ingredient(client, name="Tomato"):
+def _create_ingredient(client: TestClient, name: str = "Tomato") -> int:
     resp = client.post("/api/v1/ingredients", json={"name": name, "base_unit": "kg"})
     assert resp.status_code == 201
     return resp.json()["id"]
 
 
-def _create_supplier(client, name="Fresh Farms"):
+def _create_supplier(client: TestClient, name: str = "Fresh Farms") -> int:
     resp = client.post("/api/v1/suppliers", json={"name": name})
     assert resp.status_code == 201
     return resp.json()["id"]
 
 
-def _add_supplier_ingredient(client, ing_id, sup_id, outlet_id, pack_size=5.0, price=10.0):
+def _add_supplier_ingredient(
+    client: TestClient, ing_id: int, sup_id: int, unit_id: str, pack_size: float = 5.0, price: float = 10.0
+) -> int:
     resp = client.post(
         f"/api/v1/ingredients/{ing_id}/suppliers",
         json={
             "ingredient_id": ing_id,
             "supplier_id": sup_id,
-            "outlet_id": outlet_id,
+            "unit_id": unit_id,
             "pack_size": pack_size,
             "pack_unit": "kg",
             "price_per_pack": price,
@@ -105,209 +49,153 @@ def _add_supplier_ingredient(client, ing_id, sup_id, outlet_id, pack_size=5.0, p
     return resp.json()["id"]
 
 
-class TestOutletScopedSupplierIngredients:
-    """Test outlet-scoped visibility for supplier ingredients."""
+class TestUnitScopedSupplierIngredients:
+    """Unit-scoped visibility for supplier ingredients."""
 
-    def test_child_sees_parent_supplier_ingredients(self, session, admin_client):
-        """Location user sees supplier_ingredients from the parent brand."""
-        # Setup: brand → location hierarchy
-        brand_id = _create_outlet(admin_client, "Brand A", "BA")
-        location_id = _create_outlet(admin_client, "Location 1", "L1", parent_id=brand_id)
+    def test_brand_role_sees_links_at_the_brand(self, session: Session, client: TestClient):
+        """A user at an outlet of the brand sees the brand's links — the outlet inherits."""
+        brand_id = seed_brand(session, "Brand A")
+        seed_outlet_unit(session, brand_id, "Location 1")
 
-        ing_id = _create_ingredient(admin_client)
-        sup_id = _create_supplier(admin_client)
+        ing_id = _create_ingredient(client)
+        sup_id = _create_supplier(client)
+        _add_supplier_ingredient(client, ing_id, sup_id, brand_id)
 
-        # Add supplier_ingredient to parent brand
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, brand_id)
+        use_user(client, make_brand_user(session, "location-user", brand_id, STAFF, "locuser"))
 
-        # Query as location user
-        location_user = User(
-            id="location-user",
-            email="loc@test.com",
-            username="locuser",
-            user_type=UserType.NORMAL,
-            outlet_id=location_id,
-        )
-        for c in _make_client(session, location_user):
-            resp = c.get(f"/api/v1/ingredients/{ing_id}/suppliers")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert len(data) == 1
-            assert data[0]["outlet_id"] == brand_id
-
-    def test_parent_sees_child_supplier_ingredients(self, session, admin_client):
-        """Brand user sees supplier_ingredients from child locations."""
-        brand_id = _create_outlet(admin_client, "Brand B", "BB")
-        location_id = _create_outlet(admin_client, "Location 2", "L2", parent_id=brand_id)
-
-        ing_id = _create_ingredient(admin_client, "Onion")
-        sup_id = _create_supplier(admin_client, "Local Farms")
-
-        # Add supplier_ingredient to child location
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, location_id)
-
-        # Query as brand user
-        brand_user = User(
-            id="brand-user",
-            email="brand@test.com",
-            username="branduser",
-            user_type=UserType.NORMAL,
-            outlet_id=brand_id,
-        )
-        for c in _make_client(session, brand_user):
-            resp = c.get(f"/api/v1/ingredients/{ing_id}/suppliers")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert len(data) == 1
-            assert data[0]["outlet_id"] == location_id
-
-    def test_admin_sees_all(self, session, admin_client):
-        """Admin user (no outlet) sees all supplier_ingredients."""
-        outlet_a = _create_outlet(admin_client, "Outlet A", "OA")
-        outlet_b = _create_outlet(admin_client, "Outlet B", "OB")
-
-        ing_id = _create_ingredient(admin_client, "Garlic")
-        sup_id = _create_supplier(admin_client, "Global Supply")
-
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_a)
-        # Same supplier but different outlet is allowed with the new unique constraint
-        sup_id2 = _create_supplier(admin_client, "Another Supply")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id2, outlet_b)
-
-        resp = admin_client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 2
+        assert len(data) == 1
+        assert data[0]["unit_id"] == brand_id
 
-    def test_no_outlet_user_sees_nothing(self, session, admin_client):
-        """Normal user with no outlet sees no supplier_ingredients."""
-        outlet_id = _create_outlet(admin_client, "Some Outlet", "SO")
-        ing_id = _create_ingredient(admin_client, "Pepper")
-        sup_id = _create_supplier(admin_client, "Pepper Co")
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+    def test_brand_role_sees_links_at_its_outlets(self, session: Session, client: TestClient):
+        """The other direction: a link placed on an outlet is visible to the brand's people."""
+        brand_id = seed_brand(session, "Brand B")
+        outlet_id = seed_outlet_unit(session, brand_id, "Location 2")
 
-        # Normal user without outlet
-        no_outlet_user = User(
-            id="no-outlet-user",
-            email="nooutlet@test.com",
-            username="nooutlet",
-            user_type=UserType.NORMAL,
-            outlet_id=None,
-        )
-        for c in _make_client(session, no_outlet_user):
-            resp = c.get(f"/api/v1/ingredients/{ing_id}/suppliers")
-            assert resp.status_code == 200
-            assert resp.json() == []
+        ing_id = _create_ingredient(client, "Onion")
+        sup_id = _create_supplier(client, "Local Farms")
+        _add_supplier_ingredient(client, ing_id, sup_id, outlet_id)
 
-    def test_cross_tree_isolation(self, session, admin_client):
-        """User in tree A cannot see supplier_ingredients from tree B."""
-        tree_a_root = _create_outlet(admin_client, "Tree A", "TA")
-        tree_b_root = _create_outlet(admin_client, "Tree B", "TB")
+        use_user(client, make_brand_user(session, "brand-user", brand_id, STAFF, "branduser"))
 
-        ing_id = _create_ingredient(admin_client, "Carrot")
-        sup_id = _create_supplier(admin_client, "Carrot Farm")
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["unit_id"] == outlet_id
 
-        # Add supplier_ingredient to tree B only
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, tree_b_root)
+    def test_org_admin_sees_all(self, session: Session, client: TestClient):
+        """An org admin holds Manager at every brand, so nothing is hidden from them."""
+        unit_a = seed_brand(session, "Outlet A")
+        unit_b = seed_brand(session, "Outlet B")
 
-        # Query as tree A user
-        tree_a_user = User(
-            id="tree-a-user",
-            email="treea@test.com",
-            username="treeauser",
-            user_type=UserType.NORMAL,
-            outlet_id=tree_a_root,
-        )
-        for c in _make_client(session, tree_a_user):
-            resp = c.get(f"/api/v1/ingredients/{ing_id}/suppliers")
-            assert resp.status_code == 200
-            assert resp.json() == []
+        ing_id = _create_ingredient(client, "Garlic")
+        sup_id = _create_supplier(client, "Global Supply")
 
-    def test_supplier_endpoint_outlet_filtering(self, session, admin_client):
-        """Supplier ingredients endpoint also respects outlet scoping."""
-        outlet_a = _create_outlet(admin_client, "Outlet AA", "AA")
-        outlet_b = _create_outlet(admin_client, "Outlet BB", "BB")
+        _add_supplier_ingredient(client, ing_id, sup_id, unit_a)
+        sup_id2 = _create_supplier(client, "Another Supply")
+        _add_supplier_ingredient(client, ing_id, sup_id2, unit_b)
 
-        ing_id = _create_ingredient(admin_client, "Rice")
-        sup_id = _create_supplier(admin_client, "Rice Supply")
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 2
 
-        _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_a)
+    def test_user_with_no_passport_role_sees_nothing(
+        self, session: Session, client: TestClient
+    ):
+        """FAIL CLOSED — an empty unit scope shows nothing, where a null outlet once showed all."""
+        unit_id = seed_brand(session, "Some Outlet")
+        ing_id = _create_ingredient(client, "Pepper")
+        sup_id = _create_supplier(client, "Pepper Co")
+        _add_supplier_ingredient(client, ing_id, sup_id, unit_id)
 
-        # User in outlet_b should not see outlet_a's supplier_ingredients
-        user_b = User(
-            id="user-b",
-            email="userb@test.com",
-            username="userb",
-            user_type=UserType.NORMAL,
-            outlet_id=outlet_b,
-        )
-        for c in _make_client(session, user_b):
-            resp = c.get(f"/api/v1/suppliers/{sup_id}/ingredients")
-            assert resp.status_code == 200
-            assert resp.json() == []
+        use_user(client, create_user(session, "no-role-user", "norole"))
 
-    def test_outlet_shown_is_users_accessible_outlet_not_first_inserted(self, session, admin_client):
-        """Regression: when a supplier-ingredient is linked to multiple outlets, the outlet
-        shown to a non-admin user must be the one within their accessible tree — not
-        whichever outlet link happens to be first in DB insertion order.
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        assert resp.status_code == 200
+        assert resp.json() == []
 
-        Before the fix, _build_supplier_ingredient_read blindly picked outlet_links[0],
-        causing the wrong outlet to be displayed whenever the user's outlet was not
-        the first-inserted link.
-        """
+    def test_cross_brand_isolation(self, session: Session, client: TestClient):
+        """A role at brand A shows nothing of brand B."""
+        brand_a = seed_brand(session, "Brand A")
+        brand_b = seed_brand(session, "Brand B")
+
+        ing_id = _create_ingredient(client, "Carrot")
+        sup_id = _create_supplier(client, "Carrot Farm")
+        _add_supplier_ingredient(client, ing_id, sup_id, brand_b)
+
+        use_user(client, make_brand_user(session, "user-a", brand_a, STAFF, "usera"))
+
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_supplier_endpoint_is_unit_scoped_too(self, session: Session, client: TestClient):
+        """The supplier-side listing respects the same scope."""
+        brand_a = seed_brand(session, "Outlet AA")
+        brand_b = seed_brand(session, "Outlet BB")
+
+        ing_id = _create_ingredient(client, "Rice")
+        sup_id = _create_supplier(client, "Rice Supply")
+        _add_supplier_ingredient(client, ing_id, sup_id, brand_a)
+
+        use_user(client, make_brand_user(session, "user-b", brand_b, STAFF, "userb"))
+
+        resp = client.get(f"/api/v1/suppliers/{sup_id}/ingredients")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_unit_shown_is_the_users_accessible_unit_not_the_first_inserted(
+        self, session: Session, client: TestClient
+    ):
+        """Regression: with links at several units, the one SHOWN must be the one the caller can
+        reach — not whichever link happens to be first in insertion order."""
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
-        # Two independent outlet trees
-        outlet_a = _create_outlet(admin_client, "Outlet Alpha", "AL")
-        outlet_b = _create_outlet(admin_client, "Outlet Beta", "BE")
+        brand_a = seed_brand(session, "Outlet Alpha")
+        brand_b = seed_brand(session, "Outlet Beta")
 
-        ing_id = _create_ingredient(admin_client, "Truffle")
-        sup_id = _create_supplier(admin_client, "Luxury Farms")
+        ing_id = _create_ingredient(client, "Truffle")
+        sup_id = _create_supplier(client, "Luxury Farms")
 
-        # Create the supplier-ingredient linked to outlet_a FIRST (becomes outlet_links[0])
-        si_id = _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_a)
+        # Linked to brand_a FIRST (so it is outlet_links[0]).
+        si_id = _add_supplier_ingredient(client, ing_id, sup_id, brand_a)
 
-        # Directly add a second outlet link to outlet_b (simulates multi-outlet sharing)
-        session.add(OutletSupplierIngredient(supplier_ingredient_id=si_id, outlet_id=outlet_b))
+        session.add(
+            OutletSupplierIngredient(
+                supplier_ingredient_id=si_id, unit_id=brand_b, organization_id=ORG_ID
+            )
+        )
         session.commit()
 
-        # User assigned to outlet_b only — should see outlet_b, not outlet_a
-        user_b = User(
-            id="user-b",
-            email="b@test.com",
-            username="userb",
-            user_type=UserType.NORMAL,
-            outlet_id=outlet_b,
+        use_user(client, make_brand_user(session, "user-b", brand_b, STAFF, "userb"))
+
+        resp = client.get(f"/api/v1/ingredients/{ing_id}/suppliers")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["unit_id"] == brand_b, (
+            "unit_id should be the unit the caller can reach, not the first-inserted link"
         )
-        for c in _make_client(session, user_b):
-            resp = c.get(f"/api/v1/ingredients/{ing_id}/suppliers")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert len(data) == 1
-            assert data[0]["outlet_id"] == outlet_b, (
-                "outlet_id should be the user's accessible outlet, not the first-inserted link"
-            )
-            assert data[0]["outlet_name"] == "Outlet Beta"
+        assert data[0]["unit_name"] == "Outlet Beta"
 
-    def test_non_admin_cannot_change_outlet(self, session, admin_client):
-        """Non-admin user cannot change outlet_id on a supplier-ingredient link."""
-        outlet_id = _create_outlet(admin_client, "Test Out", "TX")
-        ing_id = _create_ingredient(admin_client, "Basil")
-        sup_id = _create_supplier(admin_client, "Herb Co")
-        si_id = _add_supplier_ingredient(admin_client, ing_id, sup_id, outlet_id)
+    def test_non_org_admin_cannot_move_a_link_to_another_unit(
+        self, session: Session, client: TestClient
+    ):
+        """Re-homing a link stays org-admin-only — a brand Manager cannot move it elsewhere."""
+        brand_id = seed_brand(session, "Test Out")
+        other_brand = seed_brand(session, "Other Out")
 
-        other_outlet = _create_outlet(admin_client, "Other Out", "OX")
+        ing_id = _create_ingredient(client, "Basil")
+        sup_id = _create_supplier(client, "Herb Co")
+        si_id = _add_supplier_ingredient(client, ing_id, sup_id, brand_id)
 
-        normal_user = User(
-            id="normal-user",
-            email="normal@test.com",
-            username="normaluser",
-            user_type=UserType.NORMAL,
-            outlet_id=outlet_id,
+        use_user(client, make_brand_user(session, "normal-user", brand_id, STAFF, "normaluser"))
+
+        resp = client.patch(
+            f"/api/v1/ingredients/{ing_id}/suppliers/{si_id}",
+            json={"unit_id": other_brand},
         )
-        for c in _make_client(session, normal_user):
-            resp = c.patch(
-                f"/api/v1/ingredients/{ing_id}/suppliers/{si_id}",
-                json={"outlet_id": other_outlet},
-            )
-            assert resp.status_code == 403
+        assert resp.status_code == 403

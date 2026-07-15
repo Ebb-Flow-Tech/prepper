@@ -1,10 +1,9 @@
 """Tests for ingredient tasting notes endpoints."""
 
 from datetime import datetime
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
-
-from app.models import User, UserType
 
 
 def test_create_ingredient_tasting_note(client: TestClient):
@@ -440,7 +439,7 @@ def test_nonparticipant_cannot_add_ingredient_note(
     session: Session, normal_user_client: TestClient
 ):
     """Non-participant cannot add an ingredient tasting note."""
-    from app.models import TastingSession, Ingredient
+    from app.models import Ingredient, TastingSession
 
     ingredient = Ingredient(name="Test Ingredient", base_unit="g")
     session.add(ingredient)
@@ -469,7 +468,7 @@ def test_admin_nonparticipant_cannot_add_ingredient_note(
     client: TestClient, session: Session
 ):
     """Admin who is not a participant cannot add an ingredient tasting note."""
-    from app.models import TastingSession, Ingredient
+    from app.models import Ingredient, TastingSession
 
     ingredient = Ingredient(name="Test Ingredient", base_unit="g")
     session.add(ingredient)

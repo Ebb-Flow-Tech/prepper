@@ -3,13 +3,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Plus, Search, GripVertical, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
-import { useInfiniteIngredients, useCreateIngredient, useInfiniteRecipes, useCategoriesPaginated, useRecipeCategories, useAllRecipeRecipeCategories, useRecipeOutletsBatch, useCategorizeIngredient, useDebouncedValue } from '@/lib/hooks';
+import { useInfiniteIngredients, useCreateIngredient, useInfiniteRecipes, useCategoriesPaginated, useRecipeCategories, useAllRecipeRecipeCategories, useCategorizeIngredient, useRecipeUnitsBatch, useDebouncedValue } from '@/lib/hooks';
+import type { RecipeUnitChip } from '@/lib/api';
 import { useAppState } from '@/lib/store';
 import { Button, Input, Select, Skeleton, Switch } from '@/components/ui';
 import Image from 'next/image';
 import { formatCurrency, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import type { Category, Ingredient, Recipe, Outlet } from '@/types';
+import type { Category, Ingredient, Recipe } from '@/types';
 
 type RightPanelTab = 'all' | 'ingredients' | 'items';
 
@@ -110,12 +111,12 @@ function DraggableIngredientCard({ ingredient, categoryMap }: { ingredient: Ingr
 
 function DraggableRecipeCard({
   recipe,
-  outletNames = [],
-  categoryNames = []
+  categoryNames = [],
+  unitNames = []
 }: {
   recipe: Recipe;
-  outletNames?: string[];
   categoryNames?: string[];
+  unitNames?: string[];
 }) {
   const { selectedRecipeId, isDragDropEnabled } = useAppState();
   const isCurrentRecipe = recipe.id === selectedRecipeId;
@@ -185,10 +186,10 @@ function DraggableRecipeCard({
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className="text-[11px] text-muted-foreground">{recipe.yield_quantity} {recipe.yield_unit}</span>
-          {outletNames.length > 0 && (
+          {unitNames.length > 0 && (
             <>
               <span className="text-muted-foreground text-[11px]">·</span>
-              <span className="text-[11px] text-muted-foreground truncate">{outletNames.join(', ')}</span>
+              <span className="text-[11px] text-primary truncate">{unitNames.join(', ')}</span>
             </>
           )}
           {categoryNames.length > 0 && (
@@ -301,11 +302,7 @@ export function NewIngredientForm({ onClose }: { onClose: () => void }) {
   );
 }
 
-interface RightPanelProps {
-  outlets?: Outlet[];
-}
-
-export function RightPanel({ outlets }: RightPanelProps) {
+export function RightPanel() {
   const { isDragDropEnabled, setIsDragDropEnabled } = useAppState();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -335,6 +332,8 @@ export function RightPanel({ outlets }: RightPanelProps) {
   const ingredients = ingredientsData?.pages.flatMap((page) => page.items);
   const { data: recipesData, isLoading: recipesLoading, error: recipesError, fetchNextPage: fetchNextRecipes, hasNextPage: hasNextRecipes, isFetchingNextPage: isFetchingNextRecipes } = useInfiniteRecipes(recipeParams);
   const recipes = recipesData?.pages.flatMap((page) => page.items);
+  const recipeIds = recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null;
+  const { data: recipeUnits = new Map<number, RecipeUnitChip[]>() } = useRecipeUnitsBatch(recipeIds);
   const { data: catPageData, isFetching: catFetching } = useCategoriesPaginated({
     page_size: 10,
     page_number: catPage,
@@ -385,11 +384,6 @@ export function RightPanel({ outlets }: RightPanelProps) {
       setIsQuickAdding(false);
     }
   }, [search, categorizeIngredient, createIngredient]);
-  // Fetch recipe outlets (with TanStack Query caching)
-  const { data: recipeOutlets = new Map() } = useRecipeOutletsBatch(
-    recipes && recipes.length > 0 ? recipes.map((r) => r.id) : null
-  );
-
   // Create a mapping of category ID to name for efficient lookups
   const categoryMap = useMemo(() => {
     return displayedCategories.reduce((acc, cat) => {
@@ -407,20 +401,11 @@ export function RightPanel({ outlets }: RightPanelProps) {
     }, {} as Record<number, string>);
   }, [recipeCategories]);
 
-  // Create mapping for outlets
-  const outletNameMap = useMemo(() => {
-    if (!outlets) return {};
-    return outlets.reduce((acc: Record<number, string>, outlet: Outlet) => {
-      acc[outlet.id] = outlet.name;
-      return acc;
-    }, {} as Record<number, string>);
-  }, [outlets]);
-
-  // Helper function to get outlet names for a recipe
-  const getOutletNamesForRecipe = (recipeId: number): string[] => {
-    const recipeOutletsList = recipeOutlets.get(recipeId) || [];
-    return recipeOutletsList.map((ro: { outlet_id: number }) => outletNameMap[ro.outlet_id]).filter(Boolean);
-  };
+  const getUnitNamesForRecipe = (recipeId: number): string[] =>
+    (recipeUnits.get(recipeId) ?? [])
+      .filter((chip) => chip.is_active)
+      .map((chip) => chip.unit_name)
+      .filter((name) => name.length > 0);
 
   // Helper function to get category names for a recipe
   const getCategoryNamesForRecipe = (recipeId: number): string[] => {
@@ -690,8 +675,8 @@ export function RightPanel({ outlets }: RightPanelProps) {
                       <DraggableRecipeCard
                         key={recipe.id}
                         recipe={recipe}
-                        outletNames={getOutletNamesForRecipe(recipe.id)}
                         categoryNames={getCategoryNamesForRecipe(recipe.id)}
+                        unitNames={getUnitNamesForRecipe(recipe.id)}
                       />
                     ))}
                     {hasNextRecipes && (

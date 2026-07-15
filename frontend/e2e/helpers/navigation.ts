@@ -9,7 +9,7 @@
  *    should test.skip() on a false return value
  */
 import type { Page } from '@playwright/test';
-import { readSeedUserData, readSeedAdminData } from './seed';
+import { readSeedUserData } from './seed';
 
 /** Persist a last-route hint so AuthGuard redirects back to the target page. */
 async function setLastRoute(page: Page, url: string): Promise<void> {
@@ -102,24 +102,6 @@ export async function goToFirstSession(page: Page): Promise<boolean> {
   if (allLinks.length === 0) return false;
   await page.goto(allLinks[0]!);
   await page.waitForURL(/\/tastings\/\d+/, { timeout: 10_000 });
-  return true;
-}
-
-export async function goToFirstOutlet(page: Page): Promise<boolean> {
-  const seed = readSeedAdminData();
-  if (seed?.outletId) {
-    const url = `/outlets/${seed.outletId}`;
-    await setLastRoute(page, url);
-    await page.goto(url);
-    await page.waitForURL(/\/outlets\/\d+/, { timeout: 15_000 });
-    return true;
-  }
-  await page.goto('/outlets');
-  await page.waitForLoadState('load');
-  const link = page.locator('a[href*="/outlets/"]').first();
-  if (!(await link.isVisible())) return false;
-  await link.click();
-  await page.waitForURL(/\/outlets\/\d+/, { timeout: 10_000 });
   return true;
 }
 

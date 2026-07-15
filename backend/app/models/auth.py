@@ -18,8 +18,6 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     username: str
-    user_type: str = "normal"
-    outlet_id: int | None = None
 
 
 class LoginResponse(BaseModel):

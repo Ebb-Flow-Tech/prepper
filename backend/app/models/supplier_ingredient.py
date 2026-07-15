@@ -49,7 +49,7 @@ class SupplierIngredientCreate(SQLModel):
 
     ingredient_id: int
     supplier_id: int
-    outlet_id: int | None = None
+    unit_id: str | None = None
     sku: str | None = None
     pack_size: float
     pack_unit: str
@@ -62,7 +62,7 @@ class SupplierIngredientCreate(SQLModel):
 class SupplierIngredientUpdate(SQLModel):
     """Schema for updating a supplier-ingredient link (all fields optional)."""
 
-    outlet_id: int | None = None
+    unit_id: str | None = None
     sku: str | None = None
     pack_size: float | None = None
     pack_unit: str | None = None
@@ -78,7 +78,7 @@ class SupplierIngredientRead(SQLModel):
     id: int
     ingredient_id: int
     supplier_id: int
-    outlet_id: int | None = None
+    unit_id: str | None = None
     sku: str | None = None
     pack_size: float
     pack_unit: str
@@ -90,4 +90,4 @@ class SupplierIngredientRead(SQLModel):
     updated_at: datetime
     supplier_name: str | None = None
     ingredient_name: str | None = None
-    outlet_name: str | None = None
+    unit_name: str | None = None

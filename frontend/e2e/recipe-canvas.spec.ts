@@ -1,6 +1,6 @@
 /**
  * Section 4: Recipe Canvas Tabs
- * Covers: Canvas, Overview, Ingredients, Instructions, Costs, Outlets, Tasting, Versions
+ * Covers: Canvas, Overview, Ingredients, Instructions, Costs, Brands, Tasting, Versions
  */
 import { test, expect } from '@playwright/test';
 import { goToFirstRecipe } from './helpers/navigation';
@@ -410,27 +410,28 @@ test.describe('Costs Tab', () => {
   });
 });
 
-test.describe('Outlets Tab', () => {
+test.describe('Brands Tab', () => {
+  // The recipe canvas "Brands" tab (formerly "Outlets") links a recipe to Passport brand units.
   test.beforeEach(async ({ page }) => {
     const found = await goToFirstRecipe(page);
     test.skip(!found, 'No recipes available');
-    await clickTab(page, 'outlets');
+    await clickTab(page, 'Brands');
   });
 
-  test('outlets tab renders without error', async ({ page }) => {
+  test('brands tab renders without error', async ({ page }) => {
     await page.waitForLoadState('load');
     await expect(page.locator('main').first()).toBeVisible();
   });
 
-  test('"Add outlet" button is visible', async ({ page }) => {
-    const addBtn = page.locator('button').filter({ hasText: /add outlet/i });
+  test('"Add Brand" button is visible', async ({ page }) => {
+    const addBtn = page.locator('button').filter({ hasText: /add brand/i });
     if (await addBtn.isVisible()) {
       await expect(addBtn).toBeVisible();
     }
   });
 
   test.describe('Edge Cases', () => {
-    test('recipe with no outlets shows empty state and add prompt', async ({ page }) => {
+    test('recipe with no brands shows empty state and add prompt', async ({ page }) => {
       await page.waitForLoadState('load');
       await expect(page.locator('main').first()).toBeVisible();
     });
@@ -465,11 +466,12 @@ test.describe('Outlets Tab', () => {
 
     test('toggling activation off then on in rapid succession does not desync UI', async ({ page }) => {
       await page.waitForLoadState('load');
-      // Find activation toggle (Switch/checkbox) in the outlets tab
+      // Find activation toggle (Switch/checkbox) in the brands tab
       const toggle = page.locator('input[type="checkbox"], [role="switch"]').first();
       if (await toggle.isVisible()) {
         let patchCount = 0;
-        await page.route('**/outlets**', (route) => {
+        // recipe↔brand links are the recipe-units endpoint (/recipes/{id}/units/{unitId})
+        await page.route('**/units**', (route) => {
           if (route.request().method() === 'PATCH') patchCount++;
           route.continue();
         });

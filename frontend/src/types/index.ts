@@ -5,7 +5,6 @@
 export interface FMHImportResult {
   suppliers_created: number;
   suppliers_updated: number;
-  outlets_created: number;
   categories_created: number;
   ingredients_created: number;
   ingredients_updated: number;
@@ -505,7 +504,8 @@ export interface SupplierIngredient {
   id: number;
   ingredient_id: number;
   supplier_id: number;
-  outlet_id: number;
+  /** Passport unit UUID the price belongs to. */
+  unit_id: string | null;
   sku: string | null;
   pack_size: number;
   pack_unit: string;
@@ -517,13 +517,13 @@ export interface SupplierIngredient {
   updated_at: string;
   supplier_name: string | null;
   ingredient_name: string | null;
-  outlet_name: string | null;
+  unit_name: string | null;
 }
 
 export interface AddSupplierIngredientRequest {
   ingredient_id: number;
   supplier_id: number;
-  outlet_id: number;
+  unit_id: string;
   sku?: string | null;
   pack_size: number;
   pack_unit: string;
@@ -541,7 +541,7 @@ export interface UpdateSupplierIngredientRequest {
   currency?: string;
   source?: string;
   is_preferred?: boolean;
-  outlet_id?: number;
+  unit_id?: string;
 }
 
 // ============ Sub-Recipe Types ============
@@ -595,54 +595,27 @@ export interface UpdateCategoryRequest {
   is_active?: boolean;
 }
 
-// ============ Outlet Types ============
+// ============ Recipe-Unit Types ============
+//
+// A unit is a Passport brand or outlet, projected read-only. Prepper links recipes to units; it
+// never creates or edits the units themselves — that happens in Passport.
 
-export type OutletType = 'brand' | 'location';
-
-export interface Outlet {
-  id: number;
-  name: string;
-  code: string;
-  outlet_type: OutletType;
-  parent_outlet_id: number | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateOutletRequest {
-  name: string;
-  code: string;
-  outlet_type?: OutletType;
-  parent_outlet_id?: number | null;
-}
-
-export interface UpdateOutletRequest {
-  name?: string;
-  code?: string;
-  outlet_type?: OutletType;
-  parent_outlet_id?: number | null;
-  is_active?: boolean;
-}
-
-// ============ Recipe-Outlet Types ============
-
-export interface RecipeOutlet {
+export interface RecipeUnit {
   recipe_id: number;
-  outlet_id: number;
+  unit_id: string;
+  organization_id: string;
   is_active: boolean;
   price_override: number | null;
   created_at: string;
 }
 
-export interface CreateRecipeOutletRequest {
-  recipe_id: number;
-  outlet_id: number;
+export interface CreateRecipeUnitRequest {
+  unit_id: string;
   is_active?: boolean;
   price_override?: number | null;
 }
 
-export interface UpdateRecipeOutletRequest {
+export interface UpdateRecipeUnitRequest {
   is_active?: boolean;
   price_override?: number | null;
 }
@@ -735,23 +708,25 @@ export interface RegisterRequest {
   email: string;
   password: string;
   username: string;
-  user_type?: string;
-  outlet_id?: number | null;
-  phone_number?: string | null;
 }
 
-export type UserType = 'normal' | 'admin';
-
+/**
+ * A Prepper account. It carries NO role: `user_type`, `is_manager` and `outlet_id` are gone.
+ * Roles are Passport's and are read per-brand (`PassportBrand.my_role`) — never as a global flag.
+ */
 export interface User {
   id: string;
   email: string;
   username: string;
-  user_type: UserType;
-  is_manager: boolean;
-  outlet_id: number | null;
   phone_number?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UpdateUserRequest {
+  email?: string;
+  username?: string;
+  phone_number?: string | null;
 }
 
 export interface LoginResponse {
@@ -804,10 +779,11 @@ export interface MenuItem {
   updated_at?: string;
 }
 
-export interface MenuOutlet {
+export interface MenuUnit {
   id: number;
   menu_id: number;
-  outlet_id: number;
+  unit_id: string;
+  organization_id: string;
   created_at?: string;
 }
 
@@ -821,7 +797,8 @@ export interface MenuSectionRead extends MenuSection {
 
 export interface MenuDetail extends Menu {
   sections: MenuSectionRead[];
-  outlets?: MenuOutlet[];
+  /** The Passport units this menu is served at (API field name is still `outlets`). */
+  outlets?: MenuUnit[];
 }
 
 export interface CreateMenuItemRequest {
@@ -842,14 +819,14 @@ export interface CreateMenuSectionRequest {
 export interface CreateMenuRequest {
   name: string;
   is_published?: boolean;
-  outlet_ids: number[];
+  unit_ids: string[];
   sections?: CreateMenuSectionRequest[];
 }
 
 export interface UpdateMenuRequest {
   name?: string;
   is_published?: boolean;
-  outlet_ids?: number[];
+  unit_ids?: string[];
   sections?: Array<{
     id?: number;
     name: string;

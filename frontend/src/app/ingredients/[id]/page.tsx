@@ -18,9 +18,8 @@ import {
   useAllergensByIngredient,
   useAddIngredientAllergen,
   useDeleteIngredientAllergen,
-  useOutlets,
 } from '@/lib/hooks';
-import { useAppState } from '@/lib/store';
+import { BrandSelect, useBrandNames } from '@/components/units';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardContent, EditableCell, Input, Modal, Select, Skeleton, Checkbox } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
@@ -32,7 +31,7 @@ interface SupplierRowEdit {
   pack_unit?: string;
   price_per_pack?: string;
   is_preferred?: boolean;
-  outlet_id?: number;
+  unit_id?: string;
 }
 
 // Unit options (same as Add Ingredient form)
@@ -257,16 +256,12 @@ export default function IngredientPage({ params }: IngredientPageProps) {
   const { id } = use(params);
   const ingredientId = parseInt(id, 10);
 
-  const { outletId, userType } = useAppState();
-  const isAdmin = userType === 'admin';
-
   const { data: ingredient, isLoading, error } = useIngredient(ingredientId);
   const { data: availableSuppliersData } = useSuppliers({ page_size: 30 });
   const availableSuppliers = availableSuppliersData?.items;
   const { data: suppliers = [] } = useIngredientSuppliers(ingredientId);
   const { data: categories = [] } = useCategories();
-  const { data: outletsData } = useOutlets({ page_size: 30 });
-  const outlets = outletsData?.items ?? [];
+  const brandNames = useBrandNames();
 
   const addSupplierMutation = useAddIngredientSupplier();
   const removeSupplierMutation = useRemoveIngredientSupplier();
@@ -359,7 +354,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
     pack_unit: '',
     pack_size: '',
     price_per_pack: '',
-    outlet_id: outletId ? outletId.toString() : '',
+    unit_id: '',
   });
 
   // Filter out suppliers that are already linked to this ingredient
@@ -393,7 +388,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
       (s) => s.id === parseInt(formData.supplier_id, 10)
     );
 
-    if (!selectedSupplier || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.outlet_id) {
+    if (!selectedSupplier || !formData.pack_unit || !formData.pack_size || !formData.price_per_pack || !formData.unit_id) {
       return;
     }
 
@@ -407,7 +402,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
         data: {
           ingredient_id: ingredientId,
           supplier_id: selectedSupplier.id,
-          outlet_id: parseInt(formData.outlet_id, 10),
+          unit_id: formData.unit_id,
           sku: formData.sku || null,
           pack_size: packSize,
           pack_unit: formData.pack_unit,
@@ -425,10 +420,10 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             id: 0,
             ingredient_id: ingredientId,
             supplier_id: selectedSupplier.id,
-            outlet_id: parseInt(formData.outlet_id, 10),
+            unit_id: formData.unit_id,
             supplier_name: selectedSupplier.name,
             ingredient_name: ingredient?.name ?? null,
-            outlet_name: outlets.find((o) => o.id === parseInt(formData.outlet_id, 10))?.name ?? null,
+            unit_name: brandNames.get(formData.unit_id) ?? null,
             sku: formData.sku || null,
             pack_size: packSize,
             pack_unit: formData.pack_unit,
@@ -448,7 +443,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
             pack_unit: '',
             pack_size: '',
             price_per_pack: '',
-            outlet_id: outletId ? outletId.toString() : '',
+            unit_id: '',
           });
           setShowAddModal(false);
         },
@@ -683,21 +678,13 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Outlet
+                        Brand
                       </label>
-                      <Select
-                        value={formData.outlet_id}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, outlet_id: e.target.value }))
+                      <BrandSelect
+                        value={formData.unit_id}
+                        onChange={(unitId) =>
+                          setFormData((prev) => ({ ...prev, unit_id: unitId }))
                         }
-                        disabled={!!outletId}
-                        options={[
-                          { value: '', label: 'Select outlet...' },
-                          ...outlets.map((o) => ({
-                            value: o.id.toString(),
-                            label: o.name,
-                          })),
-                        ]}
                       />
                     </div>
                     <div>
@@ -786,7 +773,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                         type="submit"
                         disabled={
                           !formData.supplier_id ||
-                          !formData.outlet_id ||
+                          !formData.unit_id ||
                           !formData.pack_unit ||
                           !formData.pack_size ||
                           !formData.price_per_pack ||
@@ -810,7 +797,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                             Supplier Name
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
-                            Outlet
+                            Brand
                           </th>
                           <th className="text-left py-3 px-2 font-medium text-muted-foreground">
                             SKU
@@ -845,7 +832,7 @@ export default function IngredientPage({ params }: IngredientPageProps) {
                               </Link>
                             </td>
                             <td className="py-3 px-2 text-muted-foreground text-xs">
-                              {supplier.outlet_name ?? '-'}
+                              {supplier.unit_name ?? '-'}
                             </td>
                             <td className="py-3 px-2 text-muted-foreground font-mono text-xs">
                               {editingSupplier === supplier.id ? (

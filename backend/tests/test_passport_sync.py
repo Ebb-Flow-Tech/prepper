@@ -1,10 +1,14 @@
 """Tests for the Passport sync read-model projection.
 
-These exercise the conformance-critical logic that lives in the pure-sync ``store`` and
-``role_projection`` modules — the version guard (``>=``), trap 1 (removed keeps the row),
-trap 2 (entitlement revocation via upsert), immutable insert-if-absent / delete-if-present,
-and org role -> local ``user_type`` projection with grant revocation. None of this needs the
-private ``passport_client`` SDK: the store operates on plain dicts and a SQLModel ``Session``.
+These exercise the conformance-critical logic that lives in the pure-sync ``store`` module — the
+version guard (``>=``), trap 1 (removed keeps the row), trap 2 (entitlement revocation via
+upsert), immutable insert-if-absent / delete-if-present, and the entitlement kill switch. None of
+this needs the private ``passport_client`` SDK: the store operates on plain dicts and a SQLModel
+``Session``.
+
+There is no role PROJECTION any more: roles are never written onto the local ``users`` row, they
+are read per-brand at the point of the check (``app.passport.access``). A removed membership
+therefore needs no local revocation step — the derivation simply stops returning anything.
 """
 
 import asyncio
@@ -17,10 +21,8 @@ from app.models import (
     PassportIdentityLink,
     PassportMembership,
     PassportOrganization,
-    User,
-    UserType,
 )
-from app.passport import access, role_projection, store
+from app.passport import access, store
 
 ORG = "org-1"
 PU = "pu-1"          # Passport platform_user_id
@@ -153,48 +155,40 @@ def test_identity_link_insert_if_absent_and_delete(session: Session):
     store.remove_identity_link(session, "l-1")
 
 
-# --- role projection ----------------------------------------------------------------------
+# --- removal revokes access by ARITHMETIC, not by a local write ---------------------------
 
-def _seed_user(session: Session) -> User:
-    user = User(
-        id=SUBJECT,
-        email="chef@acme.test",
-        username="chef",
-        user_type=UserType.NORMAL,
-        is_manager=True,
-        outlet_id=7,
-    )
-    session.add(user)
-    session.commit()
-    return user
+def test_removed_membership_revokes_access_and_keeps_the_tombstone(session: Session):
+    """RULE 6 — a removed member loses everything, with no local revocation step.
 
-
-
-
-def test_removed_membership_revokes_local_grants_and_keeps_the_tombstone(session: Session):
-    """RULE 6 — a removed member loses their local unit-scoped grants.
-
-    It does NOT demote `user_type`: that projection was a rule-8 violation (it conflated the org
-    vocabulary with Prepper's) and is deleted. Roles are read per-brand at the point of the check
-    now, so there is nothing to demote. Revocation survives because it can only ever REDUCE access,
-    which is the direction that is always safe.
+    Nothing is projected onto the `users` row, so there is nothing to demote: the derivation reads
+    the membership, sees the tombstone, and returns no orgs and therefore no brands. The row itself
+    is KEPT (trap 1), so restoring the membership restores access losslessly.
     """
-    _seed_user(session)
     store.create_identity_link(session, _link_values())
     store.apply_membership(session, _membership_values(version=1, role="Admin"))
-
-    user = session.get(User, SUBJECT)
-    user.is_manager = True
-    session.add(user)
-    session.commit()
+    store.apply_entitlement(session, _entitlement_values(version=1))
+    store.apply_unit(
+        session,
+        {
+            "id": "brand-1",
+            "organization_id": ORG,
+            "type": "brand",
+            "name": "Acme",
+            "external_ref": None,
+            "status": "active",
+            "version": 1,
+        },
+    )
+    store.create_unit_app_access(
+        session,
+        {"id": "uaa-1", "organization_id": ORG, "unit_id": "brand-1", "app_id": "prepper"},
+    )
+    assert access.brand_roles(session, SUBJECT) == {"brand-1": "Manager"}
 
     store.apply_membership(session, _membership_values(version=2, status="removed"))
-    role_projection.revoke_local_grants(session, platform_user_id=PU)
     session.expire_all()
 
-    user = session.get(User, SUBJECT)
-    assert user.is_manager is False, "rule 6: unit-scoped grants are revoked"
-    assert user.outlet_id is None
+    assert access.brand_roles(session, SUBJECT) == {}, "rule 6: a removed member derives nothing"
     # TRAP 1: the membership row is KEPT as a tombstone, never deleted.
     assert session.get(PassportMembership, "m-1").status == "removed"
 

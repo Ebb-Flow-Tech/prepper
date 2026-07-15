@@ -12,6 +12,8 @@ import { loginUser } from '@/lib/api';
 import { createClient } from '@/lib/supabase/client';
 import type { AuthApiError } from '@/types';
 
+const DEFAULT_DESTINATION = '/recipes';
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAppState();
@@ -37,12 +39,9 @@ export default function LoginPage() {
       login(
         response.user.id,
         response.access_token,
-        response.user.user_type,
         response.refresh_token,
         response.user.username,
-        response.user.email,
-        response.user.is_manager,
-        response.user.outlet_id ?? null
+        response.user.email
       );
 
       // Determine redirect destination (priority: URL param > tasting redirect > last route > default)
@@ -50,8 +49,8 @@ export default function LoginPage() {
       const redirectParam = params.get('redirect');
       const storedRedirect = localStorage.getItem('tasting_redirect_url');
       const storedLastRoute = localStorage.getItem('prepper_last_route');
-      const raw = redirectParam || storedRedirect || storedLastRoute || '/outlets';
-      const destination = isValidRedirectPath(raw) ? raw : '/outlets';
+      const raw = redirectParam || storedRedirect || storedLastRoute || DEFAULT_DESTINATION;
+      const destination = isValidRedirectPath(raw) ? raw : DEFAULT_DESTINATION;
 
       // Persist destination so AuthGuard picks it up when it detects auth
       // state change (prevents race condition where AuthGuard redirects to

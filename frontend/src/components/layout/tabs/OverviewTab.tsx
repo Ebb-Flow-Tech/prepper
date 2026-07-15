@@ -52,7 +52,7 @@ function formatTastingDate(dateString: string): string {
 }
 
 export function OverviewTab() {
-  const { selectedRecipeId, userId, userType } = useAppState();
+  const { selectedRecipeId, userId } = useAppState();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
@@ -726,7 +726,7 @@ export function OverviewTab() {
                     <div className="p-4 rounded-lg bg-secondary border border-border">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-sm font-semibold text-foreground">Feedback Summary</p>
-                        {(canEditRecipe || userType === 'admin') && (
+                        {canEditRecipe && (
                           <button
                             onClick={() => { summaryForRecipeIdRef.current = selectedRecipeId; summarizeFeedback(selectedRecipeId!); }}
                             disabled={isSummarizingFeedback}

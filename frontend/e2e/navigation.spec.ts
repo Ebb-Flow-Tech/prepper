@@ -3,8 +3,9 @@
  * Covers: Top Navigation, Home Page redirects
  *
  * Nav facts (from TopNav.tsx):
- * - Outlets, Menu, Ingredients, Suppliers, Recipes, Tastings, R&D, Finance — visible to all logged-in users
- * - Admin (/admin/users) — adminOnly: true, hidden for normal users
+ * - Menu, Dishes (/recipes), Ingredients, R&D, Reports (/finance), Settings — visible to all
+ *   logged-in users. There is no role-gated nav item any more: Prepper has no local roles, and
+ *   structure (outlets) is managed in Passport, so there is no /outlets entry.
  * - Navigation labels hidden at md breakpoint (xl:inline), icons only at md–xl
  */
 import { test, expect } from '@playwright/test';
@@ -21,16 +22,18 @@ test.describe('Top Navigation', () => {
     // Note: /recipes appears twice (logo + nav item) — use .first() to avoid strict mode
     await expect(nav.locator('a[href="/recipes"]').first()).toBeVisible();
     await expect(nav.locator('a[href="/ingredients"]').first()).toBeVisible();
-    await expect(nav.locator('a[href="/suppliers"]').first()).toBeVisible();
-    await expect(nav.locator('a[href="/tastings"]').first()).toBeVisible();
     await expect(nav.locator('a[href="/rnd"]').first()).toBeVisible();
     await expect(nav.locator('a[href="/menu"]').first()).toBeVisible();
+    await expect(nav.locator('a[href="/finance"]').first()).toBeVisible();
+    await expect(nav.locator('a[href="/settings"]').first()).toBeVisible();
   });
 
-  test('admin-only nav item (/admin/users) is not visible to normal users', async ({ page }) => {
-    const adminLink = page.locator('nav a[href="/admin/users"]');
-    const isVisible = await adminLink.isVisible().catch(() => false);
-    expect(isVisible).toBe(false);
+  test('no role-gated or /outlets nav item exists; Settings (Brand Roles) is available to all', async ({ page }) => {
+    // Structure moved to Passport — there is no /outlets nav entry.
+    const outletsLink = page.locator('nav a[href="/outlets"]');
+    expect(await outletsLink.isVisible().catch(() => false)).toBe(false);
+    // Role assignment now lives in Settings → Brand Roles, reachable by every logged-in user.
+    await expect(page.locator('nav').first().locator('a[href="/settings"]').first()).toBeVisible();
   });
 
   test('active page link is highlighted', async ({ page }) => {
@@ -89,17 +92,17 @@ test.describe('Top Navigation', () => {
 });
 
 test.describe('Home Page (/)', () => {
-  test('authenticated users are redirected to /outlets', async ({ page }) => {
+  test('authenticated users are redirected to /recipes', async ({ page }) => {
     await page.goto('/');
-    await page.waitForURL(/\/outlets/, { timeout: 10_000 });
-    expect(page.url()).toContain('/outlets');
+    await page.waitForURL(/\/recipes/, { timeout: 10_000 });
+    expect(page.url()).toContain('/recipes');
   });
 
   test.describe('Edge Cases', () => {
     test('redirect happens without briefly rendering home page content', async ({ page }) => {
       const homeContent = page.locator('h1').filter({ hasText: /home|welcome/i });
       await page.goto('/');
-      await page.waitForURL(/\/outlets/, { timeout: 10_000 });
+      await page.waitForURL(/\/recipes/, { timeout: 10_000 });
       const isHomeVisible = await homeContent.isVisible().catch(() => false);
       expect(isHomeVisible).toBe(false);
     });

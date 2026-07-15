@@ -10,15 +10,20 @@ Supports local JWT verification to eliminate network round-trips on every auth c
 from functools import lru_cache
 
 import jwt as _pyjwt
-from jwt.exceptions import InvalidTokenError as _JwtInvalidTokenError
-
 from ebb_flow_tech_auth import (
     AuthError as _EbbAuthError,
+)
+from ebb_flow_tech_auth import (
     JwksUnavailableError as _EbbJwksUnavailableError,
+)
+from ebb_flow_tech_auth import (
     TokenExpiredError as _EbbTokenExpiredError,
+)
+from ebb_flow_tech_auth import (
     TokenInvalidError as _EbbTokenInvalidError,
 )
 from ebb_flow_tech_auth import verify_token as _ebb_verify_token
+from jwt.exceptions import InvalidTokenError as _JwtInvalidTokenError
 from supabase import create_client
 
 from app.config import get_settings
@@ -224,6 +229,31 @@ class SupabaseAuthService:
         except Exception as e:
             logger.error("verify_token: unexpected error type=%s msg=%s", type(e).__name__, e, exc_info=True)
             return None
+
+    def verify_passport_email(self, token: str) -> str | None:
+        """Verify a token signed by PASSPORT's Supabase project; return its VERIFIED email.
+
+        The SSO issuer-cutover seam (P3, dark-launched behind ``sso_enabled``). A token from the
+        shared issuer carries a ``sub`` this app has never seen — its users are keyed by their own
+        project's sub — so resolution is by the **verified email**, not the sub
+        (``platform_user.supabase_id`` is deliberately never synced to a consumer). The caller maps
+        that email onto the local ``users`` row. Returns ``None`` when SSO is off, unconfigured, or
+        the token does not verify against Passport's project.
+
+        Adds an accepted issuer; it never rejects a token the primary path would have accepted, so
+        it is safe to deploy dark and flip on. See the P3 design doc in the passport repo.
+        """
+        settings = get_settings()
+        if not settings.sso_enabled or not settings.passport_supabase_url:
+            return None
+
+        try:
+            identity = _ebb_verify_token(token, supabase_url=settings.passport_supabase_url)
+        except (_EbbTokenExpiredError, _EbbTokenInvalidError, _EbbAuthError):
+            return None
+        except Exception:  # noqa: BLE001 — a bad Passport token must fall back, never 500
+            return None
+        return identity.email
 
     def _verify_hs256(self, token: str, supabase_url: str | None, logger) -> str | None:
         """Verify a Supabase HS256 JWT using the project's JWT secret."""
