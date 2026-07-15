@@ -57,10 +57,12 @@ class Settings(BaseSettings):
 
     # Auto-provision a Prepper login when a member is added in Passport. On `membership.upserted`
     # for an unknown email, Prepper invites them into its Supabase and creates the local user.
-    # OFF by default: a first reconcile provisions EVERY member at once, so it needs Prepper's
-    # Supabase SMTP + redirect allow-list configured first (else invites never send / dead-end).
-    # Interim measure — the SSO login cutover (P3 §5.2) supersedes it. See app/domain/provisioning.
-    auto_provision_members: bool = False
+    # ON by default so members added in Passport can sign in via Prepper's email/password page
+    # without per-env config. REQUIRES Prepper's Supabase SMTP + redirect allow-list to be
+    # configured (else invites never send / dead-end), and note a first reconcile invites EVERY
+    # member at once. Interim measure — set to False in any env that has moved to the SSO login
+    # cutover (P3 §5.2, `sso_enabled`), which supersedes it. See app/domain/provisioning.
+    auto_provision_members: bool = True
 
     # Anthropic API
     anthropic_api_key: str | None = None
