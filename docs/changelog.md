@@ -6,6 +6,8 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.58](#0058---2026-07-15)** — SSO Login & Auto-Provisioning: Dual-Verify Resolves-or-Provisions a Prepper Account by Verified Passport Identity, plus Best-Effort Member Provisioning on `membership.upserted`
+- **[0.0.57](#0057---2026-07-15)** — Fix: Restore RLS Defense-in-Depth — the Rules-7/8 Column Drop Left `is_admin()`/`is_manager_or_admin()` Reading Gone Columns; Redefine Them From the Passport Projection
 - **[0.0.56](#0056---2026-07-15)** — Fix: the Rules-7/8 Re-Key Migration Broke the Staging Deploy — Drop the `outlet_supplier_ingredient` Unique Constraint via the Column Drop, Not a Wrong Explicit Name
 - **[0.0.55](#0055---2026-07-15)** — Rules 7 + 8: Retire the `outlets` Shadow Table & the Local Role Vocabulary — Re-Key Onto Passport Units, Brand-Scoped Access Everywhere, plus SSO Dual-Verify (Dark) & a Recipe-Unit Batch Endpoint
 - **[0.0.54](#0054---2026-07-15)** — Passport: Disarm the Silent Admin Promotion (Delete the Role Projection), Brand-Roles UI, Projection-Backed Reads, Synchronous Identity Linking & the Rule-7 Re-Key Migration
@@ -62,6 +64,40 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.58] - 2026-07-15
+
+### Added
+
+#### SSO login & auto-provisioning — a Passport member gets a Prepper account on first sign-in
+
+`0.0.55` shipped SSO dual-verify dark. This wires it through to account creation so a Passport member no longer hits `Invalid email or password` on their first Prepper login.
+
+- **Dual-verify resolves-or-provisions.** `deps.py` verifies the bearer token against both Prepper's own Supabase and Passport (via `verify_passport_identity`, which returns `(sub, email)`). If no local `users` row matches the verified email, it provisions one keyed by the Passport `sub` — so the account exists the moment an active member authenticates. A non-member is still rejected (`_is_active_member` gate).
+- **Best-effort provisioning on sync.** `handlers.upsert_membership` calls `provisioning.provision_member_login` after commit (own session, flag-gated `auto_provision_members`) — inviting the member via Supabase and ensuring the local row, so the account can exist before they ever log in.
+- **Supporting primitives.** `supabase_auth_service` gains `invite_member(email)` and `verify_passport_identity(token) → (sub, email)`; `user_service` gains idempotent `ensure_user(...)`; `config` gains `auto_provision_members`, `sso_enabled`, `passport_supabase_url`.
+
+No role or unit is ever seeded onto the provisioned row — Passport owns both, read per-brand at the point of the check (rules 7 + 8).
+
+**Files changed:** `backend/app/api/deps.py`, `backend/app/domain/provisioning.py` (new), `backend/app/domain/supabase_auth_service.py`, `backend/app/domain/user_service.py`, `backend/app/passport/handlers.py`, `backend/app/config.py`, `backend/tests/test_sso_dual_verify.py`
+
+---
+
+## [0.0.57] - 2026-07-15
+
+### Fixed
+
+#### Restore RLS defense-in-depth — the helpers were reading columns 0.0.55 dropped
+
+The rules-7/8 migration `p2rtunit3k4l` (0.0.55) dropped `users.user_type` and `users.is_manager`, but the RLS helpers `is_admin()` / `is_manager_or_admin()` (from `h1i2j3k4l5m6`, 0.0.35) still read them. Postgres does **not** dependency-check function *bodies*, so the column drop succeeded and left both functions referencing gone columns — every RLS-gated query then errored with `column "user_type" does not exist`.
+
+This was invisible on the app path because the backend connects as the `BYPASSRLS` `postgres` role and never evaluates the policies — which is exactly why the breakage was silent. RLS is defense-in-depth: a leaked `authenticated` JWT hitting Postgres directly would have errored rather than been safely scoped.
+
+New migration `p3rtrls5m6n7` redefines both helpers to derive from the Passport projection instead of user columns — `is_admin()` = an active `Owner`/`Admin` membership; `is_manager_or_admin()` = that ladder OR an active `Manager` `unit_app_membership` — bridged from the local user via `passport_identity_link.subject = auth.uid()`. Both stay `SECURITY DEFINER STABLE`; Postgres-only. Verified against staging in a rolled-back transaction. The 21 `test_rls_integration` tests now seed the projection and install the functions in-transaction (and drop from ~133s to ~13s by removing a second-connection `pg_proc` lock deadlock).
+
+**Files changed:** `backend/alembic/versions/p3rtrls5m6n7_rls_functions_from_passport_projection.py` (new), `backend/tests/test_rls_integration.py`
+
 ---
 
 ## [0.0.56] - 2026-07-15

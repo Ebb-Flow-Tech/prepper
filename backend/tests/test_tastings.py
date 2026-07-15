@@ -23,7 +23,9 @@ def test_create_tasting_session(client: TestClient):
     assert data["name"] == "December Menu Tasting"
     assert data["date"] == "2024-12-15T10:00:00"
     assert data["location"] == "Main Kitchen"
-    assert data["participants"] == []
+    # The creator is auto-enrolled as a participant (organiser).
+    assert len(data["participants"]) == 1
+    assert data["participants"][0]["user_id"] == "test-admin-user"
     assert data["creator_id"] == "test-admin-user"
     assert "id" in data
 
@@ -665,14 +667,17 @@ def test_create_session_with_participant_ids(
     )
     assert response.status_code == 201
     data = response.json()
-    assert len(data["participants"]) == 1
-    assert data["participants"][0]["email"] == "chef@example.com"
-    assert data["participants"][0]["username"] == "Chef Marco"
-    assert data["participants"][0]["user_id"] == "user-123"
+    # Creator (test-admin-user) is auto-enrolled alongside the requested participant.
+    assert len(data["participants"]) == 2
+    participant_ids = {p["user_id"] for p in data["participants"]}
+    assert participant_ids == {"test-admin-user", "user-123"}
+    chef = next(p for p in data["participants"] if p["user_id"] == "user-123")
+    assert chef["email"] == "chef@example.com"
+    assert chef["username"] == "Chef Marco"
 
 
 def test_create_session_without_participant_ids(client: TestClient):
-    """Creating a session without participant_ids results in empty participants."""
+    """Creating a session without participant_ids still enrols the creator as the sole participant."""
     response = client.post(
         "/api/v1/tasting-sessions",
         json={
@@ -682,7 +687,8 @@ def test_create_session_without_participant_ids(client: TestClient):
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["participants"] == []
+    assert len(data["participants"]) == 1
+    assert data["participants"][0]["user_id"] == "test-admin-user"
 
 
 def test_update_session_participant_ids_replaces_participants(
@@ -714,7 +720,8 @@ def test_update_session_participant_ids_replaces_participants(
         },
     )
     session_id = create_response.json()["id"]
-    assert len(create_response.json()["participants"]) == 1
+    # Creator is auto-enrolled, so create yields [creator, user-1].
+    assert len(create_response.json()["participants"]) == 2
 
     # Update to replace with user2
     update_response = client.patch(

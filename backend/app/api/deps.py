@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app.database import engine
 from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
-from app.models import User
+from app.models import PassportMembership, User
 from app.passport.access import is_org_blocked
 
 
@@ -31,6 +31,24 @@ def get_bearer_token(authorization: str | None = Header(None)) -> str:
             detail="Not authenticated",
         )
     return authorization.replace("Bearer ", "")
+
+
+def _is_active_member(session: Session, email: str) -> bool:
+    """Whether a verified email belongs to an ACTIVE Passport member in the projection.
+
+    Gates SSO-login provisioning: Passport's shared issuer can sign tokens for people who are not
+    Prepper members, so a local account is only minted for someone Passport already knows as a
+    member here — never for an arbitrary verified email.
+    """
+    return (
+        session.exec(
+            select(PassportMembership).where(
+                func.lower(PassportMembership.email) == email.lower(),
+                PassportMembership.status == "active",
+            )
+        ).first()
+        is not None
+    )
 
 
 def get_current_user(
@@ -58,15 +76,22 @@ def get_current_user(
     # ADDS an accepted issuer; a Prepper-issued token still resolves by the fallback below, so 5.1
     # is safe to ship off and flip on. See passport docs/specs/2026-07-15-sso-issuer-cutover-*.
     user_id: str | None = None
-    passport_email = auth_service.verify_passport_email(token)
-    if passport_email:
+    passport_identity = auth_service.verify_passport_identity(token)
+    if passport_identity is not None:
+        passport_sub, passport_email = passport_identity
         matched = session.exec(
             select(User).where(func.lower(User.email) == passport_email.lower())
         ).first()
         if matched is not None:
             user_id = matched.id
-        # A verified member with no local account yet is provisioned at login (§5.2), not here —
-        # in the dark phase they simply fall through to the primary issuer and 401 if unknown.
+        elif _is_active_member(session, passport_email):
+            # SSO login (§5.2): a verified Passport MEMBER with no local row yet — provision it,
+            # keyed by the Passport sub (the new user has no pre-existing content to translate to).
+            # Gated on active membership so a token for a non-member never mints a local account.
+            provisioned = UserService(session).ensure_user(
+                passport_sub, passport_email, passport_email.split("@", 1)[0]
+            )
+            user_id = provisioned.id
 
     if user_id is None:
         user_id = auth_service.verify_token(token)

@@ -25,6 +25,8 @@ Run only these tests:
     DATABASE_URL=postgresql://... pytest tests/test_rls_integration.py -v
 """
 
+import importlib.util
+import pathlib
 import uuid
 from contextlib import contextmanager
 
@@ -80,19 +82,50 @@ def check_rls_prerequisites(pg_engine):
             )
 
 
+def _load_rls_migration():
+    """Load the p3 migration module so the tests use ITS is_admin/is_manager_or_admin SQL verbatim
+    — one source of truth. This decouples the tests from deploy timing: they verify the projection-
+    derived functions regardless of what is currently live on the target DB."""
+    path = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "alembic"
+        / "versions"
+        / "p3rtrls5m6n7_rls_functions_from_passport_projection.py"
+    )
+    spec = importlib.util.spec_from_file_location("_p3_rls", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture()
 def conn(pg_engine):
     """Service-role connection whose transaction is always rolled back.
 
     Used for test setup (insert data) and for SELECT / UPDATE assertions.
     The full rollback at the end guarantees no test data escapes into the DB.
+
+    It first installs the projection-derived RLS helper definitions (from the p3 migration) INSIDE
+    the transaction. `CREATE OR REPLACE FUNCTION` is transactional, so the redefinition rolls back
+    with everything else — the target DB's live functions are never mutated — while every assertion
+    in the test runs against the current, correct definitions rather than whatever is deployed.
     """
     with pg_engine.connect() as connection:
         trans = connection.begin()
+        _install_rls_functions(connection)
         try:
             yield connection
         finally:
             trans.rollback()
+
+
+def _install_rls_functions(connection) -> None:
+    """Redefine is_admin/is_manager_or_admin (projection-derived, from the p3 migration) inside the
+    caller's transaction. Any connection that will evaluate RLS must call this — including a second
+    connection a test opens to probe a policy violation without corrupting the primary one."""
+    p3 = _load_rls_migration()
+    connection.execute(text(p3._IS_ADMIN_FROM_PROJECTION))
+    connection.execute(text(p3._IS_MANAGER_OR_ADMIN_FROM_PROJECTION))
 
 
 # =============================================================================
@@ -142,22 +175,57 @@ def insert_user(
     user_type: str = "NORMAL",
     is_manager: bool = False,
 ) -> None:
+    """Insert a test user and seed the Passport projection so the RLS helpers derive their role.
+
+    Rule 8: `users` no longer carries `user_type`/`is_manager` — the RLS functions `is_admin()` /
+    `is_manager_or_admin()` now derive from the projection (`identity_link -> membership` for admin,
+    `identity_link -> unit_app_membership` for manager). So `user_type="ADMIN"` seeds an active
+    `Admin` org membership, and `is_manager=True` seeds an active `Manager` brand role — both bound
+    to the user through an identity link whose `subject` is the user's id (== `auth.uid()`). A NORMAL
+    user seeds nothing, so both helpers return false for them.
+    """
+    email = f"rls-{user_id[:16]}@rls-test.invalid"
     conn.execute(
         text("""
-            INSERT INTO users (id, email, username, user_type, is_manager,
-                               created_at, updated_at)
-            VALUES (:id, :email, :username, :user_type, :is_manager,
-                    NOW(), NOW())
+            INSERT INTO users (id, email, username, created_at, updated_at)
+            VALUES (:id, :email, :username, NOW(), NOW())
             ON CONFLICT (id) DO NOTHING
         """),
-        {
-            "id": user_id,
-            "email": f"rls-{user_id[:16]}@rls-test.invalid",
-            "username": f"rls-{user_id[:24]}",
-            "user_type": user_type,
-            "is_manager": is_manager,
-        },
+        {"id": user_id, "email": email, "username": f"rls-{user_id[:24]}"},
     )
+
+    if user_type != "ADMIN" and not is_manager:
+        return  # NORMAL: no projection rows -> is_admin()/is_manager_or_admin() are false
+
+    platform_user_id = str(uuid.uuid4())
+    conn.execute(
+        text("""
+            INSERT INTO passport_identity_link (id, platform_user_id, app_id, subject, linked_via)
+            VALUES (:id, :pu, :app, :subject, 'test')
+        """),
+        {"id": str(uuid.uuid4()), "pu": platform_user_id, "app": str(uuid.uuid4()),
+         "subject": user_id},
+    )
+    if user_type == "ADMIN":
+        conn.execute(
+            text("""
+                INSERT INTO passport_membership
+                    (id, organization_id, platform_user_id, role, status, version, email)
+                VALUES (:id, :org, :pu, 'Admin', 'active', 1, :email)
+            """),
+            {"id": str(uuid.uuid4()), "org": str(uuid.uuid4()), "pu": platform_user_id,
+             "email": email},
+        )
+    if is_manager:
+        conn.execute(
+            text("""
+                INSERT INTO passport_unit_app_membership
+                    (id, organization_id, platform_user_id, unit_id, app_id, role, status, version)
+                VALUES (:id, :org, :pu, :unit, :app, 'Manager', 'active', 1)
+            """),
+            {"id": str(uuid.uuid4()), "org": str(uuid.uuid4()), "pu": platform_user_id,
+             "unit": str(uuid.uuid4()), "app": str(uuid.uuid4())},
+        )
 
 
 def insert_recipe(conn, owner_id: str, *, is_public: bool = False) -> int:
@@ -354,24 +422,22 @@ class TestIngredientRLS:
             ).fetchone()
         assert row is not None, "Any authenticated user must be able to read ingredients"
 
-    def test_normal_user_cannot_insert_ingredient(self, pg_engine, conn):
-        """INSERT by a normal user must raise a RLS policy violation."""
+    def test_normal_user_cannot_insert_ingredient(self, conn):
+        """INSERT by a normal user must raise a RLS policy violation.
+
+        Uses `as_user` (a SAVEPOINT), not a second connection: the failed INSERT aborts to the
+        savepoint, so `conn` recovers cleanly — and, crucially, avoids two connections both trying to
+        `CREATE OR REPLACE` the RLS functions, which deadlocks on the `pg_proc` row lock.
+        """
         normal = uid()
         insert_user(conn, normal)
 
-        # Use a separate connection so a DB error doesn't corrupt `conn`
-        with pg_engine.connect() as c2:
-            with pytest.raises(Exception, match="row-level security|permission denied|42501"):
-                with c2.begin():
-                    c2.execute(text("SET LOCAL ROLE authenticated"))
-                    c2.execute(
-                        text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
-                        {"uid": normal},
-                    )
-                    c2.execute(
-                        text("INSERT INTO ingredients (name, base_unit, is_active, created_at, updated_at) "
-                             "VALUES ('RLS-blocked', 'g', true, NOW(), NOW())")
-                    )
+        with pytest.raises(Exception, match="row-level security|permission denied|42501"):
+            with as_user(conn, normal):
+                conn.execute(
+                    text("INSERT INTO ingredients (name, base_unit, is_active, created_at, updated_at) "
+                         "VALUES ('RLS-blocked', 'g', true, NOW(), NOW())")
+                )
 
     def test_manager_can_insert_ingredient(self, conn):
         manager = uid()

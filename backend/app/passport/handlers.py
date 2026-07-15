@@ -40,6 +40,7 @@ from passport_client import ResyncFanoutMixin
 from sqlmodel import Session
 
 from app.database import engine
+from app.domain import provisioning
 from app.models import PassportMembership
 from app.passport import store
 
@@ -138,6 +139,14 @@ class PassportHandlers(ResyncFanoutMixin):  # type: ignore[misc]  # SDK ships no
     async def upsert_membership(self, payload: MembershipPayload) -> None:
         with _session() as session:
             store.apply_membership(session, payload.model_dump())
+
+        # Auto-provision a Prepper login for a newly-added member (best-effort, AFTER the projection
+        # commits above so a provisioning failure never rolls the membership back or 500s the
+        # webhook). No-op unless `auto_provision_members` is on. Its own session, own error handling.
+        with _session() as session:
+            provisioning.provision_member_login(
+                session, email=payload.email, display_name=payload.display_name
+            )
 
     async def remove_membership(self, payload: MembershipPayload) -> None:
         # TRAP 1: version-guarded UPSERT that KEEPS the row (status=removed), NOT a delete.

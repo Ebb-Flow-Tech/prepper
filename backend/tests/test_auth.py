@@ -209,6 +209,11 @@ def mock_supabase_client(monkeypatch):
         "valid_token_chef": "user-chef-002",
         "valid_token_new": "user-new-003",
         "new_access_token": "user-admin-001",
+        # Google OAuth tokens are real Supabase-minted JWTs — ebb verifies them like any other.
+        # Register their subjects so oauth-complete gets past verify_token to the provisioning path.
+        "google_token_new": "user-google-010",
+        "google_token_no_name": "user-google-011",
+        "google_token_conflict": "user-google-012",
     }
 
     def mock_ebb_verify_token(token, **kwargs):

@@ -53,7 +53,7 @@ def test_passport_token_resolves_by_verified_email():
             "app.domain.supabase_auth_service._ebb_verify_token", return_value=verified
         ) as vt,
     ):
-        assert svc.verify_passport_email("tok") == "Chef@Temper.SG"
+        assert svc.verify_passport_identity("tok") == ("S_passport", "Chef@Temper.SG")
         # It verifies against PASSPORT's project, never Prepper's.
         assert vt.call_args.kwargs["supabase_url"] == "https://passport.supabase.co"
 
@@ -68,7 +68,7 @@ def test_disabled_flag_is_a_hard_off_switch():
         ),
         patch("app.domain.supabase_auth_service._ebb_verify_token") as vt,
     ):
-        assert svc.verify_passport_email("tok") is None
+        assert svc.verify_passport_identity("tok") is None
         vt.assert_not_called()  # never even attempts verification
 
 
@@ -78,7 +78,7 @@ def test_unconfigured_issuer_is_off():
         "app.domain.supabase_auth_service.get_settings",
         return_value=_settings(passport_supabase_url=None),
     ):
-        assert svc.verify_passport_email("tok") is None
+        assert svc.verify_passport_identity("tok") is None
 
 
 @pytest.mark.parametrize("boom", [ValueError("bad"), RuntimeError("jwks")])
@@ -90,7 +90,7 @@ def test_a_bad_passport_token_falls_through_never_raises(boom):
         patch("app.domain.supabase_auth_service.get_settings", return_value=_settings()),
         patch("app.domain.supabase_auth_service._ebb_verify_token", side_effect=boom),
     ):
-        assert svc.verify_passport_email("tok") is None
+        assert svc.verify_passport_identity("tok") is None
 
 
 def test_get_current_user_resolves_a_passport_token_to_the_local_row(session: Session):
@@ -102,7 +102,7 @@ def test_get_current_user_resolves_a_passport_token_to_the_local_row(session: Se
 
     # Patch the auth service the dep uses: Passport path returns the email, Prepper path is not hit.
     fake = SimpleNamespace(
-        verify_passport_email=lambda _t: "chef@temper.sg",
+        verify_passport_identity=lambda _t: ("S_passport_sub", "chef@temper.sg"),
         verify_token=lambda _t: None,
     )
     with (
@@ -121,7 +121,7 @@ def test_prepper_token_still_works_when_passport_path_misses(session: Session):
 
     _user(session, user_id="S_prepper_local", email="chef@temper.sg")
     fake = SimpleNamespace(
-        verify_passport_email=lambda _t: None,  # not a Passport token
+        verify_passport_identity=lambda _t: None,  # not a Passport token
         verify_token=lambda _t: "S_prepper_local",  # Prepper issuer resolves the sub
     )
     with (
@@ -132,3 +132,102 @@ def test_prepper_token_still_works_when_passport_path_misses(session: Session):
             authorization="Bearer sometoken", session=session
         )
     assert user.id == "S_prepper_local"
+
+
+def test_sso_login_provisions_a_local_row_for_a_new_member(session: Session):
+    """§5.2 — a verified Passport MEMBER with no local row is provisioned at login, keyed by the
+    Passport sub. This is the shared `ensure_user` path (also used by interim auto-provisioning)."""
+    from app.api import deps
+    from app.passport import store
+
+    store.apply_membership(
+        session,
+        {
+            "id": "m-1",
+            "organization_id": "org-1",
+            "platform_user_id": "pu-1",
+            "role": "Member",
+            "status": "active",
+            "version": 1,
+            "email": "newbie@temper.sg",
+            "display_name": "Newbie",
+        },
+    )
+    fake = SimpleNamespace(
+        verify_passport_identity=lambda _t: ("S_passport_newbie", "newbie@temper.sg"),
+        verify_token=lambda _t: None,
+    )
+    with (
+        patch("app.api.deps.get_auth_service", return_value=fake),
+        patch("app.api.deps.is_org_blocked", return_value=False),
+    ):
+        user = deps.get_current_user(authorization="Bearer t", session=session)
+
+    assert user.id == "S_passport_newbie", "new member keyed by the Passport sub"
+    assert user.email == "newbie@temper.sg"
+
+
+def test_sso_login_does_not_provision_a_non_member(session: Session):
+    """A verified email that is NOT a Prepper member must not mint a local account — the shared
+    issuer can sign tokens for people who aren't members here."""
+    from app.api import deps
+
+    fake = SimpleNamespace(
+        verify_passport_identity=lambda _t: ("S_passport_x", "stranger@elsewhere.com"),
+        verify_token=lambda _t: None,  # not a Prepper token either
+    )
+    with (
+        patch("app.api.deps.get_auth_service", return_value=fake),
+        patch("app.api.deps.is_org_blocked", return_value=False),
+        pytest.raises(Exception),  # 401: no local user, not a member, no fallback
+    ):
+        deps.get_current_user(authorization="Bearer t", session=session)
+
+
+def test_auto_provision_off_is_a_no_op(session: Session):
+    """Interim auto-provisioning: with the flag off, a membership event mints nothing."""
+    from app.domain import provisioning
+
+    invited = []
+    fake_auth = SimpleNamespace(invite_member=lambda e: invited.append(e))
+    with (
+        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=False)),
+        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
+    ):
+        provisioning.provision_member_login(session, email="x@y.z", display_name=None)
+    assert invited == []
+
+
+def test_auto_provision_creates_a_login_for_a_new_member(session: Session):
+    """Flag on + unknown email -> invite + local user created, keyed by the minted Supabase sub."""
+    from app.domain import provisioning
+    from app.models import User
+
+    fake_auth = SimpleNamespace(invite_member=lambda _e: "minted-sub-123")
+    with (
+        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=True)),
+        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
+    ):
+        provisioning.provision_member_login(
+            session, email="fresh@temper.sg", display_name="Fresh"
+        )
+
+    from sqlmodel import select
+
+    row = session.exec(select(User).where(User.email == "fresh@temper.sg")).first()
+    assert row is not None and row.id == "minted-sub-123"
+
+
+def test_auto_provision_skips_an_existing_user(session: Session):
+    """Idempotent: a re-synced membership for someone who already has a Prepper login never re-invites."""
+    from app.domain import provisioning
+
+    _user(session, user_id="existing", email="already@temper.sg")
+    calls = []
+    fake_auth = SimpleNamespace(invite_member=lambda e: calls.append(e) or "should-not-be-used")
+    with (
+        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=True)),
+        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
+    ):
+        provisioning.provision_member_login(session, email="already@temper.sg", display_name=None)
+    assert calls == [], "must not invite someone who already has an account"

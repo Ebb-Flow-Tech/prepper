@@ -1,7 +1,36 @@
 """Tests for tasting note images endpoints."""
 
+import datetime
+
 import pytest
 from fastapi.testclient import TestClient
+
+from app.models import TastingSession, User
+
+
+def _seed_session_without(session, *, exclude_user_id: str) -> int:
+    """Persist a tasting session created by a different organiser, with no participants.
+
+    The API auto-enrols a session's creator as a participant, so to get a session where
+    ``exclude_user_id`` is genuinely a non-participant we bypass the endpoint and insert directly.
+    """
+    organiser_id = "other-organiser"
+    assert organiser_id != exclude_user_id
+    if session.get(User, organiser_id) is None:
+        session.add(
+            User(id=organiser_id, email="organiser@test.com", username="Organiser")
+        )
+        session.flush()
+    ts = TastingSession(
+        name="Test Session",
+        date=datetime.datetime(2024, 12, 15, 10, 0, 0),
+        creator_id=organiser_id,
+    )
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+    assert ts.id is not None
+    return ts.id
 
 
 @pytest.fixture
@@ -376,7 +405,9 @@ def test_sync_ingredient_images_nonexistent(client_with_storage: TestClient):
 # ========== Admin Non-Participant Tests ==========
 
 
-def test_admin_nonparticipant_cannot_create_recipe_note(client_with_storage: TestClient):
+def test_admin_nonparticipant_cannot_create_recipe_note(
+    client_with_storage: TestClient, session
+):
     """Admin who is not a session participant cannot create a recipe tasting note."""
     recipe_response = client_with_storage.post(
         "/api/v1/recipes",
@@ -384,12 +415,9 @@ def test_admin_nonparticipant_cannot_create_recipe_note(client_with_storage: Tes
     )
     recipe_id = recipe_response.json()["id"]
 
-    # Create session WITHOUT admin as participant
-    session_response = client_with_storage.post(
-        "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
-    )
-    session_id = session_response.json()["id"]
+    # Session created by a different organiser (the creator is auto-enrolled), so the acting admin
+    # is genuinely a non-participant. Persist it directly to avoid enrolling the admin.
+    session_id = _seed_session_without(session, exclude_user_id="test-admin-user")
 
     response = client_with_storage.post(
         f"/api/v1/tasting-sessions/{session_id}/notes",
@@ -403,7 +431,9 @@ def test_admin_nonparticipant_cannot_create_recipe_note(client_with_storage: Tes
     assert "participants" in response.json()["detail"].lower()
 
 
-def test_admin_nonparticipant_cannot_create_ingredient_note(client_with_storage: TestClient):
+def test_admin_nonparticipant_cannot_create_ingredient_note(
+    client_with_storage: TestClient, session
+):
     """Admin who is not a session participant cannot create an ingredient tasting note."""
     ingredient_response = client_with_storage.post(
         "/api/v1/ingredients",
@@ -411,12 +441,9 @@ def test_admin_nonparticipant_cannot_create_ingredient_note(client_with_storage:
     )
     ingredient_id = ingredient_response.json()["id"]
 
-    # Create session WITHOUT admin as participant
-    session_response = client_with_storage.post(
-        "/api/v1/tasting-sessions",
-        json={"name": "Test Session", "date": "2024-12-15T10:00:00"},
-    )
-    session_id = session_response.json()["id"]
+    # Session created by a different organiser (the creator is auto-enrolled), so the acting admin
+    # is genuinely a non-participant. Persist it directly to avoid enrolling the admin.
+    session_id = _seed_session_without(session, exclude_user_id="test-admin-user")
 
     response = client_with_storage.post(
         f"/api/v1/tasting-sessions/{session_id}/ingredient-notes",

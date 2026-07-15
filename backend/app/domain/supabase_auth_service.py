@@ -75,6 +75,30 @@ class SupabaseAuthService:
                 raise ValueError("Invalid email or password")
             raise RuntimeError(f"Supabase error: {str(e)}")
 
+    def invite_member(self, email: str) -> str | None:
+        """Invite a user by email — Supabase mints the auth account and emails a set-password link.
+
+        For auto-provisioning: a member added in Passport gets a Prepper login without choosing a
+        password up front (they set it from the invite). Returns the new auth user id, or ``None``
+        when the account already exists (idempotent — a re-synced membership must not re-invite).
+
+        Requires Supabase SMTP + the redirect allow-list on Prepper's project, exactly like the
+        Passport side (`security.md`) — an unconfigured project mints the account but the email never
+        leaves, or lands on the Site URL. Raises ``RuntimeError`` on any other Supabase failure so the
+        caller can swallow it best-effort without breaking the sync projection.
+        """
+        if not self.service_role_key:
+            raise RuntimeError("Supabase service role key not configured")
+        try:
+            response = self.client.auth.admin.invite_user_by_email(email)
+            return response.user.id
+        except Exception as e:
+            if "already" in str(e).lower() and (
+                "registered" in str(e).lower() or "exists" in str(e).lower()
+            ):
+                return None
+            raise RuntimeError(f"Supabase invite error: {str(e)}")
+
     def register(self, email: str, password: str) -> str:
         """
         Create user in Supabase auth using admin API.
@@ -230,15 +254,15 @@ class SupabaseAuthService:
             logger.error("verify_token: unexpected error type=%s msg=%s", type(e).__name__, e, exc_info=True)
             return None
 
-    def verify_passport_email(self, token: str) -> str | None:
-        """Verify a token signed by PASSPORT's Supabase project; return its VERIFIED email.
+    def verify_passport_identity(self, token: str) -> tuple[str, str] | None:
+        """Verify a token signed by PASSPORT's Supabase project; return its ``(sub, email)``.
 
         The SSO issuer-cutover seam (P3, dark-launched behind ``sso_enabled``). A token from the
         shared issuer carries a ``sub`` this app has never seen — its users are keyed by their own
-        project's sub — so resolution is by the **verified email**, not the sub
-        (``platform_user.supabase_id`` is deliberately never synced to a consumer). The caller maps
-        that email onto the local ``users`` row. Returns ``None`` when SSO is off, unconfigured, or
-        the token does not verify against Passport's project.
+        project's sub — so an EXISTING user is resolved by the **verified email** (the caller maps it
+        onto the local ``users`` row; ``platform_user.supabase_id`` is deliberately never synced). The
+        ``sub`` is returned too so a member with no local row yet can be provisioned keyed by it
+        (§5.2). Returns ``None`` when SSO is off, unconfigured, or the token does not verify.
 
         Adds an accepted issuer; it never rejects a token the primary path would have accepted, so
         it is safe to deploy dark and flip on. See the P3 design doc in the passport repo.
@@ -253,7 +277,9 @@ class SupabaseAuthService:
             return None
         except Exception:  # noqa: BLE001 — a bad Passport token must fall back, never 500
             return None
-        return identity.email
+        if not identity.email:
+            return None
+        return identity.user_id, identity.email
 
     def _verify_hs256(self, token: str, supabase_url: str | None, logger) -> str | None:
         """Verify a Supabase HS256 JWT using the project's JWT secret."""

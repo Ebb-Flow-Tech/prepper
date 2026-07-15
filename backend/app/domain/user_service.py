@@ -6,6 +6,7 @@ Does NOT interact with Supabase auth.
 
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.models import User, UserCreate, UserUpdate
@@ -66,6 +67,27 @@ class UserService:
         self.session.commit()
         self.session.refresh(user)
         return user
+
+    def ensure_user(self, user_id: str, email: str, username: str) -> User:
+        """Insert-if-absent a local user by email — idempotent, safe to call from a sync handler.
+
+        Returns the existing row if the email is already known (regardless of its id), else creates
+        one keyed by `user_id`. Shared by both provisioning paths: interim auto-provisioning (where
+        `user_id` is a freshly minted Prepper-Supabase sub) and the SSO login path (where it is the
+        Passport-issued sub of a member with no local row yet). Never raises on a race — a concurrent
+        insert surfaces as the existing row on re-read.
+        """
+        existing = self.get_user_by_email(email)
+        if existing is not None:
+            return existing
+        try:
+            return self.create_user(UserCreate(id=user_id, email=email, username=username))
+        except (ValueError, IntegrityError):
+            self.session.rollback()
+            found = self.get_user_by_email(email)
+            if found is None:
+                raise
+            return found
 
     def update_user(self, user_id: str, data: UserUpdate) -> User:
         """
