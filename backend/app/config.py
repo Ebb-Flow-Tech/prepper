@@ -53,16 +53,19 @@ class Settings(BaseSettings):
     # accepted issuer, so it is safe to ship off and flip on. See
     # passport docs/specs/2026-07-15-sso-issuer-cutover-prepper-pilot-design.md.
     passport_supabase_url: str | None = None
-    sso_enabled: bool = False
-
-    # Auto-provision a Prepper login when a member is added in Passport. On `membership.upserted`
-    # for an unknown email, Prepper invites them into its Supabase and creates the local user.
-    # ON by default so members added in Passport can sign in via Prepper's email/password page
-    # without per-env config. REQUIRES Prepper's Supabase SMTP + redirect allow-list to be
-    # configured (else invites never send / dead-end), and note a first reconcile invites EVERY
-    # member at once. Interim measure — set to False in any env that has moved to the SSO login
-    # cutover (P3 §5.2, `sso_enabled`), which supersedes it. See app/domain/provisioning.
-    auto_provision_members: bool = True
+    # Passport project's anon (public) key. Needed for the SSO login-proxy: Prepper keeps its own
+    # login page but authenticates email/password against PASSPORT's GoTrue (P3 §5.2 decision 2),
+    # so the browser gets a Passport-issued token. Verification of that token uses JWKS/the issuer
+    # (no key), but `sign_in_with_password` needs the project's anon key. Login-proxy is active only
+    # when sso_enabled AND both passport_supabase_url and this key are set.
+    passport_supabase_anon_key: str | None = None
+    # ON by default so an environment that HAS the Passport config below is on the shared issuer
+    # without a separate flag. This is a hard gate, not a switch on its own: the login-proxy and the
+    # accept-Passport-tokens path only activate when `passport_supabase_url` (and, for login, the
+    # anon key) are ALSO set — so an env without them (local/CI) silently stays on the Prepper-native
+    # path. It only ever ADDS an accepted issuer, never rejects a Prepper token. Set to False to hard
+    # disable (the reversible kill switch).
+    sso_enabled: bool = True
 
     # Anthropic API
     anthropic_api_key: str | None = None

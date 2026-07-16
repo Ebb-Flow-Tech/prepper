@@ -7,7 +7,11 @@ Orchestrates between SupabaseAuthService and UserService.
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import (
+    get_current_user,
+    get_session,
+    resolve_or_provision_passport_user,
+)
 from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
 from app.models import (
@@ -19,6 +23,10 @@ from app.models import (
     User,
     UserCreate,
     UserRead,
+)
+from app.passport.access import (
+    has_prepper_access_for_platform_user,
+    platform_user_id_for_email,
 )
 from app.passport.identity import report_identity_link_safe
 
@@ -46,8 +54,60 @@ def login(
 
     user_service = UserService(session)
 
+    # SSO login-proxy (P3 §5.2): Prepper keeps its own login page, but authenticates against
+    # PASSPORT's project so the browser gets a Passport-issued token — one credential for every app,
+    # and no Prepper-side invite/SMTP. The local user is resolved by the VERIFIED email (not the
+    # returned sub); that same Passport token is then trusted by get_current_user on every request.
+    if auth_service.sso_login_enabled:
+        try:
+            auth_result = auth_service.login_via_passport(data.email, data.password)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid email or password",
+            )
+        except RuntimeError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service unavailable",
+            )
+        user = resolve_or_provision_passport_user(
+            session, auth_result["user_id"], auth_result["email"]
+        )
+        if user is None:
+            # Valid Passport credentials, but not an active member here — no local access.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of any Prepper organisation",
+            )
+        # App-access gate: membership alone is not access, and a NON-member must not get a session
+        # via a legacy local row. Resolve the member by email→membership (active-only). None ⇒ not a
+        # current member (e.g. a removed member who still owns a local `users` row, or a valid
+        # Passport account that was never a member here) ⇒ deny. Otherwise require DERIVED access
+        # (a brand role or the Owner/Admin ladder). `has_prepper_access_for_platform_user` fails OPEN
+        # until entitlements sync, matching the request-path derivation, so a real member is never
+        # locked out before the projection lands.
+        platform_user_id = platform_user_id_for_email(session, auth_result["email"])
+        if platform_user_id is None or not has_prepper_access_for_platform_user(
+            session, platform_user_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to Prepper",
+            )
+        # Bind the identity link (Passport sub → platform_user) so the request-path access derivation
+        # can resolve this user. Best-effort + async: it round-trips through Passport and syncs back,
+        # so the link is not present on THIS request — see the known gap in the SSO plan (§ open item).
+        report_identity_link_safe(auth_result["access_token"])
+        return LoginResponse(
+            user=UserRead.model_validate(user),
+            access_token=auth_result["access_token"],
+            refresh_token=auth_result["refresh_token"],
+            expires_in=auth_result["expires_in"],
+        )
+
+    # --- Prepper-native login (SSO off — the reversible fallback) ---
     try:
-        # Login via Supabase
         auth_result = auth_service.login(data.email, data.password)
     except ValueError:
         raise HTTPException(
@@ -286,7 +346,12 @@ def refresh_token(data: TokenRequest) -> RefreshTokenResponse:
     """
     try:
         auth_service = get_auth_service()
-        result = auth_service.refresh_token(data.refresh_token)
+        # A session minted by the SSO login-proxy carries a Passport refresh token, redeemable only
+        # by Passport's GoTrue — so refresh must route to Passport when the proxy is active.
+        if auth_service.sso_login_enabled:
+            result = auth_service.refresh_via_passport(data.refresh_token)
+        else:
+            result = auth_service.refresh_token(data.refresh_token)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -31,6 +31,7 @@ from passport_client.models import (
     UnitAppMembershipPayload,
     UnitPayload,
 )
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -194,30 +195,53 @@ def brand_roles(session: Session, subject: str) -> dict[str, str]:
     return roles
 
 
-def has_prepper_access(session: Session, subject: str) -> bool:
-    """Whether the user behind ``subject`` may use Prepper in ANY org they belong to.
+def has_prepper_access_for_platform_user(
+    session: Session, platform_user_id: str
+) -> bool:
+    """Whether a platform user may use Prepper in ANY of their orgs — the derived-access emptiness
+    test, keyed by ``platform_user_id`` directly.
 
-    Fail-open (``True``) until Passport is genuinely the source of truth, so that turning the
-    projection on does not lock everyone out before the data has landed.
+    Used by the SSO login gate, which knows the member by **email → membership** (the identity link
+    that :func:`platform_user_id_for` needs may not exist yet for an SSO user). Fail-open (``True``)
+    until entitlements have synced, so turning the projection on never locks anyone out before the
+    data lands.
     """
-    platform_user_id = platform_user_id_for(session, subject)
-    if platform_user_id is None:
-        return True  # not linked yet — Passport is not authoritative for this user
-
     orgs = orgs_for_platform_user(session, platform_user_id)
     if not orgs:
         return True
-
-    scoped = [
-        org_id for org_id in orgs if entitlement_status(session, org_id) is not None
-    ]
+    scoped = [org_id for org_id in orgs if entitlement_status(session, org_id) is not None]
     if not scoped:
         return True  # entitlements not synced yet
-
     return any(
         has_app_access(**_derivation_inputs(session, platform_user_id, org_id))
         for org_id in scoped
     )
+
+
+def platform_user_id_for_email(session: Session, email: str) -> str | None:
+    """An ACTIVE member's ``platform_user_id`` resolved straight from their email.
+
+    The SSO login path: the member is known by the verified email (the identity link may not exist
+    yet), and the membership projection carries the ``platform_user_id``. ``None`` if not a member.
+    """
+    return session.exec(
+        select(PassportMembership.platform_user_id).where(
+            func.lower(PassportMembership.email) == email.lower(),
+            PassportMembership.status == _ACTIVE,
+        )
+    ).first()
+
+
+def has_prepper_access(session: Session, subject: str) -> bool:
+    """Whether the user behind ``subject`` (a local ``users.id``) may use Prepper in ANY org.
+
+    Fail-open (``True``) until Passport is genuinely the source of truth — not linked, no org, or no
+    entitlement synced — so that turning the projection on does not lock everyone out.
+    """
+    platform_user_id = platform_user_id_for(session, subject)
+    if platform_user_id is None:
+        return True  # not linked yet — Passport is not authoritative for this user
+    return has_prepper_access_for_platform_user(session, platform_user_id)
 
 
 def org_role(session: Session, subject: str) -> str | None:

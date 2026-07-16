@@ -31,11 +31,25 @@ from app.config import get_settings
 
 @lru_cache
 def _get_supabase_client():
-    """Create and cache a singleton Supabase client."""
+    """Create and cache a singleton Supabase client (Prepper's own project)."""
     settings = get_settings()
     if not settings.supabase_url or not settings.supabase_key:
         raise ValueError("Supabase credentials not configured")
     return create_client(settings.supabase_url, settings.supabase_key)
+
+
+@lru_cache
+def _get_passport_supabase_client():
+    """Create and cache a client pointed at PASSPORT's project (the shared issuer).
+
+    Used by the SSO login-proxy (P3 §5.2): Prepper's own login page authenticates email/password
+    here, so the browser receives a Passport-issued token. Uses the anon (public) key — the same
+    key a browser would use — never Prepper's service-role key.
+    """
+    settings = get_settings()
+    if not settings.passport_supabase_url or not settings.passport_supabase_anon_key:
+        raise ValueError("Passport Supabase credentials not configured")
+    return create_client(settings.passport_supabase_url, settings.passport_supabase_anon_key)
 
 
 class SupabaseAuthService:
@@ -75,29 +89,65 @@ class SupabaseAuthService:
                 raise ValueError("Invalid email or password")
             raise RuntimeError(f"Supabase error: {str(e)}")
 
-    def invite_member(self, email: str) -> str | None:
-        """Invite a user by email — Supabase mints the auth account and emails a set-password link.
+    @property
+    def sso_login_enabled(self) -> bool:
+        """Whether the SSO login-proxy is active — email/password authenticate against Passport.
 
-        For auto-provisioning: a member added in Passport gets a Prepper login without choosing a
-        password up front (they set it from the invite). Returns the new auth user id, or ``None``
-        when the account already exists (idempotent — a re-synced membership must not re-invite).
+        Requires all three: the feature flag, Passport's project URL, and its anon key. Any missing
+        → the login path falls back to Prepper's own project (fully reversible)."""
+        s = get_settings()
+        return bool(s.sso_enabled and s.passport_supabase_url and s.passport_supabase_anon_key)
 
-        Requires Supabase SMTP + the redirect allow-list on Prepper's project, exactly like the
-        Passport side (`security.md`) — an unconfigured project mints the account but the email never
-        leaves, or lands on the Site URL. Raises ``RuntimeError`` on any other Supabase failure so the
-        caller can swallow it best-effort without breaking the sync projection.
+    def login_via_passport(self, email: str, password: str) -> dict:
+        """Authenticate email/password against PASSPORT's project; return a Passport-issued session.
+
+        The returned ``user_id`` is the Passport ``sub`` (not a Prepper sub) and ``email`` is the
+        authenticated address — the caller resolves the LOCAL ``users`` row by that email, never by
+        this sub (P3 §5.2). Same error contract as :meth:`login`.
         """
-        if not self.service_role_key:
-            raise RuntimeError("Supabase service role key not configured")
+        client = _get_passport_supabase_client()
         try:
-            response = self.client.auth.admin.invite_user_by_email(email)
-            return response.user.id
+            response = client.auth.sign_in_with_password(
+                {"email": email, "password": password}
+            )
+            if not response.user or not response.user.email:
+                # A successful sign-in without an email is unreachable in practice, but the caller
+                # keys the local lookup on this email — guard so a null maps to a clean 400, not a
+                # 500 (parity with verify_passport_identity's `if not identity.email`).
+                raise ValueError("Invalid email or password")
+            return {
+                "user_id": response.user.id,  # Passport sub — resolve locally by email, not this
+                "email": response.user.email,
+                "access_token": response.session.access_token,
+                "refresh_token": response.session.refresh_token,
+                "expires_in": response.session.expires_in,
+            }
+        except ValueError:
+            raise  # the deliberate null-email guard above → 400, not the 503 fallback below
         except Exception as e:
-            if "already" in str(e).lower() and (
-                "registered" in str(e).lower() or "exists" in str(e).lower()
-            ):
-                return None
-            raise RuntimeError(f"Supabase invite error: {str(e)}")
+            error_msg = str(e).lower()
+            if "invalid login" in error_msg or "invalid credentials" in error_msg:
+                raise ValueError("Invalid email or password")
+            raise RuntimeError(f"Passport auth error: {str(e)}")
+
+    def refresh_via_passport(self, refresh_token: str) -> dict:
+        """Refresh a Passport-issued session against PASSPORT's project (SSO login-proxy).
+
+        A session minted by :meth:`login_via_passport` carries a Passport refresh token, which only
+        Passport's GoTrue can redeem — so refresh must route here, not to Prepper's project."""
+        client = _get_passport_supabase_client()
+        try:
+            response = client.auth.refresh_session(refresh_token)
+            return {
+                "access_token": response.session.access_token,
+                "refresh_token": response.session.refresh_token,
+                "expires_in": response.session.expires_in,
+            }
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "invalid" in error_msg or "expired" in error_msg:
+                raise ValueError("Invalid or expired refresh token")
+            raise RuntimeError(f"Passport auth error: {str(e)}")
 
     def register(self, email: str, password: str) -> str:
         """

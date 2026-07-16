@@ -1,5 +1,6 @@
 """Shared dependencies for API routes."""
 
+import logging
 from collections.abc import Generator
 
 from fastapi import Depends, Header, HTTPException, status
@@ -51,6 +52,39 @@ def _is_active_member(session: Session, email: str) -> bool:
     )
 
 
+def resolve_or_provision_passport_user(
+    session: Session, sub: str, email: str
+) -> User | None:
+    """Map a verified PASSPORT identity onto the local ``users`` row (P3 §5.2).
+
+    Resolves an existing user by the **verified email** — Passport's ``sub`` is not this app's sub,
+    and ``platform_user.supabase_id`` is never synced, so email is the only key a consumer holds. If
+    no local row exists, provisions one keyed by the Passport ``sub`` — but ONLY for an active
+    member, so a valid Passport token for a non-member never mints a local account. Returns ``None``
+    when the email is not an active member.
+
+    Shared by BOTH the request-verify path (:func:`get_current_user`) and the SSO login-proxy
+    (``/login``) so the two can never drift — a divergence here is an auth bug.
+    """
+    matches = session.exec(
+        select(User).where(func.lower(User.email) == email.lower())
+    ).all()
+    if len(matches) > 1:
+        # `users.email` is case-sensitive-unique with no write-time normalisation, so case-variant
+        # rows (`Chef@x` / `chef@x`) can coexist. On a token-minting path we must NOT map to an
+        # arbitrary one — fail closed and let the caller 403. TODO: a case-insensitive unique index
+        # (citext) + write-time lowercasing makes this unreachable; then collapse back to one row.
+        logging.getLogger(__name__).warning(
+            "resolve_or_provision: ambiguous case-variant email match (count=%d)", len(matches)
+        )
+        return None
+    if matches:
+        return matches[0]
+    if _is_active_member(session, email):
+        return UserService(session).ensure_user(sub, email, email.split("@", 1)[0])
+    return None
+
+
 def get_current_user(
     authorization: str | None = Header(None),
     session: Session = Depends(get_session),
@@ -78,20 +112,9 @@ def get_current_user(
     user_id: str | None = None
     passport_identity = auth_service.verify_passport_identity(token)
     if passport_identity is not None:
-        passport_sub, passport_email = passport_identity
-        matched = session.exec(
-            select(User).where(func.lower(User.email) == passport_email.lower())
-        ).first()
-        if matched is not None:
-            user_id = matched.id
-        elif _is_active_member(session, passport_email):
-            # SSO login (§5.2): a verified Passport MEMBER with no local row yet — provision it,
-            # keyed by the Passport sub (the new user has no pre-existing content to translate to).
-            # Gated on active membership so a token for a non-member never mints a local account.
-            provisioned = UserService(session).ensure_user(
-                passport_sub, passport_email, passport_email.split("@", 1)[0]
-            )
-            user_id = provisioned.id
+        resolved = resolve_or_provision_passport_user(session, *passport_identity)
+        if resolved is not None:
+            user_id = resolved.id
 
     if user_id is None:
         user_id = auth_service.verify_token(token)

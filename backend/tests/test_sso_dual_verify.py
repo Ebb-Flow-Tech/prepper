@@ -184,50 +184,172 @@ def test_sso_login_does_not_provision_a_non_member(session: Session):
         deps.get_current_user(authorization="Bearer t", session=session)
 
 
-def test_auto_provision_off_is_a_no_op(session: Session):
-    """Interim auto-provisioning: with the flag off, a membership event mints nothing."""
-    from app.domain import provisioning
-
-    invited = []
-    fake_auth = SimpleNamespace(invite_member=lambda e: invited.append(e))
-    with (
-        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=False)),
-        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
-    ):
-        provisioning.provision_member_login(session, email="x@y.z", display_name=None)
-    assert invited == []
+# --- 5.2 LOGIN-PROXY: Prepper's login page authenticates against Passport -----------------------
 
 
-def test_auto_provision_creates_a_login_for_a_new_member(session: Session):
-    """Flag on + unknown email -> invite + local user created, keyed by the minted Supabase sub."""
-    from app.domain import provisioning
-    from app.models import User
+def _login_settings(**over):
+    base = dict(
+        sso_enabled=True,
+        passport_supabase_url="https://passport.supabase.co",
+        passport_supabase_anon_key="anon-key",
+        supabase_url="https://prepper.supabase.co",
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
 
-    fake_auth = SimpleNamespace(invite_member=lambda _e: "minted-sub-123")
-    with (
-        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=True)),
-        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
-    ):
-        provisioning.provision_member_login(
-            session, email="fresh@temper.sg", display_name="Fresh"
+
+def test_sso_login_enabled_requires_flag_url_and_anon_key():
+    """The proxy is active only when all three are set — any missing is a hard off (fallback)."""
+    svc = _svc()
+    with patch("app.domain.supabase_auth_service.get_settings", return_value=_login_settings()):
+        assert svc.sso_login_enabled is True
+    for missing, off in [
+        ("sso_enabled", False),
+        ("passport_supabase_url", None),
+        ("passport_supabase_anon_key", None),
+    ]:
+        with patch(
+            "app.domain.supabase_auth_service.get_settings",
+            return_value=_login_settings(**{missing: off}),
+        ):
+            assert svc.sso_login_enabled is False, missing
+
+
+def test_login_via_passport_authenticates_against_passport_and_returns_its_session():
+    """Login hits PASSPORT's project and returns its sub + token — never Prepper's project."""
+    svc = _svc()
+    sess = SimpleNamespace(access_token="AT", refresh_token="RT", expires_in=3600)
+    passport_user = SimpleNamespace(id="S_passport", email="chef@temper.sg")
+    fake_client = SimpleNamespace(
+        auth=SimpleNamespace(
+            sign_in_with_password=lambda creds: SimpleNamespace(user=passport_user, session=sess)
         )
+    )
+    with patch(
+        "app.domain.supabase_auth_service._get_passport_supabase_client", return_value=fake_client
+    ) as gc:
+        out = svc.login_via_passport("chef@temper.sg", "pw")
+    gc.assert_called_once()  # the PASSPORT client, not Prepper's
+    assert out["user_id"] == "S_passport"  # Passport sub — caller resolves locally by email
+    assert out["email"] == "chef@temper.sg"
+    assert (out["access_token"], out["refresh_token"]) == ("AT", "RT")
 
-    from sqlmodel import select
 
-    row = session.exec(select(User).where(User.email == "fresh@temper.sg")).first()
-    assert row is not None and row.id == "minted-sub-123"
+def test_login_via_passport_bad_credentials_maps_to_valueerror():
+    """A GoTrue 'invalid login' becomes the same ValueError the endpoint turns into a 400."""
+    svc = _svc()
 
+    def _boom(_creds):
+        raise Exception("Invalid login credentials")
 
-def test_auto_provision_skips_an_existing_user(session: Session):
-    """Idempotent: a re-synced membership for someone who already has a Prepper login never re-invites."""
-    from app.domain import provisioning
-
-    _user(session, user_id="existing", email="already@temper.sg")
-    calls = []
-    fake_auth = SimpleNamespace(invite_member=lambda e: calls.append(e) or "should-not-be-used")
-    with (
-        patch("app.domain.provisioning.get_settings", return_value=SimpleNamespace(auto_provision_members=True)),
-        patch("app.domain.provisioning.get_auth_service", return_value=fake_auth),
+    fake_client = SimpleNamespace(auth=SimpleNamespace(sign_in_with_password=_boom))
+    with patch(
+        "app.domain.supabase_auth_service._get_passport_supabase_client", return_value=fake_client
     ):
-        provisioning.provision_member_login(session, email="already@temper.sg", display_name=None)
-    assert calls == [], "must not invite someone who already has an account"
+        with pytest.raises(ValueError):
+            svc.login_via_passport("chef@temper.sg", "wrong")
+
+
+def test_resolve_matches_local_user_by_email_ignoring_sub(session: Session):
+    """An existing local row is found by verified email, case-insensitively; the Passport sub is not
+    used as a key (it is not this app's sub)."""
+    from app.api.deps import resolve_or_provision_passport_user
+
+    _user(session, user_id="local-1", email="chef@temper.sg")
+    resolved = resolve_or_provision_passport_user(session, "S_passport_unused", "CHEF@Temper.SG")
+    assert resolved is not None and resolved.id == "local-1"
+
+
+def test_resolve_provisions_active_member_keyed_by_passport_sub(session: Session):
+    from app.api.deps import resolve_or_provision_passport_user
+    from app.models import PassportMembership
+
+    session.add(
+        PassportMembership(
+            id="m1", organization_id="o1", platform_user_id="pu1",
+            role="Owner", status="active", version=1, email="new@temper.sg",
+        )
+    )
+    session.commit()
+    resolved = resolve_or_provision_passport_user(session, "S_new", "new@temper.sg")
+    assert resolved is not None and resolved.id == "S_new"  # keyed by the Passport sub
+
+
+def test_resolve_rejects_a_non_member(session: Session):
+    """A valid Passport identity that is not an active member here mints nothing → None (403)."""
+    from app.api.deps import resolve_or_provision_passport_user
+
+    assert resolve_or_provision_passport_user(session, "S_x", "stranger@nowhere.com") is None
+
+
+def test_resolve_fails_closed_on_ambiguous_case_variant_emails(session: Session):
+    """Two local rows differing only by email case must NOT resolve to an arbitrary one — on a
+    token-minting path, refuse to guess (return None → 403) rather than map to the wrong person."""
+    from app.api.deps import resolve_or_provision_passport_user
+
+    _user(session, user_id="u-lower", email="chef@temper.sg")
+    _user(session, user_id="u-upper", email="CHEF@temper.sg")  # case-variant duplicate
+    assert resolve_or_provision_passport_user(session, "S_x", "chef@temper.sg") is None
+
+
+def _member(session: Session, *, email: str, platform_user_id: str, role: str = "Owner"):
+    from app.models import PassportMembership
+
+    session.add(
+        PassportMembership(
+            id=f"m-{platform_user_id}", organization_id="o1", platform_user_id=platform_user_id,
+            role=role, status="active", version=1, email=email,
+        )
+    )
+    session.commit()
+
+
+def test_platform_user_id_for_email_resolves_active_member(session: Session):
+    from app.passport.access import platform_user_id_for_email
+
+    _member(session, email="chef@temper.sg", platform_user_id="pu-1")
+    assert platform_user_id_for_email(session, "CHEF@Temper.SG") == "pu-1"  # case-insensitive
+    assert platform_user_id_for_email(session, "nobody@x.com") is None
+
+
+def test_removed_member_does_not_resolve_so_the_login_gate_denies(session: Session):
+    """A removed member returns None (active-only) — the login gate treats None as 'not a member' and
+    denies, so a removed member cannot keep a session via a legacy local `users` row."""
+    from app.models import PassportMembership
+    from app.passport.access import platform_user_id_for_email
+
+    session.add(
+        PassportMembership(
+            id="m-removed", organization_id="o1", platform_user_id="pu-removed",
+            role="Owner", status="removed", version=2, email="gone@temper.sg",
+        )
+    )
+    session.commit()
+    assert platform_user_id_for_email(session, "gone@temper.sg") is None
+
+
+def test_login_gate_fails_open_before_entitlements_sync(session: Session):
+    """A member whose org has NO entitlement row yet is NOT blocked — Passport is not authoritative
+    for that org until the data lands (matches the request-path derivation)."""
+    from app.passport.access import has_prepper_access_for_platform_user
+
+    _member(session, email="chef@temper.sg", platform_user_id="pu-1")  # no entitlement projected
+    assert has_prepper_access_for_platform_user(session, "pu-1") is True
+
+
+def test_login_gate_blocks_member_with_no_access_once_entitled(session: Session):
+    """Entitlement active but the member holds no brand role and is a plain Member (no ladder) and
+    no brand carries the app → derived access is empty → the gate blocks (403 at login)."""
+    from app.models import PassportEntitlement
+    from app.passport.access import has_prepper_access_for_platform_user
+
+    _member(session, email="staff@temper.sg", platform_user_id="pu-2", role="Member")
+    session.add(
+        PassportEntitlement(
+            id="e1", organization_id="o1", app_id="app-prepper",
+            status="active", tier=None, source="admin", version=1,
+        )
+    )
+    session.commit()
+    # no PassportUnit / unit_app_access / unit_app_membership → roles_at_brands is empty
+    assert has_prepper_access_for_platform_user(session, "pu-2") is False
