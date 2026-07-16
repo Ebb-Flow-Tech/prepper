@@ -14,6 +14,7 @@ against a real Postgres. Run it once against staging before trusting its numbers
 """
 
 import pytest
+from sqlalchemy import text as sa_text
 from sqlmodel import Session
 
 from app.models import RecipeOutlet
@@ -25,6 +26,7 @@ from tests.conftest import (
     link_identity,
     seed_brand,
     seed_entitlement,
+    store,
 )
 
 OTHER_ORG = "org-other"
@@ -125,15 +127,61 @@ def test_recipe_owned_by_a_single_org_user_is_derivable_by_owner(
         json={"name": "Orphan", "portion_size": 1, "portion_unit": "pax"},
     ).json()
     session.exec(
-        __import__("sqlalchemy").text(
-            f"UPDATE recipes SET owner_id = 'solo-owner' WHERE id = {recipe['id']}"
-        )
+        sa_text(f"UPDATE recipes SET owner_id = 'solo-owner' WHERE id = {recipe['id']}")
     )
     session.commit()
 
     r = report_for(session, _spec("recipes"))
 
     assert r.by_owner >= 1
+
+
+def test_recipe_owned_by_an_unlinked_user_is_derivable_by_email(
+    session: Session, client
+):
+    """The owner has NO identity link — only a membership carrying their email.
+
+    This is the common case, not the edge case. `identity_link` is written on SSO login
+    (`report_identity_link_safe`), so anyone who has not logged in since SSO went live has none.
+    Measured on staging: 2 links for 5 users, and the sole recipe owner was not among them.
+
+    A link-only derivation reported 0 of 11 recipes derivable. `deps.get_org_context` resolves
+    link-OR-email, so the report must too — otherwise it models a chain the app does not use and
+    its "undecidable" column is fiction.
+    """
+    create_user(session, "unlinked-owner", "unlinked", email="chef@temper.sg")
+    # A membership Passport knows, matching by email. NO link_identity call — that is the point.
+    store.apply_membership(
+        session,
+        {
+            "id": "mem-unlinked",
+            "organization_id": ORG_ID,
+            "platform_user_id": "pu-unlinked",
+            "role": "Member",
+            "status": "active",
+            "version": 1,
+            "email": "chef@temper.sg",
+            "display_name": "Chef",
+        },
+    )
+    seed_entitlement(session, ORG_ID)
+
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Unlinked", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+    session.exec(
+        sa_text(
+            f"UPDATE recipes SET owner_id = 'unlinked-owner' WHERE id = {recipe['id']}"
+        )
+    )
+    session.commit()
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.by_owner >= 1, (
+        "an unlinked owner must still derive via their membership email"
+    )
 
 
 def test_recipe_owned_by_a_multi_org_user_is_undecidable(session: Session, client):
@@ -148,7 +196,7 @@ def test_recipe_owned_by_a_multi_org_user_is_undecidable(session: Session, clien
         json={"name": "Ambiguous", "portion_size": 1, "portion_unit": "pax"},
     ).json()
     session.exec(
-        __import__("sqlalchemy").text(
+        sa_text(
             f"UPDATE recipes SET owner_id = 'multi-owner' WHERE id = {recipe['id']}"
         )
     )
@@ -204,11 +252,53 @@ def test_recipe_linked_to_two_orgs_is_a_conflict_not_a_derivation(
 # =============================================================================
 
 
+def test_a_row_derivable_both_ways_is_counted_once(
+    session: Session, client, brand_id: str
+):
+    """A recipe with a unit link AND a single-org owner is ONE row, not two.
+
+    Found by running against staging: `menus` reported total=3, by_link=1, by_owner=3 —
+    UNDECIDABLE = -1. The categories are not disjoint, so a row satisfying both was counted twice
+    and the coverage summed past the total. A report that over-counts "derivable" is the exact
+    failure that matters: it under-states how many rows need a human decision.
+
+    Link is authoritative; owner is the fallback. `by_owner` must therefore mean
+    "not link-derivable, but owner-derivable".
+    """
+    _single_org_owner(session, "both-ways")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Both", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+    client.post(f"/api/v1/recipes/{recipe['id']}/units", json={"unit_id": brand_id})
+    session.exec(
+        sa_text(f"UPDATE recipes SET owner_id = 'both-ways' WHERE id = {recipe['id']}")
+    )
+    session.commit()
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.total == 1
+    assert r.by_link == 1, "the authoritative link derivation wins"
+    assert r.by_owner == 0, (
+        "and the same row must NOT be counted again as owner-derivable"
+    )
+    assert r.undecidable == 0
+
+
 def test_counts_never_exceed_the_total(session: Session, client, brand_id: str):
     """set + by_link + by_owner + undecidable must equal total, or the report lies about coverage."""
-    client.post(
+    _single_org_owner(session, "coverage-owner")
+    linked = client.post(
         "/api/v1/recipes", json={"name": "A", "portion_size": 1, "portion_unit": "pax"}
+    ).json()
+    client.post(f"/api/v1/recipes/{linked['id']}/units", json={"unit_id": brand_id})
+    session.exec(
+        sa_text(
+            f"UPDATE recipes SET owner_id = 'coverage-owner' WHERE id = {linked['id']}"
+        )
     )
+    session.commit()
     client.post("/api/v1/categories", json={"name": "Sauces"})
 
     for spec in SPECS:

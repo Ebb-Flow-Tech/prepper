@@ -56,18 +56,45 @@ WHERE t.organization_id IS NULL
   AND (SELECT COUNT(DISTINCT l.organization_id) FROM {link} l WHERE l.{fk} = t.id) > 1
 """
 
-# An owner resolves only through the projection, and only if they belong to exactly one active org.
+# An owner resolves through the projection, and only if they belong to exactly one active org.
+#
+# Resolution is identity link OR verified email — the same chain `deps.get_org_context` uses, and
+# for the same reason: `identity_link` is written on SSO login (`report_identity_link_safe`), so
+# anyone who has not logged in since SSO went live has no link at all. Measured on staging, the
+# link-only form derived 0 of 11 recipes and 0 of 13 tasting sessions; adding the email path
+# derived all of them. A report that models a chain the app does not use tells you nothing about
+# what the app can see.
 _OWNER_DERIVABLE = """
 SELECT COUNT(*) FROM {table} t
+JOIN users u ON u.id = t.{owner}
 WHERE t.organization_id IS NULL
-  AND t.{owner} IS NOT NULL
+  AND {not_link_derivable}
   AND (
     SELECT COUNT(DISTINCT m.organization_id)
-    FROM passport.identity_link il
-    JOIN passport.membership m ON m.platform_user_id = il.platform_user_id
-    WHERE il.subject = t.{owner} AND m.status = 'active'
+    FROM passport.membership m
+    WHERE m.status = 'active'
+      AND (
+        m.platform_user_id IN (
+          SELECT il.platform_user_id FROM passport.identity_link il WHERE il.subject = t.{owner}
+        )
+        OR lower(m.email) = lower(u.email)
+      )
   ) = 1
 """
+
+# The buckets MUST be disjoint or the coverage sums past the total. Measured on staging before this
+# was added: `menus` reported total=3, by_link=1, by_owner=3 -> UNDECIDABLE = -1, because a row with
+# both a unit link and a resolvable owner was counted twice. An over-counted "derivable" understates
+# how many rows need a human decision, which is the one number this report exists to produce.
+#
+# The link is authoritative (it carries the org of a unit the row is actually served at), so it
+# wins; the owner is the fallback for rows with no link.
+_NOT_LINK_DERIVABLE = (
+    "(SELECT COUNT(DISTINCT l.organization_id) FROM {link} l WHERE l.{fk} = t.id) = 0"
+)
+_NO_LINK_TABLE = (
+    "TRUE"  # tables with no link table at all: every owner-derivation is the only one
+)
 
 _TOTAL = "SELECT COUNT(*) FROM {table}"
 _UNSET = "SELECT COUNT(*) FROM {table} WHERE organization_id IS NULL"
@@ -158,8 +185,17 @@ def report_for(session: Session, spec: TableSpec) -> TableReport:
             )
 
     if spec.owner:
+        # Exclude anything the link already claimed, so the buckets stay disjoint.
+        not_link = (
+            _NOT_LINK_DERIVABLE.format(link=spec.link, fk=spec.fk)
+            if spec.link and spec.fk
+            else _NO_LINK_TABLE
+        )
         r.by_owner = _scalar(
-            session, _OWNER_DERIVABLE.format(table=spec.table, owner=spec.owner)
+            session,
+            _OWNER_DERIVABLE.format(
+                table=spec.table, owner=spec.owner, not_link_derivable=not_link
+            ),
         )
 
     return r

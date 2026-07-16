@@ -81,9 +81,16 @@ Prepper serves several organisations, and its domain data is not isolated by any
 - **`access.org_role` / `is_org_admin` take an optional `organization_id`.** Passing it is correct; omitting it is the live cross-org bug — an Owner of org B is reported Owner while acting in org A, and takes the unfiltered branch in tasting sessions, ingredients and suppliers. Optional rather than required because the fix is atomic with its **13 call sites**, and they cannot supply an org until their route takes `get_org_context`. Step 3 removes the default.
 - **`scripts/org_backfill_report.py`** — READ-ONLY. Reports, per table, what can be assigned to an org from the data.
 
-**The finding that shapes step 2:** the backfill is not merely ambiguous for some rows — it is **impossible** for `ingredients`, `categories` and `menus_sketch`, which have no owner column *and* no unit link. 100% of their rows are undecidable and no ownership rule can help, because there is no ownership: they were a globally-shared pool, and nothing in the data says which org owns "Tomato". `suppliers` derives only through two hops. That makes the next step a product decision, not a data one.
+**What running it against staging found — both defects the unit tests missed:**
 
-**Next:** run `python -m app.passport.reconcile`, then `python -m scripts.org_backfill_report` against production. Choose the rule for undecidable rows from real numbers. Only then does step 2 backfill, and step 3 enforce (query predicates, child-router parent checks, RLS).
+- **The owner derivation modelled a chain the app does not use.** It resolved owner → org via `identity_link` alone, but the link is only written on SSO login, so anyone who has not logged in since SSO went live has none. Staging holds **2 links for 5 users**, and the sole recipe owner was not among them: link-only derived **0** of 11 recipes and **0** of 13 tasting sessions. It now resolves link-OR-email, the same chain `get_org_context` uses, and derives all of them.
+- **The buckets were not disjoint.** A row with both a unit link and a resolvable owner was counted twice — `menus` reported total=3, by_link=1, by_owner=3, **UNDECIDABLE = −1**. An over-counted "derivable" understates how many rows need a human decision, which is the one number the report exists to produce. The link is authoritative and wins; the owner is the fallback.
+
+**And the finding that shapes step 2:** the backfill is not merely ambiguous for some rows — it is **impossible** for `ingredients`, `categories` and `menus_sketch`, which have no owner column *and* no unit link. On staging that is 6984 rows (~96% of the domain). No ownership rule can help, because there is no ownership: they were a globally-shared pool, and nothing in the data says which org owns "Tomato". `suppliers` derives well (291/295) but only through two hops.
+
+**Decision (2026-07-16):** those three stay per-org — ingredient pricing and supplier terms are commercially sensitive, and a second org must not inherit the founding org's catalogue. Every undecidable row is assigned to the founding org, and **step 2 aborts rather than guessing** if more than one org has data by the time it runs.
+
+**Next:** `python -m app.passport.reconcile`, then `python -m scripts.org_backfill_report` against production before step 2 executes there.
 
 **Files changed:** `backend/alembic/versions/q1orgcol9p0q_add_organization_id_to_domain_tables.py` (new), `backend/app/api/deps.py`, `backend/app/passport/access.py`, `backend/app/models/{recipe,ingredient,supplier,category,tasting,menu,menu_sketch}.py`, `backend/scripts/org_backfill_report.py` (new), `backend/tests/test_org_context.py` (new), `backend/tests/test_org_backfill_report.py` (new), `CLAUDE.md`
 

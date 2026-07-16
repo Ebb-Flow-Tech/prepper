@@ -76,17 +76,36 @@ def _collect_api_routes(app: FastAPI) -> list[APIRoute]:
     FastAPI >=0.139 does not flatten included routers onto the app; it appends an
     ``_IncludedRouter`` whose ``original_router`` holds the real routes.
     """
-    found: list[APIRoute] = []
+    return [route for route, _ in _collect_with_paths(app)]
 
-    def walk(node: object) -> None:
+
+def _collect_with_paths(app: FastAPI) -> list[tuple[APIRoute, str]]:
+    """Every APIRoute paired with its FULL mounted path.
+
+    ``route.path`` is router-RELATIVE on FastAPI >=0.139 (``/login``, or ``""`` for
+    ``@router.get("")``), so it cannot be compared to an allowlist of full paths. The mounted
+    prefix lives on the ``_IncludedRouter``'s ``include_context.prefix``, so accumulate it.
+
+    Do NOT try to recover the full path by matching relative suffixes against the OpenAPI schema:
+    ``@router.get("")`` has a relative path of ``""``, and ``anything.endswith("")`` is True, so
+    every such route silently matches an arbitrary schema entry. That bug made this script report
+    22 allowlisted routes when 7 are.
+    """
+    found: list[tuple[APIRoute, str]] = []
+
+    def walk(node: object, prefix: str) -> None:
         for route in getattr(node, "routes", []) or []:
             if isinstance(route, APIRoute):
-                found.append(route)
+                found.append((route, prefix + route.path))
                 continue
             inner = getattr(route, "original_router", None)
-            walk(inner if inner is not None else route)
+            if inner is None:
+                walk(route, prefix)
+                continue
+            context = getattr(route, "include_context", None)
+            walk(inner, prefix + getattr(context, "prefix", "") or prefix)
 
-    walk(app)
+    walk(app, "")
     return found
 
 
@@ -107,30 +126,17 @@ def _has_route_level_auth(route: APIRoute) -> bool:
 
 def census() -> Census:
     app = create_app()
-    routes = _collect_api_routes(app)
     allowlist = public_routes(get_settings())
-    # The OpenAPI schema is the only public source of FULL paths: `route.path` is router-relative
-    # on FastAPI >=0.139, so it cannot be compared against the allowlist directly.
-    schema = {
-        (method.upper(), path)
-        for path, operations in app.openapi()["paths"].items()
-        for method in operations
-        if method.upper() not in NON_ROUTED_METHODS
-    }
 
     total = route_level = public = 0
     gate_only_by_module: Counter[str] = Counter()
     gate_only_routes: list[tuple[str, str, str]] = []
 
-    for route in routes:
+    for route, full in _collect_with_paths(app):
         module = route.endpoint.__module__.split(".")[-1]
         has_auth = _has_route_level_auth(route)
         for method in sorted(_routed_methods(route)):
             total += 1
-            full = next(
-                (p for (m, p) in schema if m == method and p.endswith(route.path)),
-                route.path,
-            )
             if (method, full) in allowlist:
                 public += 1
             elif has_auth:

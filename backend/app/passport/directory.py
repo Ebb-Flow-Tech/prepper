@@ -17,6 +17,7 @@ from sqlmodel import Session, col, select
 
 from app.models import (
     PassportMembership,
+    PassportOrganization,
     PassportUnit,
     PassportUnitAppAccess,
     PassportUnitAppMembership,
@@ -25,6 +26,51 @@ from app.passport import access
 
 _ACTIVE = "active"
 _BRAND = "brand"
+
+
+def organizations_for_user(
+    session: Session, subject: str, platform_user_id: str | None = None
+) -> list[dict[str, object]]:
+    """The orgs this user may act in, with names and their role in each.
+
+    The only read of ``passport.organization``. It has been projected since the sync consumer
+    landed and nothing ever queried it, so the client carried ``organization_id`` on three payloads
+    with no way to render a name.
+
+    ``platform_user_id`` may be passed by a caller that has already resolved it (including via the
+    email fallback, for a user whose identity link has not synced yet). Omitting it falls back to
+    the link alone, which returns ``[]`` for that user — so pass it.
+
+    The role is read PER ORG. ``access.org_role``'s org-less form answers "your strongest role
+    anywhere", which would report an Owner of org B as Owner of org A.
+    """
+    platform_user_id = platform_user_id or access.platform_user_id_for(session, subject)
+    if platform_user_id is None:
+        return []
+
+    rows = session.exec(
+        select(PassportOrganization, PassportMembership)
+        .join(
+            PassportMembership,
+            col(PassportMembership.organization_id) == col(PassportOrganization.id),
+        )
+        .where(
+            PassportMembership.platform_user_id == platform_user_id,
+            PassportMembership.status == _ACTIVE,
+        )
+        .order_by(col(PassportOrganization.name))
+    ).all()
+
+    return [
+        {
+            "id": org.id,
+            "name": org.name,
+            "slug": org.slug,
+            "status": org.status,
+            "my_org_role": membership.role,
+        }
+        for org, membership in rows
+    ]
 
 
 def brands_for_user(session: Session, subject: str) -> list[dict[str, object]]:

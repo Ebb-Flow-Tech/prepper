@@ -22,6 +22,7 @@ from app.api import (
     menu_sketch_sections,
     menu_sketches,
     menus,
+    organizations,
     passport_roles,
     recipe_allergens,
     recipe_categories,
@@ -208,6 +209,13 @@ def create_app() -> FastAPI:
         passport_roles.router,
         prefix=f"{settings.api_v1_prefix}/passport/brand-roles",
         tags=["passport-roles"],
+    )
+    # The orgs the caller may act in — names + their role in each. Read from the projection; the
+    # only route that surfaces `passport.organization` to the client.
+    app.include_router(
+        organizations.router,
+        prefix=f"{settings.api_v1_prefix}/passport/organizations",
+        tags=["organizations"],
     )
     app.include_router(
         ingredient_allergens.router,
