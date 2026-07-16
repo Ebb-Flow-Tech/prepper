@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import Response
 from sqlmodel import Session
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain import IngredientService
 from app.domain.category_service import CategoryService
 from app.domain.fmh_import_service import (
@@ -55,9 +55,10 @@ def _require_org_admin(session: Session, current_user: User) -> None:
 def create_ingredient(
     data: IngredientCreate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Create a new ingredient."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     return service.create_ingredient(data)
 
 
@@ -76,6 +77,7 @@ def list_ingredients(
     is_halal: str | None = Query(default=None),
     sort_by: str | None = Query(default=None),
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """List all ingredients with optional filters."""
     from app.models.pagination import PaginatedResponse
@@ -85,7 +87,7 @@ def list_ingredients(
     parsed_allergen_ids = [int(x) for x in allergen_ids.split(",")] if allergen_ids else None
     parsed_is_halal = [x.strip().lower() == "true" for x in is_halal.split(",")] if is_halal else None
 
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     offset = (page_number - 1) * page_size
     filter_kwargs = dict(active_only=active_only, category=category, source=source, master_only=master_only, search=search,
                          category_ids=parsed_category_ids, units=parsed_units, allergen_ids=parsed_allergen_ids, is_halal=parsed_is_halal,
@@ -190,9 +192,10 @@ async def download_fmh_sample_items() -> Response:
 @router.get("/categories", response_model=list[Category])
 def list_categories(
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """List all available ingredient categories from the database."""
-    service = CategoryService(session)
+    service = CategoryService(session, org.organization_id)
     return service.list_categories(active_only=True)
 
 
@@ -200,9 +203,10 @@ def list_categories(
 def get_ingredient(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get an ingredient by ID."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     ingredient = service.get_ingredient(ingredient_id)
     if not ingredient:
         raise HTTPException(
@@ -216,9 +220,10 @@ def get_ingredient(
 def get_variants(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get all variant ingredients linked to a master ingredient."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
 
     # Verify the ingredient exists
     ingredient = service.get_ingredient(ingredient_id)
@@ -236,9 +241,10 @@ def update_ingredient(
     ingredient_id: int,
     data: IngredientUpdate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Update an ingredient."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     ingredient = service.update_ingredient(ingredient_id, data)
     if not ingredient:
         raise HTTPException(
@@ -252,9 +258,10 @@ def update_ingredient(
 def deactivate_ingredient(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Deactivate (soft-delete) an ingredient."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     ingredient = service.deactivate_ingredient(ingredient_id)
     if not ingredient:
         raise HTTPException(
@@ -274,9 +281,10 @@ def get_ingredient_suppliers(
     ingredient_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get all suppliers for an ingredient, restricted to the units the caller can see."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     result = service.get_ingredient_suppliers(
         ingredient_id,
         subject=current_user.id,
@@ -299,6 +307,7 @@ def add_ingredient_supplier(
     data: SupplierIngredientCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Add a supplier to an ingredient, at a unit the caller can actually see.
 
@@ -307,7 +316,7 @@ def add_ingredient_supplier(
     """
     # Ensure the path ingredient_id matches the body
     data.ingredient_id = ingredient_id
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     result = service.add_ingredient_supplier(ingredient_id, data, subject=current_user.id)
     if result is None:
         raise HTTPException(
@@ -332,6 +341,7 @@ def update_ingredient_supplier(
     data: SupplierIngredientUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Update a supplier-ingredient link the caller can see.
 
@@ -345,7 +355,7 @@ def update_ingredient_supplier(
       - 403 when the caller CAN see the link but may not re-home it. Re-homing stays
         org-admin-only; the row is not a secret from them, the operation is simply refused.
     """
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     result = service.update_ingredient_supplier(
         supplier_ingredient_id, data, subject=current_user.id
     )
@@ -370,13 +380,14 @@ def remove_ingredient_supplier(
     supplier_ingredient_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Remove a supplier from an ingredient, if the caller can see the link.
 
     404 rather than 403 for a link at another brand's unit: its existence is not the caller's to
     learn, and the scoped read would never have shown it to them.
     """
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     success = service.remove_ingredient_supplier(
         supplier_ingredient_id, subject=current_user.id
     )
@@ -395,9 +406,10 @@ def get_preferred_supplier(
     ingredient_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get the preferred supplier for an ingredient, restricted to the units the caller can see."""
-    service = IngredientService(session)
+    service = IngredientService(session, org.organization_id)
     ingredient = service.get_ingredient(ingredient_id)
     if not ingredient:
         raise HTTPException(

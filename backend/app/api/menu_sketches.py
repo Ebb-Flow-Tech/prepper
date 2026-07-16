@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
-from app.api.deps import get_session
+from app.api.deps import OrgContext, get_org_context, get_session
 from app.domain.menu_sketch_service import MenuSketchService
 from app.models.menu_sketch import (
     MenuSketch,
@@ -19,18 +19,22 @@ router = APIRouter()
 def list_menu_sketches(
     include_archived: bool = Query(False, description="Include archived sketches"),
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> list[MenuSketch]:
     """List menu sketches. Pass include_archived=true to include archived ones."""
-    return MenuSketchService(session).list_sketches(include_archived=include_archived)
+    return MenuSketchService(session, org.organization_id).list_sketches(
+        include_archived=include_archived
+    )
 
 
 @router.get("/{sketch_id}", response_model=MenuSketchRead)
 def get_menu_sketch(
     sketch_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> MenuSketch:
     """Get a single menu sketch by ID."""
-    sketch = MenuSketchService(session).get_sketch(sketch_id)
+    sketch = MenuSketchService(session, org.organization_id).get_sketch(sketch_id)
     if sketch is None:
         raise HTTPException(status_code=404, detail="Sketch not found")
     return sketch
@@ -40,9 +44,10 @@ def get_menu_sketch(
 def create_menu_sketch(
     data: MenuSketchCreate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> MenuSketch:
     """Create a new menu sketch."""
-    return MenuSketchService(session).create_sketch(data)
+    return MenuSketchService(session, org.organization_id).create_sketch(data)
 
 
 @router.patch("/{sketch_id}", response_model=MenuSketchRead)
@@ -50,9 +55,12 @@ def update_menu_sketch(
     sketch_id: int,
     data: MenuSketchUpdate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> MenuSketch:
     """Update a menu sketch."""
-    sketch = MenuSketchService(session).update_sketch(sketch_id, data)
+    sketch = MenuSketchService(session, org.organization_id).update_sketch(
+        sketch_id, data
+    )
     if sketch is None:
         raise HTTPException(status_code=404, detail="Sketch not found")
     return sketch
@@ -62,9 +70,10 @@ def update_menu_sketch(
 def delete_menu_sketch(
     sketch_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> dict:
     """Soft-delete a menu sketch (sets status to 'archived')."""
-    deleted = MenuSketchService(session).delete_sketch(sketch_id)
+    deleted = MenuSketchService(session, org.organization_id).delete_sketch(sketch_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Sketch not found")
     return {"ok": True}
@@ -74,9 +83,10 @@ def delete_menu_sketch(
 def fork_menu_sketch(
     sketch_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> MenuSketch:
     """Fork a menu sketch — creates a copy with incremented version."""
-    sketch = MenuSketchService(session).fork_sketch(sketch_id)
+    sketch = MenuSketchService(session, org.organization_id).fork_sketch(sketch_id)
     if sketch is None:
         raise HTTPException(status_code=404, detail="Sketch not found")
     return sketch

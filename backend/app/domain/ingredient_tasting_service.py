@@ -1,15 +1,14 @@
 """Ingredient-tasting session relationship management operations."""
 
-from typing import Optional
 
 from sqlmodel import Session, select
 
 from app.models import (
     Ingredient,
     IngredientTasting,
-    IngredientTastingCreate,
     IngredientTastingBatchCreate,
     IngredientTastingBatchResult,
+    IngredientTastingCreate,
     IngredientTastingRead,
     TastingSession,
 )
@@ -23,7 +22,7 @@ class IngredientTastingService:
 
     def add_ingredient_to_session(
         self, session_id: int, data: IngredientTastingCreate
-    ) -> Optional[IngredientTasting]:
+    ) -> IngredientTasting | None:
         """Add an ingredient to a tasting session."""
         # Verify session exists
         tasting_session = self.session.get(TastingSession, session_id)
@@ -57,7 +56,7 @@ class IngredientTastingService:
 
     def add_ingredients_to_session(
         self, session_id: int, data: IngredientTastingBatchCreate
-    ) -> Optional[IngredientTastingBatchResult]:
+    ) -> IngredientTastingBatchResult | None:
         """Add multiple ingredients to a tasting session. Skips duplicates and invalid IDs."""
         tasting_session = self.session.get(TastingSession, session_id)
         if not tasting_session:

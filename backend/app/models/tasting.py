@@ -2,9 +2,7 @@
 
 import datetime
 from enum import Enum
-from typing import Optional, List
 
-from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
 
@@ -26,8 +24,8 @@ class TastingSessionBase(SQLModel):
 
     name: str = Field(max_length=200, description="e.g. 'December Menu Tasting'")
     date: datetime.datetime
-    location: Optional[str] = Field(default=None, max_length=200)
-    notes: Optional[str] = Field(default=None)
+    location: str | None = Field(default=None, max_length=200)
+    notes: str | None = Field(default=None)
 
 
 class TastingSession(TastingSessionBase, table=True):
@@ -40,8 +38,8 @@ class TastingSession(TastingSessionBase, table=True):
     # alembic q1orgcol9p0q.
     organization_id: str | None = Field(default=None, index=True)
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    creator_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
+    id: int | None = Field(default=None, primary_key=True)
+    creator_id: str | None = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -49,17 +47,17 @@ class TastingSession(TastingSessionBase, table=True):
 class TastingSessionCreate(TastingSessionBase):
     """Schema for creating a new tasting session."""
 
-    participant_ids: Optional[List[str]] = None
+    participant_ids: list[str] | None = None
 
 
 class TastingSessionUpdate(SQLModel):
     """Schema for updating a tasting session (all fields optional)."""
 
-    name: Optional[str] = None
-    date: Optional[datetime.datetime] = None
-    location: Optional[str] = None
-    participant_ids: Optional[List[str]] = None
-    notes: Optional[str] = None
+    name: str | None = None
+    date: datetime.datetime | None = None
+    location: str | None = None
+    participant_ids: list[str] | None = None
+    notes: str | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -72,9 +70,9 @@ class TastingUser(SQLModel, table=True):
 
     __tablename__ = "tasting_users"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     tasting_session_id: int = Field(foreign_key="tasting_sessions.id", index=True)
-    user_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
+    user_id: str | None = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -83,18 +81,21 @@ class TastingUserRead(SQLModel):
     """Participant summary embedded in TastingSessionRead responses."""
 
     id: int
-    user_id: Optional[str]
+    user_id: str | None
     email: str
     username: str
-    phone_number: Optional[str] = None
+    phone_number: str | None = None
 
 
 class TastingSessionRead(TastingSessionBase):
     """TastingSession for API responses — includes resolved participant list."""
 
     id: int
-    creator_id: Optional[str] = None
-    participants: List[TastingUserRead] = []
+    creator_id: str | None = None
+    # The org this session belongs to. Carried so an admin bypass can be scoped to it rather
+    # than asking the org-less "admin of ANY of your orgs" question. Nullable until the backfill.
+    organization_id: str | None = None
+    participants: list[TastingUserRead] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -108,24 +109,24 @@ class TastingNoteBase(SQLModel):
     """Shared fields for TastingNote."""
 
     # Ratings (1-5 scale)
-    taste_rating: Optional[int] = Field(default=None, ge=1, le=5)
-    presentation_rating: Optional[int] = Field(default=None, ge=1, le=5)
-    texture_rating: Optional[int] = Field(default=None, ge=1, le=5)
-    overall_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    taste_rating: int | None = Field(default=None, ge=1, le=5)
+    presentation_rating: int | None = Field(default=None, ge=1, le=5)
+    texture_rating: int | None = Field(default=None, ge=1, le=5)
+    overall_rating: int | None = Field(default=None, ge=1, le=5)
 
     # Feedback
-    feedback: Optional[str] = Field(default=None, description="Free-form tasting notes")
-    action_items: Optional[str] = Field(default=None, description="What needs to change")
+    feedback: str | None = Field(default=None, description="Free-form tasting notes")
+    action_items: str | None = Field(default=None, description="What needs to change")
     action_items_done: bool = Field(default=False, description="Whether action items have been completed")
 
     # Decision
-    decision: Optional[str] = Field(
+    decision: str | None = Field(
         default=None,
         description="approved, needs_work, or rejected",
     )
 
     # Taster info
-    taster_name: Optional[str] = Field(default=None, max_length=100)
+    taster_name: str | None = Field(default=None, max_length=100)
 
 
 class TastingNote(TastingNoteBase, table=True):
@@ -133,10 +134,10 @@ class TastingNote(TastingNoteBase, table=True):
 
     __tablename__ = "tasting_notes"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     session_id: int = Field(foreign_key="tasting_sessions.id", index=True)
     recipe_id: int = Field(foreign_key="recipes.id", index=True)
-    user_id: Optional[str] = Field(default=None, foreign_key="users.id", index=True)
+    user_id: str | None = Field(default=None, foreign_key="users.id", index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
@@ -145,21 +146,21 @@ class TastingNoteCreate(TastingNoteBase):
     """Schema for creating a tasting note."""
 
     recipe_id: int
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 class TastingNoteUpdate(SQLModel):
     """Schema for updating a tasting note (all fields optional)."""
 
-    taste_rating: Optional[int] = None
-    presentation_rating: Optional[int] = None
-    texture_rating: Optional[int] = None
-    overall_rating: Optional[int] = None
-    feedback: Optional[str] = None
-    action_items: Optional[str] = None
-    action_items_done: Optional[bool] = None
-    decision: Optional[str] = None
-    taster_name: Optional[str] = None
+    taste_rating: int | None = None
+    presentation_rating: int | None = None
+    texture_rating: int | None = None
+    overall_rating: int | None = None
+    feedback: str | None = None
+    action_items: str | None = None
+    action_items_done: bool | None = None
+    decision: str | None = None
+    taster_name: str | None = None
 
 
 class TastingNoteRead(TastingNoteBase):
@@ -168,7 +169,7 @@ class TastingNoteRead(TastingNoteBase):
     id: int
     session_id: int
     recipe_id: int
-    user_id: Optional[str] = None
+    user_id: str | None = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -176,9 +177,9 @@ class TastingNoteRead(TastingNoteBase):
 class TastingNoteWithRecipe(TastingNoteRead):
     """TastingNote with recipe name for recipe history view."""
 
-    recipe_name: Optional[str] = None
-    session_name: Optional[str] = None
-    session_date: Optional[datetime.datetime] = None
+    recipe_name: str | None = None
+    session_name: str | None = None
+    session_date: datetime.datetime | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -191,7 +192,7 @@ class RecipeTastingSummary(SQLModel):
 
     recipe_id: int
     total_tastings: int
-    average_overall_rating: Optional[float]
-    latest_decision: Optional[str]
-    latest_feedback: Optional[str]
-    latest_tasting_date: Optional[datetime.datetime]
+    average_overall_rating: float | None
+    latest_decision: str | None
+    latest_feedback: str | None
+    latest_tasting_date: datetime.datetime | None

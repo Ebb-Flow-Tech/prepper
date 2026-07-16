@@ -2,7 +2,7 @@
 
 from sqlmodel import Session, select
 
-from app.models import Recipe, RecipeImage, RecipeImageCreate, RecipeImageUpdate
+from app.models import Recipe, RecipeImage
 
 
 class RecipeImageService:

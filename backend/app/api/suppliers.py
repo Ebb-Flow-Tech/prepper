@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import Response
 from sqlmodel import Session
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain.fmh_import_service import FMHImportResult, import_suppliers
 from app.domain.storage_service import (
     StorageError,
@@ -31,9 +31,10 @@ router = APIRouter()
 def create_supplier(
     data: SupplierCreate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Create a new supplier."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     return service.create_supplier(data)
 
 
@@ -44,10 +45,11 @@ def list_suppliers(
     page_size: int = Query(default=30, ge=1, le=100),
     search: str | None = Query(default=None),
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """List all suppliers."""
     from app.models.pagination import PaginatedResponse
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     offset = (page_number - 1) * page_size
     items = service.list_paginated(offset=offset, limit=page_size, active_only=active_only, search=search)
     total = service.count(active_only=active_only, search=search)
@@ -99,9 +101,10 @@ async def download_fmh_sample_supplier_pricings() -> Response:
 def get_supplier(
     supplier_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get a supplier by ID."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     supplier = service.get_supplier(supplier_id)
     if not supplier:
         raise HTTPException(
@@ -116,9 +119,10 @@ def update_supplier(
     supplier_id: int,
     data: SupplierUpdate,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Update a supplier."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     supplier = service.update_supplier(supplier_id, data)
     if not supplier:
         raise HTTPException(
@@ -132,9 +136,10 @@ def update_supplier(
 def deactivate_supplier(
     supplier_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Soft-delete a supplier by deactivating it."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     supplier = service.deactivate_supplier(supplier_id)
     if not supplier:
         raise HTTPException(
@@ -148,9 +153,10 @@ def deactivate_supplier(
 def delete_supplier(
     supplier_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Delete a supplier."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     deleted = service.delete_supplier(supplier_id)
     if not deleted:
         raise HTTPException(
@@ -192,9 +198,10 @@ def get_supplier_ingredients(
     supplier_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get all ingredients of a supplier, restricted to the units the caller can see."""
-    service = SupplierService(session)
+    service = SupplierService(session, org.organization_id)
     supplier = service.get_supplier(supplier_id)
     if not supplier:
         raise HTTPException(

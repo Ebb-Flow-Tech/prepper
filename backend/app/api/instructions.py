@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.models import Recipe, InstructionsRaw, InstructionsStructured
+from app.api.guards import require_recipe_access
 from app.domain import InstructionsService, RecipeService
+from app.models import InstructionsRaw, InstructionsStructured, Recipe
 
 router = APIRouter()
 
@@ -15,6 +16,7 @@ def store_raw_instructions(
     recipe_id: int,
     data: InstructionsRaw,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Store raw instructions text for a recipe."""
     service = InstructionsService(session)
@@ -31,6 +33,7 @@ def store_raw_instructions(
 def parse_instructions(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Parse raw instructions into structured format using LLM."""
     recipe_service = RecipeService(session)
@@ -60,6 +63,7 @@ def update_structured_instructions(
     recipe_id: int,
     data: InstructionsStructured,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Manually update structured instructions."""
     service = InstructionsService(session)

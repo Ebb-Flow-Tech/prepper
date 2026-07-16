@@ -1,18 +1,17 @@
 """Ingredient tasting note management operations."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlmodel import Session, select
 
 from app.models import (
-    TastingSession,
+    Ingredient,
     IngredientTastingNote,
     IngredientTastingNoteCreate,
     IngredientTastingNoteUpdate,
     IngredientTastingNoteWithDetails,
     IngredientTastingSummary,
-    Ingredient,
+    TastingSession,
 )
 
 
@@ -24,7 +23,7 @@ class IngredientTastingNoteService:
 
     def add(
         self, session_id: int, data: IngredientTastingNoteCreate
-    ) -> Optional[IngredientTastingNote]:
+    ) -> IngredientTastingNote | None:
         """Add an ingredient tasting note to a session."""
         # Verify session exists
         tasting_session = self.session.get(TastingSession, session_id)
@@ -55,13 +54,13 @@ class IngredientTastingNoteService:
         )
         return list(self.session.exec(statement).all())
 
-    def get(self, note_id: int) -> Optional[IngredientTastingNote]:
+    def get(self, note_id: int) -> IngredientTastingNote | None:
         """Get an ingredient tasting note by ID."""
         return self.session.get(IngredientTastingNote, note_id)
 
     def update(
         self, note_id: int, data: IngredientTastingNoteUpdate
-    ) -> Optional[IngredientTastingNote]:
+    ) -> IngredientTastingNote | None:
         """Update an ingredient tasting note."""
         note = self.get(note_id)
         if not note:

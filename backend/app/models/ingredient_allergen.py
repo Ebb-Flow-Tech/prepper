@@ -1,7 +1,7 @@
 """Ingredient-Allergen model - many-to-many relationship between ingredients and allergens."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -19,7 +19,7 @@ class IngredientAllergen(SQLModel, table=True):
 
     __tablename__ = "ingredient_allergens"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     ingredient_id: int = Field(foreign_key="ingredients.id", index=True)
     allergen_id: int = Field(foreign_key="allergens.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

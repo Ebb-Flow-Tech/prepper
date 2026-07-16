@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs and the `tasting-note-images` Family
 - **[0.0.64](#0064---2026-07-16)** — Fix: Four Cross-Tenant Leaks (All Three Supplier-Ingredient Writes, `GET /menu-items`), Email Self-Service Granting Another User's Passport Identity, Unscoped `GET /users` PII & Unauthenticated `/docs`; plus the Settings Refactor — Tabs/Table Primitives, the BrandRoles Scroll Fix, Profile Org Info & the Org Switcher
 - **[0.0.63](#0063---2026-07-16)** — Org Isolation (1/3): Nullable `organization_id` on the Seven Per-Org Tables, `get_org_context` with Email Fallback & a Read-Only Backfill Report — No Query Enforces Yet; `ingredients`/`categories`/`menus_sketch` Are 100% Underivable
 - **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check, the `GET /menu-items` Cross-Brand Leak & a Route-Auth Census
@@ -67,6 +68,53 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.65] - 2026-07-17
+
+Org isolation 2 of 3. `0.0.63` added the column and `get_org_context`; nothing read either. This wires both to the write path and the read path, so `organization_id` starts meaning something.
+
+### Fixed
+
+#### The ingredient, supplier, category and menu-sketch catalogues were global
+
+Not scoped by the wrong question like `0.0.64`'s leaks — scoped by nothing at all. Every authenticated user of every org listed every row: the full ingredient catalogue **with costs**, every supplier name, every menu sketch. The largest cross-org exposure in the app, and the least visible, because a list endpoint returning rows looks exactly like a list endpoint working.
+
+`organization_id` moved from a create **method** argument to a **required constructor** argument on those four services. A service that cannot be built without an org cannot silently read every org's rows, and the read surface (`list`, `list_paginated`, `count`, `get_*`, `_name_exists`) is far too wide to thread an argument through method by method without missing one.
+
+Three defects surfaced while doing it, none of them in the spec:
+
+- **`get_*` used `session.get()`** — fetch by primary key alone, so `GET /{id}` returned another org's row on a guessed integer. `update_*` and `soft_delete_*` resolve through the same method, so scoping it closed the cross-org **writes** too.
+- **`_name_exists` was global** — "Desserts" existing in *any* org stopped every other org from ever creating it, and the 409 confirmed the other tenant had it. Uniqueness that crosses a tenant boundary leaks the tenant's contents.
+- **`fork_sketch` used `session.get()` and stamped no org** — a fork crossed orgs and the copy landed NULL, i.e. visible to everyone.
+
+#### `is_public` meant public to the instance, not to the org
+
+A recipe is visible when you own it, when it is assigned to a unit you can see, **or when `is_public` is true** — and that last clause had no org predicate under it. Every tenant's public recipes were readable by everyone, in the list and by id. `is_public` is the one visibility rule a chef would reasonably read as "public within my company".
+
+The rule is duplicated in `guards.py`, whose own docstring requires it to agree with the list query, so both were fixed together. The guard now answers two questions instead of one: `_in_org` fails to a **404** (another tenant's row is not yours to know exists), `_may_see_recipe` fails to the historical **403** (your org, outside your brands). Ordering is load-bearing — `is_public` returns True on its own, so it must never be reached for a foreign row.
+
+The admin branch got *simpler*: under the org predicate, `Recipe.organization_id.in_(admin_orgs)` could only ever widen past the active org, so it collapses to `organization_id in admin_org_ids`.
+
+#### A dual-org admin saw the other org's tasting sessions
+
+Participation scoping held. `admin_org_ids` did not — it is the union of every org you administer, so an Admin of both ORG_A and ORG_B got ORG_B's sessions in ORG_A's list. Every check passed, the user really was an admin, and the sessions really were theirs to see *in another context*. The active org is what made it wrong. Now `is_org_admin`, a question about the org being acted in.
+
+#### `tasting-note-images` resolved no user on any route
+
+`DELETE /{image_id}` destroyed a row **and its storage object** on a bare integer, for any account, on anyone's session. The `sync/*` routes were worse: image ids came from the request **body** and were deleted without ever being checked against the note in the path — an IDOR nested inside an unauthorised route. All five routes now resolve image → note → session, and the sync routes intersect the body's ids with the note's own.
+
+### Changed
+
+- **Creates stamp `organization_id`** on all seven per-org tables, from `get_org_context` — the enabler for everything above, since predicates against NULL orgs would have hidden new rows from their own creators. No `Create` schema carries `organization_id` and none gained one: the org comes from the token, on the same principle as `owner_id` and `users.email`.
+- **`domain/org_scope.py`** is the single home for the predicate, including a transitional `IS NULL` arm. NULL means *not yet backfilled*, not *belongs to everyone* — a bare `organization_id = :active_org` would have erased every pre-backfill row from the UI on deploy. The arm is self-eliminating: it matches nothing once the backfill lands and is formally dead after the `NOT NULL` migration.
+- **Dead code deleted rather than fixed.** `TastingSessionService.list()`, `list_paginated()` and `count()` had no callers: `list()` selected every session in the deployment unfiltered, and `count()` took no admin argument, so an admin's total would have disagreed with their own rows. Same for `_build_list_query`'s `user_id=None` branch ("apply no participation filter"). An unscoped query with no caller is a leak that has not happened yet.
+- `vitest` + `@testing-library/*` added as devDependencies for the `OrgSwitcher` tests. No production dependency changed.
+
+### Still outstanding
+
+`menus`, `GET /users` and `directory.*` still return the union across your orgs. RLS (`is_admin_in` / `is_manager_or_admin_in`) and the `NOT NULL` migration remain — the latter now unblocked by create-stamping, but it must still run after `q2orgfill1r2s` or it fails on the legacy NULLs.
+
 ---
 
 ## [0.0.64] - 2026-07-16

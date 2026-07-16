@@ -8,9 +8,9 @@ from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.recipe_ingredient import RecipeIngredient
     from app.models.category import Category
     from app.models.ingredient_allergen import IngredientAllergen
+    from app.models.recipe_ingredient import RecipeIngredient
     from app.models.supplier_ingredient import SupplierIngredient
 
 

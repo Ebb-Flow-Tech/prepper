@@ -1,13 +1,14 @@
 """Recipe allergens API routes."""
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.models import Allergen, Recipe
+from app.api.guards import require_recipe_access
 from app.domain.ingredient_allergen_service import IngredientAllergenService
 from app.domain.recipe_service import RecipeService
+from app.models import Allergen, Recipe
 
 
 class RecipeAllergensBatchRequest(BaseModel):
@@ -24,6 +25,7 @@ batch_router = APIRouter()
 def get_recipe_allergens(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Get all allergens for a specific recipe.
 

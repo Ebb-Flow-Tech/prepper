@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
+from app.domain.allergen_service import AllergenService
 from app.models.allergen import (
     Allergen,
     AllergenCreate,
     AllergenUpdate,
 )
-from app.domain.allergen_service import AllergenService
 
 router = APIRouter()
 

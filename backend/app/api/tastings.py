@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 
 # Notes live in their own module but hang off the same /tasting-sessions prefix.
 from app.api.tasting_notes import router as notes_router
@@ -32,7 +32,10 @@ def _check_session_access(
     data — so there is no brand to be a `Manager` of and the old admin bypass maps to the org-wide
     check.
     """
-    if access.is_org_admin(session, current_user.id):
+    # Scoped to the SESSION's org. `is_org_admin(user)` with no org means "admin of ANY of your
+    # orgs", so an Owner of org B read org A's sessions. `admins_row` falls back to the org-less
+    # question only while `organization_id` is NULL (pre-backfill) — see access.admins_row.
+    if access.admins_row(session, current_user.id, tasting_session.organization_id):
         return
     if tasting_session.creator_id == current_user.id:
         return
@@ -52,7 +55,8 @@ def _check_session_access_raw(
     session: Session,
 ) -> None:
     """Lightweight access check using raw TastingSession (no full participant load)."""
-    if access.is_org_admin(session, current_user.id):
+    # Scoped to the session's org — see `_check_session_access`.
+    if access.admins_row(session, current_user.id, tasting_session.organization_id):
         return
     if tasting_session.creator_id == current_user.id:
         return
@@ -86,10 +90,13 @@ def create_tasting_session(
     data: TastingSessionCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Create a new tasting session."""
     service = TastingSessionService(session)
-    return service.create(data, creator_id=current_user.id)
+    return service.create(
+        data, creator_id=current_user.id, organization_id=org.organization_id
+    )
 
 
 @router.get("")
@@ -99,16 +106,23 @@ def list_tasting_sessions(
     search: str | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
-    """List all tasting sessions, ordered by date descending."""
+    """List the caller's tasting sessions in the active org, ordered by date descending."""
     from app.models.pagination import PaginatedResponse
     service = TastingSessionService(session)
     offset = (page_number - 1) * page_size
-    # `None` means "do not filter by participation" — the org administrator's view of every session.
-    user_id = (
-        None if access.is_org_admin(session, current_user.id) else current_user.id
+    # Always scoped to the org AND to the caller. An org admin additionally sees every session in
+    # the org they are acting in — asked as a question about THIS org, not as the set of orgs they
+    # administer, which is a union and leaked the other orgs' sessions into this list.
+    items, total = service.list_paginated_with_count(
+        org.organization_id,
+        current_user.id,
+        offset=offset,
+        limit=page_size,
+        search=search,
+        is_org_admin=access.admins_row(session, current_user.id, org.organization_id),
     )
-    items, total = service.list_paginated_with_count(offset=offset, limit=page_size, search=search, user_id=user_id)
     return PaginatedResponse.create(items=items, total_count=total, page_number=page_number, page_size=page_size)
 
 

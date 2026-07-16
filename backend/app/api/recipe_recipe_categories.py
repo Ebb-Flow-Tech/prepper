@@ -4,12 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
+from app.api.guards import require_recipe_access
+from app.domain.recipe_recipe_category_service import RecipeRecipeCategoryService
+from app.models import Recipe
 from app.models.recipe_recipe_category import (
     RecipeRecipeCategory,
     RecipeRecipeCategoryCreate,
     RecipeRecipeCategoryUpdate,
 )
-from app.domain.recipe_recipe_category_service import RecipeRecipeCategoryService
 
 router = APIRouter()
 
@@ -57,6 +59,7 @@ def get_recipe_category_link(
 def list_categories_by_recipe(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """List all categories assigned to a recipe."""
     service = RecipeRecipeCategoryService(session)
@@ -109,6 +112,7 @@ def delete_recipe_category_link(
 def delete_all_categories_for_recipe(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Delete all category links for a recipe."""
     service = RecipeRecipeCategoryService(session)

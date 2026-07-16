@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.database import get_session
 from app.agents.feedback_summary_agent import FeedbackSummaryAgent
+from app.api.guards import require_recipe_access
+from app.database import get_session
+from app.models import Recipe
 
 router = APIRouter()
 
@@ -27,6 +29,7 @@ class SummarizeFeedbackResponse(BaseModel):
 async def summarize_feedback(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ) -> SummarizeFeedbackResponse:
     """Summarize all tasting feedback for a recipe using the AI agent.
 

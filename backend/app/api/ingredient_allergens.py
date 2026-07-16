@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.models import IngredientAllergen, IngredientAllergenCreate
 from app.domain.ingredient_allergen_service import IngredientAllergenService
-
+from app.models import IngredientAllergen, IngredientAllergenCreate
 
 router = APIRouter()
 

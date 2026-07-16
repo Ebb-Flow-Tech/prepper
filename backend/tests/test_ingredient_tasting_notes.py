@@ -65,7 +65,12 @@ def test_create_note_for_nonexistent_ingredient(client: TestClient):
 
 
 def test_create_note_for_nonexistent_session(client: TestClient):
-    """Test creating a note for a session that doesn't exist returns 403 (not a participant)."""
+    """A session that does not exist is 404, not 403.
+
+    It used to 403 "not a participant" — you cannot participate in a session that isn't there, so
+    the status conflated "absent" with "denied". `require_session_access` resolves the session
+    first and says which it is.
+    """
     ingredient_response = client.post(
         "/api/v1/ingredients",
         json={"name": "Test Ingredient", "base_unit": "g"},
@@ -80,8 +85,7 @@ def test_create_note_for_nonexistent_session(client: TestClient):
             "overall_rating": 5,
         },
     )
-    # Participant check runs first — no participant row for nonexistent session
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_get_session_ingredient_notes(client: TestClient):

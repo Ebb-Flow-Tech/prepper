@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlmodel import Session, select, func
+from sqlmodel import Session, func, select
 
 from app.models.allergen import (
     Allergen,

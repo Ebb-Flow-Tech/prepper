@@ -3,11 +3,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.api.deps import get_session, get_current_user
-from app.models import IngredientTasting, IngredientTastingCreate, IngredientTastingBatchCreate, IngredientTastingBatchResult, IngredientTastingRead, User
-from app.domain import IngredientTastingService, TastingSessionService
+from app.api.deps import get_current_user, get_session
+from app.api.guards import require_session_access
 from app.api.tastings import _check_creator_only
-
+from app.domain import IngredientTastingService, TastingSessionService
+from app.models import (
+    IngredientTasting,
+    IngredientTastingBatchCreate,
+    IngredientTastingBatchResult,
+    IngredientTastingCreate,
+    IngredientTastingRead,
+    User,
+)
+from app.models.tasting import TastingSession
 
 router = APIRouter()
 
@@ -19,6 +27,7 @@ router = APIRouter()
 def get_session_ingredients(
     session_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Get all ingredients associated with a tasting session."""
     service = IngredientTastingService(session)
@@ -35,6 +44,7 @@ def add_ingredient_to_session(
     data: IngredientTastingCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add an ingredient to a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)
@@ -63,6 +73,7 @@ def add_ingredients_to_session_batch(
     data: IngredientTastingBatchCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add multiple ingredients to a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)
@@ -87,6 +98,7 @@ def remove_ingredient_from_session(
     ingredient_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Remove an ingredient from a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)

@@ -476,7 +476,6 @@ def test_fork_recipe_basic(client: TestClient):
             "name": "Original Recipe",
             "yield_quantity": 4,
             "yield_unit": "servings",
-            "owner_id": "user123",
         },
     )
     assert create_response.status_code == 201
@@ -512,7 +511,6 @@ def test_fork_recipe_with_new_owner(client: TestClient):
             "name": "Shared Recipe",
             "yield_quantity": 2,
             "yield_unit": "portion",
-            "owner_id": "original_owner",
         },
     )
     original = create_response.json()
@@ -938,7 +936,6 @@ def test_get_version_tree_preserves_recipe_data(client: TestClient):
             "name": "Detailed Recipe",
             "yield_quantity": 4,
             "yield_unit": "servings",
-            "owner_id": "user123",
         },
     ).json()
 
@@ -954,7 +951,7 @@ def test_get_version_tree_preserves_recipe_data(client: TestClient):
     assert orig["name"] == "Detailed Recipe"
     assert orig["yield_quantity"] == 4
     assert orig["yield_unit"] == "servings"
-    assert orig["owner_id"] == "user123"
+    assert orig["owner_id"] == ADMIN_USER_ID  # the caller owns what they create
     assert orig["version"] == 1
     assert orig["root_id"] is None
 
@@ -1150,8 +1147,7 @@ def test_version_tree_outlet_user_sees_their_brands_recipes(client: TestClient, 
     assert outlet_id in access.accessible_unit_ids(session, "location-user-1")
 
     response = client.get(
-        f"/api/v1/recipes/{recipe['id']}/versions",
-        params={"user_id": "location-user-1"},
+        f"/api/v1/recipes/{recipe['id']}/versions"
     )
     assert response.status_code == 200
     versions = response.json()
@@ -1179,11 +1175,10 @@ def test_version_tree_user_of_another_brand_sees_masked_recipes(client: TestClie
 
     forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
 
-    make_brand_user(session, "brand-a-user", brand_a, MANAGER, "brand_a_user")
+    use_user(client, make_brand_user(session, "brand-a-user", brand_a, MANAGER, "brand_a_user"))
 
     response = client.get(
-        f"/api/v1/recipes/{recipe['id']}/versions",
-        params={"user_id": "brand-a-user"},
+        f"/api/v1/recipes/{recipe['id']}/versions"
     )
     assert response.status_code == 200
     versions = response.json()
@@ -1198,15 +1193,18 @@ def test_version_tree_user_of_another_brand_sees_masked_recipes(client: TestClie
 
 
 def test_version_tree_owner_sees_own_recipe_unmasked(client: TestClient, session):
-    """The owner always sees their own recipe, whatever Passport says."""
+    """The owner always sees their own recipe, whatever Passport says.
+
+    Acts AS the owner throughout. It used to create the recipe under a fabricated `owner_id`, fork
+    it as the admin, and then pass `?user_id=` to "become" the owner for the read — which only
+    worked because fork had no access check and the masking trusted a query string. Both are gone.
+    """
+    owner = create_user(session, "recipe-owner-user", "owner")
+    use_user(client, owner)
+
     recipe = client.post(
         "/api/v1/recipes",
-        json={
-            "name": "Owned Recipe",
-            "yield_quantity": 1,
-            "yield_unit": "batch",
-            "owner_id": "recipe-owner-user",
-        },
+        json={"name": "Owned Recipe", "yield_quantity": 1, "yield_unit": "batch"},
     ).json()
 
     forked = client.post(
@@ -1214,12 +1212,7 @@ def test_version_tree_owner_sees_own_recipe_unmasked(client: TestClient, session
         json={"new_owner_id": "other-admin-user"},
     ).json()
 
-    create_user(session, "recipe-owner-user", "owner")
-
-    response = client.get(
-        f"/api/v1/recipes/{recipe['id']}/versions",
-        params={"user_id": "recipe-owner-user"},
-    )
+    response = client.get(f"/api/v1/recipes/{recipe['id']}/versions")
     assert response.status_code == 200
     versions = response.json()
     assert len(versions) == 2
@@ -1238,25 +1231,24 @@ def test_version_tree_user_with_no_passport_role_sees_masked_recipes(
 
     The old model treated an empty scope as "see everything". It now derives nothing.
     """
+    # Built by the admin (who owns what they create), then READ as someone with no Passport role
+    # at all. Forking under a fabricated `owner_id` used to work only because fork had no access
+    # check — it is a 403 now, correctly.
     recipe = client.post(
         "/api/v1/recipes",
         json={
             "name": "Other User Recipe",
             "yield_quantity": 1,
             "yield_unit": "batch",
-            "owner_id": "other-user",
             "is_public": False,
         },
     ).json()
 
     forked = client.post(f"/api/v1/recipes/{recipe['id']}/fork").json()
 
-    create_user(session, "unrelated-user", "unrelated")
+    use_user(client, create_user(session, "unrelated-user", "unrelated"))
 
-    response = client.get(
-        f"/api/v1/recipes/{recipe['id']}/versions",
-        params={"user_id": "unrelated-user"},
-    )
+    response = client.get(f"/api/v1/recipes/{recipe['id']}/versions")
     assert response.status_code == 200
     versions = response.json()
     assert len(versions) == 2

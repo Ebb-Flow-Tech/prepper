@@ -3,11 +3,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.api.deps import get_session, get_current_user
-from app.models import Recipe, RecipeTasting, RecipeTastingRead, RecipeTastingCreate, RecipeTastingBatchCreate, RecipeTastingBatchResult, RecipeTastingReorderRequest, User
-from app.domain import RecipeTastingService, TastingSessionService
+from app.api.deps import get_current_user, get_session
+from app.api.guards import require_session_access
 from app.api.tastings import _check_creator_only
-
+from app.domain import RecipeTastingService, TastingSessionService
+from app.models import (
+    Recipe,
+    RecipeTasting,
+    RecipeTastingBatchCreate,
+    RecipeTastingBatchResult,
+    RecipeTastingCreate,
+    RecipeTastingRead,
+    RecipeTastingReorderRequest,
+    User,
+)
+from app.models.tasting import TastingSession
 
 router = APIRouter()
 
@@ -19,6 +29,7 @@ router = APIRouter()
 def get_session_recipes(
     session_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Get all recipes associated with a tasting session."""
     service = RecipeTastingService(session)
@@ -32,6 +43,7 @@ def get_session_recipes(
 def get_session_recipes_full(
     session_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Get all recipes associated with a tasting session with full details.
 
@@ -55,6 +67,7 @@ def add_recipe_to_session(
     data: RecipeTastingCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add a recipe to a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)
@@ -83,6 +96,7 @@ def add_recipes_to_session_batch(
     data: RecipeTastingBatchCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add multiple recipes to a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)
@@ -107,6 +121,7 @@ def reorder_session_recipes(
     data: RecipeTastingReorderRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Reorder dishes in a tasting session by updating their sequence numbers. Creator-only."""
     tasting_service = TastingSessionService(session)
@@ -134,6 +149,7 @@ def remove_recipe_from_session(
     recipe_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Remove a recipe from a tasting session. Only the session creator can do this."""
     tasting_service = TastingSessionService(session)

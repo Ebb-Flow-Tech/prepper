@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, select
 
+from app.domain.org_scope import org_scope
 from app.models.passport import PassportUnit
 from app.models.supplier import (
     Supplier,
@@ -18,30 +19,38 @@ from app.passport import access
 class SupplierService:
     """Service for supplier CRUD operations."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
+        """``organization_id`` is required and has no default — see `CategoryService.__init__`."""
         self.session = session
+        self.organization_id = organization_id
 
     def create_supplier(self, data: SupplierCreate) -> Supplier:
-        """Create a new supplier."""
+        """Create a new supplier, stamped with the acting org.
+
+        The org comes from the acting org context, never from the request body — the Create
+        schemas deliberately have no such field. A tenant id a client can assert is not a
+        tenant id, for the same reason `owner_id` and `users.email` are not.
+        """
         supplier = Supplier.model_validate(data)
+        supplier.organization_id = self.organization_id
         self.session.add(supplier)
         self.session.commit()
         self.session.refresh(supplier)
         return supplier
 
     def list_suppliers(self, active_only: bool = True) -> list[Supplier]:
-        """List all suppliers.
+        """List this org's suppliers.
 
         Args:
             active_only: If True, only return active suppliers (is_active=True)
         """
-        statement = select(Supplier)
+        statement = select(Supplier).where(org_scope(Supplier, self.organization_id))
         if active_only:
             statement = statement.where(Supplier.is_active == True)
         return list(self.session.exec(statement).all())
 
     def _build_list_query(self, active_only=True, search=None):
-        statement = select(Supplier)
+        statement = select(Supplier).where(org_scope(Supplier, self.organization_id))
         if active_only:
             statement = statement.where(Supplier.is_active == True)
         if search:
@@ -60,8 +69,17 @@ class SupplierService:
         return self.session.exec(count_stmt).one()
 
     def get_supplier(self, supplier_id: int) -> Supplier | None:
-        """Get a supplier by ID."""
-        return self.session.get(Supplier, supplier_id)
+        """Get a supplier by ID, within this org.
+
+        `update_supplier` and the soft-delete resolve through here, so this predicate is what
+        stops a cross-org write as well as a cross-org read.
+        """
+        return self.session.exec(
+            select(Supplier).where(
+                Supplier.id == supplier_id,
+                org_scope(Supplier, self.organization_id),
+            )
+        ).first()
 
     def update_supplier(
         self, supplier_id: int, data: SupplierUpdate
@@ -140,17 +158,20 @@ class SupplierService:
             )
         )
 
-        if not access.is_org_admin(self.session, subject):
-            accessible = access.accessible_unit_ids(self.session, subject)
-            if not accessible:
-                return []
-            statement = statement.where(
-                col(SupplierIngredient.id).in_(
-                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
-                        col(OutletSupplierIngredient.unit_id).in_(accessible)
-                    )
+        # No org-admin bypass: `accessible_unit_ids` already covers an org admin via the Passport
+        # ladder, so the branch only ever skipped the filter for OTHER orgs — `is_org_admin`
+        # without an org means "admin of ANY of your orgs".
+        accessible = access.accessible_unit_ids(self.session, subject)
+        if not accessible:
+            return []
+
+        statement = statement.where(
+            col(SupplierIngredient.id).in_(
+                select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                    col(OutletSupplierIngredient.unit_id).in_(accessible)
                 )
             )
+        )
 
         rows = list(self.session.exec(statement).all())
         unit_names = self._unit_names(

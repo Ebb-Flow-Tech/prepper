@@ -3,7 +3,8 @@
 import asyncio
 import concurrent.futures
 import time
-from typing import Callable, Any, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 

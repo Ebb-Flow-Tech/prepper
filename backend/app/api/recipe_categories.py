@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
+from app.domain.recipe_category_service import RecipeCategoryService
 from app.models.recipe_category import (
     RecipeCategory,
     RecipeCategoryCreate,
     RecipeCategoryUpdate,
 )
-from app.domain.recipe_category_service import RecipeCategoryService
 
 router = APIRouter()
 

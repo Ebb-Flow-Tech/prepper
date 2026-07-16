@@ -1,18 +1,20 @@
 """Sub-recipe API routes for BOM hierarchy management."""
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.costing import evict_costing_cache
 from app.api.deps import get_session
+from app.api.guards import require_recipe_access
+from app.domain import CycleDetectedError, SubRecipeService
 from app.models import (
+    Recipe,
     RecipeRecipe,
     RecipeRecipeCreate,
-    RecipeRecipeUpdate,
     RecipeRecipeReorder,
+    RecipeRecipeUpdate,
 )
-from app.domain import SubRecipeService, CycleDetectedError
 
 router = APIRouter()
 batch_router = APIRouter()
@@ -36,6 +38,7 @@ def get_sub_recipes_batch(
 def list_sub_recipes(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Get all sub-recipes for a recipe, ordered by position."""
     service = SubRecipeService(session)
@@ -51,6 +54,7 @@ def add_sub_recipe(
     recipe_id: int,
     data: RecipeRecipeCreate,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """
     Add a sub-recipe to a recipe.
@@ -80,6 +84,7 @@ def update_sub_recipe(
     link_id: int,
     data: RecipeRecipeUpdate,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Update a sub-recipe link's quantity or unit."""
     service = SubRecipeService(session)
@@ -101,6 +106,7 @@ def remove_sub_recipe(
     recipe_id: int,
     link_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Remove a sub-recipe from a recipe."""
     service = SubRecipeService(session)
@@ -117,6 +123,7 @@ def reorder_sub_recipes(
     recipe_id: int,
     data: RecipeRecipeReorder,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Reorder sub-recipes within a recipe."""
     service = SubRecipeService(session)
@@ -127,6 +134,7 @@ def reorder_sub_recipes(
 def get_used_in(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """
     Get all recipes that use this recipe as a sub-recipe.
@@ -141,6 +149,7 @@ def get_used_in(
 def get_bom_tree(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """
     Get the full Bill of Materials tree for a recipe.

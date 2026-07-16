@@ -5,16 +5,16 @@ from sqlmodel import Session
 from sqlmodel import select as sql_select
 
 from app.api.deps import get_current_user, get_session
+from app.api.guards import require_session_access
+from app.domain import IngredientTastingNoteService, TastingSessionService
 from app.models import (
     IngredientTastingNoteCreate,
-    IngredientTastingNoteUpdate,
     IngredientTastingNoteRead,
+    IngredientTastingNoteUpdate,
     IngredientTastingNoteWithDetails,
 )
-from app.models.tasting import TastingUser
+from app.models.tasting import TastingSession, TastingUser
 from app.models.user import User
-from app.domain import TastingSessionService, IngredientTastingNoteService
-
 
 router = APIRouter()
 
@@ -23,6 +23,7 @@ router = APIRouter()
 def list_session_ingredient_notes(
     session_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """List all ingredient notes for a tasting session."""
     session_service = TastingSessionService(session)
@@ -46,6 +47,7 @@ def add_ingredient_note_to_session(
     data: IngredientTastingNoteCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add an ingredient tasting note to a session. Only participants can add notes."""
     # Verify the user is a participant of this session
@@ -76,6 +78,7 @@ def get_ingredient_tasting_note(
     session_id: int,
     note_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Get a specific ingredient tasting note."""
     service = IngredientTastingNoteService(session)
@@ -94,6 +97,7 @@ def update_ingredient_tasting_note(
     note_id: int,
     data: IngredientTastingNoteUpdate,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Update an ingredient tasting note."""
     service = IngredientTastingNoteService(session)
@@ -112,6 +116,7 @@ def delete_ingredient_tasting_note(
     session_id: int,
     note_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Delete an ingredient tasting note from a session."""
     service = IngredientTastingNoteService(session)

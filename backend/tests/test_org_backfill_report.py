@@ -54,6 +54,18 @@ def _sqlite_schema(monkeypatch):
             monkeypatch.setattr(mod, name, value.replace("passport.", ""))
 
 
+def _clear_org(session: Session, table: str) -> None:
+    """Return a table's rows to the PRE-BACKFILL state: `organization_id IS NULL`.
+
+    Creates stamp the org from the acting context now, so nothing new is ever undecidable — which
+    is the point of that change. But this report exists FOR the rows that predate it, and they are
+    the only rows it will ever see in anger. Testing it against freshly-stamped rows would test a
+    situation it is never used in.
+    """
+    session.exec(sa_text(f"UPDATE {table} SET organization_id = NULL"))  # noqa: S608
+    session.commit()
+
+
 def _spec(table: str) -> TableSpec:
     return next(s for s in SPECS if s.table == table)
 
@@ -97,6 +109,7 @@ def test_tables_with_no_owner_and_no_link_are_wholly_undecidable(
     else:
         client.post("/api/v1/menu-sketches", json={"name": "Spring"})
 
+    _clear_org(session, table)
     r = report_for(session, _spec(table))
 
     assert r.total >= 1
@@ -118,6 +131,7 @@ def test_recipe_with_a_unit_link_is_derivable(session: Session, client, brand_id
     ).json()
     client.post(f"/api/v1/recipes/{recipe['id']}/units", json={"unit_id": brand_id})
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.by_link >= 1, (
@@ -139,6 +153,7 @@ def test_recipe_owned_by_a_single_org_user_is_derivable_by_owner(
     )
     session.commit()
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.by_owner >= 1
@@ -185,6 +200,7 @@ def test_recipe_owned_by_an_unlinked_user_is_derivable_by_email(
     )
     session.commit()
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.by_owner >= 1, (
@@ -210,6 +226,7 @@ def test_recipe_owned_by_a_multi_org_user_is_undecidable(session: Session, clien
     )
     session.commit()
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.by_owner == 0, "a multi-org owner must never count as derivable"
@@ -248,6 +265,7 @@ def test_recipe_linked_to_two_orgs_is_a_conflict_not_a_derivation(
     )
     session.commit()
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.link_conflict >= 1, "a two-org recipe is a conflict"
@@ -284,6 +302,7 @@ def test_a_row_derivable_both_ways_is_counted_once(
     )
     session.commit()
 
+    _clear_org(session, "recipes")
     r = report_for(session, _spec("recipes"))
 
     assert r.total == 1
@@ -321,6 +340,7 @@ def test_counts_never_exceed_the_total(session: Session, client, brand_id: str):
 
 def test_an_empty_table_reports_zero_not_a_crash(session: Session):
     """A table with no rows must report zeros — the report runs before any backfill exists."""
+    _clear_org(session, "menus")
     r = report_for(session, _spec("menus"))
     assert (r.total, r.by_link, r.by_owner, r.undecidable) == (0, 0, 0, 0)
 

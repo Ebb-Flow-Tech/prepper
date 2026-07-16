@@ -645,8 +645,14 @@ export async function deleteTastingNote(
 
 // ============ Recipe Tasting History ============
 
-export async function getRecipesWithFeedback(userId: string): Promise<Recipe[]> {
-  return fetchApi<Recipe[]>(`/recipes/with-feedback/${userId}`);
+/**
+ * Recipes with tasting feedback, for the signed-in user.
+ *
+ * Takes no user id: the backend reads the identity from the token. It used to accept one in the
+ * path, which meant anyone could substitute a colleague's id and read their recipes.
+ */
+export async function getRecipesWithFeedback(): Promise<Recipe[]> {
+  return fetchApi<Recipe[]>('/recipes/with-feedback');
 }
 
 export async function getRecipeTastingNotes(

@@ -295,11 +295,14 @@ def test_delete_nonexistent_tasting_note_image(client_with_storage: TestClient):
 
 
 def test_get_images_for_nonexistent_tasting_note(client_with_storage: TestClient):
-    """Test getting images for a non-existent tasting note returns empty list."""
+    """A nonexistent note is 404, not an empty list.
+
+    `200 []` is indistinguishable from "this note has no images", and it answered at all for a
+    note on someone else's tasting session. `require_tasting_note_access` resolves the note — and
+    the session behind it — before the handler runs.
+    """
     response = client_with_storage.get("/api/v1/tasting-note-images/99999")
-    assert response.status_code == 200
-    images = response.json()
-    assert images == []
+    assert response.status_code == 404
 
 
 # ========== Ingredient Tasting Note Images Tests ==========
@@ -399,7 +402,7 @@ def test_sync_ingredient_images_nonexistent(client_with_storage: TestClient):
     )
 
     assert response.status_code == 404
-    assert "Ingredient tasting note not found" in response.json()["detail"]
+    assert "not found" in response.json()["detail"].lower()
 
 
 # ========== Admin Non-Participant Tests ==========

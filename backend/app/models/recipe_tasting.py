@@ -1,7 +1,6 @@
 """RecipeTasting model - many-to-many relationship between recipes and tasting sessions."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
@@ -16,10 +15,10 @@ class RecipeTasting(SQLModel, table=True):
 
     __tablename__ = "recipe_tastings"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     recipe_id: int = Field(foreign_key="recipes.id", index=True)
     tasting_session_id: int = Field(foreign_key="tasting_sessions.id", index=True)
-    sequence: Optional[int] = Field(default=None)
+    sequence: int | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -38,9 +37,9 @@ class RecipeTastingRead(SQLModel):
     id: int
     recipe_id: int
     tasting_session_id: int
-    recipe_name: Optional[str] = None
+    recipe_name: str | None = None
     ingredients: list[RecipeTastingIngredient] = []
-    sequence: Optional[int] = None
+    sequence: int | None = None
     created_at: datetime
 
 

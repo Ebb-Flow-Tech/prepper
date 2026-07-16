@@ -22,7 +22,13 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
-from app.api.deps import get_current_user, get_session, require_auth
+from app.api.deps import (
+    OrgContext,
+    get_current_user,
+    get_org_context,
+    get_session,
+    require_auth,
+)
 from app.database import SQLITE_SCHEMA_TRANSLATE_MAP
 from app.database import get_session as db_get_session
 from app.main import app
@@ -253,8 +259,11 @@ def use_user(client: TestClient, user: User) -> User:
     client.app.dependency_overrides[get_current_user] = lambda: user
     # `get_current_user` depends on `require_auth`, which conftest also overrides — without
     # switching both, the route keeps resolving to the PREVIOUS user and the test silently
-    # asserts nothing.
+    # asserts nothing. Same for the org context on any route that stamps or scopes by org.
     client.app.dependency_overrides[require_auth] = lambda: user
+    client.app.dependency_overrides[get_org_context] = lambda: OrgContext(
+        user=user, organization_id=ORG_ID
+    )
     return user
 
 
@@ -302,6 +311,12 @@ def _override_deps(session: Session, user: User) -> None:
     # NOTE: this stubs out the very gate under test — only tests/test_default_deny_auth.py,
     # which deliberately does not use these fixtures, can observe it.
     app.dependency_overrides[require_auth] = lambda: user
+    # Org context: creates stamp `organization_id` from it. Without this every create 403s here,
+    # because the fixture user's identity link and membership are seeded per-test rather than
+    # resolved from a real token.
+    app.dependency_overrides[get_org_context] = lambda: OrgContext(
+        user=user, organization_id=ORG_ID
+    )
 
 
 @pytest.fixture(name="client")

@@ -1,10 +1,7 @@
 """Tests for recipe image upload endpoint (legacy - for backwards compatibility)."""
 
-from unittest.mock import AsyncMock, patch, MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
-
 
 # A minimal valid PNG base64 (1x1 transparent pixel)
 TEST_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

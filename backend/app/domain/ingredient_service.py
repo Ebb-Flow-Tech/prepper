@@ -4,18 +4,19 @@ from datetime import datetime
 
 from sqlmodel import Session, col, select
 
+from app.domain.org_scope import org_scope
 from app.models import (
+    FoodCategory,
     Ingredient,
     IngredientCreate,
     IngredientListRead,
-    IngredientUpdate,
-    FoodCategory,
     IngredientSource,
+    IngredientUpdate,
     PassportUnit,
     SupplierIngredient,
     SupplierIngredientCreate,
-    SupplierIngredientUpdate,
     SupplierIngredientRead,
+    SupplierIngredientUpdate,
 )
 from app.models.supplier import Supplier
 from app.passport import access
@@ -30,8 +31,10 @@ SKU_ALREADY_EXISTS = "SKU already exists"
 class IngredientService:
     """Service for ingredient CRUD operations."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
+        """``organization_id`` is required and has no default — see `CategoryService.__init__`."""
         self.session = session
+        self.organization_id = organization_id
         self._accessible_unit_ids_cache: dict[str, set[str]] = {}
 
     def _get_accessible_unit_ids(self, subject: str) -> set[str]:
@@ -62,8 +65,14 @@ class IngredientService:
         return {unit_id: name for unit_id, name in rows}
 
     def create_ingredient(self, data: IngredientCreate) -> Ingredient:
-        """Create a new ingredient."""
+        """Create a new ingredient, stamped with the acting org.
+
+        The org comes from the acting org context, never from the request body — the Create
+        schemas deliberately have no such field. A tenant id a client can assert is not a
+        tenant id, for the same reason `owner_id` and `users.email` are not.
+        """
         ingredient = Ingredient.model_validate(data)
+        ingredient.organization_id = self.organization_id
         self.session.add(ingredient)
         self.session.commit()
         self.session.refresh(ingredient)
@@ -76,7 +85,7 @@ class IngredientService:
         source: IngredientSource | None = None,
         master_only: bool = False,
     ) -> list[Ingredient]:
-        """List all ingredients with optional filters.
+        """List this org's ingredients with optional filters.
 
         Args:
             active_only: If True, only return active ingredients
@@ -84,7 +93,7 @@ class IngredientService:
             source: Filter by source (fmh or manual)
             master_only: If True, only return ingredients without a master (top-level)
         """
-        statement = select(Ingredient)
+        statement = select(Ingredient).where(org_scope(Ingredient, self.organization_id))
 
         if active_only:
             statement = statement.where(Ingredient.is_active == True)
@@ -102,7 +111,7 @@ class IngredientService:
 
     def _build_list_query(self, active_only=True, category=None, source=None, master_only=False, search=None,
                           category_ids=None, units=None, allergen_ids=None, is_halal=None):
-        statement = select(Ingredient)
+        statement = select(Ingredient).where(org_scope(Ingredient, self.organization_id))
         if active_only:
             statement = statement.where(Ingredient.is_active == True)
         if category is not None:
@@ -113,9 +122,10 @@ class IngredientService:
             statement = statement.where(Ingredient.master_ingredient_id == None)
         if search:
             from sqlalchemy import or_
+
             from app.models.category import Category
-            from app.models.supplier_ingredient import SupplierIngredient as SI
             from app.models.supplier import Supplier
+            from app.models.supplier_ingredient import SupplierIngredient as SI
 
             for token in search.split():
                 term = f"%{token}%"
@@ -219,14 +229,25 @@ class IngredientService:
         return result, total
 
     def get_ingredient(self, ingredient_id: int) -> Ingredient | None:
-        """Get an ingredient by ID."""
-        return self.session.get(Ingredient, ingredient_id)
+        """Get an ingredient by ID, within this org.
+
+        The update and soft-delete paths resolve through here, so the predicate guards the writes
+        as well as the read — a `session.get()` would hand back another org's row on a guessed
+        integer, and cost data is the most sensitive thing in the catalogue.
+        """
+        return self.session.exec(
+            select(Ingredient).where(
+                Ingredient.id == ingredient_id,
+                org_scope(Ingredient, self.organization_id),
+            )
+        ).first()
 
     def get_variants(self, master_ingredient_id: int) -> list[Ingredient]:
-        """Get all variant ingredients linked to a master ingredient."""
+        """Get all variant ingredients linked to a master ingredient, within this org."""
         statement = select(Ingredient).where(
             Ingredient.master_ingredient_id == master_ingredient_id,
             Ingredient.is_active == True,
+            org_scope(Ingredient, self.organization_id),
         )
         return list(self.session.exec(statement).all())
 
@@ -370,6 +391,7 @@ class IngredientService:
             return None
 
         from sqlalchemy.orm import selectinload
+
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
         statement = (
@@ -382,19 +404,22 @@ class IngredientService:
             )
         )
 
-        accessible: set[str] | None = None
-        if not access.is_org_admin(self.session, subject):
-            accessible = self._get_accessible_unit_ids(subject)
-            if not accessible:
-                return []
-            # Keep only links attached to at least one unit the user may see
-            statement = statement.where(
-                col(SupplierIngredient.id).in_(
-                    select(OutletSupplierIngredient.supplier_ingredient_id).where(
-                        col(OutletSupplierIngredient.unit_id).in_(accessible)
-                    )
+        # No org-admin bypass. `accessible_unit_ids` ALREADY covers an org admin: the Passport
+        # ladder gives them Manager at every brand of their org, including brands created after
+        # them (verified). The bypass therefore widened nothing for their own org — it only skipped
+        # the filter for OTHER orgs, because `is_org_admin` without an `organization_id` means
+        # "admin of ANY of your orgs". `access.org_role` documents that form as the live bug.
+        accessible = self._get_accessible_unit_ids(subject)
+        if not accessible:
+            return []
+        # Keep only links attached to at least one unit the user may see
+        statement = statement.where(
+            col(SupplierIngredient.id).in_(
+                select(OutletSupplierIngredient.supplier_ingredient_id).where(
+                    col(OutletSupplierIngredient.unit_id).in_(accessible)
                 )
             )
+        )
 
         rows = list(self.session.exec(statement).all())
         return self._build_reads(rows, accessible_unit_ids=accessible)
@@ -628,15 +653,20 @@ class IngredientService:
 
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
-        accessible: set[str] | None = None
-        if not access.is_org_admin(self.session, subject):
-            accessible = self._get_accessible_unit_ids(subject)
-            if not accessible:
-                return None
+        # No org-admin bypass. `accessible_unit_ids` ALREADY covers an org admin: the Passport
+        # ladder gives them Manager at every brand of their org, including brands created after
+        # them (verified). The bypass therefore widened nothing for their own org — it only skipped
+        # the filter for OTHER orgs, because `is_org_admin` without an `organization_id` means
+        # "admin of ANY of your orgs". `access.org_role` documents that form as the live bug.
+        accessible = self._get_accessible_unit_ids(subject)
+        if not accessible:
+            return None
 
         def _unit_filter(stmt):
-            if accessible is None:
-                return stmt
+            # `accessible` is always a non-empty set here — the early return above handles the
+            # empty case. The old `if accessible is None: return stmt` escape existed only for the
+            # org-admin bypass that has been removed, and would now be an unreachable way to
+            # disable scoping entirely.
             return stmt.where(
                 col(SupplierIngredient.id).in_(
                     select(OutletSupplierIngredient.supplier_ingredient_id).where(

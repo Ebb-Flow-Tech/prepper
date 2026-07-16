@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 if TYPE_CHECKING:
-    from app.models.supplier_ingredient import SupplierIngredient
+    pass
 
 
 class SupplierIngredientTag(SQLModel, table=True):
@@ -14,7 +14,7 @@ class SupplierIngredientTag(SQLModel, table=True):
 
     __tablename__ = "supplier_ingredient_tags"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=100, unique=True)
     is_active: bool = Field(default=True)
 
@@ -38,7 +38,7 @@ class SupplierIngredientTagLink(SQLModel, table=True):
         ),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     supplier_ingredient_id: int = Field(
         sa_column=sa.Column(
             sa.Integer,

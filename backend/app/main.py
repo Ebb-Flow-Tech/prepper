@@ -102,6 +102,17 @@ def create_app() -> FastAPI:
         prefix=f"{settings.api_v1_prefix}/ingredients",
         tags=["ingredients"],
     )
+    # BEFORE `recipes.router`, and that ORDER IS LOAD-BEARING. Both mount at /recipes, and
+    # `recipes` declares `GET /{recipe_id}` — a catch-all for any single path segment. Registered
+    # after it, this router's static `GET /with-feedback` would be swallowed and 422 with
+    # "unable to parse 'with-feedback' as an integer". Starlette matches in registration order, so
+    # specific paths must precede parameterised ones. Pinned by
+    # tests/test_route_order.py::test_with_feedback_is_not_swallowed_by_recipe_id.
+    app.include_router(
+        tasting_history.router,
+        prefix=f"{settings.api_v1_prefix}/recipes",
+        tags=["recipe-tastings"],
+    )
     app.include_router(
         recipes.router,
         prefix=f"{settings.api_v1_prefix}/recipes",
@@ -143,11 +154,6 @@ def create_app() -> FastAPI:
         tastings.router,
         prefix=f"{settings.api_v1_prefix}/tasting-sessions",
         tags=["tastings"],
-    )
-    app.include_router(
-        tasting_history.router,
-        prefix=f"{settings.api_v1_prefix}/recipes",
-        tags=["recipe-tastings"],
     )
     app.include_router(
         suppliers.router,

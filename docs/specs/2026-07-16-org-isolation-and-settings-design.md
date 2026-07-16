@@ -638,6 +638,43 @@ Questions.
 
 ### 4b. Org scoping (PR 3)
 
+> **Status.** Create-stamping is done for all seven tables. Read scoping is done for the four
+> catalogues that were **wholly unscoped** — ingredients, suppliers, categories, menu sketches —
+> via `domain/org_scope.py`, whose `org_scope(model, org)` is the one home for the predicate
+> (including the transitional `IS NULL` arm; see Unit 3). `organization_id` moved from a create
+> **method** parameter to a **required constructor** argument on those four services: a service
+> that cannot be built without an org cannot silently read every org's rows, and the read surface
+> is far too wide (`list`, `list_paginated`, `count`, `get_*`, `_name_exists`) to thread an
+> argument through method by method without missing one.
+>
+> Three things found while doing it, none of which the spec anticipated:
+> - `get_*` used `session.get()` — fetch by primary key alone, so `GET /{id}` returned another
+>   org's row on a guessed integer. Because `update_*` and `soft_delete_*` resolve through the same
+>   method, scoping it closed the cross-org **writes** as well.
+> - `_name_exists` was global, so "Desserts" existing in any org blocked every other org from
+>   creating it — uniqueness leaking tenant contents through a 409.
+> - `fork_sketch` resolved via `session.get()` **and** stamped no org on the copy, so a fork
+>   crossed orgs and landed as NULL, i.e. visible to everyone.
+>
+> **Recipes** are scoped at both ends — the list query and `guards.py`, which its own docstring
+> requires to agree. `is_public` had no org predicate under it, so it meant public to the
+> *instance*: every tenant's public recipes were readable by everyone, by id as well as in the
+> list. The guard now answers two questions rather than one — `_in_org` fails to a **404** (a row
+> in another tenant is not yours to know exists), `_may_see_recipe` fails to the historical **403**
+> (a row in your org but outside your brands). The admin branch got *simpler*: under `org_scope`,
+> `Recipe.organization_id.in_(admin_orgs)` could only ever widen past the active org, so it
+> collapses to `organization_id in admin_org_ids`.
+>
+> **Tasting sessions** were scoped by participation, which held, and by `admin_org_ids`, which did
+> not — that set is a union, so an Admin of both orgs saw ORG_B's sessions while acting in ORG_A.
+> Now `is_org_admin`, a question about the active org. `list()`, `list_paginated()` and `count()`
+> were deleted: no callers, and `list()` selected every session in the deployment unfiltered while
+> `count()` took no admin argument. An unscoped query with no caller is a leak that has not
+> happened yet.
+>
+> Still outstanding here: `user_service` (`GET /users`), menus, the `directory.*` narrowing, and
+> the pagination noted at the end of this section.
+
 Default-deny establishes *authentication*. Org context establishes *scope*, and only applies to
 routes touching org-scoped data. On top of the global gate:
 

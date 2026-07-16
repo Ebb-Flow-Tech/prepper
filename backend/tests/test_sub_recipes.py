@@ -2,7 +2,6 @@
 
 from fastapi.testclient import TestClient
 
-
 # ============ Helper Functions ============
 
 
@@ -163,14 +162,19 @@ def test_add_sub_recipe_indirect_cycle_rejected(client: TestClient):
 
 
 def test_add_sub_recipe_parent_not_found(client: TestClient):
-    """Test adding sub-recipe to non-existent parent returns 400."""
+    """Grafting onto a nonexistent parent is a 404, not a 400.
+
+    `require_recipe_access` resolves the parent before the handler runs — it has to, since
+    grafting a sub-recipe onto a parent you cannot see was a real leak. A missing parent is
+    therefore "not found" rather than "bad request".
+    """
     sub = create_recipe(client, "Sub Recipe")
 
     response = client.post(
         "/api/v1/recipes/99999/sub-recipes",
         json={"child_recipe_id": sub["id"], "quantity": 1, "unit": "portion"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
@@ -506,13 +510,14 @@ def test_get_bom_tree_nested(client: TestClient):
 
 
 def test_get_bom_tree_recipe_not_found(client: TestClient):
-    """Test BOM tree for non-existent recipe returns error structure."""
-    response = client.get("/api/v1/recipes/99999/bom-tree")
-    assert response.status_code == 200
-    data = response.json()
+    """A BOM tree for a recipe that does not exist is a 404.
 
-    assert data["recipe_id"] == 99999
-    assert data["error"] == "not_found"
+    It used to be a 200 carrying `{"error": "not_found"}` in the body. `require_recipe_access`
+    resolves the recipe before the handler runs, so the status now says what happened and the
+    caller does not have to parse a success response to discover a failure.
+    """
+    response = client.get("/api/v1/recipes/99999/bom-tree")
+    assert response.status_code == 404
 
 
 # ============ Edge Cases ============

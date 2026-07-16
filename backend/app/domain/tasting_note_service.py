@@ -1,18 +1,17 @@
 """Tasting note management operations."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlmodel import Session, col, select
 
 from app.models import (
-    TastingSession,
+    Recipe,
+    RecipeTastingSummary,
     TastingNote,
     TastingNoteCreate,
     TastingNoteUpdate,
     TastingNoteWithRecipe,
-    RecipeTastingSummary,
-    Recipe,
+    TastingSession,
 )
 from app.passport import access
 
@@ -25,7 +24,7 @@ class TastingNoteService:
 
     def add(
         self, session_id: int, data: TastingNoteCreate
-    ) -> Optional[TastingNote]:
+    ) -> TastingNote | None:
         """Add a tasting note to a session."""
         # Verify session exists
         tasting_session = self.session.get(TastingSession, session_id)
@@ -56,13 +55,13 @@ class TastingNoteService:
         )
         return list(self.session.exec(statement).all())
 
-    def get(self, note_id: int) -> Optional[TastingNote]:
+    def get(self, note_id: int) -> TastingNote | None:
         """Get a tasting note by ID."""
         return self.session.get(TastingNote, note_id)
 
     def update(
         self, note_id: int, data: TastingNoteUpdate
-    ) -> Optional[TastingNote]:
+    ) -> TastingNote | None:
         """Update a tasting note."""
         note = self.get(note_id)
         if not note:
@@ -125,7 +124,7 @@ class TastingNoteService:
 
         return notes_with_info
 
-    def get_recipes_with_feedback(self, user_id: Optional[str] = None) -> list[Recipe]:
+    def get_recipes_with_feedback(self, user_id: str | None = None) -> list[Recipe]:
         """Get all unique recipes that have at least one tasting note.
 
         Only returns recipes that are accessible to the user:

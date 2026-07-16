@@ -1,19 +1,16 @@
 """Base class for AI agents using Claude with tool use."""
 
-import json
 import time
 from abc import ABC, abstractmethod
 from typing import Any
 
 import anthropic
 
-from app.config import get_settings
 from app.agents.agent_utils import (
     print_agent_header,
-    print_tool_call,
-    print_tool_timing,
     print_timing_summary,
 )
+from app.config import get_settings
 
 
 class BaseAgent(ABC):
@@ -106,7 +103,7 @@ class BaseAgent(ABC):
         api_call_count = 0
         total_api_time_ms = 0.0
 
-        print_agent_header(self.agent_name, f"Starting execution")
+        print_agent_header(self.agent_name, "Starting execution")
 
         messages = [{"role": "user", "content": initial_message}]
 

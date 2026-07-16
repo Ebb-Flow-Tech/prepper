@@ -6,7 +6,6 @@ from sqlmodel import Session, select
 
 from app.models.menu_sketch_section import MenuSketchSection
 from app.models.menu_sketch_section_item import MenuSketchSectionItem
-from app.models.recipe import Recipe
 from app.models.menu_sketch_section_item_comment import (
     CommentRead,
     DishCommentsRead,
@@ -15,6 +14,7 @@ from app.models.menu_sketch_section_item_comment import (
     MenuSketchSectionItemCommentCreate,
     MenuSketchSectionItemCommentUpdate,
 )
+from app.models.recipe import Recipe
 
 
 class MenuSketchSectionItemCommentService:

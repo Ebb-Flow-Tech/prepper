@@ -1,6 +1,5 @@
 """Database connection tests for Supabase/PostgreSQL."""
 
-import pytest
 from sqlalchemy import text
 from sqlmodel import Session
 

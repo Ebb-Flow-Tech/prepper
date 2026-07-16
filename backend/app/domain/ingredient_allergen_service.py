@@ -3,8 +3,8 @@
 from sqlmodel import Session, select
 
 from app.models import (
-    Ingredient,
     Allergen,
+    Ingredient,
     IngredientAllergen,
     IngredientAllergenCreate,
     RecipeIngredient,

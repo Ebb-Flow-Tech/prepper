@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.database import get_session
 from app.agents.category_agent import CategoryAgent
+from app.database import get_session
 
 router = APIRouter()
 

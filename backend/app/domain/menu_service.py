@@ -11,6 +11,7 @@ run through this file:
 
 from datetime import datetime
 
+from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -60,9 +61,15 @@ class MenuService:
                 )
             )
 
-    def create_menu(self, data: MenuCreate, unit_ids: list[str]) -> Menu:
-        """Create a new menu and link it to Passport units."""
+    def create_menu(self, data: MenuCreate, unit_ids: list[str], organization_id: str) -> Menu:
+        """Create a new menu, stamped with the acting org, and link it to Passport units.
+
+        ``organization_id`` comes from the acting org context, never from the request body — the
+        Create schemas deliberately have no such field. A tenant id a client can assert is not a
+        tenant id, for the same reason `owner_id` and `users.email` are not.
+        """
         menu = Menu.model_validate(data)
+        menu.organization_id = organization_id
         self.session.add(menu)
         self.session.commit()
         self.session.refresh(menu)
@@ -97,9 +104,25 @@ class MenuService:
             statement = statement.where(col(Menu.is_active).is_(True))
 
         # Explicit admin bypass: an org Owner/Admin administers the ORGANISATION and sees every
-        # menu in it, including one that is not yet placed on any unit.
-        if access.is_org_admin(self.session, current_user.id):
-            return list(self.session.exec(statement).all())
+        # menu in it, including one not yet placed on any unit — which the ladder cannot supply,
+        # since `accessible_unit_ids` only reaches menus LINKED to a unit.
+        #
+        # Scoped to the orgs actually administered. It used to ask `is_org_admin(user)` with no
+        # org — "admin of ANY of your orgs" — so an Owner of org B listed every menu in org A.
+        # NULL orgs are included while the backfill is outstanding; see recipe_service for the
+        # same reasoning.
+        admin_orgs = access.admin_org_ids(self.session, current_user.id)
+        if admin_orgs:
+            return list(
+                self.session.exec(
+                    statement.where(
+                        or_(
+                            col(Menu.organization_id).in_(admin_orgs),
+                            col(Menu.organization_id).is_(None),
+                        )
+                    )
+                ).all()
+            )
 
         unit_ids = access.accessible_unit_ids(self.session, current_user.id)
         if not unit_ids:

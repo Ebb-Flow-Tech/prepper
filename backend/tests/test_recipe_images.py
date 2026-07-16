@@ -232,11 +232,14 @@ def test_add_image_missing_base64(client: TestClient, sample_recipe):
 
 
 def test_get_images_for_nonexistent_recipe(client: TestClient):
-    """Test getting images for a non-existent recipe returns empty list."""
+    """A nonexistent recipe is a 404, not an empty list.
+
+    It returned `200 []`, which is indistinguishable from "this recipe has no images" — and it
+    answered at all for a recipe the caller may not see. `require_recipe_access` resolves the
+    recipe first, so the status now distinguishes the two.
+    """
     response = client.get("/api/v1/recipe-images/99999")
-    assert response.status_code == 200
-    images = response.json()
-    assert images == []
+    assert response.status_code == 404
 
 
 def test_first_image_is_always_main(client: TestClient, sample_recipe):
@@ -304,9 +307,14 @@ def test_get_main_recipe_image(client: TestClient, sample_recipe):
     assert main_image["is_main"] is True
 
 
-def test_get_main_image_not_found(client: TestClient):
-    """Test getting main image for recipe with no images."""
-    response = client.get("/api/v1/recipe-images/main/99999")
+def test_get_main_image_not_found(client: TestClient, sample_recipe):
+    """A recipe that exists but has no main image.
+
+    Used recipe 99999, which does not exist — so it was really testing "nonexistent recipe" and
+    getting the images router's message by luck. `require_recipe_access` now 404s a nonexistent
+    recipe first, which is correct; to test "no main image" the recipe has to exist.
+    """
+    response = client.get(f"/api/v1/recipe-images/main/{sample_recipe['id']}")
     assert response.status_code == 404
     assert "No main image found" in response.json()["detail"]
 

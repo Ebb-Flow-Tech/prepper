@@ -13,6 +13,7 @@ from sqlalchemy import false, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, select
 
+from app.domain.org_scope import org_scope
 from app.models import (
     AllergenInfo,
     Ingredient,
@@ -45,9 +46,15 @@ class RecipeService:
 
     # --- Recipe Lifecycle Operations ---
 
-    def create_recipe(self, data: RecipeCreate) -> Recipe:
-        """Create a new recipe."""
+    def create_recipe(self, data: RecipeCreate, organization_id: str) -> Recipe:
+        """Create a new recipe, stamped with the acting org.
+
+        ``organization_id`` comes from the acting org context, never from the request body — the
+        Create schemas deliberately have no such field. A tenant id a client can assert is not a
+        tenant id, for the same reason `owner_id` and `users.email` are not.
+        """
         recipe = Recipe.model_validate(data)
+        recipe.organization_id = organization_id
         self.session.add(recipe)
         self.session.commit()
         self.session.refresh(recipe)
@@ -85,13 +92,19 @@ class RecipeService:
 
     def _build_list_query(
         self,
+        organization_id: str,
         status: RecipeStatus | None = None,
         current_user: User | None = None,
         search: str | None = None,
         category_ids: list[int] | None = None,
     ):  # type: ignore[no-untyped-def]
-        """Build the base recipe-listing query with search, category and access filters."""
-        statement = select(Recipe)
+        """Build the base recipe-listing query with search, category and access filters.
+
+        ``organization_id`` is first and required: every branch below has to sit underneath it, and
+        a defaulted org would mean forgetting it returns other tenants' recipes rather than an
+        error.
+        """
+        statement = select(Recipe).where(org_scope(Recipe, organization_id))
         if status:
             statement = statement.where(Recipe.status == status)
 
@@ -140,23 +153,36 @@ class RecipeService:
         if not current_user:
             return statement.where(false())
 
-        # Explicit admin bypass: an org Owner/Admin administers the ORGANISATION and is
-        # expected to see every recipe in it, including drafts owned by other people that
-        # are not yet assigned to any unit.
-        if access.is_org_admin(self.session, current_user.id):
+        # Explicit admin bypass: an org Owner/Admin administers the ORGANISATION and is expected to
+        # see every recipe in it, including drafts owned by other people that are not yet assigned
+        # to any unit. The ladder cannot supply that — `accessible_unit_ids` only reaches recipes
+        # LINKED to a unit — so the bypass is real and stays.
+        #
+        # The statement is already narrowed to `organization_id` by `org_scope` above, so "admin of
+        # the org being acted in" is the whole test, and the bypass is simply the absence of a
+        # further filter. This used to OR in `Recipe.organization_id.in_(admin_orgs)` — the union of
+        # every org the caller administers — which was correct only because nothing else scoped the
+        # query. Under `org_scope` that union could only ever widen past the active org, so it goes.
+        if organization_id in access.admin_org_ids(self.session, current_user.id):
             return statement
 
         return statement.where(or_(*self._visible_recipe_conditions(current_user)))
 
     def list_recipes(
-        self, status: RecipeStatus | None = None, current_user: User | None = None
+        self,
+        organization_id: str,
+        status: RecipeStatus | None = None,
+        current_user: User | None = None,
     ) -> list[Recipe]:
-        """List recipes visible to the user, optionally filtered by status."""
-        statement = self._build_list_query(status=status, current_user=current_user)
+        """List recipes visible to the user in this org, optionally filtered by status."""
+        statement = self._build_list_query(
+            organization_id, status=status, current_user=current_user
+        )
         return list(self.session.exec(statement).all())
 
     def list_paginated(
         self,
+        organization_id: str,
         offset: int,
         limit: int,
         status: RecipeStatus | None = None,
@@ -166,6 +192,7 @@ class RecipeService:
     ) -> list[Recipe]:
         """Return one page of visible recipes, newest first."""
         statement = self._build_list_query(
+            organization_id,
             status=status,
             current_user=current_user,
             search=search,
@@ -176,6 +203,7 @@ class RecipeService:
 
     def count(
         self,
+        organization_id: str,
         status: RecipeStatus | None = None,
         current_user: User | None = None,
         search: str | None = None,
@@ -183,6 +211,7 @@ class RecipeService:
     ) -> int:
         """Count the recipes visible to the user under the same filters as the listing."""
         statement = self._build_list_query(
+            organization_id,
             status=status,
             current_user=current_user,
             search=search,
@@ -193,6 +222,7 @@ class RecipeService:
 
     def list_paginated_with_count(
         self,
+        organization_id: str,
         offset: int,
         limit: int,
         status: RecipeStatus | None = None,
@@ -202,6 +232,7 @@ class RecipeService:
     ) -> tuple[list[Recipe], int]:
         """Return paginated items and total count, reusing the same base filter."""
         base = self._build_list_query(
+            organization_id,
             status=status,
             current_user=current_user,
             search=search,

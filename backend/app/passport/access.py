@@ -310,10 +310,74 @@ def is_org_admin(
 ) -> bool:
     """``True`` for an org ``Owner`` or ``Admin``.
 
-    Pass ``organization_id``: without it this answers "an admin of ANY of your orgs", which lets an
-    Owner of org B administer org A. See :func:`org_role`.
+    **Pass ``organization_id`` whenever a ROW is in scope.** Without it this answers "an admin of
+    ANY of your orgs", so an Owner of org B administers org A. Every caller that read or wrote a
+    specific row and asked the org-less question was a cross-org leak; use :func:`admins_row` (one
+    row) or :func:`admin_org_ids` (a list query) instead.
+
+    The org-less form legitimately survives in three places, and only these:
+
+    - ``writeback.py`` — a pre-filter. Passport re-checks against the VERIFIED end user and applies
+      its own authority matrix, so it is the real gate; this only avoids asking for something we
+      already know it will refuse.
+    - the FMH/buy-catalogue imports in ``api/suppliers.py`` and ``api/ingredients.py`` — they
+      rewrite GLOBAL master data. Suppliers and ingredients carry no enforced org scope yet, so
+      "admin of any org" matches the scope the data actually has.
+    - ``api/menus.py`` — the fallback for a menu placed at no unit at all.
+
+    All three become wrong the moment that data is org-scoped, and each then needs the acting org
+    from ``get_org_context``. They are not row bypasses today, which is why they are not leaks.
     """
     return org_role(session, subject, organization_id) in ("Owner", "Admin")
+
+
+def admin_org_ids(session: Session, subject: str) -> set[str]:
+    """Every org this user administers (``Owner`` or ``Admin``).
+
+    For scoping an admin bypass to the orgs it should actually apply to. ``is_org_admin`` answers a
+    yes/no about ONE org; this answers "which ones", which is what a list query needs.
+    """
+    platform_user_id = platform_user_id_for(session, subject)
+    if platform_user_id is None:
+        return set()
+
+    return {
+        org_id
+        for org_id, role in session.exec(
+            select(
+                PassportMembership.organization_id, PassportMembership.role
+            ).where(
+                PassportMembership.platform_user_id == platform_user_id,
+                PassportMembership.status == _ACTIVE,
+            )
+        ).all()
+        if role in ("Owner", "Admin")
+    }
+
+
+def admins_row(
+    session: Session, subject: str, row_organization_id: str | None
+) -> bool:
+    """Whether ``subject`` administers the org that owns this row.
+
+    **The transitional rule, in ONE place.** Domain rows only got `organization_id` in
+    `q1orgcol9p0q` and it is only populated where `q2orgfill1r2s` has run — so it is NULL in the
+    test database and in any environment behind on migrations.
+
+    - row HAS an org  -> the correct, org-scoped question. An Owner of org B is not an admin here.
+    - row org is NULL -> fall back to the org-less question ("admin of any of your orgs").
+
+    The NULL branch is the known cross-org defect and is deliberately kept: a NULL org carries no
+    information to scope by, and answering ``False`` would silently revoke every documented admin
+    bypass the moment this shipped — admins would lose the unassigned drafts these bypasses exist
+    for. The fallback disappears on its own as the backfill lands, without another code change.
+
+    Centralised so there is one comment to delete rather than nine, and one place to change when
+    `organization_id` becomes NOT NULL.
+    """
+    if row_organization_id is not None:
+        return is_org_admin(session, subject, row_organization_id)
+    return is_org_admin(session, subject)
 
 
 def _brand_of(session: Session, unit_id: str) -> str | None:

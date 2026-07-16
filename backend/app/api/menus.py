@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain import MenuService
 from app.models import (
     MenuCreate,
@@ -300,6 +300,7 @@ def create_menu(
     data: CreateMenuRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Create a new menu, requiring `Manager` at every unit it is being created for.
 
@@ -325,7 +326,9 @@ def create_menu(
         version_no=1,
         created_by=current_user.id,
     )
-    menu = service.create_menu(menu_create, data.unit_ids)
+    menu = service.create_menu(
+        menu_create, data.unit_ids, organization_id=org.organization_id
+    )
 
     # Add sections and items
     for section_data in data.sections:

@@ -6,7 +6,6 @@ from sqlmodel import Session
 from app.api.deps import get_session
 from app.domain import supplier_ingredient_tag_service as svc
 from app.models.supplier_ingredient_tag import (
-    SupplierIngredientTag,
     SupplierIngredientTagCreate,
     SupplierIngredientTagRead,
 )

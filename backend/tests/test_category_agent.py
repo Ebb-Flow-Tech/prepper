@@ -9,7 +9,7 @@ from app.agents.category_agent import CategoryAgent
 from app.models.category import Category
 
 # Import mock classes from conftest
-from tests.conftest import MockContentBlock, MockToolUseBlock, MockClaudeResponse
+from tests.conftest import MockClaudeResponse, MockContentBlock, MockToolUseBlock
 
 
 class TestCategoryAgentInit:

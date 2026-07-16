@@ -4,12 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.models import (
-    RecipeIngredientCreate,
-    RecipeIngredientUpdate,
-    RecipeIngredientRead,
-)
+from app.api.guards import require_recipe_access
 from app.domain import RecipeService
+from app.models import (
+    Recipe,
+    RecipeIngredientCreate,
+    RecipeIngredientRead,
+    RecipeIngredientUpdate,
+)
 
 router = APIRouter()
 
@@ -18,6 +20,7 @@ router = APIRouter()
 def list_recipe_ingredients(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """List all ingredients for a recipe."""
     service = RecipeService(session)
@@ -39,6 +42,7 @@ def add_ingredient_to_recipe(
     recipe_id: int,
     data: RecipeIngredientCreate,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Add an ingredient to a recipe."""
     service = RecipeService(session)
@@ -66,6 +70,7 @@ def update_recipe_ingredient(
     ri_id: int,
     data: RecipeIngredientUpdate,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Update a recipe ingredient's quantity or unit."""
     service = RecipeService(session)
@@ -86,6 +91,7 @@ def remove_ingredient_from_recipe(
     recipe_id: int,
     ri_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Remove an ingredient from a recipe."""
     service = RecipeService(session)

@@ -7,11 +7,11 @@ import pytest
 from sqlmodel import Session
 
 from app.agents.feedback_summary_agent import FeedbackSummaryAgent
-from app.models.tasting import TastingNote, TastingSession
 from app.models.recipe import Recipe
+from app.models.tasting import TastingNote, TastingSession
 
 # Import mock classes from conftest
-from tests.conftest import MockContentBlock, MockToolUseBlock, MockClaudeResponse
+from tests.conftest import MockClaudeResponse, MockToolUseBlock
 
 
 class TestFeedbackSummaryAgentInit:
@@ -357,6 +357,14 @@ class TestSummarizeFeedback:
         assert "Mixed feedback" in result["summary"]
 
 
+def _create_recipe(client) -> int:
+    """A real recipe owned by the caller. `require_recipe_access` resolves it before the agent."""
+    return client.post(
+        "/api/v1/recipes",
+        json={"name": "Feedback Recipe", "yield_quantity": 1, "yield_unit": "batch"},
+    ).json()["id"]
+
+
 class TestSummarizeFeedbackAPI:
     """Tests for the API endpoint."""
 
@@ -453,8 +461,12 @@ class TestSummarizeFeedbackAPI:
             assert data["summary"] is None
 
     def test_summarize_feedback_endpoint_no_api_key(self, client, agent_no_api_key):
-        """Test endpoint fails gracefully without API key."""
-        recipe_id = 999
+        """Fails gracefully without an API key — on a recipe the caller can actually see.
+
+        Used recipe 999, which does not exist: `require_recipe_access` 404s before the agent is
+        reached, so the recipe must be real to test the agent's behaviour at all.
+        """
+        recipe_id = _create_recipe(client)
 
         response = client.post(f"/api/v1/agents/summarize-feedback/{recipe_id}")
 
@@ -462,8 +474,8 @@ class TestSummarizeFeedbackAPI:
         assert "ANTHROPIC_API_KEY" in response.json()["detail"]
 
     def test_summarize_feedback_endpoint_path_parameter(self, client):
-        """Test endpoint correctly handles path parameter recipe_id."""
-        recipe_id = 12345
+        """Handles the path parameter — for a recipe that exists and the caller may see."""
+        recipe_id = _create_recipe(client)
 
         with (
             patch("app.agents.base_agent.get_settings") as mock_settings,

@@ -2,7 +2,6 @@
 
 from fastapi.testclient import TestClient
 
-
 # ============ Helpers ============
 
 def _create_supplier(client: TestClient, name: str = "Test Supplier") -> dict:

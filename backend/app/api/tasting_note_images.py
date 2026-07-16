@@ -7,12 +7,23 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.models import TastingNoteImage
+from app.api.guards import (
+    require_ingredient_note_access,
+    require_note_image_access,
+    require_tasting_note_access,
+)
+from app.config import get_settings
+from app.domain.ingredient_tasting_note_service import IngredientTastingNoteService
+from app.domain.storage_service import (
+    StorageError,
+    StorageService,
+    is_storage_configured,
+)
 from app.domain.tasting_note_image_service import TastingNoteImageService
 from app.domain.tasting_note_service import TastingNoteService
-from app.domain.ingredient_tasting_note_service import IngredientTastingNoteService
-from app.config import get_settings
-from app.domain.storage_service import StorageService, StorageError, is_storage_configured
+from app.models import TastingNoteImage
+from app.models.ingredient_tasting import IngredientTastingNote
+from app.models.tasting import TastingNote
 
 router = APIRouter()
 
@@ -36,6 +47,7 @@ class UpdateTastingNoteImagesRequest(BaseModel):
 def get_tasting_note_images(
     tasting_note_id: int,
     session: Session = Depends(get_session),
+    _note: TastingNote = Depends(require_tasting_note_access),
 ):
     """Get all images for a tasting note."""
     service = TastingNoteImageService(session)
@@ -47,6 +59,7 @@ def get_tasting_note_images(
 def get_ingredient_tasting_note_images(
     ingredient_tasting_note_id: int,
     session: Session = Depends(get_session),
+    _note: IngredientTastingNote = Depends(require_ingredient_note_access),
 ):
     """Get all images for an ingredient tasting note."""
     service = TastingNoteImageService(session)
@@ -58,6 +71,7 @@ def get_ingredient_tasting_note_images(
 async def delete_tasting_note_image(
     image_id: int,
     session: Session = Depends(get_session),
+    _image: TastingNoteImage = Depends(require_note_image_access),
 ):
     """Delete a tasting note image from both storage and database."""
     service = TastingNoteImageService(session)
@@ -88,6 +102,7 @@ async def sync_tasting_note_images(
     tasting_note_id: int,
     data: UpdateTastingNoteImagesRequest,
     session: Session = Depends(get_session),
+    _note: TastingNote = Depends(require_tasting_note_access),
 ):
     """
     Sync tasting note images: add new images, keep existing, delete marked ones.
@@ -108,8 +123,18 @@ async def sync_tasting_note_images(
 
     image_service = TastingNoteImageService(session)
 
-    # Collect image IDs marked for deletion
-    image_ids_to_delete = [img.id for img in data.images if img.id is not None and img.removed]
+    # Only images that actually belong to THIS note. The ids come from the request body and were
+    # deleted unchecked, so a caller with access to one note could name any image id in the
+    # deployment and destroy it — storage object and all. The guard proves you may touch this note;
+    # it cannot prove the ids you sent belong to it.
+    own_image_ids = {
+        img.id for img in await asyncio.to_thread(image_service.get_tasting_note_images, tasting_note_id)
+    }
+    image_ids_to_delete = [
+        img.id
+        for img in data.images
+        if img.id is not None and img.removed and img.id in own_image_ids
+    ]
 
     if image_ids_to_delete:
         try:
@@ -185,6 +210,7 @@ async def sync_ingredient_tasting_note_images(
     ingredient_tasting_note_id: int,
     data: UpdateTastingNoteImagesRequest,
     session: Session = Depends(get_session),
+    _note: IngredientTastingNote = Depends(require_ingredient_note_access),
 ):
     """
     Sync ingredient tasting note images: add new images, keep existing, delete marked ones.
@@ -205,8 +231,18 @@ async def sync_ingredient_tasting_note_images(
 
     image_service = TastingNoteImageService(session)
 
-    # Collect image IDs marked for deletion
-    image_ids_to_delete = [img.id for img in data.images if img.id is not None and img.removed]
+    # Only images that actually belong to THIS note. The ids come from the request body and were
+    # deleted unchecked, so a caller with access to one note could name any image id in the
+    # deployment and destroy it — storage object and all. The guard proves you may touch this note;
+    # it cannot prove the ids you sent belong to it.
+    own_image_ids = {
+        img.id for img in await asyncio.to_thread(image_service.get_ingredient_tasting_note_images, ingredient_tasting_note_id)
+    }
+    image_ids_to_delete = [
+        img.id
+        for img in data.images
+        if img.id is not None and img.removed and img.id in own_image_ids
+    ]
 
     if image_ids_to_delete:
         try:

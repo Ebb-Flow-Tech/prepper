@@ -70,11 +70,6 @@ from app.models.menu_sketch import (
     MenuSketchRead,
     MenuSketchUpdate,
 )
-from app.models.recipe_outlet import (
-    RecipeOutlet,
-    RecipeOutletCreate,
-    RecipeOutletUpdate,
-)
 from app.models.outlet_supplier_ingredient import (
     OutletSupplierIngredient,
     OutletSupplierIngredientCreate,
@@ -119,6 +114,11 @@ from app.models.recipe_ingredient import (
     RecipeIngredientCreate,
     RecipeIngredientRead,
     RecipeIngredientUpdate,
+)
+from app.models.recipe_outlet import (
+    RecipeOutlet,
+    RecipeOutletCreate,
+    RecipeOutletUpdate,
 )
 from app.models.recipe_recipe import (
     RecipeRecipe,

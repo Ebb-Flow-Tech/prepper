@@ -7,10 +7,15 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
+from app.api.guards import require_recipe_access
 from app.config import get_settings
-from app.models import RecipeImage
 from app.domain import RecipeImageService, RecipeService
-from app.domain.storage_service import StorageService, StorageError, is_storage_configured
+from app.domain.storage_service import (
+    StorageError,
+    StorageService,
+    is_storage_configured,
+)
+from app.models import Recipe, RecipeImage
 
 router = APIRouter()
 
@@ -32,6 +37,7 @@ async def add_recipe_image(
     recipe_id: int,
     data: AddRecipeImageRequest,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """
     Upload a base64-encoded image for a recipe.
@@ -77,6 +83,7 @@ async def add_recipe_image(
 def get_main_recipe_image(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Get the main (preferred) image for a recipe."""
     service = RecipeImageService(session)
@@ -142,6 +149,7 @@ def reorder_recipe_images(
     recipe_id: int,
     data: ReorderRecipeImagesRequest,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Reorder images for a recipe."""
     service = RecipeImageService(session)
@@ -153,6 +161,7 @@ def reorder_recipe_images(
 def get_recipe_images(
     recipe_id: int,
     session: Session = Depends(get_session),
+    _recipe: Recipe = Depends(require_recipe_access),
 ):
     """Get all images for a recipe."""
     service = RecipeImageService(session)

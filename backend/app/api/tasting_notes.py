@@ -2,19 +2,18 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
-
 from sqlmodel import select as sql_select
 
 from app.api.deps import get_current_user, get_session
+from app.api.guards import require_session_access
 from app.domain import TastingNoteService, TastingSessionService
 from app.models import (
     TastingNoteCreate,
     TastingNoteRead,
     TastingNoteUpdate,
 )
-from app.models.tasting import TastingUser
+from app.models.tasting import TastingSession, TastingUser
 from app.models.user import User
-
 
 router = APIRouter()
 
@@ -23,6 +22,7 @@ router = APIRouter()
 def list_session_notes(
     session_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """List all notes for a tasting session.
 
@@ -51,6 +51,7 @@ def add_note_to_session(
     data: TastingNoteCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Add a tasting note to a session. Only participants can add notes."""
     # Verify the user is a participant of this session
@@ -81,6 +82,7 @@ def get_tasting_note(
     session_id: int,
     note_id: int,
     session: Session = Depends(get_session),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Get a specific tasting note."""
     service = TastingNoteService(session)
@@ -100,6 +102,7 @@ def update_tasting_note(
     data: TastingNoteUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Update a tasting note. Only the original creator can edit."""
     service = TastingNoteService(session)
@@ -124,6 +127,7 @@ def delete_tasting_note(
     note_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    _session: TastingSession = Depends(require_session_access),
 ):
     """Delete a tasting note from a session. Only the original creator can delete."""
     service = TastingNoteService(session)

@@ -169,10 +169,14 @@ export function useDeleteTastingNote() {
 
 // ============ Recipe Tasting History ============
 
+/**
+ * `userId` is kept ONLY as a cache key and a gate — it is no longer sent. The backend reads the
+ * identity from the token, because a client-supplied user id was an impersonation hole.
+ */
 export function useRecipesWithFeedback(userId: string | null) {
   return useQuery({
     queryKey: ['recipes-with-feedback', userId],
-    queryFn: () => api.getRecipesWithFeedback(userId!),
+    queryFn: () => api.getRecipesWithFeedback(),
     enabled: userId !== null,
   });
 }

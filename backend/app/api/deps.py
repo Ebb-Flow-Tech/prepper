@@ -286,7 +286,22 @@ def _resolve_current_user(
         )
 
     token = authorization.replace("Bearer ", "")
-    auth_service = get_auth_service()
+
+    # A missing/invalid Supabase config is a 503, not a crash. `get_auth_service` raises
+    # ValueError("Supabase credentials not configured"); letting it propagate returns a bare 500
+    # with NO CORS headers, so a browser reports it as a CORS failure and the next person debugs
+    # the wrong thing entirely.
+    #
+    # Default-deny made this matter: the 124 previously-ungated routes never touched auth, so a
+    # missing key was survivable. Now every route resolves a user, and one absent env var takes the
+    # whole API down. `api/auth.py:47-53` already answers 503 for exactly this.
+    try:
+        auth_service = get_auth_service()
+    except (RuntimeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable",
+        )
 
     # SSO issuer cutover (P3, dark). If the token is signed by PASSPORT's Supabase project, resolve
     # the local user by its VERIFIED email — the shared issuer's sub is not this app's sub, and

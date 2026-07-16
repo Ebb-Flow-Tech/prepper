@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import field_validator
 from sqlalchemy import JSON, Column
@@ -85,12 +85,12 @@ class MenuSketchTastingNoteRead(SQLModel):
     """Compact tasting note embedded in MenuSketchSectionItemRead."""
 
     id: int
-    feedback: Optional[str]
-    taster_name: Optional[str]
-    decision: Optional[str]
-    overall_rating: Optional[int]
-    session_name: Optional[str]
-    session_date: Optional[datetime]
+    feedback: str | None
+    taster_name: str | None
+    decision: str | None
+    overall_rating: int | None
+    session_name: str | None
+    session_date: datetime | None
     created_at: datetime
 
 

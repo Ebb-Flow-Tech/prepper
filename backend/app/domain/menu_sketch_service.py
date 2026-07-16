@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
+from app.domain.org_scope import org_scope
 from app.models.menu_sketch import (
     MenuSketch,
     MenuSketchCreate,
@@ -16,31 +17,48 @@ from app.models.menu_sketch_section_item import MenuSketchSectionItem
 class MenuSketchService:
     """Service for menu sketch management."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
+        """``organization_id`` is required and has no default — see `CategoryService.__init__`."""
         self.session = session
+        self.organization_id = organization_id
 
     def list_sketches(self, include_archived: bool = False) -> list[MenuSketch]:
-        """Return menu sketches ordered by most recently updated.
+        """Return this org's menu sketches, ordered by most recently updated.
 
         When *include_archived* is False (default) archived sketches are excluded.
         """
-        stmt = select(MenuSketch)
+        stmt = select(MenuSketch).where(org_scope(MenuSketch, self.organization_id))
         if not include_archived:
             stmt = stmt.where(MenuSketch.status != "archived")
         stmt = stmt.order_by(MenuSketch.updated_at.desc())  # type: ignore[arg-type]
         return list(self.session.exec(stmt).all())
 
     def get_sketch(self, sketch_id: int) -> MenuSketch | None:
-        """Get a single sketch by ID."""
-        return self.session.get(MenuSketch, sketch_id)
+        """Get a single sketch by ID, within this org.
+
+        Every mutating method on this service (update, fork, delete, and the section/item routes
+        that resolve a sketch first) funnels through here — so this predicate is the whole
+        family's org boundary, not just the read's.
+        """
+        return self.session.exec(
+            select(MenuSketch).where(
+                MenuSketch.id == sketch_id,
+                org_scope(MenuSketch, self.organization_id),
+            )
+        ).first()
 
     def create_sketch(self, data: MenuSketchCreate) -> MenuSketch:
-        """Create a new sketch."""
+        """Create a new sketch, stamped with the acting org.
+
+        The org comes from the acting org context, never the request body — the Create schemas
+        have no such field. A tenant id a client can assert is not a tenant id.
+        """
         sketch = MenuSketch(
             name=data.name,
             version=1,
             status="draft",
             notes=None,
+            organization_id=self.organization_id,
         )
         self.session.add(sketch)
         self.session.commit()
@@ -81,8 +99,16 @@ class MenuSketchService:
         return True
 
     def fork_sketch(self, sketch_id: int) -> MenuSketch | None:
-        """Fork a sketch — copy metadata + all sections and items, increment version."""
-        original = self.session.get(MenuSketch, sketch_id)
+        """Fork a sketch — copy metadata + all sections and items, increment version.
+
+        Resolves through `get_sketch`, not `session.get`: forking is a read of someone's sketch
+        followed by a write of a copy, and by primary key alone that read crosses orgs.
+
+        The fork inherits the acting org rather than the original's, so it cannot be written into
+        an org the caller isn't acting in. In practice these are the same value — `get_sketch` has
+        already established the original is in scope.
+        """
+        original = self.get_sketch(sketch_id)
         if original is None:
             return None
 
@@ -92,6 +118,7 @@ class MenuSketchService:
             status="draft",
             root=original.id,
             notes=None,
+            organization_id=self.organization_id,
         )
         self.session.add(forked)
         self.session.commit()

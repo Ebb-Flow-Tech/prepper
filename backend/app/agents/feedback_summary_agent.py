@@ -11,8 +11,13 @@ from typing import Any
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from app.agents.agent_utils import (
+    print_tool_call,
+    print_tool_timing,
+    run_async_in_sync,
+    time_it,
+)
 from app.agents.base_agent import BaseAgent
-from app.agents.agent_utils import print_tool_call, print_tool_timing, run_async_in_sync, time_it
 from app.models.tasting import TastingNote
 
 

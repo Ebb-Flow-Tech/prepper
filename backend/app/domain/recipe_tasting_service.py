@@ -1,6 +1,5 @@
 """Recipe-tasting session relationship management operations."""
 
-from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -9,11 +8,11 @@ from app.models import (
     Recipe,
     RecipeIngredient,
     RecipeTasting,
-    RecipeTastingIngredient,
-    RecipeTastingRead,
-    RecipeTastingCreate,
     RecipeTastingBatchCreate,
     RecipeTastingBatchResult,
+    RecipeTastingCreate,
+    RecipeTastingIngredient,
+    RecipeTastingRead,
     RecipeTastingReorderItem,
     TastingSession,
 )
@@ -27,7 +26,7 @@ class RecipeTastingService:
 
     def add_recipe_to_session(
         self, session_id: int, data: RecipeTastingCreate
-    ) -> Optional[RecipeTasting]:
+    ) -> RecipeTasting | None:
         """Add a recipe to a tasting session."""
         # Verify session exists
         tasting_session = self.session.get(TastingSession, session_id)
@@ -61,7 +60,7 @@ class RecipeTastingService:
 
     def add_recipes_to_session(
         self, session_id: int, data: RecipeTastingBatchCreate
-    ) -> Optional[RecipeTastingBatchResult]:
+    ) -> RecipeTastingBatchResult | None:
         """Add multiple recipes to a tasting session. Skips duplicates and invalid IDs."""
         tasting_session = self.session.get(TastingSession, session_id)
         if not tasting_session:

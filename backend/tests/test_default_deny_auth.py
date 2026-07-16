@@ -175,3 +175,27 @@ def test_docs_are_available_in_development():
         dev_app = create_app()
 
     assert mounted_paths(dev_app) & DOCS_PATHS == DOCS_PATHS
+
+
+def test_unconfigured_auth_service_is_503_not_an_unhandled_500(anon_client: TestClient):
+    """A misconfigured auth service must fail as a 503, not an unhandled exception.
+
+    `get_auth_service()` raises `ValueError("Supabase credentials not configured")` when the keys
+    are missing. `_resolve_current_user` let it propagate, so FastAPI returned a bare 500 — with no
+    CORS headers, which makes a browser report it as a CORS failure and sends the next person
+    hunting the wrong bug entirely. (It sent me hunting it for ten minutes.)
+
+    Default-deny raised the stakes: the 124 previously-ungated routes never touched auth, so a
+    missing key was survivable. Now EVERY route resolves a user, so one absent env var takes the
+    whole API down with a misleading error.
+
+    `api/auth.py:47-53` already does this correctly for login — same failure, same 503.
+    """
+    with patch(
+        "app.api.deps.get_auth_service",
+        side_effect=ValueError("Supabase credentials not configured"),
+    ):
+        response = anon_client.get("/api/v1/ingredients", headers={"Authorization": "Bearer x"})
+
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"].lower()
