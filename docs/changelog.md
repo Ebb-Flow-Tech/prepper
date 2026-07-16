@@ -6,7 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
-- **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs and the `tasting-note-images` Family
+- **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs, the `tasting-note-images` Family, and the SSO Login 503
 - **[0.0.64](#0064---2026-07-16)** — Fix: Four Cross-Tenant Leaks (All Three Supplier-Ingredient Writes, `GET /menu-items`), Email Self-Service Granting Another User's Passport Identity, Unscoped `GET /users` PII & Unauthenticated `/docs`; plus the Settings Refactor — Tabs/Table Primitives, the BrandRoles Scroll Fix, Profile Org Info & the Org Switcher
 - **[0.0.63](#0063---2026-07-16)** — Org Isolation (1/3): Nullable `organization_id` on the Seven Per-Org Tables, `get_org_context` with Email Fallback & a Read-Only Backfill Report — No Query Enforces Yet; `ingredients`/`categories`/`menus_sketch` Are 100% Underivable
 - **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check, the `GET /menu-items` Cross-Brand Leak & a Route-Auth Census
@@ -99,6 +99,16 @@ The admin branch got *simpler*: under the org predicate, `Recipe.organization_id
 #### A dual-org admin saw the other org's tasting sessions
 
 Participation scoping held. `admin_org_ids` did not — it is the union of every org you administer, so an Admin of both ORG_A and ORG_B got ORG_B's sessions in ORG_A's list. Every check passed, the user really was an admin, and the sessions really were theirs to see *in another context*. The active org is what made it wrong. Now `is_org_admin`, a question about the org being acted in.
+
+#### SSO login 503'd on any deployment without Prepper's own Supabase key
+
+`SupabaseAuthService.__init__` built Prepper's own Supabase client eagerly, so `SupabaseAuthService()` raised `ValueError("Supabase credentials not configured")` whenever `supabase_key` was unset — and `api/auth.py` turns that into a 503. But with the SSO login-proxy active, `login_via_passport` talks to **Passport's** project; Prepper's client is only needed for storage and `auth.admin.create_user`. The SSO path was fully configured and could not run, blocked by a client it would never have called.
+
+`client` is now a lazy property. The error is **deferred, not suppressed** — the paths that genuinely need Prepper's project still raise exactly as before, with a test pinning that so laziness cannot quietly become an `AttributeError` inside the SDK. Found by running the app, not by reading it: the test suite was green throughout, because `_svc()` in `test_sso_dual_verify.py` bypassed `__init__` with `__new__` — a workaround for this very bug, written before anyone noticed it was one.
+
+#### `.env.example` documented `SUPABASE_KEY` as the anon key; it must be service_role
+
+Two consumers need an admin credential the anon key cannot supply: `auth.admin.create_user` (an admin API) and `storage_service` (bucket writes). Following the example gave a key that authenticates fine everywhere else and then fails at registration and image upload. The entry now names `service_role`, says where to find it, lists both consumers, and notes that it bypasses RLS.
 
 #### `tasting-note-images` resolved no user on any route
 

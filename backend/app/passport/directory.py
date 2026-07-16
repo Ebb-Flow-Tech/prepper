@@ -73,7 +73,9 @@ def organizations_for_user(
     ]
 
 
-def brands_for_user(session: Session, subject: str) -> list[dict[str, object]]:
+def brands_for_user(
+    session: Session, subject: str, organization_id: str
+) -> list[dict[str, object]]:
     """Active brands that CARRY Prepper, in the acting user's orgs, with that user's role at each.
 
     A brand with no ``unit_app_access`` row confers access to nobody — not even an org Owner, whose
@@ -88,14 +90,18 @@ def brands_for_user(session: Session, subject: str) -> list[dict[str, object]]:
         return []
 
     org_ids = access.orgs_for_platform_user(session, platform_user_id)
-    if not org_ids:
+    if organization_id not in org_ids:
+        # Fail closed on our own rather than trusting the caller. `get_org_context` has already
+        # verified the acting org against the projection, so this should be unreachable — but a
+        # directory function that returns rows for any org it is handed is one refactor away from
+        # being the leak, and the check costs a set membership.
         return []
 
     rows = session.exec(
         select(PassportUnit)
         .join(PassportUnitAppAccess, col(PassportUnitAppAccess.unit_id) == PassportUnit.id)
         .where(
-            col(PassportUnit.organization_id).in_(org_ids),
+            col(PassportUnit.organization_id) == organization_id,
             PassportUnit.type == _BRAND,
             PassportUnit.status == _ACTIVE,
         )
@@ -113,7 +119,9 @@ def brands_for_user(session: Session, subject: str) -> list[dict[str, object]]:
     ]
 
 
-def roster(session: Session, subject: str) -> list[dict[str, object]]:
+def roster(
+    session: Session, subject: str, organization_id: str
+) -> list[dict[str, object]]:
     """Every brand-app role row in the acting user's orgs — the assignment roster.
 
     Delivery is own-app scoped, so every projected row is already Prepper's: do NOT filter by
@@ -128,7 +136,11 @@ def roster(session: Session, subject: str) -> list[dict[str, object]]:
         return []
 
     org_ids = access.orgs_for_platform_user(session, platform_user_id)
-    if not org_ids:
+    if organization_id not in org_ids:
+        # Fail closed on our own rather than trusting the caller. `get_org_context` has already
+        # verified the acting org against the projection, so this should be unreachable — but a
+        # directory function that returns rows for any org it is handed is one refactor away from
+        # being the leak, and the check costs a set membership.
         return []
 
     rows = session.exec(
@@ -140,7 +152,7 @@ def roster(session: Session, subject: str) -> list[dict[str, object]]:
             == PassportUnitAppMembership.platform_user_id,
         )
         .where(
-            col(PassportUnitAppMembership.organization_id).in_(org_ids),
+            col(PassportUnitAppMembership.organization_id) == organization_id,
             PassportUnitAppMembership.status == _ACTIVE,
             col(PassportMembership.organization_id)
             == PassportUnitAppMembership.organization_id,
@@ -163,7 +175,9 @@ def roster(session: Session, subject: str) -> list[dict[str, object]]:
     ]
 
 
-def assignable_members(session: Session, subject: str) -> list[dict[str, object]]:
+def assignable_members(
+    session: Session, subject: str, organization_id: str
+) -> list[dict[str, object]]:
     """Org members who could be given a brand role, in the acting user's orgs.
 
     A person can only hold a brand-app role if Passport knows them as an org member, so the
@@ -175,12 +189,16 @@ def assignable_members(session: Session, subject: str) -> list[dict[str, object]
         return []
 
     org_ids = access.orgs_for_platform_user(session, platform_user_id)
-    if not org_ids:
+    if organization_id not in org_ids:
+        # Fail closed on our own rather than trusting the caller. `get_org_context` has already
+        # verified the acting org against the projection, so this should be unreachable — but a
+        # directory function that returns rows for any org it is handed is one refactor away from
+        # being the leak, and the check costs a set membership.
         return []
 
     rows = session.exec(
         select(PassportMembership).where(
-            col(PassportMembership.organization_id).in_(org_ids),
+            col(PassportMembership.organization_id) == organization_id,
             PassportMembership.status == _ACTIVE,
         )
     ).all()

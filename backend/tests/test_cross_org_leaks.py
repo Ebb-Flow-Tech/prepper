@@ -473,6 +473,49 @@ class TestTastingSessionsAreOrgScoped:
         )
 
 
+class TestMenusAreOrgScoped:
+    """The last of the seven tables whose reads filtered on nothing.
+
+    Same two defects as recipes, in the same shapes: `admin_org_ids` is a union across orgs, so an
+    Admin of ORG_B listed ORG_B's menus while acting in ORG_A; and `get_menu` resolved by primary
+    key alone.
+    """
+
+    def _org_b_menu(self, session: Session):
+        from app.models.menu import Menu
+
+        menu = Menu(
+            name="ORG_B Secret Menu",
+            organization_id=ORG_B,
+            is_active=True,
+            created_by="org-b-chef",
+        )
+        session.add(menu)
+        session.commit()
+        session.refresh(menu)
+        return menu
+
+    def test_a_dual_org_admin_does_not_list_org_b_menus_while_acting_in_org_a(
+        self, session: Session, client: TestClient
+    ):
+        from tests.conftest import grant_org_role, link_identity
+
+        admin = create_user(session, "menu-admin", "menuadmin")
+        link_identity(session, "menu-admin", "pu-menu-admin")
+        grant_org_role(session, "pu-menu-admin", "Admin", org_id=ORG_ID)
+        grant_org_role(session, "pu-menu-admin", "Admin", org_id=ORG_B)
+        self._org_b_menu(session)
+        use_user(client, admin)  # conftest pins the acting org to ORG_ID
+
+        resp = client.get("/api/v1/menus")
+
+        assert resp.status_code == 200, resp.text
+        assert "ORG_B Secret Menu" not in resp.text, (
+            "CROSS-ORG LEAK: admin_org_ids is a union — the menu list must be narrowed to the "
+            "org actually being acted in"
+        )
+
+
 class TestTastingNoteImageIDOR:
     """`tasting-note-images` resolved NO user on any route.
 

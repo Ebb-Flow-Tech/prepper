@@ -24,7 +24,9 @@ def _user(session: Session, *, user_id: str, email: str) -> User:
 
 
 def _svc() -> SupabaseAuthService:
-    # Build without touching the real Supabase client (its __init__ creates one).
+    # Bypass __init__ so no settings are read at all — these tests patch `get_settings` per-case.
+    # (__init__ no longer builds a Supabase client; `client` is a lazy property. This `__new__` was
+    # originally a workaround for exactly that eager construction.)
     return SupabaseAuthService.__new__(SupabaseAuthService)
 
 
@@ -192,6 +194,43 @@ def _login_settings(**over):
     )
     base.update(over)
     return SimpleNamespace(**base)
+
+
+def test_sso_login_works_without_preppers_own_supabase_key():
+    """The SSO login-proxy must not depend on a client it never uses.
+
+    `login_via_passport` talks to PASSPORT's project via `_get_passport_supabase_client`. Prepper's
+    own client is only needed for storage and `auth.admin.create_user`. But `__init__` built it
+    eagerly, so `SupabaseAuthService()` raised `ValueError("Supabase credentials not configured")`
+    whenever `supabase_key` was unset — and `api/auth.py:49` turns that into a 503. The SSO path was
+    fully configured and could not run, blocked by a client it would never have touched.
+
+    Found by running the app: login 503'd with both PASSPORT_SUPABASE_* set and SSO on.
+    """
+    from app.domain import supabase_auth_service as mod
+
+    mod._get_supabase_client.cache_clear()
+    settings = _login_settings(supabase_key=None, supabase_jwt_secret=None)
+    with patch("app.domain.supabase_auth_service.get_settings", return_value=settings):
+        svc = SupabaseAuthService()  # must not raise
+        assert svc.sso_login_enabled is True
+
+
+def test_preppers_own_client_still_raises_when_actually_used():
+    """Laziness must defer the error, not swallow it.
+
+    A path that genuinely needs Prepper's project (storage, admin user creation) must still fail
+    loudly when the key is absent — otherwise this fix trades a startup 503 for a confusing
+    AttributeError deep inside the supabase SDK.
+    """
+    from app.domain import supabase_auth_service as mod
+
+    mod._get_supabase_client.cache_clear()
+    settings = _login_settings(supabase_key=None, supabase_jwt_secret=None)
+    with patch("app.domain.supabase_auth_service.get_settings", return_value=settings):
+        svc = SupabaseAuthService()
+        with pytest.raises(ValueError, match="Supabase credentials not configured"):
+            _ = svc.client
 
 
 def test_sso_login_enabled_requires_flag_url_and_anon_key():

@@ -31,7 +31,13 @@ from app.config import get_settings
 
 @lru_cache
 def _get_supabase_client():
-    """Create and cache a singleton Supabase client (Prepper's own project)."""
+    """Create and cache a singleton Supabase client (Prepper's own project).
+
+    ``settings.supabase_key`` is the **service_role** key despite the plain name — `create_user`
+    below calls `auth.admin.*`, which the anon key cannot reach. It bypasses RLS, so it stays
+    server-side; `_get_passport_supabase_client` deliberately uses an anon key instead, because
+    that one only ever does what a browser does.
+    """
     settings = get_settings()
     if not settings.supabase_url or not settings.supabase_key:
         raise ValueError("Supabase credentials not configured")
@@ -56,11 +62,27 @@ class SupabaseAuthService:
     """Service for Supabase authentication operations."""
 
     def __init__(self) -> None:
-        """Initialize with cached Supabase client."""
-        self.client = _get_supabase_client()
+        """Read settings only. Prepper's own client is built on first use, not here.
+
+        Constructing it eagerly coupled EVERY auth path to Prepper's own project, including the
+        ones that never touch it. With the SSO login-proxy active, `login_via_passport` talks to
+        PASSPORT's project — but `SupabaseAuthService()` still raised when `supabase_key` was
+        unset, and `api/auth.py` turns that into a 503. SSO login was unusable on any deployment
+        that had not also configured a project it would never call.
+        """
         settings = get_settings()
         self.service_role_key = settings.supabase_key
         self._jwt_secret = settings.supabase_jwt_secret
+
+    @property
+    def client(self):  # type: ignore[no-untyped-def]
+        """Prepper's own Supabase client, built on first access.
+
+        Still raises `ValueError` when unconfigured — deferred, not suppressed. The paths that need
+        it (storage, `auth.admin.create_user`, non-SSO login) must fail as loudly as before; the
+        point is only that paths which do NOT need it are no longer taken down with them.
+        """
+        return _get_supabase_client()
 
     def login(self, email: str, password: str) -> dict:
         """

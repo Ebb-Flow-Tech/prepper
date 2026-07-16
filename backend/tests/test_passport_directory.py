@@ -105,9 +105,9 @@ def test_unlinked_user_sees_nothing(session: Session):
     store.apply_unit(session, _unit(BRAND))
     store.create_unit_app_access(session, _access("a-1", BRAND))
 
-    assert directory.brands_for_user(session, SUBJECT) == []
-    assert directory.roster(session, SUBJECT) == []
-    assert directory.assignable_members(session, SUBJECT) == []
+    assert directory.brands_for_user(session, SUBJECT, ORG) == []
+    assert directory.roster(session, SUBJECT, ORG) == []
+    assert directory.assignable_members(session, SUBJECT, ORG) == []
 
 
 def test_linked_non_member_sees_nothing(session: Session):
@@ -121,14 +121,14 @@ def test_linked_non_member_sees_nothing(session: Session):
     store.apply_unit(session, _unit(BRAND))
     store.create_unit_app_access(session, _access("a-1", BRAND))
 
-    assert directory.brands_for_user(session, SUBJECT) == []
+    assert directory.brands_for_user(session, SUBJECT, ORG) == []
 
 
 def test_brand_carrying_the_app_is_listed_with_the_users_role(session: Session):
     _seed(session)
     store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
 
-    brands = directory.brands_for_user(session, SUBJECT)
+    brands = directory.brands_for_user(session, SUBJECT, ORG)
 
     assert [b["id"] for b in brands] == [BRAND]
     assert brands[0]["my_role"] == "Staff"
@@ -143,7 +143,7 @@ def test_owner_sees_manager_at_every_brand_via_the_ladder(session: Session):
     store.apply_unit(session, _unit(BRAND))
     store.create_unit_app_access(session, _access("a-1", BRAND))
 
-    brands = directory.brands_for_user(session, SUBJECT)
+    brands = directory.brands_for_user(session, SUBJECT, ORG)
 
     assert brands[0]["my_role"] == "Manager", "Owner must hold Manager with no role row"
 
@@ -154,14 +154,14 @@ def test_brand_without_app_access_is_hidden(session: Session):
     _seed(session)
     store.apply_unit(session, _unit(DARK_BRAND, name="Dark"))  # no unit_app_access row
 
-    assert [b["id"] for b in directory.brands_for_user(session, SUBJECT)] == [BRAND]
+    assert [b["id"] for b in directory.brands_for_user(session, SUBJECT, ORG)] == [BRAND]
 
 
 def test_archived_brand_is_hidden(session: Session):
     _seed(session)
     store.apply_unit(session, _unit(BRAND, status="archived", name="Acme"))
 
-    assert directory.brands_for_user(session, SUBJECT) == []
+    assert directory.brands_for_user(session, SUBJECT, ORG) == []
 
 
 def test_roster_excludes_removed_tombstones(session: Session):
@@ -169,14 +169,14 @@ def test_roster_excludes_removed_tombstones(session: Session):
     showing it would read as an active grant."""
     _seed(session)
     store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
-    assert len(directory.roster(session, SUBJECT)) == 1
+    assert len(directory.roster(session, SUBJECT, ORG)) == 1
 
     store.apply_unit_app_membership(
         session, {**_role_row("uam-1", BRAND, status="removed"), "version": 2}
     )
     session.expire_all()
 
-    assert directory.roster(session, SUBJECT) == []
+    assert directory.roster(session, SUBJECT, ORG) == []
 
 
 def test_roster_carries_the_email_embedded_in_the_membership(session: Session):
@@ -185,11 +185,48 @@ def test_roster_carries_the_email_embedded_in_the_membership(session: Session):
     _seed(session)
     store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
 
-    row = directory.roster(session, SUBJECT)[0]
+    row = directory.roster(session, SUBJECT, ORG)[0]
 
     assert row["email"] == "chef@acme.test"
     assert row["unit_name"] == "Acme"
     assert row["role"] == "Staff"
+
+
+def test_a_member_of_two_orgs_sees_only_the_org_they_are_acting_in(session: Session):
+    """The narrowing that `in_(org_ids)` could not express.
+
+    The test below covers an org the subject does NOT belong to — which the old union already
+    excluded. This is the case it did not: the subject is a genuine member of BOTH orgs, so the
+    union returned both orgs' brands at once and the org switcher was decorative, since switching
+    changed nothing about what came back.
+    """
+    _seed(session)
+    store.apply_entitlement(session, _entitlement(OTHER_ORG))
+    store.apply_membership(session, _membership(OTHER_ORG))  # a real member of the second org
+    store.apply_unit(session, _unit(OTHER_BRAND, OTHER_ORG, name="Other"))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND, OTHER_ORG))
+    store.apply_unit_app_membership(session, _role_row("uam-2", OTHER_BRAND, OTHER_ORG))
+
+    assert [b["id"] for b in directory.brands_for_user(session, SUBJECT, ORG)] == [BRAND]
+    assert [b["id"] for b in directory.brands_for_user(session, SUBJECT, OTHER_ORG)] == [
+        OTHER_BRAND
+    ], "acting in the other org must show the other org's brands — narrowed, not hardcoded"
+
+
+def test_directory_fails_closed_for_an_org_you_are_not_in(session: Session):
+    """`get_org_context` validates the acting org, so this should be unreachable from a request.
+
+    Pinned anyway: these functions take an org id as an argument, and an argument is exactly the
+    kind of thing a future caller supplies from somewhere less careful.
+    """
+    _seed(session)
+    store.apply_entitlement(session, _entitlement(OTHER_ORG))
+    store.apply_unit(session, _unit(OTHER_BRAND, OTHER_ORG, name="Other"))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND, OTHER_ORG))
+
+    assert directory.brands_for_user(session, SUBJECT, OTHER_ORG) == []
+    assert directory.roster(session, SUBJECT, OTHER_ORG) == []
+    assert directory.assignable_members(session, SUBJECT, OTHER_ORG) == []
 
 
 def test_another_orgs_brands_and_roles_are_never_visible(session: Session):
@@ -202,8 +239,8 @@ def test_another_orgs_brands_and_roles_are_never_visible(session: Session):
     store.create_unit_app_access(session, _access("a-2", OTHER_BRAND, OTHER_ORG))
     store.apply_unit_app_membership(session, _role_row("uam-2", OTHER_BRAND, OTHER_ORG))
 
-    brand_ids = [b["id"] for b in directory.brands_for_user(session, SUBJECT)]
-    roster_units = [r["unit_id"] for r in directory.roster(session, SUBJECT)]
+    brand_ids = [b["id"] for b in directory.brands_for_user(session, SUBJECT, ORG)]
+    roster_units = [r["unit_id"] for r in directory.roster(session, SUBJECT, ORG)]
 
     assert brand_ids == [BRAND], "must not leak another org's brands"
     assert OTHER_BRAND not in roster_units, "must not leak another org's role rows"

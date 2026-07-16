@@ -17,7 +17,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.api.deps import get_bearer_token, get_current_user, get_session
+from app.api.deps import (
+    OrgContext,
+    get_bearer_token,
+    get_current_user,
+    get_org_context,
+    get_session,
+)
 from app.models import User
 from app.passport import directory, writeback
 
@@ -40,6 +46,7 @@ class SetRoleRequest(BaseModel):
 def list_brand_roles(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ) -> list[Any]:
     """The brand-app role roster, READ FROM THE PROJECTION — not from Passport.
 
@@ -47,31 +54,36 @@ def list_brand_roles(
     survives a Passport outage, adds no network hop, and does not ``403`` for a user who has no
     identity link yet. Mutations below still go up via write-back.
     """
-    return list(directory.roster(session, current_user.id))
+    return list(directory.roster(session, current_user.id, org.organization_id))
 
 
 @router.get("/brands")
 def list_brands(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ) -> list[Any]:
-    """Active brands carrying Prepper, in the caller's orgs, with the caller's role at each.
+    """Active brands carrying Prepper in the ACTING org, with the caller's role at each.
+
+    Narrowed to the org being acted in, not the union of the caller's orgs — the switcher is
+    what changes this list, so a union would make the switcher decorative.
 
     Brands are where people are assigned — outlets and entities never hold roles. A brand with no
     ``unit_app_access`` row is omitted: it confers access to nobody, so it is not somewhere a role
     can be given.
     """
-    return list(directory.brands_for_user(session, current_user.id))
+    return list(directory.brands_for_user(session, current_user.id, org.organization_id))
 
 
 @router.get("/members")
 def list_members(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ) -> list[Any]:
     """Org members who can be given a brand role — from Passport's membership roster, NOT from
     Prepper's local ``users`` table (which may hold accounts Passport has never heard of)."""
-    return list(directory.assignable_members(session, current_user.id))
+    return list(directory.assignable_members(session, current_user.id, org.organization_id))
 
 
 @router.post("", status_code=201)

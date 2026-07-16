@@ -11,9 +11,9 @@ run through this file:
 
 from datetime import datetime
 
-from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
+from app.domain.org_scope import org_scope
 from app.models import (
     Menu,
     MenuCreate,
@@ -33,8 +33,14 @@ _BELONGS_TO_BRAND = "belongs_to_brand"
 class MenuService:
     """Service for menu management."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
+        """``organization_id`` is required and has no default — see `CategoryService.__init__`.
+
+        `get_menu` has three internal callers (update, duplicate, and the section resolver) as well
+        as four route callers; an org threaded through each is an org some caller forgets.
+        """
         self.session = session
+        self.organization_id = organization_id
 
     # --- Menu CRUD ---
 
@@ -61,15 +67,15 @@ class MenuService:
                 )
             )
 
-    def create_menu(self, data: MenuCreate, unit_ids: list[str], organization_id: str) -> Menu:
+    def create_menu(self, data: MenuCreate, unit_ids: list[str]) -> Menu:
         """Create a new menu, stamped with the acting org, and link it to Passport units.
 
-        ``organization_id`` comes from the acting org context, never from the request body — the
-        Create schemas deliberately have no such field. A tenant id a client can assert is not a
+        The org comes from the acting org context, never from the request body — the Create
+        schemas deliberately have no such field. A tenant id a client can assert is not a
         tenant id, for the same reason `owner_id` and `users.email` are not.
         """
         menu = Menu.model_validate(data)
-        menu.organization_id = organization_id
+        menu.organization_id = self.organization_id
         self.session.add(menu)
         self.session.commit()
         self.session.refresh(menu)
@@ -80,26 +86,35 @@ class MenuService:
         return menu
 
     def get_menu(self, menu_id: int) -> Menu | None:
-        """Get a menu by ID (without sections/items)."""
-        return self.session.get(Menu, menu_id)
+        """Get a menu by ID (without sections/items), within this org.
+
+        A `session.get()` here would resolve by primary key alone and hand back another org's menu
+        on a guessed integer.
+        """
+        return self.session.exec(
+            select(Menu).where(
+                Menu.id == menu_id,
+                org_scope(Menu, self.organization_id),
+            )
+        ).first()
 
     def list_menus(
         self, current_user: User | None = None, include_archived: bool = False
     ) -> list[Menu]:
-        """List the menus this user may see.
+        """List the menus this user may see, within the org they are acting in.
 
         Visibility is the set of units Passport says the user can reach — the brands they hold
         a role at, plus the outlets under them — matched against `menu_outlets.unit_id`.
 
         **Fail closed.** No user, or no role at any brand, means no menus. The old model treated
         a null `outlet_id` as "see everything"; that is deliberately not carried over. An org
-        Owner/Admin still sees everything, because Passport's ladder gives them Manager at every
-        brand, so their accessible-unit set is never empty.
+        Owner/Admin still sees everything in the org, because Passport's ladder gives them Manager
+        at every brand, so their accessible-unit set is never empty.
         """
         if not current_user:
             return []
 
-        statement = select(Menu)
+        statement = select(Menu).where(org_scope(Menu, self.organization_id))
         if not include_archived:
             statement = statement.where(col(Menu.is_active).is_(True))
 
@@ -107,22 +122,12 @@ class MenuService:
         # menu in it, including one not yet placed on any unit — which the ladder cannot supply,
         # since `accessible_unit_ids` only reaches menus LINKED to a unit.
         #
-        # Scoped to the orgs actually administered. It used to ask `is_org_admin(user)` with no
-        # org — "admin of ANY of your orgs" — so an Owner of org B listed every menu in org A.
-        # NULL orgs are included while the backfill is outstanding; see recipe_service for the
-        # same reasoning.
-        admin_orgs = access.admin_org_ids(self.session, current_user.id)
-        if admin_orgs:
-            return list(
-                self.session.exec(
-                    statement.where(
-                        or_(
-                            col(Menu.organization_id).in_(admin_orgs),
-                            col(Menu.organization_id).is_(None),
-                        )
-                    )
-                ).all()
-            )
+        # `org_scope` above already narrows to the org being acted in, so "admin of THIS org" is
+        # the whole test and the bypass is simply the absence of a further filter. This used to OR
+        # in `Menu.organization_id.in_(admin_orgs)` — the union of every org the caller
+        # administers — so an Admin of org B listed org B's menus while acting in org A.
+        if self.organization_id in access.admin_org_ids(self.session, current_user.id):
+            return list(self.session.exec(statement).all())
 
         unit_ids = access.accessible_unit_ids(self.session, current_user.id)
         if not unit_ids:
@@ -184,6 +189,9 @@ class MenuService:
             created_by=original.created_by,
         )
         new_menu = Menu.model_validate(new_menu_data)
+        # The fork inherits the acting org. Without this it lands NULL, which `org_scope`'s
+        # transitional IS NULL arm then shows to EVERY org — the same defect `fork_sketch` had.
+        new_menu.organization_id = self.organization_id
         self.session.add(new_menu)
         self.session.flush()
 

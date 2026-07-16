@@ -124,9 +124,11 @@ def _require_manager_for_menu(
     )
 
 
-def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
+def _get_menu_detail(
+    menu_id: int, session: Session, organization_id: str
+) -> MenuDetail | None:
     """Get menu with all sections, items, and recipe names in minimal queries."""
-    service = MenuService(session)
+    service = MenuService(session, organization_id)
     menu = service.get_menu(menu_id)
     if not menu:
         return None
@@ -195,14 +197,14 @@ def _get_menu_detail(menu_id: int, session: Session) -> MenuDetail | None:
 
 
 def _check_menu_accessible(
-    menu_id: int, current_user: User, session: Session
+    menu_id: int, current_user: User, session: Session, organization_id: str
 ) -> bool:
     """Whether the caller may see this menu: it must live at a unit they can see.
 
     Org admins fall out of this naturally — they hold a role at every brand, so
     `accessible_unit_ids` already covers every unit.
     """
-    service = MenuService(session)
+    service = MenuService(session, organization_id)
     menu = service.get_menu(menu_id)
     if not menu or not menu.is_active:
         return False
@@ -235,6 +237,7 @@ def list_menus(
     include_archived: bool = False,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """List the menus the caller may see — those served at a unit they hold a role at.
 
@@ -246,7 +249,7 @@ def list_menus(
     can_see_archived = MANAGER in access.brand_roles(session, current_user.id).values()
     effective_include_archived = include_archived and can_see_archived
 
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     menus = service.list_menus(current_user, include_archived=effective_include_archived)
     return [
         MenuRead(
@@ -271,18 +274,19 @@ def get_menu(
     menu_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get menu detail with sections and items.
 
     Returns 404 if menu not found or not accessible.
     """
-    if not _check_menu_accessible(menu_id, current_user, session):
+    if not _check_menu_accessible(menu_id, current_user, session, org.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
         )
 
-    menu_detail = _get_menu_detail(menu_id, session)
+    menu_detail = _get_menu_detail(menu_id, session, org.organization_id)
     if not menu_detail:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -319,16 +323,14 @@ def create_menu(
             )
 
     # Create menu
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     menu_create = MenuCreate(
         name=data.name,
         is_published=data.is_published,
         version_no=1,
         created_by=current_user.id,
     )
-    menu = service.create_menu(
-        menu_create, data.unit_ids, organization_id=org.organization_id
-    )
+    menu = service.create_menu(menu_create, data.unit_ids)
 
     # Add sections and items
     for section_data in data.sections:
@@ -354,7 +356,7 @@ def create_menu(
             session.add(item)
         session.commit()
 
-    return _get_menu_detail(menu.id, session)
+    return _get_menu_detail(menu.id, session, org.organization_id)
 
 
 # --- POST /menus/{menu_id}/fork ---
@@ -365,12 +367,13 @@ def fork_menu(
     menu_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Fork a menu with version_no + 1.
 
     The fork copies the source menu's unit links, so it requires `Manager` at every one of them.
     """
-    if not _check_menu_accessible(menu_id, current_user, session):
+    if not _check_menu_accessible(menu_id, current_user, session, org.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
@@ -378,7 +381,7 @@ def fork_menu(
 
     _require_manager_for_menu(menu_id, current_user, session)
 
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     new_menu = service.fork_menu(menu_id)
 
     if not new_menu:
@@ -387,7 +390,7 @@ def fork_menu(
             detail="Menu not found",
         )
 
-    return _get_menu_detail(new_menu.id, session)
+    return _get_menu_detail(new_menu.id, session, org.organization_id)
 
 
 # --- PATCH /menus/{menu_id} ---
@@ -399,6 +402,7 @@ def update_menu(
     data: UpdateMenuRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Update menu metadata and/or contents.
 
@@ -407,7 +411,7 @@ def update_menu(
     into them). A manager at Temper can no longer edit Willow's menu, nor push a menu onto Willow —
     that was the bug the global `is_manager` flag created.
     """
-    if not _check_menu_accessible(menu_id, current_user, session):
+    if not _check_menu_accessible(menu_id, current_user, session, org.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
@@ -426,7 +430,7 @@ def update_menu(
                     detail="Invalid recipe ID in menu items",
                 )
 
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     menu_update = MenuUpdate(
         name=data.name,
         is_published=data.is_published,
@@ -469,7 +473,7 @@ def update_menu(
             detail="Menu not found",
         )
 
-    return _get_menu_detail(menu_id, session)
+    return _get_menu_detail(menu_id, session, org.organization_id)
 
 
 # --- PATCH /menus/{menu_id}/delete ---
@@ -480,12 +484,13 @@ def delete_menu(
     menu_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Soft-delete a menu (set is_active to False).
 
     Requires `Manager` at every unit the menu is served at — archiving it removes it from all of them.
     """
-    if not _check_menu_accessible(menu_id, current_user, session):
+    if not _check_menu_accessible(menu_id, current_user, session, org.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Menu not found",
@@ -493,7 +498,7 @@ def delete_menu(
 
     _require_manager_for_menu(menu_id, current_user, session)
 
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     deleted = service.soft_delete_menu(menu_id)
 
     if not deleted:
@@ -522,6 +527,7 @@ def restore_menu(
     menu_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Restore a soft-deleted menu (set is_active to True).
 
@@ -529,7 +535,7 @@ def restore_menu(
     takes `Manager` at each. `_check_menu_accessible` cannot be used here — it deliberately rejects
     archived menus.
     """
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     if not service.get_menu(menu_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -565,6 +571,7 @@ def get_menus_by_unit(
     unit_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get all menus served at a Passport unit — 404 if the caller cannot see that unit."""
     if unit_id not in access.accessible_unit_ids(session, current_user.id):
@@ -573,7 +580,7 @@ def get_menus_by_unit(
             detail="Unit not found",
         )
 
-    service = MenuService(session)
+    service = MenuService(session, org.organization_id)
     menus = service.get_menus_by_unit(unit_id)
 
     return [
@@ -599,6 +606,7 @@ def get_items_by_section(
     section_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
     """Get menu items for a section, ordered by order_no then name.
 
@@ -606,7 +614,7 @@ def get_items_by_section(
     brand scoping every other menu read enforces.
     """
     section = session.get(MenuSection, section_id)
-    if not section or not _check_menu_accessible(section.menu_id, current_user, session):
+    if not section or not _check_menu_accessible(section.menu_id, current_user, session, org.organization_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Section not found",
