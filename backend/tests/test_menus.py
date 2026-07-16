@@ -369,6 +369,67 @@ def test_get_items_by_section(client: TestClient, brand_id: str):
     assert data[0]["display_price"] == 10.00
 
 
+def test_cannot_read_another_brands_menu_items(client: TestClient, session: Session):
+    """A section id is a small integer — it must not be a way around brand scoping.
+
+    `GET /menu-items/{section_id}` authenticated but never checked access, so any signed-in user
+    could enumerate section ids and read another brand's recipe names and prices. Its sibling
+    `GET /menu-outlets/{unit_id}` always checked; this one was simply missed.
+    """
+    brand_a = seed_brand(session, "Brand A")
+    brand_b = seed_brand(session, "Brand B")
+
+    recipe_id = _create_recipe(client, "Brand B Recipe")
+    menu = _create_menu(
+        client,
+        "Brand B Menu",
+        [brand_b],
+        [
+            {
+                "name": "Mains",
+                "order_no": 1,
+                "items": [{"recipe_id": recipe_id, "order_no": 1, "display_price": 42.00}],
+            }
+        ],
+    )
+    section_id = menu["sections"][0]["id"]
+
+    use_user(client, make_brand_user(session, "manager-a", brand_a, MANAGER, "managera"))
+
+    response = client.get(f"/api/v1/menu-items/{section_id}")
+    assert response.status_code == 404  # brand B's section is not visible to brand A
+
+
+def test_menu_items_hidden_from_user_with_no_role(client: TestClient, session: Session):
+    """Fail closed: no Passport role means no units, which means no menu items."""
+    recipe_id = _create_recipe(client, "Test Recipe")
+    brand = seed_brand(session, "Brand A")
+    menu = _create_menu(
+        client,
+        "Brand Menu",
+        [brand],
+        [
+            {
+                "name": "Mains",
+                "order_no": 1,
+                "items": [{"recipe_id": recipe_id, "order_no": 1, "display_price": 10.00}],
+            }
+        ],
+    )
+    section_id = menu["sections"][0]["id"]
+
+    use_user(client, create_user(session, "no-role-user", "norole"))
+
+    response = client.get(f"/api/v1/menu-items/{section_id}")
+    assert response.status_code == 404
+
+
+def test_get_items_by_section_unknown_section(client: TestClient, brand_id: str):
+    """An unknown section is 404, not an empty 200 — it must not confirm what does not exist."""
+    response = client.get("/api/v1/menu-items/999999")
+    assert response.status_code == 404
+
+
 def test_menu_item_with_substitution(client: TestClient, brand_id: str):
     recipe_id = _create_recipe(client, "Test Recipe")
     menu = _create_menu(

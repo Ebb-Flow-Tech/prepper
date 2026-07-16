@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
@@ -22,7 +22,6 @@ from app.api import (
     menu_sketch_sections,
     menu_sketches,
     menus,
-    recipe_units,
     passport_roles,
     recipe_allergens,
     recipe_categories,
@@ -30,6 +29,7 @@ from app.api import (
     recipe_ingredients,
     recipe_recipe_categories,
     recipe_tastings,
+    recipe_units,
     recipes,
     sub_recipes,
     supplier_ingredient_tags,
@@ -40,6 +40,7 @@ from app.api import (
     tastings,
     users,
 )
+from app.api.deps import require_auth
 from app.config import get_settings
 from app.database import create_db_and_tables
 
@@ -63,6 +64,10 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         lifespan=lifespan,
         debug=settings.debug,
+        # Default-deny: every route requires a JWT unless `deps.public_routes` allowlists it.
+        # Registered here rather than per-router so a router added later is protected by omission
+        # rather than exposed by it. See tests/test_default_deny_auth.py.
+        dependencies=[Depends(require_auth)],
     )
 
     # CORS middleware

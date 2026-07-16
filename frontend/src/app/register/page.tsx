@@ -68,12 +68,9 @@ export default function RegisterPage() {
         username: name,
       });
 
-      // Registration only takes credentials; the phone number is a profile field set afterwards.
-      if (phoneNumber.trim()) {
-        await updateUser(response.user.id, { phone_number: phoneNumber.trim() });
-      }
-
-      toast.success('Registration successful!');
+      // `login` first: it stores the JWT that `updateUser` needs. Every API call reads the token
+      // from storage, and the backend denies unauthenticated requests by default, so PATCHing the
+      // profile before logging in would 401 and silently drop the phone number.
       login(
         response.user.id,
         response.access_token,
@@ -81,6 +78,13 @@ export default function RegisterPage() {
         response.user.username,
         response.user.email
       );
+
+      // Registration only takes credentials; the phone number is a profile field set afterwards.
+      if (phoneNumber.trim()) {
+        await updateUser(response.user.id, { phone_number: phoneNumber.trim() });
+      }
+
+      toast.success('Registration successful!');
       router.push('/recipes');
     } catch (err: unknown) {
       console.error('Registration error:', err);

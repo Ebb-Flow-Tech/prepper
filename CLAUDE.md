@@ -15,7 +15,8 @@ Features: Supabase auth with **brand-scoped roles derived from Passport** (no lo
 - `backend/app/main.py` — FastAPI factory (lifespan, CORS, routers)
 - `backend/app/models/` — SQLModel entities (Recipe, Ingredient, TastingSession, MenuSketch, User, etc.). **No local `Outlet` — brands/outlets are `passport_unit` (Passport-owned, projected).**
 - `backend/app/domain/` — service layer (one file per resource: recipe, recipe-unit links, costing, sub-recipes, tasting, suppliers, categories, menu-sketch, users, Supabase auth)
-- `backend/app/api/` — FastAPI routers (one per resource) + `deps.py`
+- `backend/app/api/` — FastAPI routers (one per resource) + `deps.py` (`require_auth` default-deny gate, `public_routes()` allowlist, `get_current_user`)
+- `backend/scripts/route_auth_census.py` — surveys which routes resolve a user of their own; run it rather than counting auth by hand (a file-level grep cannot see `batch_router`-style mounts)
 - `backend/app/agents/` — AI features: `base_agent.py`, `category_agent.py`, `feedback_summary_agent.py`
 - `backend/app/passport/` — Passport sync consumer: eight-aggregate read-model projection (`store`, `handlers`, `sync_router`), derived brand-scoped access + entitlement kill switch (`access`), read-model queries for brands/roster (`directory`), role write-back (`writeback`), identity reporting (`identity`), grant revocation only (`role_projection`), nightly `reconcile`. **Multi-org: every org Passport delivers is projected; `org_id` is resolved per-request from the acting user's membership, never from config.** **Roles are read per-brand at the point of the check — never projected onto the `users` row.**
 - `backend/app/utils/` — unit conversion helpers
@@ -75,6 +76,9 @@ API routes under `/api/v1`. Swagger at `http://localhost:8000/docs`.
 - Never print secrets.
 - Cycle detection on sub-recipes — don't bypass. (Outlet-hierarchy cycle detection is Passport's now.)
 - Access control is **brand-scoped, derived from Passport** (`app.passport.access.role_at_unit` / `accessible_unit_ids`). There is no local role flag; never reintroduce one.
+- **Auth is default-deny.** `require_auth` is registered on the app (`main.py`), so every route needs a JWT unless it's in `deps.public_routes()`. Adding to that allowlist opens a route to the world — justify it. `tests/test_default_deny_auth.py` derives its route list from the running app and will fail on any new ungated route.
+- **Authenticated ≠ authorised.** The gate proves *who* is calling, never *what they may see*. A route reading org- or brand-scoped data must still check (`accessible_unit_ids`, or a parent check). `GET /menu-items/{section_id}` took `get_current_user` and leaked every org's menu items because it never used it.
+- `fastapi` is **pinned, not floored** (`pyproject.toml`) — `include_router`'s path handling changed across versions and the auth gate depends on it. Read the comment there before bumping.
 
 ## Testing
 - `pytest` for backend (SQLite in-memory). Bug fixes include a regression test.

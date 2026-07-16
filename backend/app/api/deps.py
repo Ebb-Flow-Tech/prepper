@@ -3,10 +3,11 @@
 import logging
 from collections.abc import Generator
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.config import Settings, get_settings
 from app.database import engine
 from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
@@ -85,15 +86,90 @@ def resolve_or_provision_passport_user(
     return None
 
 
-def get_current_user(
+def public_routes(settings: Settings) -> frozenset[tuple[str, str]]:
+    """The ONLY routes reachable without a JWT. Everything else is denied by default.
+
+    Built from ``settings.api_v1_prefix`` rather than hardcoded: the prefix is a live env knob
+    (``API_V1_PREFIX``), and every ``include_router`` derives its prefix from it. A hardcoded
+    ``/api/v1`` here would stop matching the moment the prefix changed — and the failure mode is
+    that LOGIN returns 401 and nobody can get in. CI would never catch it; it breaks production only.
+
+    ``/health`` is literal because it is registered outside the prefix.
+
+    ``POST {prefix}/passport/sync`` is allowlisted for JWT purposes ONLY — it is authenticated by
+    HMAC in ``app.passport.sync_router`` because Passport calls it machine-to-machine. Allowlisted
+    is not ungated.
+    """
+    prefix = settings.api_v1_prefix
+    return frozenset(
+        {
+            ("POST", f"{prefix}/auth/login"),
+            ("POST", f"{prefix}/auth/register"),
+            ("POST", f"{prefix}/auth/oauth-complete"),
+            ("POST", f"{prefix}/auth/refresh-token"),
+            ("POST", f"{prefix}/auth/logout"),
+            ("POST", f"{prefix}/passport/sync"),
+            ("GET", "/health"),
+        }
+    )
+
+
+def require_auth(
+    request: Request,
     authorization: str | None = Header(None),
     session: Session = Depends(get_session),
+) -> User | None:
+    """The global gate: authentication is required unless the route is explicitly public.
+
+    Registered once on the app, so a route added tomorrow is protected by default. This inverts the
+    codebase's previous posture, where a route was open unless it opted in — 124 of 182 had not.
+
+    Returns ``None`` for public routes; the caller's credentials are NOT inspected there. That
+    ordering is the whole design:
+
+    - Resolving credentials BEFORE the allowlist check breaks login. ``_resolve_current_user``
+      raises 401 on a missing header, and FastAPI resolves sub-dependencies before the parent body,
+      so an allowlist checked afterwards never runs.
+    - ``POST /auth/oauth-complete`` carries a SUPABASE token, which this app's JWT path would
+      reject. A public route must not have its credentials validated at all.
+
+    Match on ``request.url.path`` (the full path), never ``request.scope["route"].path`` — on
+    FastAPI >=0.139 the latter is router-RELATIVE (``/login``), so an allowlist of full paths would
+    never match and login would 401.
+    """
+    if (request.method, request.url.path) in public_routes(get_settings()):
+        return None
+    return _resolve_current_user(session, authorization)
+
+
+def get_current_user(user: User | None = Depends(require_auth)) -> User:
+    """The acting user. Unchanged contract for every route that already depends on this.
+
+    Shares ``require_auth`` as its dependency, so FastAPI's per-request cache (keyed by callable
+    identity) resolves the token ONCE for both the global gate and the route. Verifying
+    independently here would cost every already-gated route a second dual-issuer verification and
+    a second user lookup.
+
+    ``None`` is only reachable on a public route, which by definition has no acting user.
+    """
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    return user
+
+
+def _resolve_current_user(
+    session: Session,
+    authorization: str | None,
 ) -> User:
     """
     Extract JWT from Authorization header, verify it, and return the user.
 
     Raises:
-        HTTPException: 401 if token is missing or invalid, 404 if user not found
+        HTTPException: 401 if token is missing or invalid, 403 if the caller's orgs are all
+        suspended, 404 if user not found
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(

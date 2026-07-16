@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check & a Route-Auth Census
 - **[0.0.58](#0058---2026-07-15)** — SSO Login & Auto-Provisioning: Dual-Verify Resolves-or-Provisions a Prepper Account by Verified Passport Identity, plus Best-Effort Member Provisioning on `membership.upserted`
 - **[0.0.57](#0057---2026-07-15)** — Fix: Restore RLS Defense-in-Depth — the Rules-7/8 Column Drop Left `is_admin()`/`is_manager_or_admin()` Reading Gone Columns; Redefine Them From the Passport Projection
 - **[0.0.56](#0056---2026-07-15)** — Fix: the Rules-7/8 Re-Key Migration Broke the Staging Deploy — Drop the `outlet_supplier_ingredient` Unique Constraint via the Column Drop, Not a Wrong Explicit Name
@@ -64,6 +65,29 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.62] - 2026-07-16
+
+### Fixed
+
+#### Default-deny authentication — 124 of 182 routes required no token at all
+
+The API was open by default: a route was gated only if it opted in, and most had not. Measured by building the app and walking its dependency tree, **124 of 182 routes accepted an unauthenticated caller** — including `DELETE /suppliers/{id}`, `DELETE /recipes/{id}`, `DELETE /allergens/{id}`, `GET /users` (every user's email and phone), and both AI agent routes, which spent Anthropic credits for anonymous callers. With multiple orgs live this was an active leak, not a latent one.
+
+- **The default is now deny.** `require_auth` is registered once on the app (`main.py`), so every route requires a JWT unless `deps.public_routes(settings)` allowlists it — five `auth` routes, the HMAC-verified `passport/sync`, and `/health`. A router added tomorrow is protected by omission rather than exposed by it. This is the posture `.claude/rules/security.md` already mandated and the codebase inverted.
+- **The allowlist is derived, not hardcoded.** It is built from `settings.api_v1_prefix`, because that prefix is a live env knob and a hardcoded `/api/v1` would silently stop matching if it changed — with login returning 401 and nobody able to sign in.
+- **Ordering is the design.** `require_auth` checks the allowlist *before* touching credentials, then delegates to `_resolve_current_user` (today's `get_current_user` body, extracted verbatim, still raising 401/401/403/404 — the Passport entitlement kill switch is preserved). Resolving first would break login, and would reject `oauth-complete`, which legitimately carries a *Supabase* token on a public route. `get_current_user` now depends on `require_auth`, so FastAPI's per-request cache resolves the token once for both rather than twice.
+- **A user may only update themselves.** `PATCH /users/{id}` had no authorisation whatsoever — any caller could rewrite any user's email or phone. Now 403 unless `user_id == current_user.id`. It stays org-agnostic by design: a new registrant has no Passport identity yet.
+- **`login()` before `updateUser`.** `register/page.tsx` PATCHed the profile before storing the JWT, so under default-deny the phone number would have been silently dropped.
+- **`fastapi` pinned to `==0.139.0`.** `include_router`'s path handling changed inside the previously-allowed range; the gate depends on it, and the failure mode of a drift is unreachable login.
+
+**Verification:** `tests/test_default_deny_auth.py` generates its route list from `app.openapi()` and asserts 401 on every non-public route — 186 assertions. It is the only test that can see the gate: `conftest._override_deps` stubs it out everywhere else, so the rest of the suite would stay green with the gate deleted. `scripts/route_auth_census.py` surveys route-level auth from the running app, because file-level greps cannot see `batch_router`-style mounts and `app.routes` yields `_IncludedRouter` wrappers on FastAPI 0.139.
+
+**Known follow-up:** authentication is not authorisation. 123 routes still lean on the global gate alone and resolve no user, so they cannot check *what* a caller may see. Org scoping addresses those.
+
+**Files changed:** `backend/app/api/deps.py`, `backend/app/main.py`, `backend/app/api/users.py`, `backend/pyproject.toml`, `backend/scripts/route_auth_census.py` (new), `backend/tests/test_default_deny_auth.py` (new), `backend/tests/test_users.py` (new), `backend/tests/conftest.py`, `backend/tests/test_sso_dual_verify.py`, `frontend/src/app/register/page.tsx`, `CLAUDE.md`
+
 ---
 
 ## [0.0.58] - 2026-07-15

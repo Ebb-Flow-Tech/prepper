@@ -109,9 +109,7 @@ def test_get_current_user_resolves_a_passport_token_to_the_local_row(session: Se
         patch("app.api.deps.get_auth_service", return_value=fake),
         patch("app.api.deps.is_org_blocked", return_value=False),
     ):
-        user = deps.get_current_user(
-            authorization="Bearer sometoken", session=session
-        )
+        user = deps._resolve_current_user(session, "Bearer sometoken")
     assert user.id == "S_prepper_local", "resolved to the local row, keyed by its own id"
 
 
@@ -128,9 +126,7 @@ def test_prepper_token_still_works_when_passport_path_misses(session: Session):
         patch("app.api.deps.get_auth_service", return_value=fake),
         patch("app.api.deps.is_org_blocked", return_value=False),
     ):
-        user = deps.get_current_user(
-            authorization="Bearer sometoken", session=session
-        )
+        user = deps._resolve_current_user(session, "Bearer sometoken")
     assert user.id == "S_prepper_local"
 
 
@@ -161,7 +157,7 @@ def test_sso_login_provisions_a_local_row_for_a_new_member(session: Session):
         patch("app.api.deps.get_auth_service", return_value=fake),
         patch("app.api.deps.is_org_blocked", return_value=False),
     ):
-        user = deps.get_current_user(authorization="Bearer t", session=session)
+        user = deps._resolve_current_user(session, "Bearer t")
 
     assert user.id == "S_passport_newbie", "new member keyed by the Passport sub"
     assert user.email == "newbie@temper.sg"
@@ -181,7 +177,7 @@ def test_sso_login_does_not_provision_a_non_member(session: Session):
         patch("app.api.deps.is_org_blocked", return_value=False),
         pytest.raises(Exception),  # 401: no local user, not a member, no fallback
     ):
-        deps.get_current_user(authorization="Bearer t", session=session)
+        deps._resolve_current_user(session, "Bearer t")
 
 
 # --- 5.2 LOGIN-PROXY: Prepper's login page authenticates against Passport -----------------------

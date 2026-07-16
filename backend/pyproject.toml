@@ -7,7 +7,15 @@ readme = "README.md"
 # a lower floor here makes pip's resolver thrash to ResolutionTooDeep rather than name the conflict.
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.109.0",
+    # PINNED, not floored. The default-deny gate (app.api.deps.require_auth) matches the request
+    # path against an allowlist, and how FastAPI reports that path changed inside the range this
+    # previously allowed: up to ~0.109 `include_router` rewrote child routes with the mounted
+    # prefix, so `scope["route"].path` was the full path; from ~0.139 it appends an
+    # `_IncludedRouter` wrapper and routes keep their RELATIVE path. `require_auth` uses
+    # `request.url.path`, which is correct on both — but `app.routes` also stops yielding real
+    # routes, which silently guts the auth test. A floor here means `pip install -U` can change
+    # auth behaviour; the failure mode is that login 401s and nobody can sign in.
+    "fastapi==0.139.0",
     "uvicorn[standard]>=0.27.0",
     "sqlmodel>=0.0.14",
     "pydantic-settings>=2.1.0",

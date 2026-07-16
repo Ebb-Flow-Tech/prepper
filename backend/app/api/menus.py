@@ -597,7 +597,18 @@ def get_items_by_section(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get menu items for a section, ordered by order_no then name."""
+    """Get menu items for a section, ordered by order_no then name.
+
+    404 unless the caller can see the section's menu — a section id must not be a way around the
+    brand scoping every other menu read enforces.
+    """
+    section = session.get(MenuSection, section_id)
+    if not section or not _check_menu_accessible(section.menu_id, current_user, session):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found",
+        )
+
     statement = (
         select(MenuItem, Recipe.name)
         .outerjoin(Recipe, Recipe.id == MenuItem.recipe_id)

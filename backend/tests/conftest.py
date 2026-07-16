@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import get_current_user, get_session, require_auth
 from app.database import SQLITE_SCHEMA_TRANSLATE_MAP
 from app.database import get_session as db_get_session
 from app.main import app
@@ -251,6 +251,10 @@ def make_brand_user(
 def use_user(client: TestClient, user: User) -> User:
     """Make ``user`` the caller for subsequent requests on this client."""
     client.app.dependency_overrides[get_current_user] = lambda: user
+    # `get_current_user` depends on `require_auth`, which conftest also overrides — without
+    # switching both, the route keeps resolving to the PREVIOUS user and the test silently
+    # asserts nothing.
+    client.app.dependency_overrides[require_auth] = lambda: user
     return user
 
 
@@ -293,6 +297,11 @@ def _override_deps(session: Session, user: User) -> None:
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[db_get_session] = lambda: session
     app.dependency_overrides[get_current_user] = lambda: user
+    # The app-level default-deny gate runs on EVERY request and would 401 the whole suite,
+    # which sends no Authorization header. Overriding `get_current_user` alone is not enough.
+    # NOTE: this stubs out the very gate under test — only tests/test_default_deny_auth.py,
+    # which deliberately does not use these fixtures, can observe it.
+    app.dependency_overrides[require_auth] = lambda: user
 
 
 @pytest.fixture(name="client")
