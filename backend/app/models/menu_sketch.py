@@ -16,6 +16,11 @@ class MenuSketch(SQLModel, table=True):
 
     __tablename__ = "menus_sketch"
 
+    # Passport org UUID (rule 9) — a scope pointer, not a Passport fact. Nullable until the
+    # backfill lands: existing rows have no org and any default would be a guess. See
+    # alembic q1orgcol9p0q.
+    organization_id: str | None = Field(default=None, index=True)
+
     id: int | None = Field(default=None, primary_key=True)
     version: int = Field(default=1)
     name: str = Field(default="Untitled Menu")

@@ -35,6 +35,11 @@ class Recipe(RecipeBase, table=True):
 
     __tablename__ = "recipes"
 
+    # Passport org UUID (rule 9) — a scope pointer, not a Passport fact. Nullable until the
+    # backfill lands: existing rows have no org and any default would be a guess. See
+    # alembic q1orgcol9p0q.
+    organization_id: str | None = Field(default=None, index=True)
+
     id: int | None = Field(default=None, primary_key=True)
     instructions_raw: str | None = Field(default=None)
     instructions_structured: dict[str, Any] | None = Field(

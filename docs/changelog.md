@@ -6,7 +6,8 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
-- **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check & a Route-Auth Census
+- **[0.0.63](#0063---2026-07-16)** — Org Isolation (1/3): Nullable `organization_id` on the Seven Per-Org Tables, `get_org_context` with Email Fallback & a Read-Only Backfill Report — No Query Enforces Yet; `ingredients`/`categories`/`menus_sketch` Are 100% Underivable
+- **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check, the `GET /menu-items` Cross-Brand Leak & a Route-Auth Census
 - **[0.0.58](#0058---2026-07-15)** — SSO Login & Auto-Provisioning: Dual-Verify Resolves-or-Provisions a Prepper Account by Verified Passport Identity, plus Best-Effort Member Provisioning on `membership.upserted`
 - **[0.0.57](#0057---2026-07-15)** — Fix: Restore RLS Defense-in-Depth — the Rules-7/8 Column Drop Left `is_admin()`/`is_manager_or_admin()` Reading Gone Columns; Redefine Them From the Passport Projection
 - **[0.0.56](#0056---2026-07-15)** — Fix: the Rules-7/8 Re-Key Migration Broke the Staging Deploy — Drop the `outlet_supplier_ingredient` Unique Constraint via the Column Drop, Not a Wrong Explicit Name
@@ -67,6 +68,27 @@ All notable changes to Prepper are documented here.
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
 ---
 
+## [0.0.63] - 2026-07-16
+
+### Added
+
+#### Org isolation, step 1 of 3 — the column, the context and the report. Nothing enforces yet.
+
+Prepper serves several organisations, and its domain data is not isolated by any of them. `organization_id` existed on exactly three link tables and appeared in **no `WHERE` clause anywhere**; no core entity had the column at all. This lays the groundwork without changing a single query's behaviour — deliberately, because the interesting decision needs data that does not exist yet.
+
+- **`organization_id` on the seven per-org tables** (`recipes`, `ingredients`, `suppliers`, `categories`, `tasting_sessions`, `menus`, `menus_sketch`), **nullable**, indexed, plus a composite `(organization_id, is_active)` where the list query already filters on that flag. Migration `q1orgcol9p0q` is purely additive: no backfill, no query change, reversible by dropping the columns. `allergens` is excluded (a global real-world vocabulary) and so is `users` — org membership is Passport-owned and already in `passport.membership`; copying it onto the user row would duplicate Passport state and be simply wrong for a multi-org user. Child tables scope through their parent rather than carrying state that can disagree with it.
+- **`deps.get_org_context`** — resolves the acting org from `X-Organization-Id`. The header *proposes*; the projection *disposes*: membership is re-derived per request, so a forged header is a 403, never a scope. One org → no header needed; several → the header is required (there is no safe default, and guessing writes into the wrong tenant silently). Includes an **email fallback**, because `report_identity_link_safe` is asynchronous — without it every freshly-logged-in SSO user would 403 until sync landed. The kill switch is asked per-org here, unlike `is_org_blocked`, which only blocks when *every* org is suspended. **No route uses this yet.**
+- **`access.org_role` / `is_org_admin` take an optional `organization_id`.** Passing it is correct; omitting it is the live cross-org bug — an Owner of org B is reported Owner while acting in org A, and takes the unfiltered branch in tasting sessions, ingredients and suppliers. Optional rather than required because the fix is atomic with its **13 call sites**, and they cannot supply an org until their route takes `get_org_context`. Step 3 removes the default.
+- **`scripts/org_backfill_report.py`** — READ-ONLY. Reports, per table, what can be assigned to an org from the data.
+
+**The finding that shapes step 2:** the backfill is not merely ambiguous for some rows — it is **impossible** for `ingredients`, `categories` and `menus_sketch`, which have no owner column *and* no unit link. 100% of their rows are undecidable and no ownership rule can help, because there is no ownership: they were a globally-shared pool, and nothing in the data says which org owns "Tomato". `suppliers` derives only through two hops. That makes the next step a product decision, not a data one.
+
+**Next:** run `python -m app.passport.reconcile`, then `python -m scripts.org_backfill_report` against production. Choose the rule for undecidable rows from real numbers. Only then does step 2 backfill, and step 3 enforce (query predicates, child-router parent checks, RLS).
+
+**Files changed:** `backend/alembic/versions/q1orgcol9p0q_add_organization_id_to_domain_tables.py` (new), `backend/app/api/deps.py`, `backend/app/passport/access.py`, `backend/app/models/{recipe,ingredient,supplier,category,tasting,menu,menu_sketch}.py`, `backend/scripts/org_backfill_report.py` (new), `backend/tests/test_org_context.py` (new), `backend/tests/test_org_backfill_report.py` (new), `CLAUDE.md`
+
+---
+
 ## [0.0.62] - 2026-07-16
 
 ### Fixed
@@ -86,7 +108,13 @@ The API was open by default: a route was gated only if it opted in, and most had
 
 **Known follow-up:** authentication is not authorisation. 123 routes still lean on the global gate alone and resolve no user, so they cannot check *what* a caller may see. Org scoping addresses those.
 
-**Files changed:** `backend/app/api/deps.py`, `backend/app/main.py`, `backend/app/api/users.py`, `backend/pyproject.toml`, `backend/scripts/route_auth_census.py` (new), `backend/tests/test_default_deny_auth.py` (new), `backend/tests/test_users.py` (new), `backend/tests/conftest.py`, `backend/tests/test_sso_dual_verify.py`, `frontend/src/app/register/page.tsx`, `CLAUDE.md`
+#### `GET /menu-items/{section_id}` leaked every brand's menu items
+
+Authenticated, and then no access check at all — it selected `MenuItem` by `section_id` and returned it. Any signed-in user could enumerate section ids and read another brand's recipe names and prices. Its sibling `GET /menu-outlets/{unit_id}` had always checked `accessible_unit_ids`; this route was simply missed, and being authenticated made it *look* safe.
+
+It now resolves the section's menu and reuses the existing `_check_menu_accessible`, 404ing otherwise (404 not 403, matching the file's convention — brand B's menu is not visible to brand A, so its existence is not confirmed). This is the concrete case behind the "authenticated ≠ authorised" note above: the route held a `User` and never consulted it.
+
+**Files changed:** `backend/app/api/deps.py`, `backend/app/main.py`, `backend/app/api/users.py`, `backend/app/api/menus.py`, `backend/pyproject.toml`, `backend/scripts/route_auth_census.py` (new), `backend/tests/test_default_deny_auth.py` (new), `backend/tests/test_users.py` (new), `backend/tests/test_menus.py`, `backend/tests/conftest.py`, `backend/tests/test_sso_dual_verify.py`, `frontend/src/app/register/page.tsx`, `CLAUDE.md`
 
 ---
 

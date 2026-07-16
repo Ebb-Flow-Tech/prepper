@@ -1,0 +1,227 @@
+"""The org-backfill report must count correctly — its numbers decide a one-way migration.
+
+The rule for undecidable rows is chosen from this report's output. If it over-counts "derivable",
+rows get assigned to an org from a derivation that was never sound, and a wrong assignment loses a
+user access to their own data. So every branch is pinned here against known data.
+
+Runs on the SQLite test database, where the `passport` schema collapses to the default (see
+`app/database.py`). The report's SQL is schema-qualified for Postgres, so the `_sqlite_schema`
+fixture re-points it rather than executing it verbatim.
+
+**Known limitation:** that rewrite means these tests exercise the report's LOGIC, not the exact SQL
+string production runs. The `passport.`-qualified form is verified only by running the report
+against a real Postgres. Run it once against staging before trusting its numbers.
+"""
+
+import pytest
+from sqlmodel import Session
+
+from app.models import RecipeOutlet
+from scripts.org_backfill_report import SPECS, TableSpec, report_for
+from tests.conftest import (
+    ORG_ID,
+    create_user,
+    grant_org_role,
+    link_identity,
+    seed_brand,
+    seed_entitlement,
+)
+
+OTHER_ORG = "org-other"
+
+
+@pytest.fixture(autouse=True)
+def _sqlite_schema(monkeypatch):
+    """Point the report's `passport.`-qualified SQL at SQLite's flat namespace.
+
+    The projection lives in a dedicated `passport` schema on Postgres and collapses to the default
+    on SQLite. The report targets production, so it stays qualified; this rewrites for the test.
+    """
+    import scripts.org_backfill_report as mod
+
+    monkeypatch.setattr(
+        mod, "_OWNER_DERIVABLE", mod._OWNER_DERIVABLE.replace("passport.", "")
+    )
+
+
+def _spec(table: str) -> TableSpec:
+    return next(s for s in SPECS if s.table == table)
+
+
+def _single_org_owner(session: Session, user_id: str, org: str = ORG_ID) -> str:
+    create_user(session, user_id, user_id)
+    pu = f"pu-{user_id}"
+    link_identity(session, user_id, pu)
+    grant_org_role(session, pu, "Member", org_id=org)
+    seed_entitlement(session, org)
+    return user_id
+
+
+def _multi_org_owner(session: Session, user_id: str) -> str:
+    _single_org_owner(session, user_id, ORG_ID)
+    grant_org_role(session, f"pu-{user_id}", "Member", org_id=OTHER_ORG)
+    return user_id
+
+
+# =============================================================================
+# The headline finding: three tables can derive nothing at all
+# =============================================================================
+
+
+@pytest.mark.parametrize("table", ["ingredients", "categories", "menus_sketch"])
+def test_tables_with_no_owner_and_no_link_are_wholly_undecidable(
+    session: Session, client, table: str
+):
+    """These have no owner column and no unit link, so 100% of rows are undecidable.
+
+    This is not a gap in the report — it is the finding. No ownership rule can assign them,
+    because there is no ownership. The answer must come from a human who knows the history.
+    """
+    if table == "categories":
+        client.post("/api/v1/categories", json={"name": "Dairy"})
+    elif table == "ingredients":
+        client.post(
+            "/api/v1/ingredients",
+            json={"name": "Tomato", "base_unit": "kg", "unit_price": 1.0},
+        )
+    else:
+        client.post("/api/v1/menu-sketches", json={"name": "Spring"})
+
+    r = report_for(session, _spec(table))
+
+    assert r.total >= 1
+    assert r.by_link == 0
+    assert r.by_owner == 0
+    assert r.undecidable == r.total, f"{table}: every row must be reported undecidable"
+
+
+# =============================================================================
+# Recipes — the one table with a genuinely authoritative derivation
+# =============================================================================
+
+
+def test_recipe_with_a_unit_link_is_derivable(session: Session, client, brand_id: str):
+    """A recipe served at a unit carries that unit's org on the link row — authoritative."""
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Laksa", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+    client.post(f"/api/v1/recipes/{recipe['id']}/units", json={"unit_id": brand_id})
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.by_link >= 1, (
+        "a recipe linked to exactly one org's unit is derivable from that link"
+    )
+
+
+def test_recipe_owned_by_a_single_org_user_is_derivable_by_owner(
+    session: Session, client
+):
+    """No unit link, but the owner belongs to exactly one org — so the org is unambiguous."""
+    _single_org_owner(session, "solo-owner")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Orphan", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+    session.exec(
+        __import__("sqlalchemy").text(
+            f"UPDATE recipes SET owner_id = 'solo-owner' WHERE id = {recipe['id']}"
+        )
+    )
+    session.commit()
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.by_owner >= 1
+
+
+def test_recipe_owned_by_a_multi_org_user_is_undecidable(session: Session, client):
+    """THE ambiguity this report exists to size.
+
+    The owner belongs to two orgs, so the data cannot say which one the recipe belongs to.
+    Assigning it would be a guess, and a wrong guess loses them their own recipe.
+    """
+    _multi_org_owner(session, "multi-owner")
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Ambiguous", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+    session.exec(
+        __import__("sqlalchemy").text(
+            f"UPDATE recipes SET owner_id = 'multi-owner' WHERE id = {recipe['id']}"
+        )
+    )
+    session.commit()
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.by_owner == 0, "a multi-org owner must never count as derivable"
+    assert r.undecidable >= 1
+
+
+def test_recipe_linked_to_two_orgs_is_a_conflict_not_a_derivation(
+    session: Session, client
+):
+    """A recipe served at units in two orgs is a conflict, not a derivation.
+
+    Resolving it to the first match would silently pick a tenant, so the report must surface it.
+
+    The link rows are inserted DIRECTLY, not via the API, and deliberately: `POST /recipes/{id}/units`
+    already refuses a brand the caller does not manage (403), so this admin cannot build the state
+    through it. That is not proof the state cannot exist — a user who administers BOTH orgs can
+    create it, and historical rows predate today's checks. The report reads whatever is actually in
+    the database, so it is tested against that.
+    """
+    brand_a = seed_brand(session, "Brand A", org_id=ORG_ID)
+    brand_b = seed_brand(session, "Brand B", org_id=OTHER_ORG)
+    recipe = client.post(
+        "/api/v1/recipes",
+        json={"name": "Shared", "portion_size": 1, "portion_unit": "pax"},
+    ).json()
+
+    session.add_all(
+        [
+            RecipeOutlet(
+                recipe_id=recipe["id"], unit_id=brand_a, organization_id=ORG_ID
+            ),
+            RecipeOutlet(
+                recipe_id=recipe["id"], unit_id=brand_b, organization_id=OTHER_ORG
+            ),
+        ]
+    )
+    session.commit()
+
+    r = report_for(session, _spec("recipes"))
+
+    assert r.link_conflict >= 1, "a two-org recipe is a conflict"
+    assert r.by_link == 0, "a conflicted row must NOT also be counted derivable"
+    assert r.warnings, "a conflict must be surfaced, not swallowed"
+
+
+# =============================================================================
+# Accounting
+# =============================================================================
+
+
+def test_counts_never_exceed_the_total(session: Session, client, brand_id: str):
+    """set + by_link + by_owner + undecidable must equal total, or the report lies about coverage."""
+    client.post(
+        "/api/v1/recipes", json={"name": "A", "portion_size": 1, "portion_unit": "pax"}
+    )
+    client.post("/api/v1/categories", json={"name": "Sauces"})
+
+    for spec in SPECS:
+        r = report_for(session, spec)
+        assert r.already_set + r.by_link + r.by_owner + r.undecidable == r.total, (
+            f"{spec.table}: coverage does not reconcile to total"
+        )
+        assert r.undecidable >= 0, (
+            f"{spec.table}: negative undecidable means double-counting"
+        )
+
+
+def test_an_empty_table_reports_zero_not_a_crash(session: Session):
+    """A table with no rows must report zeros — the report runs before any backfill exists."""
+    r = report_for(session, _spec("menus"))
+    assert (r.total, r.by_link, r.by_owner, r.undecidable) == (0, 0, 0, 0)

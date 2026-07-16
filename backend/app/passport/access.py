@@ -244,8 +244,17 @@ def has_prepper_access(session: Session, subject: str) -> bool:
     return has_prepper_access_for_platform_user(session, platform_user_id)
 
 
-def org_role(session: Session, subject: str) -> str | None:
-    """The user's strongest ACTIVE org role across their orgs: ``Owner`` | ``Admin`` | ``Member``.
+def org_role(session: Session, subject: str, organization_id: str | None = None) -> str | None:
+    """The user's ACTIVE org role: ``Owner`` | ``Admin`` | ``Member``.
+
+    Pass ``organization_id`` to ask the only question that has a correct answer — a role is held IN
+    an org. Omitting it falls back to "strongest role across ALL your orgs", which is **wrong** and
+    retained only so the 13 existing callers keep working until each is given an active org (they
+    cannot supply one until their route takes ``get_org_context``).
+
+    The org-less form is the live cross-org bug: an Owner of org B is reported Owner while acting in
+    org A, and so takes the unfiltered branch in ``api/tastings.py:109``,
+    ``ingredient_service.py:383`` and ``supplier_service.py:143``. Do not add callers to it.
 
     Rule 8: Passport's vocabulary, read verbatim. This replaces Prepper's `user_type` — but note it
     is NOT the same question. `user_type == admin` used to mean "superuser of this app"; the org role
@@ -257,6 +266,9 @@ def org_role(session: Session, subject: str) -> str | None:
     platform_user_id = platform_user_id_for(session, subject)
     if platform_user_id is None:
         return None
+
+    if organization_id is not None:
+        return _org_role(session, platform_user_id, organization_id)
 
     roles = {
         r
@@ -273,9 +285,15 @@ def org_role(session: Session, subject: str) -> str | None:
     return None
 
 
-def is_org_admin(session: Session, subject: str) -> bool:
-    """``True`` for an org ``Owner`` or ``Admin`` — the people who administer the organisation."""
-    return org_role(session, subject) in ("Owner", "Admin")
+def is_org_admin(
+    session: Session, subject: str, organization_id: str | None = None
+) -> bool:
+    """``True`` for an org ``Owner`` or ``Admin``.
+
+    Pass ``organization_id``: without it this answers "an admin of ANY of your orgs", which lets an
+    Owner of org B administer org A. See :func:`org_role`.
+    """
+    return org_role(session, subject, organization_id) in ("Owner", "Admin")
 
 
 def _brand_of(session: Session, unit_id: str) -> str | None:

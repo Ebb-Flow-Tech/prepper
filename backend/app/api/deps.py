@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Generator
+from typing import NamedTuple
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import func
@@ -12,6 +13,7 @@ from app.database import engine
 from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
 from app.models import PassportMembership, User
+from app.passport import access
 from app.passport.access import is_org_blocked
 
 
@@ -158,6 +160,98 @@ def get_current_user(user: User | None = Depends(require_auth)) -> User:
             detail="Not authenticated",
         )
     return user
+
+
+class OrgContext(NamedTuple):
+    """The acting user AND the single organisation they are acting in."""
+
+    user: User
+    organization_id: str
+
+
+def _platform_user_for(session: Session, user: User) -> str | None:
+    """Resolve a local user to their Passport platform user — link first, then email.
+
+    The email fallback is not optional. ``report_identity_link_safe`` is best-effort and
+    ASYNCHRONOUS (``api/auth.py:98-100``): it round-trips through Passport and syncs back, so a
+    freshly-logged-in SSO user has no identity link on this request. Without the fallback every one
+    of them would 403 on every org-scoped route until sync landed. ``api/auth.py:90`` already
+    trusts this exact resolution to decide whether login is allowed at all.
+    """
+    platform_user_id = access.platform_user_id_for(session, user.id)
+    if platform_user_id is not None:
+        return platform_user_id
+    return access.platform_user_id_for_email(session, user.email)
+
+
+def get_org_context(
+    user: User = Depends(get_current_user),
+    x_organization_id: str | None = Header(None),
+    session: Session = Depends(get_session),
+) -> OrgContext:
+    """Which org is this request acting in? The header proposes; the projection disposes.
+
+    Prepper projects every org Passport delivers and a user may belong to several, so an org-scoped
+    read cannot be answered without knowing which one. Brand-scoped reads still need no active org
+    (``access.brand_roles`` unions safely — a brand id already carries its org); this is for
+    everything else.
+
+    The client names an org and it is re-derived against the projection, so a forged header yields
+    403 rather than a scope. Never trust a client-supplied tenant id.
+
+    - header names an org the caller belongs to -> that org
+    - header names any other org               -> 403
+    - no header, caller has exactly one org    -> that org (single-org users never send it)
+    - no header, caller has several            -> 400 (no safe default; guessing writes into the
+                                                  wrong tenant silently)
+    - no Passport identity, or no orgs         -> 403
+
+    This deliberately supersedes the fail-open in ``access.has_prepper_access`` (:238-243), which
+    returns ``True`` for an unlinked user so that switching the projection on cannot lock everyone
+    out. That is coherent for the boolean "may use Prepper at all"; it cannot survive contact with
+    scoping, because there is no org to fail open *into* — a request names exactly one org or scopes
+    nothing. The email fallback preserves the intent (don't lock out users Passport knows) without
+    inventing an org.
+    """
+    platform_user_id = _platform_user_for(session, user)
+    if platform_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No Passport identity for this user",
+        )
+
+    orgs = access.orgs_for_platform_user(session, platform_user_id)
+    if not orgs:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not belong to any organization",
+        )
+
+    if x_organization_id is not None:
+        if x_organization_id not in orgs:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of this organization",
+            )
+        organization_id = x_organization_id
+    elif len(orgs) == 1:
+        organization_id = orgs[0]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Organization-Id required: you belong to more than one organization",
+        )
+
+    # The kill switch, asked PER ORG. `is_org_blocked` is an any-org question — it blocks only when
+    # every org the user belongs to is suspended, so a user in one healthy and one suspended org
+    # keeps full access to the suspended one. Acting in a suspended org is blocked, full stop.
+    if access.entitlement_status(session, organization_id) not in (None, "active"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization access is currently suspended",
+        )
+
+    return OrgContext(user=user, organization_id=organization_id)
 
 
 def _resolve_current_user(
