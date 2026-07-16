@@ -1,9 +1,18 @@
 'use client';
 
-import { User as UserIcon, Store } from 'lucide-react';
+import { Building2, Store, User as UserIcon } from 'lucide-react';
 import { useAppState } from '@/lib/store';
-import { useUser, usePassportBrands } from '@/lib/hooks';
-import { Skeleton } from '@/components/ui';
+import { useUser, usePassportBrands, useOrganizations } from '@/lib/hooks';
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  PageHeader,
+  Skeleton,
+} from '@/components/ui';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -19,10 +28,10 @@ function timeAgo(dateStr: string): string {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <div className="text-base font-semibold text-foreground pb-3 border-b border-border">
+      <div className="border-b border-border pb-3 text-base font-semibold text-foreground">
         {children}
       </div>
     </div>
@@ -30,56 +39,107 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /**
- * The account, plus the brands the user actually holds a role at. There is no single "role" to
- * show: the role is per brand, so the brands are the answer.
+ * Who you are, which organisation you are in, and what you can do.
+ *
+ * Every field is read-only, and stays so: the account is Prepper's but the org, brands and roles
+ * are Passport's. Showing them as editable here would promise something this app cannot deliver.
+ *
+ * There is no single "role" to display — the role is per brand, so the brands ARE the answer.
  */
 export function UserProfileTab() {
   const { userId, username, email } = useAppState();
 
   const { data: user, isLoading: userLoading } = useUser(userId);
   const { data: brands, isLoading: brandsLoading } = usePassportBrands();
+  const { data: organizations, isLoading: orgsLoading } = useOrganizations();
 
   const myBrands = (brands ?? []).filter((brand) => brand.my_role !== null);
 
   return (
-    <div className="h-full w-full overflow-auto">
-      <div className="p-8 max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <UserIcon className="h-6 w-6 text-muted-foreground" />
-            <h1 className="text-2xl font-bold text-foreground">Account Information</h1>
-          </div>
-          {userLoading ? (
-            <Skeleton className="h-4 w-32 rounded" />
-          ) : user?.updated_at ? (
-            <span className="text-sm text-muted-foreground">
-              Last updated: {timeAgo(user.updated_at)}
-            </span>
-          ) : null}
-        </div>
+    <div className="space-y-6">
+      <PageHeader title="Profile" description="Your account, organisation and brand access.">
+        {userLoading ? (
+          <Skeleton className="h-4 w-32 rounded" />
+        ) : user?.updated_at ? (
+          <span className="text-sm text-muted-foreground">
+            Last updated: {timeAgo(user.updated_at)}
+          </span>
+        ) : null}
+      </PageHeader>
 
-        {/* Fields grid */}
-        <div className="grid grid-cols-2 gap-x-12 gap-y-6 mb-8">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserIcon className="h-5 w-5 text-muted-foreground" />
+            Account
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-2">
           <Field label="Username">
             {userLoading ? <Skeleton className="h-5 w-28 rounded" /> : (username ?? '—')}
           </Field>
-
           <Field label="Email Address">
             {userLoading ? <Skeleton className="h-5 w-40 rounded" /> : (email ?? '—')}
           </Field>
-
           <Field label="Phone Number">
             {userLoading ? <Skeleton className="h-5 w-28 rounded" /> : (user?.phone_number ?? '—')}
           </Field>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Brand access — held in Passport, per brand */}
-        <div>
-          <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase mb-3">
-            Your Brands
-          </p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-muted-foreground" />
+            Organisation
+          </CardTitle>
+          <CardDescription>
+            {(organizations?.length ?? 0) > 1
+              ? 'You belong to more than one organisation. Switch between them from the top bar.'
+              : 'The organisation your recipes, menus and suppliers belong to.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {orgsLoading ? (
+            <Skeleton className="h-16 rounded-xl" />
+          ) : organizations && organizations.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {organizations.map((org) => (
+                <div
+                  key={org.id}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-foreground">{org.name}</p>
+                    <p className="text-sm text-muted-foreground">{org.slug}</p>
+                  </div>
+                  <Badge variant="secondary">{org.my_org_role}</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              You do not belong to an organisation yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Store className="h-5 w-5 text-muted-foreground" />
+            Your brands
+          </CardTitle>
+          <CardDescription>
+            An organisation Owner or Admin manages every brand automatically — those do not appear
+            as a role here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           {brandsLoading ? (
             <Skeleton className="h-20 rounded-xl" />
           ) : myBrands.length > 0 ? (
@@ -92,10 +152,10 @@ export function UserProfileTab() {
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
                     <Store className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-foreground">{brand.name}</p>
-                    <p className="text-sm text-muted-foreground">{brand.my_role}</p>
                   </div>
+                  <Badge variant="unit">{brand.my_role}</Badge>
                 </div>
               ))}
             </div>
@@ -107,8 +167,8 @@ export function UserProfileTab() {
           <p className="mt-3 text-xs text-muted-foreground">
             Brands, outlets and roles are managed in Passport.
           </p>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

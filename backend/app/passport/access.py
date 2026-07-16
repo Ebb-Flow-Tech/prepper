@@ -23,6 +23,7 @@ entitlements are really flowing.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from passport_client.access import has_app_access, roles_at_brands
@@ -223,13 +224,32 @@ def platform_user_id_for_email(session: Session, email: str) -> str | None:
 
     The SSO login path: the member is known by the verified email (the identity link may not exist
     yet), and the membership projection carries the ``platform_user_id``. ``None`` if not a member.
+
+    **``email`` must be a VERIFIED email**, not a value a user can write. This maps an email onto a
+    Passport identity, so whoever controls the input controls whose identity is returned. Callers
+    pass either a token claim (``api/auth.py:90``) or ``users.email``, which is safe only because
+    the profile route refuses to set it (``UserUpdate``).
+
+    Fails closed on an ambiguous match rather than returning an arbitrary one — the same rule
+    ``deps.resolve_or_provision_passport_user`` applies, and for the same reason: on a path that
+    confers identity, "one of these two people" is not an answer.
     """
-    return session.exec(
-        select(PassportMembership.platform_user_id).where(
-            func.lower(PassportMembership.email) == email.lower(),
-            PassportMembership.status == _ACTIVE,
+    matches = list(
+        session.exec(
+            select(PassportMembership.platform_user_id).where(
+                func.lower(PassportMembership.email) == email.lower(),
+                PassportMembership.status == _ACTIVE,
+            )
+        ).all()
+    )
+    distinct = set(matches)
+    if len(distinct) > 1:
+        logging.getLogger(__name__).warning(
+            "platform_user_id_for_email: ambiguous match (count=%d) — failing closed",
+            len(distinct),
         )
-    ).first()
+        return None
+    return next(iter(distinct), None)
 
 
 def has_prepper_access(session: Session, subject: str) -> bool:

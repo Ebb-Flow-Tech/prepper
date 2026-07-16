@@ -21,3 +21,4 @@ export * from './useSupplierIngredients';
 export * from './useSupplierIngredientTags';
 export * from './usePassportRoles';
 export * from './useRecipeUnitsBatch';
+export * from './useOrganizations';

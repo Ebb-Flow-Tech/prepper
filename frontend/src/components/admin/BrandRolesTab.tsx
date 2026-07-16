@@ -9,6 +9,19 @@ import {
   useSetBrandRole,
   useRemoveBrandRole,
 } from '@/lib/hooks/usePassportRoles';
+import {
+  Badge,
+  Button,
+  PageHeader,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui';
 import type { BrandRole } from '@/types';
 
 /**
@@ -23,10 +36,13 @@ import type { BrandRole } from '@/types';
  *    brand `Manager` may assign `Staff` but never a peer, and may not change an existing role at
  *    all. Only an org `Owner`/`Admin` can do everything. The message is surfaced verbatim.
  *  - Org `Owner`s and `Admin`s hold `Manager` at every brand with NO row in this table — that is
- *    the ladder. An empty roster does not mean nobody has access.
+ *    the ladder. An empty roster does not mean nobody has access. This is stated on screen too,
+ *    not just here: it is the single most misleading thing about this page, and a reader of the
+ *    source is not the person who needs to know.
  */
 
 const ROLES: BrandRole[] = ['Manager', 'Staff'];
+const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong';
@@ -46,8 +62,7 @@ export function BrandRolesTab() {
   const [role, setRole_] = useState<BrandRole>('Staff');
 
   const pending = assign.isPending || setRole.isPending || remove.isPending;
-  const error =
-    assign.error ?? setRole.error ?? remove.error ?? null;
+  const error = assign.error ?? setRole.error ?? remove.error ?? null;
 
   // People already holding a role at the selected brand cannot be assigned there again — Passport
   // would reject it, and offering it invites a pointless 409/duplicate.
@@ -69,12 +84,14 @@ export function BrandRolesTab() {
   }
 
   if (brandsLoading || rosterLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading brand roles…</div>;
+    return <p className="text-sm text-muted-foreground">Loading brand roles…</p>;
   }
 
+  // Not an error state: Passport returning nothing here is a normal outcome for someone who is not
+  // yet a member of an entitled org, or who has never signed in so has no identity link.
   if (!brands?.length) {
     return (
-      <div className="p-6 space-y-2">
+      <div className="space-y-2">
         <p className="text-sm text-foreground">No brands available.</p>
         <p className="text-sm text-muted-foreground">
           Brands come from Passport. You will see them here once you are an active member of an
@@ -86,15 +103,11 @@ export function BrandRolesTab() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-lg font-medium text-foreground">Brand roles</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Managed in Passport. A person may hold a different role at each brand — there is no single
-          role. Organisation Owners and Admins hold <span className="font-medium">Manager</span> at
-          every brand automatically and will not appear below.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Brand roles"
+        description="Managed in Passport. A person may hold a different role at each brand — there is no single role."
+      />
 
       {error && (
         <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
@@ -106,133 +119,117 @@ export function BrandRolesTab() {
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Brand</span>
-          <select
+          <Select
             value={unitId}
             onChange={(e) => setUnitId(e.target.value)}
-            className="rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground"
-          >
-            <option value="">Select a brand…</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: 'Select a brand…' },
+              ...brands.map((b) => ({ value: b.id, label: b.name })),
+            ]}
+          />
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Person</span>
-          <select
+          <Select
             value={platformUserId}
             onChange={(e) => setPlatformUserId(e.target.value)}
-            className="rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground"
-          >
-            <option value="">Select a person…</option>
-            {assignable.map((m) => (
-              <option key={m.platform_user_id} value={m.platform_user_id}>
-                {m.display_name || m.email}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: 'Select a person…' },
+              ...assignable.map((m) => ({
+                value: m.platform_user_id,
+                label: m.display_name || m.email,
+              })),
+            ]}
+          />
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Role</span>
-          <select
+          <Select
             value={role}
             onChange={(e) => setRole_(e.target.value as BrandRole)}
-            className="rounded border border-border bg-card px-3 py-1.5 text-sm text-foreground"
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+            options={ROLE_OPTIONS}
+          />
         </label>
 
-        <button
-          onClick={handleAssign}
-          disabled={pending || !platformUserId || !unitId}
-          className="rounded bg-foreground px-4 py-1.5 text-sm font-medium text-background transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button onClick={handleAssign} disabled={pending || !platformUserId || !unitId}>
           {assign.isPending ? 'Assigning…' : 'Assign'}
-        </button>
+        </Button>
       </div>
 
+      {/* The ladder, said out loud. Owners and Admins hold Manager at every brand with no row
+          below, so this table can look empty while everyone still has access. */}
+      <p className="text-sm text-muted-foreground">
+        Organisation <span className="font-medium text-foreground">Owners</span> and{' '}
+        <span className="font-medium text-foreground">Admins</span> hold{' '}
+        <span className="font-medium text-foreground">Manager</span> at every brand automatically
+        and do not appear below. An empty list does not mean nobody has access.
+      </p>
+
       {/* --- roster ------------------------------------------------------------------ */}
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full">
-          <thead className="bg-secondary">
-            <tr className="border-b border-border text-left">
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Person
-              </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Brand
-              </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Org role
-              </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Brand role
-              </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                &nbsp;
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {!roster?.length && (
-              <tr>
-                <td colSpan={5} className="px-6 py-6 text-center text-sm text-muted-foreground">
-                  No brand roles assigned. Owners and Admins still hold Manager everywhere.
-                </td>
-              </tr>
-            )}
-            {roster?.map((r) => (
-              <tr key={r.assignment_id} className="border-b border-border hover:bg-secondary">
-                <td className="px-6 py-3 text-sm text-foreground">
-                  {r.display_name || r.email}
-                  {r.display_name && (
-                    <span className="ml-2 text-xs text-muted-foreground">{r.email}</span>
-                  )}
-                </td>
-                <td className="px-6 py-3 text-sm text-muted-foreground">{r.unit_name}</td>
-                <td className="px-6 py-3 text-sm text-muted-foreground">{r.org_role}</td>
-                <td className="px-6 py-3 text-sm">
-                  <select
-                    value={r.role}
-                    disabled={pending}
-                    onChange={(e) =>
-                      setRole.mutate({
-                        assignmentId: r.assignment_id,
-                        role: e.target.value as BrandRole,
-                      })
-                    }
-                    className="rounded border border-border bg-card px-2 py-1 text-sm text-foreground disabled:opacity-50"
-                  >
-                    {ROLES.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-6 py-3 text-right text-sm">
-                  <button
-                    onClick={() => remove.mutate(r.assignment_id)}
-                    disabled={pending}
-                    className="text-sm text-red-600 transition-colors hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Person</TableHead>
+            <TableHead>Brand</TableHead>
+            <TableHead>Org role</TableHead>
+            <TableHead>Brand role</TableHead>
+            <TableHead>
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {!roster?.length && (
+            <TableRow>
+              <TableEmpty colSpan={5}>
+                No brand roles assigned. Owners and Admins still hold Manager everywhere.
+              </TableEmpty>
+            </TableRow>
+          )}
+          {roster?.map((r) => (
+            <TableRow key={r.assignment_id}>
+              <TableCell className="text-foreground">
+                {r.display_name || r.email}
+                {r.display_name && (
+                  <span className="ml-2 text-xs text-muted-foreground">{r.email}</span>
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{r.unit_name}</TableCell>
+              <TableCell>
+                <Badge variant="secondary">{r.org_role}</Badge>
+              </TableCell>
+              <TableCell>
+                <Select
+                  aria-label={`Brand role for ${r.display_name || r.email} at ${r.unit_name}`}
+                  value={r.role}
+                  disabled={pending}
+                  onChange={(e) =>
+                    setRole.mutate({
+                      assignmentId: r.assignment_id,
+                      role: e.target.value as BrandRole,
+                    })
+                  }
+                  className="h-8 w-auto py-1"
+                  options={ROLE_OPTIONS}
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => remove.mutate(r.assignment_id)}
+                  disabled={pending}
+                  className="text-red-600 hover:text-red-700 dark:text-red-400"
+                >
+                  Remove
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

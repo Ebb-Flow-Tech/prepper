@@ -21,6 +21,9 @@ from app.models.supplier import Supplier
 from app.passport import access
 
 UNIT_NOT_FOUND = "Unit not found"
+# Re-homing a link is org-admin-only (see `update_ingredient_supplier`). Distinct from "not found"
+# because the caller CAN see this link — they are being denied the move, not the row.
+NOT_ORG_ADMIN_FOR_MOVE = "Only an organisation admin can move a link to a different unit"
 SKU_ALREADY_EXISTS = "SKU already exists"
 
 
@@ -397,13 +400,19 @@ class IngredientService:
         return self._build_reads(rows, accessible_unit_ids=accessible)
 
     def add_ingredient_supplier(
-        self, ingredient_id: int, data: SupplierIngredientCreate
+        self, ingredient_id: int, data: SupplierIngredientCreate, subject: str
     ) -> SupplierIngredientRead | None | str:
         """Add a supplier link to an ingredient, optionally scoped to a Passport unit.
 
+        ``subject`` is REQUIRED: ``data.unit_id`` is client-supplied, and without a check the
+        caller could attach supplier pricing to any brand's unit — including one whose links they
+        cannot read, since :meth:`get_ingredient_suppliers` IS scoped. Reads were scoped and writes
+        were not; the route took ``current_user`` and never passed it on.
+
         Returns:
-            SupplierIngredientRead on success, None if ingredient/supplier not found,
-            or an error string if the SKU is a duplicate or the unit is unknown.
+            SupplierIngredientRead on success, None if ingredient/supplier not found or the unit is
+            not one the caller may see, or an error string if the SKU is a duplicate or the unit is
+            unknown.
         """
         from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
 
@@ -429,6 +438,11 @@ class IngredientService:
             unit = self.session.get(PassportUnit, data.unit_id)
             if unit is None:
                 return UNIT_NOT_FOUND
+            # `None` (not UNIT_NOT_FOUND) so the route 404s: a unit the caller cannot see must not
+            # be distinguishable from one that does not exist. Org admins hold every brand of their
+            # org via the ladder, so they pass this naturally.
+            if not self._may_write_at_unit(subject, unit.id):
+                return None
 
         if data.is_preferred:
             self._unset_preferred(ingredient_id)
@@ -464,9 +478,17 @@ class IngredientService:
         return self._build_reads([refreshed])[0]
 
     def update_ingredient_supplier(
-        self, supplier_ingredient_id: int, data: SupplierIngredientUpdate
+        self, supplier_ingredient_id: int, data: SupplierIngredientUpdate, subject: str
     ) -> SupplierIngredientRead | None | str:
-        """Update a supplier-ingredient link.
+        """Update a supplier-ingredient link the caller may actually see.
+
+        ``subject`` is REQUIRED. This took no subject, and the route only checked authority when
+        ``data.unit_id`` was present — so a PATCH without it reached here with no check at all, and
+        any signed-in user could rewrite any brand's pricing. Returning the updated row also
+        disclosed a link the scoped read hides, making the write an oracle too.
+
+        Both the link's CURRENT unit and (when moving) the TARGET unit are checked: reading is
+        scoped, so writing must not be looser in either direction.
 
         Returns None if the link does not exist, or an error string if a supplied unit_id
         names no Passport unit.
@@ -477,6 +499,12 @@ class IngredientService:
         if not si:
             return None
 
+        # `None`, so the route 404s: a link at a unit the caller cannot see must not be
+        # distinguishable from one that does not exist. Checked BEFORE any field is read, so the
+        # response body cannot disclose the row either.
+        if not self._may_edit_link(subject, supplier_ingredient_id):
+            return None
+
         update_data = data.model_dump(exclude_unset=True)
 
         # unit_id is not a column on SupplierIngredient — it lives on the link row.
@@ -485,6 +513,12 @@ class IngredientService:
             unit = self.session.get(PassportUnit, new_unit_id)
             if unit is None:
                 return UNIT_NOT_FOUND
+            # Re-homing stays ORG-ADMIN-ONLY, scoped to the TARGET unit's org. This is a
+            # deliberate product rule, not a scope check: a brand Manager may edit their own
+            # brand's pricing but may not re-home a link, because the destination is by definition
+            # outside the brand they manage.
+            if not access.is_org_admin(self.session, subject, unit.organization_id):
+                return NOT_ORG_ADMIN_FOR_MOVE
             existing_link = self.session.exec(
                 select(OutletSupplierIngredient).where(
                     OutletSupplierIngredient.supplier_ingredient_id == supplier_ingredient_id
@@ -518,10 +552,60 @@ class IngredientService:
             return None
         return self._build_reads([refreshed])[0]
 
-    def remove_ingredient_supplier(self, supplier_ingredient_id: int) -> bool:
-        """Remove a supplier-ingredient link."""
+    def _may_write_at_unit(self, subject: str, unit_id: str) -> bool:
+        """Whether ``subject`` may attach, move or detach supplier pricing at ``unit_id``.
+
+        Write scope must not be looser than read scope: being able to change a row you cannot see
+        is the bug this closes.
+
+        The admin check is scoped to the UNIT'S OWN ORG. `is_org_admin` without an org answers
+        "an admin of ANY of your orgs", so an admin of org B would pass here for org A's brand —
+        `access.org_role` documents that form as the live cross-org bug and says not to add callers
+        to it. The unit carries its org, so there is no excuse for asking the org-less question.
+        """
+        unit = self.session.get(PassportUnit, unit_id)
+        if unit is None:
+            return False
+        if access.is_org_admin(self.session, subject, unit.organization_id):
+            return True
+        return unit_id in self._get_accessible_unit_ids(subject)
+
+    def _may_edit_link(self, subject: str, supplier_ingredient_id: int) -> bool:
+        """Whether ``subject`` may change or remove an EXISTING link, by its current unit(s).
+
+        A link attached to no unit is org-wide reference data that no brand role reaches; only an
+        org admin gets it, and only via :meth:`_may_write_at_unit` on a real unit — so an unlinked
+        row is not editable here at all. That is deliberate: it is exactly the row whose owner
+        cannot be established.
+        """
+        from app.models.outlet_supplier_ingredient import OutletSupplierIngredient
+
+        unit_ids = list(
+            self.session.exec(
+                select(OutletSupplierIngredient.unit_id).where(
+                    OutletSupplierIngredient.supplier_ingredient_id == supplier_ingredient_id
+                )
+            ).all()
+        )
+        return any(self._may_write_at_unit(subject, unit_id) for unit_id in unit_ids)
+
+    def remove_ingredient_supplier(
+        self, supplier_ingredient_id: int, subject: str
+    ) -> bool:
+        """Remove a supplier-ingredient link the caller may actually see.
+
+        ``subject`` is REQUIRED. This took a bare id and deleted it, so any signed-in user could
+        destroy another brand's supplier pricing by guessing a small integer — data the scoped read
+        path would never have shown them.
+
+        A link attached to no unit is org-wide reference data and stays admin-only; a link at units
+        the caller cannot see is not theirs to remove.
+        """
         si = self.session.get(SupplierIngredient, supplier_ingredient_id)
         if not si:
+            return False
+
+        if not self._may_edit_link(subject, supplier_ingredient_id):
             return False
 
         self.session.delete(si)

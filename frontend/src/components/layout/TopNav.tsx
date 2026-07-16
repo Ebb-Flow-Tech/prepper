@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FlaskConical, DollarSign, Package, BookOpen, UtensilsCrossed, Settings, LogOut, LucideIcon, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
+import { OrgSwitcher } from './OrgSwitcher';
 import { logoutUser } from '@/lib/api';
 import { ConfirmModal } from '@/components/ui';
 
@@ -165,6 +166,8 @@ export function TopNav() {
 
             {/* User Info and Logout (Desktop) */}
             <div className="hidden md:flex items-center gap-3">
+              {/* The org everything on screen belongs to. Static with one org, a picker with more. */}
+              <OrgSwitcher />
               {username && (
                 <span className="hidden md:inline text-sm font-medium text-muted-foreground">
                   {username}

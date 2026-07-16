@@ -29,6 +29,8 @@ Note the census is environment-dependent: ``POST /api/v1/passport/sync`` is moun
 from __future__ import annotations
 
 import argparse
+import inspect
+import re
 from collections import Counter
 from typing import TypedDict
 
@@ -70,6 +72,24 @@ def _routed_methods(route: APIRoute) -> set[str]:
     return (route.methods or set()) - NON_ROUTED_METHODS
 
 
+def mounted_paths(app: FastAPI) -> set[str]:
+    """Every path mounted DIRECTLY on the app, including non-API ones.
+
+    Use this instead of touching ``app.routes`` by hand. On FastAPI >=0.139 that list is a trap:
+    it holds one ``_IncludedRouter`` per ``include_router`` call (38 of them here) plus a handful
+    of real routes, and ``_IncludedRouter`` has no ``path``, ``methods``, ``name`` OR ``endpoint``
+    — so the obvious ``for r in app.routes: r.path`` raises ``AttributeError``.
+
+    This exists because that trap has now been walked into three separate times: ``app.routes``
+    yielding wrappers gutted an auth test, relative paths made the allowlist match everything, and
+    a plain ``.path`` read blew up a docs test. Three incidents is a helper, not a docstring.
+
+    Only for the app's OWN routes (``/health``, and the ``/docs`` family when DEBUG is on). For API
+    routes use :func:`_collect_with_paths`, which descends into the wrappers and rebuilds full paths.
+    """
+    return {p for r in app.routes if (p := getattr(r, "path", None)) is not None}
+
+
 def _collect_api_routes(app: FastAPI) -> list[APIRoute]:
     """Every APIRoute, descending through _IncludedRouter wrappers.
 
@@ -107,6 +127,36 @@ def _collect_with_paths(app: FastAPI) -> list[tuple[APIRoute, str]]:
 
     walk(app, "")
     return found
+
+
+def declares_user_but_ignores_it(route: APIRoute) -> bool:
+    """Whether the endpoint asks for a `User` and then never mentions it again.
+
+    The signature of an authorised route with the behaviour of an unauthorised one — which is
+    exactly why this class of bug survives review. Three real leaks had this shape:
+
+    - `GET /menu-items/{section_id}` returned any brand's menu items and prices.
+    - `POST /ingredients/{id}/suppliers` let any user attach pricing to any brand's unit.
+    - `DELETE /ingredients/{id}/suppliers/{si_id}` let any user delete another brand's link —
+      data the scoped READ path would never have shown them.
+
+    A false positive is possible (a route could legitimately take a user only to have the gate
+    resolve it), so this reports rather than fails on its own. `tests/test_route_auth_census.py`
+    asserts the count stays at zero.
+    """
+    try:
+        src = inspect.getsource(route.endpoint)
+    except (OSError, TypeError):
+        return False
+
+    signature_end = re.search(r"\)\s*(->[^:]+)?:\n", src)
+    if signature_end is None:
+        return False
+
+    signature, body = src[: signature_end.end()], src[signature_end.end() :]
+    if "current_user" not in signature:
+        return False
+    return "current_user" not in body
 
 
 def _has_route_level_auth(route: APIRoute) -> bool:

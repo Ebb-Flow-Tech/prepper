@@ -10,6 +10,7 @@ hand-listed subset goes green while dozens of routes stay open, which is worse t
 """
 
 import re
+from unittest.mock import patch
 
 import pytest
 from fastapi import Request
@@ -18,9 +19,12 @@ from fastapi.testclient import TestClient
 from app.api.deps import public_routes, require_auth
 from app.config import get_settings
 from app.main import app
-from scripts.route_auth_census import _collect_api_routes
+from scripts.route_auth_census import _collect_api_routes, mounted_paths
 
 PATH_PARAM = re.compile(r"\{[^}]+\}")
+
+# FastAPI mounts these itself, outside any router.
+DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"})
 
 
 def _schema_routes() -> list[tuple[str, str]]:
@@ -123,3 +127,51 @@ def test_health_is_reachable_without_a_token(anon_client: TestClient):
     dependency applies to it — without the allowlist entry it would 401 and fail the deploy."""
     response = anon_client.get("/health")
     assert response.status_code == 200
+
+
+# =============================================================================
+# The docs routes — the hole the fixture above cannot see
+# =============================================================================
+
+
+def test_docs_routes_are_not_exposed_when_debug_is_off():
+    """`/docs`, `/redoc` and `/openapi.json` served the full API schema with no token.
+
+    FastAPI registers them as plain Starlette `Route`s, not `APIRoute`s, so the app-level
+    `dependencies=[Depends(require_auth)]` never applies to them. `main.py` claimed "every route
+    requires a JWT unless allowlisted" — untrue for exactly these four, and they were not
+    allowlisted.
+
+    `test_route_requires_authentication` CANNOT catch this by construction: it enumerates
+    `app.openapi()["paths"]`, and the docs routes do not appear in the schema they serve.
+
+    Gated by `debug` rather than by the allowlist: an anonymous JWT-less caller cannot be given a
+    login form by a JSON API, so there is no useful 401 to return — the honest fix is not to serve
+    them in production at all. `app.openapi()` still works, so the fixtures above are unaffected.
+    """
+    from app.config import get_settings
+    from app.main import create_app
+
+    settings = get_settings()
+    assert settings.debug is False, "this test asserts the production default"
+
+    docs_paths = mounted_paths(create_app()) & DOCS_PATHS
+
+    assert docs_paths == set(), f"docs routes must not be mounted when debug is off: {docs_paths}"
+
+
+def test_docs_are_available_in_development():
+    """Turning them off in production must not take them away from developers.
+
+    CLAUDE.md documents Swagger at localhost:8000/docs as part of the workflow.
+    """
+    from app.main import create_app
+
+    with patch("app.main.settings") as mock_settings:
+        mock_settings.app_name = "test"
+        mock_settings.debug = True
+        mock_settings.cors_origins = []
+        mock_settings.api_v1_prefix = "/api/v1"
+        dev_app = create_app()
+
+    assert mounted_paths(dev_app) & DOCS_PATHS == DOCS_PATHS

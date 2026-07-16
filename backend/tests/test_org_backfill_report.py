@@ -38,12 +38,20 @@ def _sqlite_schema(monkeypatch):
 
     The projection lives in a dedicated `passport` schema on Postgres and collapses to the default
     on SQLite. The report targets production, so it stays qualified; this rewrites for the test.
+
+    Rewrites EVERY module-level SQL constant rather than a named list. An earlier version named
+    `_OWNER_DERIVABLE` alone, so `org_reality`'s queries went unrewritten and died on
+    `no such table: passport.organization`. A fixture that must be updated by hand whenever a query
+    is added is a fixture that will be forgotten.
     """
     import scripts.org_backfill_report as mod
 
-    monkeypatch.setattr(
-        mod, "_OWNER_DERIVABLE", mod._OWNER_DERIVABLE.replace("passport.", "")
-    )
+    for name in dir(mod):
+        if not name.startswith("_"):
+            continue
+        value = getattr(mod, name)
+        if isinstance(value, str) and "passport." in value:
+            monkeypatch.setattr(mod, name, value.replace("passport.", ""))
 
 
 def _spec(table: str) -> TableSpec:
@@ -315,3 +323,82 @@ def test_an_empty_table_reports_zero_not_a_crash(session: Session):
     """A table with no rows must report zeros — the report runs before any backfill exists."""
     r = report_for(session, _spec("menus"))
     assert (r.total, r.by_link, r.by_owner, r.undecidable) == (0, 0, 0, 0)
+
+
+# =============================================================================
+# The premise check — is this deployment actually multi-org?
+# =============================================================================
+
+
+def test_org_reality_reports_a_single_org_deployment(session: Session, client):
+    """One org, nobody spanning two: the multi-org machinery is inert and backfill is trivial."""
+    from scripts.org_backfill_report import org_reality
+
+    store.apply_org(
+        session,
+        {
+            "id": ORG_ID,
+            "name": "Mission Groups",
+            "slug": "mg",
+            "status": "active",
+            "version": 1,
+        },
+    )
+
+    reality = org_reality(session)
+
+    assert len(reality["orgs"]) == 1
+    assert reality["multi_org_users"] == 0
+    assert reality["backfill_can_run"] is True
+
+
+def test_org_reality_flags_multi_org_users(session: Session, client):
+    """A user in two orgs is what makes the header and the switcher necessary.
+
+    Staging has zero. If production has zero too, that machinery is solving a problem this
+    deployment does not have — which is worth knowing before building more of it.
+    """
+    from scripts.org_backfill_report import org_reality
+
+    store.apply_org(
+        session,
+        {"id": ORG_ID, "name": "A", "slug": "a", "status": "active", "version": 1},
+    )
+    store.apply_org(
+        session,
+        {"id": OTHER_ORG, "name": "B", "slug": "b", "status": "active", "version": 1},
+    )
+    _multi_org_owner(session, "spans-both")
+
+    reality = org_reality(session)
+
+    assert reality["multi_org_users"] == 1
+    assert reality["backfill_can_run"] is False, (
+        "two orgs means the founding-org rule is unsound and q2 must abort"
+    )
+
+
+def test_org_reality_ignores_a_removed_membership(session: Session, client):
+    """Passport keeps tombstones. A removed membership is not a second org for this user."""
+    from scripts.org_backfill_report import org_reality
+
+    store.apply_org(
+        session,
+        {"id": ORG_ID, "name": "A", "slug": "a", "status": "active", "version": 1},
+    )
+    _single_org_owner(session, "left-one")
+    store.apply_membership(
+        session,
+        {
+            "id": "mem-gone",
+            "organization_id": OTHER_ORG,
+            "platform_user_id": "pu-left-one",
+            "role": "Member",
+            "status": "removed",
+            "version": 1,
+            "email": "x@test.com",
+            "display_name": "x",
+        },
+    )
+
+    assert org_reality(session)["multi_org_users"] == 0

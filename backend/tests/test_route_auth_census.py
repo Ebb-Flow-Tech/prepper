@@ -85,4 +85,34 @@ def test_the_global_gate_is_not_counted_as_route_level_auth():
     from scripts.route_auth_census import AUTH_DEPENDENCIES
 
     assert "require_auth" not in AUTH_DEPENDENCIES
-    assert census()["gate_only"] > 0, "if this is 0, the gate is being counted as route-level auth"
+    assert census()["gate_only"] > 0, (
+        "if this is 0, the gate is being counted as route-level auth"
+    )
+
+
+def test_no_route_declares_a_user_and_ignores_it():
+    """The signature of an authorised route with the behaviour of an unauthorised one.
+
+    This exact shape produced three real cross-brand leaks — `/menu-items`, and both write paths on
+    `/ingredients/{id}/suppliers`. Each took `current_user` and never passed it on, so the endpoint
+    LOOKED authorised while scoping nothing. The reads on the same data were correctly scoped,
+    which made the asymmetry invisible: you could destroy rows you were not allowed to see.
+
+    If this fails, a route asks who is calling and then does not care. Either use the user, or drop
+    the parameter and let the global gate do the authenticating.
+    """
+    from scripts.route_auth_census import (
+        _collect_with_paths,
+        declares_user_but_ignores_it,
+    )
+
+    offenders = [
+        f"{sorted((route.methods or set()) - NON_ROUTED)} {full}"
+        for route, full in _collect_with_paths(app)
+        if declares_user_but_ignores_it(route)
+    ]
+
+    assert offenders == [], (
+        "these routes take `current_user` and never reference it:\n  "
+        + "\n  ".join(offenders)
+    )

@@ -26,11 +26,19 @@ interface StoredAuth {
   refreshToken: string | null;
   username: string | null;
   email: string | null;
+  /**
+   * The org the user is ACTING IN, sent as `X-Organization-Id` on every request.
+   *
+   * Client state, deliberately: the org LIST is server state and lives in `useOrganizations()`.
+   * Only the selection is ours. It is a proposal, never an authority — the backend re-derives
+   * membership from the Passport projection on every request and 403s a forged value.
+   */
+  activeOrgId: string | null;
 }
 
 function getStoredAuth(): StoredAuth {
   if (typeof window === 'undefined') {
-    return { userId: null, jwt: null, refreshToken: null, username: null, email: null };
+    return { userId: null, jwt: null, refreshToken: null, username: null, email: null, activeOrgId: null };
   }
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -40,7 +48,7 @@ function getStoredAuth(): StoredAuth {
   } catch {
     // Ignore parse errors
   }
-  return { userId: null, jwt: null, refreshToken: null, username: null, email: null };
+  return { userId: null, jwt: null, refreshToken: null, username: null, email: null, activeOrgId: null };
 }
 
 function setStoredAuth(auth: StoredAuth) {
@@ -71,6 +79,7 @@ interface AppState {
   refreshToken: string | null;
   username: string | null;
   email: string | null;
+  activeOrgId: string | null;
 }
 
 interface AppContextValue extends AppState {
@@ -87,6 +96,7 @@ interface AppContextValue extends AppState {
   setRefreshToken: (token: string | null) => void;
   setUsername: (username: string | null) => void;
   setEmail: (email: string | null) => void;
+  setActiveOrgId: (orgId: string | null) => void;
   login: (userId: string, jwt: string, refreshToken: string, username: string, email: string) => void;
   logout: () => void;
 }
@@ -108,7 +118,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     jwt: null,
     refreshToken: null,
     username: null,
-    email: null
+    email: null,
+    activeOrgId: null
   });
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -121,7 +132,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       jwt: storedAuth.jwt,
       refreshToken: storedAuth.refreshToken,
       username: storedAuth.username,
-      email: storedAuth.email
+      email: storedAuth.email,
+      activeOrgId: storedAuth.activeOrgId
     }));
     setIsHydrated(true);
   }, []);
@@ -150,9 +162,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       jwt: state.jwt,
       refreshToken: state.refreshToken,
       username: state.username,
-      email: state.email
+      email: state.email,
+      activeOrgId: state.activeOrgId
     });
-  }, [state.userId, state.jwt, state.refreshToken, state.username, state.email, isHydrated]);
+  }, [state.userId, state.jwt, state.refreshToken, state.username, state.email, state.activeOrgId, isHydrated]);
 
   const selectRecipe = useCallback((id: number | null) => {
     setState((prev) => ({ ...prev, selectedRecipeId: id }));
@@ -206,6 +219,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, email }));
   }, []);
 
+  const setActiveOrgId = useCallback((activeOrgId: string | null) => {
+    setState((prev) => {
+      if (prev.activeOrgId === activeOrgId) return prev;
+      // EVERY cached key is org-dependent, so the whole cache is stale the instant the org
+      // changes. Per-key invalidation is not enough: anything less risks rendering org A's
+      // recipes under org B's name, which is the exact failure org scoping exists to prevent.
+      getQueryClient()?.clear();
+      return { ...prev, activeOrgId };
+    });
+  }, []);
+
   const login = useCallback((userId: string, jwt: string, refreshToken: string, username: string, email: string) => {
     // Clear any data cached from previous user session before setting new auth
     getQueryClient()?.clear();
@@ -213,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    setState((prev) => ({ ...prev, userId: null, jwt: null, refreshToken: null, username: null, email: null }));
+    setState((prev) => ({ ...prev, userId: null, jwt: null, refreshToken: null, username: null, email: null, activeOrgId: null }));
     // Clear TanStack Query cache so the next user doesn't see stale data
     getQueryClient()?.clear();
   }, []);
@@ -235,6 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRefreshToken,
         setUsername,
         setEmail,
+        setActiveOrgId,
         login,
         logout
       }}

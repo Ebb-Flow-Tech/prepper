@@ -65,10 +65,21 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         lifespan=lifespan,
         debug=settings.debug,
-        # Default-deny: every route requires a JWT unless `deps.public_routes` allowlists it.
+        # Default-deny: every API route requires a JWT unless `deps.public_routes` allowlists it.
         # Registered here rather than per-router so a router added later is protected by omission
         # rather than exposed by it. See tests/test_default_deny_auth.py.
         dependencies=[Depends(require_auth)],
+        # The docs routes are the ONE thing that dependency cannot reach: FastAPI registers them as
+        # plain Starlette `Route`s, not `APIRoute`s, so they served the full schema to anyone. They
+        # are not allowlisted either — they were simply invisible to the gate AND to the test that
+        # enumerates `app.openapi()["paths"]`, since they do not appear in the schema they serve.
+        #
+        # Gated by `debug` rather than added to the allowlist: a JSON API has no useful 401 to hand
+        # an anonymous browser, so the honest answer is not to serve them in production. Developers
+        # keep them via DEBUG=true. `app.openapi()` is unaffected, so the auth fixtures still work.
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
     )
 
     # CORS middleware

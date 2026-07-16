@@ -175,8 +175,22 @@ def _platform_user_for(session: Session, user: User) -> str | None:
     The email fallback is not optional. ``report_identity_link_safe`` is best-effort and
     ASYNCHRONOUS (``api/auth.py:98-100``): it round-trips through Passport and syncs back, so a
     freshly-logged-in SSO user has no identity link on this request. Without the fallback every one
-    of them would 403 on every org-scoped route until sync landed. ``api/auth.py:90`` already
-    trusts this exact resolution to decide whether login is allowed at all.
+    of them would 403 on every org-scoped route until sync landed.
+
+    **The fallback is only sound while ``users.email`` is not user-writable**, and this depends on
+    it. An earlier version of this docstring claimed ``api/auth.py:90`` "already trusts this exact
+    resolution" — it does not, and the claim produced a real vulnerability. `auth.py:90` passes
+    ``auth_result["email"]``, an email from a VERIFIED Passport token. This passes ``users.email``,
+    a local column. Same function, categorically different trust in the argument.
+
+    While ``UserUpdate`` accepted ``email``, the chain was: PATCH your own row to a target's email,
+    then inherit their Passport identity and org role — with no identity link, which is exactly the
+    state a non-member is permanently in, so the fallback fired for precisely the accounts that
+    must never resolve. ``UserUpdate`` now refuses ``email``, and
+    ``access.platform_user_id_for_email`` fails closed on an ambiguous match.
+
+    If ``users.email`` ever becomes writable again, this fallback must resolve from the verified
+    token claim instead — or be deleted.
     """
     platform_user_id = access.platform_user_id_for(session, user.id)
     if platform_user_id is not None:

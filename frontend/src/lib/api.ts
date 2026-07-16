@@ -3,6 +3,7 @@ import type {
   AssignBrandRoleRequest,
   BrandRole,
   PassportBrand,
+  PassportOrganization,
   PassportBrandRole,
   PassportMember,
 } from '@/types';
@@ -144,18 +145,29 @@ export class ApiError extends Error {
 
 function readAuthFromStorage() {
   if (typeof window === 'undefined') {
-    return { jwt: null, refreshToken: null };
+    return { jwt: null, refreshToken: null, activeOrgId: null };
   }
   try {
     const stored = localStorage.getItem('prepper_auth');
     if (stored) {
       const auth = JSON.parse(stored);
-      return { jwt: auth.jwt, refreshToken: auth.refreshToken };
+      return { jwt: auth.jwt, refreshToken: auth.refreshToken, activeOrgId: auth.activeOrgId ?? null };
     }
   } catch {
     // Ignore parse errors
   }
-  return { jwt: null, refreshToken: null };
+  return { jwt: null, refreshToken: null, activeOrgId: null };
+}
+
+/**
+ * The acting org, sent on every request beside the JWT.
+ *
+ * A proposal, not an authority: the backend re-derives membership from the Passport projection
+ * and 403s an org the caller does not belong to. Omitted when unset — a single-org user never
+ * needs to send it, and the server resolves their one org itself.
+ */
+function orgHeader(activeOrgId: string | null): Record<string, string> {
+  return activeOrgId ? { 'X-Organization-Id': activeOrgId } : {};
 }
 
 function updateTokensInStorage(newJwt: string, newRefreshToken: string) {
@@ -179,13 +191,14 @@ async function fetchApi<T>(
   retryCount = 0
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt, refreshToken } = readAuthFromStorage();
+  const { jwt, refreshToken, activeOrgId } = readAuthFromStorage();
 
   const config: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(jwt ? { 'Authorization': `Bearer ${jwt}` } : {}),
+      ...orgHeader(activeOrgId),
       ...options.headers,
     },
   };
@@ -247,12 +260,13 @@ async function fetchApiFormData<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt } = readAuthFromStorage();
+  const { jwt, activeOrgId } = readAuthFromStorage();
 
   const config: RequestInit = {
     ...options,
     headers: {
       ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+      ...orgHeader(activeOrgId),
       ...options.headers,
     },
   };
@@ -277,9 +291,9 @@ async function fetchApiFormData<T>(
 
 async function fetchApiBlob(endpoint: string): Promise<Blob> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt } = readAuthFromStorage();
+  const { jwt, activeOrgId } = readAuthFromStorage();
   const response = await fetch(url, {
-    headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+    headers: { ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}), ...orgHeader(activeOrgId) },
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -1379,13 +1393,32 @@ export async function getUser(userId: string): Promise<User> {
   return fetchApi<User>(`/users/${userId}`);
 }
 
+/** The largest page the backend allows. See the truncation note on `getUsers`. */
+const USERS_PAGE_SIZE = 100;
+
+/**
+ * People who share an organisation with the caller.
+ *
+ * `GET /users` is now org-scoped and paginated — it used to return every user in the instance,
+ * unpaginated, to any authenticated caller.
+ *
+ * KNOWN LIMITATION: this unwraps the first page and drops the rest, so an org with more than
+ * `USERS_PAGE_SIZE` members shows only the first 100. Callers render a flat list and none paginate
+ * yet. Surfacing it here rather than hiding it: a silent cap reads as "these are all the users",
+ * and none of them are wrong today only because no org is that large.
+ */
 export async function getUsers(): Promise<User[]> {
-  return fetchApi<User[]>('/users');
+  const page = await fetchApi<PaginatedResponse<User>>(
+    `/users?page_size=${USERS_PAGE_SIZE}`
+  );
+  return page.items;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const users = await fetchApi<User[]>(`/users?email=${encodeURIComponent(email)}`);
-  return users.length > 0 ? users[0] : null;
+  const page = await fetchApi<PaginatedResponse<User>>(
+    `/users?email=${encodeURIComponent(email)}&page_size=1`
+  );
+  return page.items.length > 0 ? page.items[0] : null;
 }
 
 export async function updateUser(userId: string, data: UpdateUserRequest): Promise<User> {
@@ -1705,6 +1738,10 @@ export async function getSupplierIngredientsPaginated(
 // refreshes from the projection once the event lands. A 403 (Passport's authority matrix) and a 409
 // (the target unit is not a brand) are NORMAL outcomes, surfaced verbatim.
 // ---------------------------------------------------------------------------
+
+export async function getPassportOrganizations(): Promise<PassportOrganization[]> {
+  return fetchApi<PassportOrganization[]>('/passport/organizations');
+}
 
 export async function getPassportBrands(): Promise<PassportBrand[]> {
   return fetchApi<PassportBrand[]>('/passport/brand-roles/brands');

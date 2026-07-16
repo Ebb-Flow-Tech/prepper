@@ -99,6 +99,17 @@ _NO_LINK_TABLE = (
 _TOTAL = "SELECT COUNT(*) FROM {table}"
 _UNSET = "SELECT COUNT(*) FROM {table} WHERE organization_id IS NULL"
 
+# Module-level so the SQLite test fixture can re-point `passport.` at the flat namespace. Inline
+# SQL cannot be rewritten and simply explodes there — which is how these two were caught.
+_ORGS = "SELECT id, name, status FROM passport.organization ORDER BY name"
+
+_MULTI_ORG_USERS = """
+SELECT COUNT(*) FROM (
+    SELECT platform_user_id FROM passport.membership WHERE status = 'active'
+    GROUP BY platform_user_id HAVING COUNT(DISTINCT organization_id) > 1
+) x
+"""
+
 
 @dataclass
 class TableSpec:
@@ -162,6 +173,38 @@ def _scalar(session: Session, sql: str) -> int:
     return int(session.exec(text(sql)).one()[0])  # type: ignore[call-overload]
 
 
+def org_reality(session: Session) -> dict[str, object]:
+    """How many orgs are actually live, and does anyone span more than one?
+
+    The premise check. Prepper's whole org design — the `X-Organization-Id` header, refusing to
+    guess when a user belongs to several, the switcher — is justified ONLY by multi-org. If one org
+    holds everything and no user spans two, that machinery is solving a problem this deployment does
+    not have yet, and the backfill is trivial.
+
+    It also predicts whether `q2orgfill1r2s` will run: its founding-org rule aborts unless exactly
+    one org is projected.
+    """
+    orgs = session.exec(text(_ORGS)).all()  # type: ignore[call-overload]
+
+    # Orgs that actually own data, as opposed to merely being projected.
+    with_data = {
+        row[0]
+        for table in ("recipe_outlets", "menu_outlets", "outlet_supplier_ingredient")
+        for row in session.exec(  # type: ignore[call-overload]
+            text(f"SELECT DISTINCT organization_id FROM {table}")  # noqa: S608
+        ).all()
+    }
+
+    multi_org_users = _scalar(session, _MULTI_ORG_USERS)
+
+    return {
+        "orgs": [(r[0], r[1], r[2]) for r in orgs],
+        "orgs_with_data": with_data,
+        "multi_org_users": multi_org_users,
+        "backfill_can_run": len(orgs) == 1,
+    }
+
+
 def report_for(session: Session, spec: TableSpec) -> TableReport:
     r = TableReport(table=spec.table, note=spec.note)
     r.total = _scalar(session, _TOTAL.format(table=spec.table))
@@ -214,6 +257,30 @@ def main() -> None:
     engine = create_engine(url)
 
     print("Org backfill coverage — READ-ONLY, nothing is written.\n")
+
+    with Session(engine) as session:
+        reality = org_reality(session)
+
+    orgs = reality["orgs"]
+    assert isinstance(orgs, list)
+    print(f"ORGS PROJECTED: {len(orgs)}")
+    for org_id, name, status in orgs:
+        owns = "owns data" if org_id in reality["orgs_with_data"] else "no data"  # type: ignore[operator]
+        print(f"  - {name} ({status}) — {owns}")
+    print(f"MULTI-ORG USERS: {reality['multi_org_users']}")
+    if len(orgs) == 1 and reality["multi_org_users"] == 0:
+        print(
+            "\n  => Single-tenant in practice. The X-Organization-Id header, the refusal to guess\n"
+            "     between orgs, and the switcher are all inert here — nothing to switch between.\n"
+            "     Backfill is trivial: everything belongs to the one org."
+        )
+    elif not reality["backfill_can_run"]:
+        print(
+            f"\n  => q2orgfill1r2s will ABORT: it assigns undecidable rows to THE founding org,\n"
+            f"     which is not sound with {len(orgs)} orgs projected. Choose a rule first."
+        )
+    print()
+
     header = f"{'table':<18}{'total':>8}{'set':>8}{'by link':>9}{'by owner':>10}{'UNDECIDABLE':>13}"
     print(header)
     print("-" * len(header))

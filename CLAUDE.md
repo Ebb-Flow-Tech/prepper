@@ -45,7 +45,7 @@ npm run dev                         # requires backend on :8000
 npm run build | lint
 ```
 
-API routes under `/api/v1`. Swagger at `http://localhost:8000/docs`.
+API routes under `/api/v1`. Swagger at `http://localhost:8000/docs` — **dev only**: `/docs`, `/redoc` and `/openapi.json` are mounted only when `DEBUG=true`. They are plain Starlette routes, so the default-deny gate cannot reach them; serving the schema unauthenticated in production is the reason they are off there.
 
 ## Key patterns
 - **Backend**: services receive SQLModel `Session` and return domain objects. Routers call services via function calls (no DI framework). Tests use SQLite in-memory via `conftest.py`.
@@ -78,8 +78,10 @@ API routes under `/api/v1`. Swagger at `http://localhost:8000/docs`.
 - Cycle detection on sub-recipes — don't bypass. (Outlet-hierarchy cycle detection is Passport's now.)
 - Access control is **brand-scoped, derived from Passport** (`app.passport.access.role_at_unit` / `accessible_unit_ids`). There is no local role flag; never reintroduce one.
 - **Auth is default-deny.** `require_auth` is registered on the app (`main.py`), so every route needs a JWT unless it's in `deps.public_routes()`. Adding to that allowlist opens a route to the world — justify it. `tests/test_default_deny_auth.py` derives its route list from the running app and will fail on any new ungated route.
-- **Authenticated ≠ authorised.** The gate proves *who* is calling, never *what they may see*. A route reading org- or brand-scoped data must still check (`accessible_unit_ids`, or a parent check). `GET /menu-items/{section_id}` took `get_current_user` and leaked every org's menu items because it never used it.
-- **Org isolation is half-built — don't assume it works.** The 7 per-org tables (recipe, ingredient, supplier, category, tasting_session, menu, menu_sketch) now carry a **nullable** `organization_id`, but **no query filters on it yet** and nothing is backfilled. `get_org_context` exists and is tested; no route uses it. `access.org_role`/`is_org_admin` take an optional `organization_id` — **always pass it**; the org-less form is the live cross-org bug (an Owner of org B is admin in org A) and exists only until its 13 callers are migrated.
+- **Authenticated ≠ authorised.** The gate proves *who* is calling, never *what they may see*. A route reading org- or brand-scoped data must still check (`accessible_unit_ids`, or a parent check). Four routes took `get_current_user` and never consulted it: `GET /menu-items/{section_id}` leaked every brand's menu prices, and all three supplier-ingredient writes let any user rewrite any brand's pricing. **Write scope must never be looser than read scope** — being able to destroy a row the scoped read hides is the shape to look for. `tests/test_route_auth_census.py` pins the declared-but-unused case; the conditional case (`if data.x: check()`) is not detectable and needs a human.
+- **`users.email` is IDENTITY, not profile.** Passport resolves org membership by it (`deps._platform_user_for`), so a self-writable email hands over someone else's org role. `UserUpdate` refuses it. If it ever becomes writable again, that fallback must resolve from the verified token claim or be deleted.
+- **Org isolation is half-built — don't assume it works.** The 7 per-org tables (recipe, ingredient, supplier, category, tasting_session, menu, menu_sketch) carry `organization_id`, **backfilled** (`q2orgfill1r2s`) but **nullable, and no query filters on it**. `get_org_context` exists and is tested; no route uses it. `access.org_role`/`is_org_admin` take an optional `organization_id` — **always pass it**; the org-less form is the live cross-org bug (an Owner of org B is admin in org A) and exists only until its 13 callers are migrated.
+- **`organization_id` stays nullable until the write path sets it.** Creates do not stamp it yet, so `NOT NULL` would break every insert — it did exactly that on staging. `NOT NULL` ships with the create-path stamping, in the same migration, never before.
 - `fastapi` is **pinned, not floored** (`pyproject.toml`) — `include_router`'s path handling changed across versions and the auth gate depends on it. Read the comment there before bumping.
 
 ## Testing

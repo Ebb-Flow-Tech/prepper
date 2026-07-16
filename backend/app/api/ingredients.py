@@ -15,6 +15,7 @@ from app.domain.fmh_import_service import (
     import_buy_catalogue,
     import_ingredients,
 )
+from app.domain.ingredient_service import NOT_ORG_ADMIN_FOR_MOVE, UNIT_NOT_FOUND
 from app.domain.storage_service import (
     StorageError,
     StorageService,
@@ -299,11 +300,15 @@ def add_ingredient_supplier(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Add a supplier to an ingredient."""
+    """Add a supplier to an ingredient, at a unit the caller can actually see.
+
+    `data.unit_id` is client-supplied, so it is checked against the caller's brands — otherwise
+    anyone could attach pricing to a rival brand's unit.
+    """
     # Ensure the path ingredient_id matches the body
     data.ingredient_id = ingredient_id
     service = IngredientService(session)
-    result = service.add_ingredient_supplier(ingredient_id, data)
+    result = service.add_ingredient_supplier(ingredient_id, data, subject=current_user.id)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -328,16 +333,26 @@ def update_ingredient_supplier(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a supplier-ingredient link.
+    """Update a supplier-ingredient link the caller can see.
 
-    Moving a link to a different unit stays org-admin-only: the old rule was `user_type == ADMIN`,
-    with no manager involved, so it maps straight onto `is_org_admin` and gains no brand scope.
+    Scope is checked in the service against the link's current unit — and, when moving, the target
+    unit too. The route previously checked authority ONLY when `unit_id` was present, so a PATCH
+    without it reached the service unchecked and could rewrite any brand's pricing.
+
+    Two different denials, deliberately different codes:
+      - 404 when the link is not visible to the caller — the scoped read would never have shown it,
+        so a write must not confirm it exists either.
+      - 403 when the caller CAN see the link but may not re-home it. Re-homing stays
+        org-admin-only; the row is not a secret from them, the operation is simply refused.
     """
-    if data.unit_id is not None:
-        _require_org_admin(session, current_user)
-
     service = IngredientService(session)
-    result = service.update_ingredient_supplier(supplier_ingredient_id, data)
+    result = service.update_ingredient_supplier(
+        supplier_ingredient_id, data, subject=current_user.id
+    )
+    if result == NOT_ORG_ADMIN_FOR_MOVE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result)
+    if result == UNIT_NOT_FOUND:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -356,9 +371,15 @@ def remove_ingredient_supplier(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove a supplier from an ingredient."""
+    """Remove a supplier from an ingredient, if the caller can see the link.
+
+    404 rather than 403 for a link at another brand's unit: its existence is not the caller's to
+    learn, and the scoped read would never have shown it to them.
+    """
     service = IngredientService(session)
-    success = service.remove_ingredient_supplier(supplier_ingredient_id)
+    success = service.remove_ingredient_supplier(
+        supplier_ingredient_id, subject=current_user.id
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

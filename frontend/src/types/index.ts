@@ -989,6 +989,21 @@ export interface CreateSupplierIngredientTagRequest {
 
 export type BrandRole = 'Manager' | 'Staff';
 
+/**
+ * An organisation the user belongs to, from Prepper's projection of Passport.
+ *
+ * The only place org NAMES reach the client. `organization_id` has been carried on several
+ * payloads since the sync consumer landed with no way to render it.
+ */
+export interface PassportOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  /** The user's role IN THIS ORG: `Owner` | `Admin` | `Member`. Read per-org, never "strongest anywhere". */
+  my_org_role: string;
+}
+
 export interface PassportBrand {
   id: string;
   name: string;

@@ -235,3 +235,79 @@ def test_suspended_org_is_blocked_even_when_another_org_is_healthy(session: Sess
         get_org_context(user=user, x_organization_id=OTHER_ORG, session=session)
 
     assert exc.value.status_code == 403
+
+
+# =============================================================================
+# The email fallback — the input that confers identity
+# =============================================================================
+
+
+def test_ambiguous_email_fails_closed(session: Session):
+    """Two active members sharing an email must resolve to NEITHER.
+
+    `platform_user_id_for_email` maps an email onto a Passport identity, so returning an arbitrary
+    `.first()` match hands one person another's org role. `deps.resolve_or_provision_passport_user`
+    already failed closed here; this path did not.
+
+    Also the only test that executes the guard — its logging call was an unimported `NameError`
+    that the whole suite went green around, because nothing ever reached the branch.
+    """
+    for suffix in ("one", "two"):
+        store.apply_membership(
+            session,
+            {
+                "id": f"mem-{suffix}",
+                "organization_id": ORG_ID,
+                "platform_user_id": f"pu-{suffix}",
+                "role": "Member",
+                "status": "active",
+                "version": 1,
+                "email": "shared@temper.sg",
+                "display_name": suffix,
+            },
+        )
+
+    assert access.platform_user_id_for_email(session, "shared@temper.sg") is None
+
+
+def test_ambiguity_is_case_insensitive(session: Session):
+    """`Chef@x` and `chef@x` are the same person to Passport and must not resolve arbitrarily."""
+    for suffix, email in (("one", "Chef@temper.sg"), ("two", "chef@temper.sg")):
+        store.apply_membership(
+            session,
+            {
+                "id": f"mem-case-{suffix}",
+                "organization_id": ORG_ID,
+                "platform_user_id": f"pu-case-{suffix}",
+                "role": "Member",
+                "status": "active",
+                "version": 1,
+                "email": email,
+                "display_name": suffix,
+            },
+        )
+
+    assert access.platform_user_id_for_email(session, "CHEF@temper.sg") is None
+
+
+def test_one_member_across_two_orgs_still_resolves(session: Session):
+    """The SAME platform user in two orgs is one identity, not an ambiguity — it must resolve.
+
+    Failing closed here would break every multi-org user, which is the case this design exists for.
+    """
+    for org in (ORG_ID, OTHER_ORG):
+        store.apply_membership(
+            session,
+            {
+                "id": f"mem-{org}",
+                "organization_id": org,
+                "platform_user_id": "pu-same-person",
+                "role": "Member",
+                "status": "active",
+                "version": 1,
+                "email": "multi@temper.sg",
+                "display_name": "Multi",
+            },
+        )
+
+    assert access.platform_user_id_for_email(session, "multi@temper.sg") == "pu-same-person"

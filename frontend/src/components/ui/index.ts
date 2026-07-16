@@ -19,3 +19,14 @@ export { ViewToggle } from './ViewToggle';
 export { DropdownButton } from './DropdownButton';
 export type { DropdownItem } from './DropdownButton';
 export { NumericInput } from './NumericInput';
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty,
+} from './Table';
+export { Pagination } from './Pagination';

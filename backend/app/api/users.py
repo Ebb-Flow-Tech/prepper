@@ -11,17 +11,35 @@ from app.models.user import User, UserRead, UserUpdate
 router = APIRouter()
 
 
-@router.get("", response_model=list[UserRead])
+@router.get("")
 def list_users(
     email: str | None = Query(None),
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get all users or search by email. Returns empty list if email not found."""
+    """People who share an organisation with the caller, paginated.
+
+    This returned every user in the instance — email, username and phone number — to any
+    authenticated caller, unpaginated, and `?email=` made it a targeted lookup oracle on top.
+
+    Scoped to the caller's orgs via the Passport projection. It is NOT narrowed to a single acting
+    org yet: no route carries an org context, and the union already closes the cross-tenant leak.
+    """
+    from app.models.pagination import PaginatedResponse
+
     service = UserService(session)
-    if email:
-        user = service.get_user_by_email(email)
-        return [user] if user else []
-    return service.get_all_users()
+    offset = (page_number - 1) * page_size
+    items, total = service.list_users_paginated(
+        current_user.id, offset=offset, limit=page_size, email=email
+    )
+    return PaginatedResponse.create(
+        items=[UserRead.model_validate(u) for u in items],
+        total_count=total,
+        page_number=page_number,
+        page_size=page_size,
+    )
 
 
 @router.get("/{user_id}", response_model=UserRead)

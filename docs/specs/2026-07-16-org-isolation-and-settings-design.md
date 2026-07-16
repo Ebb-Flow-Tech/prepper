@@ -435,6 +435,21 @@ to make them safe. The NULL rule buys safety at the cost of a permanent special 
 count reaches zero**. If the chosen rule is "NULL = owner-only", the column stays nullable and that
 special case is documented at each query site.
 
+**`NOT NULL` must ship WITH the write path, never before it (learned the hard way, 2026-07-16).**
+An early cut of migration 2 set `NOT NULL` immediately after backfilling and **broke every write on
+staging within seconds**: the column became mandatory in the database while no application code
+populated it on insert, so every `INSERT` failed with `NotNullViolation` (verified against real
+staging — `INSERT INTO categories` raised). Backfilling EXISTING rows and constraining FUTURE ones
+are different changes with different prerequisites:
+
+| Change | Prerequisite |
+|---|---|
+| Backfill existing rows | the rule is chosen (migration 2) |
+| `NOT NULL` | **every create path stamps `organization_id` from the org context** (migration 3) |
+
+So migration 2 asserts zero NULLs and stops. `NOT NULL` lands in migration 3, in the same change as
+the create-path stamping, and not one migration earlier.
+
 **Ordering constraint:** migration 2 reads `passport.identity_link` and `passport.membership`. Both
 are projections. If the projection is stale or incomplete for a given user, that user's rows fall to
 undecidable rather than being assigned wrongly — the safe direction. Migration 2 should therefore

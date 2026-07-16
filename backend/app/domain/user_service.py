@@ -6,10 +6,12 @@ Does NOT interact with Supabase auth.
 
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models import User, UserCreate, UserUpdate
+from app.passport import access
 
 
 class UserService:
@@ -118,12 +120,75 @@ class UserService:
         self.session.refresh(user)
         return user
 
-    def get_all_users(self) -> list[User]:
-        """
-        Get all users, ordered by creation date (newest first).
+    def _org_scoped_user_query(self, subject: str):
+        """Users who share an org with ``subject``, newest first.
 
-        Returns:
-            List of all User objects
+        `users` has no `organization_id` and must not get one: membership is Passport-owned and
+        already projected, and a multi-org user has no single org to store. So the scope is a JOIN:
+
+            users.id = identity_link.subject
+            identity_link.platform_user_id = membership.platform_user_id
+            membership.organization_id IN (the caller's active orgs)
+
+        Note the join is on `identity_link.subject` — it holds the local `users.id`, while
+        `platform_user_id` holds Passport's. Joining the wrong pair matches nothing and silently
+        returns an empty list.
+
+        This scopes to the caller's org UNION rather than one active org, because no route carries
+        an org context yet. The union closes the cross-tenant leak; narrowing to the acting org
+        comes with the rest of org scoping.
+
+        A user with no identity link appears to nobody — correct, since nothing places them in an
+        org, and guessing would be the leak this closes.
         """
-        statement = select(User).order_by(User.created_at.desc())
-        return list(self.session.exec(statement).all())
+        from app.models import PassportIdentityLink, PassportMembership
+
+        platform_user_id = access.platform_user_id_for(self.session, subject)
+        if platform_user_id is None:
+            return None
+
+        org_ids = access.orgs_for_platform_user(self.session, platform_user_id)
+        if not org_ids:
+            return None
+
+        members_in_my_orgs = (
+            select(PassportIdentityLink.subject)
+            .join(
+                PassportMembership,
+                col(PassportMembership.platform_user_id)
+                == col(PassportIdentityLink.platform_user_id),
+            )
+            .where(
+                col(PassportMembership.organization_id).in_(org_ids),
+                PassportMembership.status == "active",
+            )
+        )
+        return (
+            select(User)
+            .where(col(User.id).in_(members_in_my_orgs))
+            .order_by(col(User.created_at).desc())
+        )
+
+    def list_users_paginated(
+        self, subject: str, *, offset: int, limit: int, email: str | None = None
+    ) -> tuple[list[User], int]:
+        """Users in the caller's orgs, paginated.
+
+        `subject` is REQUIRED. This returned EVERY user in the instance — email, username and phone
+        number — to any authenticated caller, unpaginated. `?email=` made it a targeted oracle as
+        well as a bulk dump.
+
+        Fails CLOSED: an unresolvable caller sees nobody rather than everybody.
+        """
+        statement = self._org_scoped_user_query(subject)
+        if statement is None:
+            return [], 0
+
+        if email:
+            statement = statement.where(func.lower(User.email) == email.lower())
+
+        total = self.session.exec(
+            select(func.count()).select_from(statement.subquery())
+        ).one()
+        rows = list(self.session.exec(statement.offset(offset).limit(limit)).all())
+        return rows, int(total)

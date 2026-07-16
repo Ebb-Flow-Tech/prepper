@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.64](#0064---2026-07-16)** — Fix: Four Cross-Tenant Leaks (All Three Supplier-Ingredient Writes, `GET /menu-items`), Email Self-Service Granting Another User's Passport Identity, Unscoped `GET /users` PII & Unauthenticated `/docs`; plus the Settings Refactor — Tabs/Table Primitives, the BrandRoles Scroll Fix, Profile Org Info & the Org Switcher
 - **[0.0.63](#0063---2026-07-16)** — Org Isolation (1/3): Nullable `organization_id` on the Seven Per-Org Tables, `get_org_context` with Email Fallback & a Read-Only Backfill Report — No Query Enforces Yet; `ingredients`/`categories`/`menus_sketch` Are 100% Underivable
 - **[0.0.62](#0062---2026-07-16)** — Fix: Default-Deny Authentication — 124 of 182 Routes Required No Token (Anonymous `DELETE` on Suppliers/Recipes, `GET /users` PII, Anonymous AI Spend); Global `require_auth` Gate + Derived Public Allowlist, `PATCH /users/{id}` Ownership Check, the `GET /menu-items` Cross-Brand Leak & a Route-Auth Census
 - **[0.0.58](#0058---2026-07-15)** — SSO Login & Auto-Provisioning: Dual-Verify Resolves-or-Provisions a Prepper Account by Verified Passport Identity, plus Best-Effort Member Provisioning on `membership.upserted`
@@ -66,6 +67,57 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.64] - 2026-07-16
+
+### Fixed
+
+#### Four cross-tenant leaks, all of the same shape: authenticated but never authorised
+
+The default-deny gate in `0.0.62` proved *who* is calling. It never proved *what they may see* — and four routes held a `User` they simply did not consult. Every one was found by attacking the code, not by reading it.
+
+- **`POST` / `PATCH` / `DELETE /ingredients/{id}/suppliers`** — all three writes on supplier-ingredient links were unscoped. `unit_id` is client-supplied and unchecked, so any signed-in user could attach pricing to **any brand's unit**; `DELETE` took a bare integer and removed **any brand's link**; `PATCH` had no check at all unless `unit_id` happened to be present, so a body without it rewrote another brand's price and SKU — and the 200 response disclosed the whole link. The perverse part: `get_ingredient_suppliers` **is** correctly scoped, so you could destroy rows you were forbidden to read. That is 8,637 rows of supplier pricing on staging.
+- **`GET /menu-items/{section_id}`** — took `get_current_user` and performed no access check whatsoever, returning any brand's recipe names and prices to anyone who could guess a small integer. Its sibling `GET /menu-outlets/{unit_id}` had always checked.
+
+All now scope against the caller's brands, mirroring the read path exactly, and 404 rather than 403 so a rival brand's row cannot be probed for existence. The `Manager`-cannot-re-home rule is preserved and still 403s — that one is a product decision, not a scope check.
+
+#### `PATCH /users/{id}` let you take another user's Passport identity
+
+`users.email` was self-writable, and `deps._platform_user_for` resolves org membership by matching it against `passport.membership.email` when no identity link has synced. The chain: `PATCH /users/{me} {"email": "ceo@corp.com"}` → `GET /passport/organizations` → the target's orgs and org role. No identity link needed — and a non-member never gets one, so the fallback fired permanently for exactly the accounts that must never resolve.
+
+Email is identity now, not a profile field: `UserUpdate` refuses it (`extra: forbid`, so a stray `email` is a 422 rather than a silent no-op), and `access.platform_user_id_for_email` fails closed on an ambiguous match — the same rule `resolve_or_provision_passport_user` already applied on its own token-minting path.
+
+#### `GET /users` was unscoped, unpaginated PII
+
+Every user in the instance — email, username, phone number — to any authenticated caller, with `?email=` as a targeted lookup oracle. Now scoped to the caller's orgs through the projection join and paginated. Not yet narrowed to a single acting org: no route carries an org context, and the union already closes the cross-tenant leak.
+
+#### `_may_write_at_unit` asked the org-less admin question
+
+`access.org_role`'s org-less form answers "an admin of *any* of your orgs" — its docstring ends "Do not add callers to it." A new caller was added anyway, so an admin of org B could write into org A. The unit carries its own org; the check now passes it.
+
+#### `/docs`, `/redoc` and `/openapi.json` served the schema with no token
+
+FastAPI registers them as plain Starlette `Route`s, not `APIRoute`s, so the app-level gate never applied — and `test_default_deny_auth` could not see them either, since it enumerates `app.openapi()["paths"]` and they do not appear in the schema they serve. `main.py` claimed "every route requires a JWT unless allowlisted"; that was false for exactly these four. Now mounted only when `DEBUG=true`. Developers keep Swagger; production returns 404.
+
+### Added
+
+#### Settings: Profile and Brand Roles rebuilt, and the organisation is finally visible
+
+- **`Tabs` and `Table` primitives**; `Pagination` exported from the barrel at last. Three components had hand-rolled these.
+- **The settings shell owns scroll and width.** This fixes a live bug: `BrandRolesTab` rendered inside an `overflow-hidden` flex without a scroll container of its own, so **a long roster was unreachable**. The three tabs had each decided separately and disagreed (`max-w-2xl` vs `max-w-7xl` vs nothing).
+- **Profile** rebuilt on `Card`/`PageHeader`/`Badge`, with a new **Organisation** section — the org name and your role in it, which the client has never been able to render.
+- **Brand Roles** rebuilt on primitives. The org-Owner **ladder is now visible copy** rather than a source comment: Owners and Admins hold `Manager` at every brand with no row in the table, so an empty roster does not mean nobody has access — the single most misleading thing on that page. The `assignable` memo, the empty-brands explainer, the verbatim Passport error and the no-optimistic-update rule all survive deliberately.
+- **`GET /passport/organizations`** — the first read of `passport.organization`, projected since the sync consumer landed and never queried. Returns name, slug and per-org role, resolving identity exactly as `get_org_context` does so a freshly-logged-in SSO user is not handed an empty list.
+- **Org switcher** in `TopNav`: static text with one org, a picker with several. `activeOrgId` persists beside the JWT; `X-Organization-Id` attaches in all three `api.ts` wrappers; switching clears the whole query cache, because every cached key is org-dependent and anything less risks showing one org's data under another's name.
+
+### Changed
+
+- **`scripts/route_auth_census.py`** — reported 22 allowlisted routes against an allowlist of 7. It recovered full paths by matching relative suffixes against the OpenAPI schema, and `@router.get("")` has a relative path of `""`, so `anything.endswith("")` matched an arbitrary entry. It now accumulates the real prefix from `_IncludedRouter.include_context.prefix`, and has its own tests: this script had been silently wrong twice.
+- **`mounted_paths()`** — `app.routes` on FastAPI 0.139 holds 38 `_IncludedRouter` wrappers with no `path`, `methods`, `name` or `endpoint`, so the obvious iteration raises. That trap was walked into three separate times; it is now one documented helper rather than four scattered docstrings.
+
+**Known limitation:** `getUsers()` unwraps the first page of 100 and drops the rest — no caller paginates yet, so an org with more than 100 members shows only the first 100. Recorded at the call site rather than left silent.
+
 ---
 
 ## [0.0.63] - 2026-07-16

@@ -53,8 +53,8 @@ export function UserManagementTab() {
   }
 
   return (
-    <div className="h-full w-full overflow-auto">
-      <div className="p-6 max-w-7xl mx-auto">
+    <div>
+      <div>
         <PageHeader
           title="Accounts"
           description="Login accounts and contact details. Roles are assigned per brand in the Brand Roles tab — Passport owns them, Prepper cannot set them here."

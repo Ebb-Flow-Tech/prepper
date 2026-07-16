@@ -46,9 +46,20 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(SQLModel):
-    """Schema for updating a user. Roles are NOT settable here — Passport owns them."""
+    """Schema for updating a user's PROFILE.
 
-    email: str | None = None
+    Roles are not settable here — Passport owns them. Neither is **email**, for the same reason:
+    it stopped being a profile field the moment Passport began resolving org membership by it.
+    `deps._platform_user_for` matches `users.email` against `passport.membership.email` when an
+    identity link has not synced yet, so a self-writable email is a way to inherit someone else's
+    Passport identity and org role.
+
+    `model_config` forbids unknown keys so a stray `email` is a 422 rather than a silent no-op —
+    a request that believes it changed identity and did not is worse than a rejected one.
+    """
+
+    model_config = {"extra": "forbid"}
+
     username: str | None = None
     phone_number: str | None = None
 
