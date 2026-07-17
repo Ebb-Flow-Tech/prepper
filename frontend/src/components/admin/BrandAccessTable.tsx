@@ -18,21 +18,26 @@ import type { BrandRole, PassportBrand, PassportBrandRole } from '@/types';
 /**
  * Brands, each expanding to everyone who can reach it.
  *
- * The roster is brand-first because the brand is the unit people think in, and because the numbers
- * demand it: 10 brands × ~19 Owners/Admins is ~190 rows, which is unreadable flat and fine collapsed.
+ * Brand-first because the brand is the unit people think in, and because the numbers demand it: 10
+ * brands × ~19 Owners/Admins is ~190 rows, unreadable flat and fine collapsed.
  *
- * Two rules this component exists to honour:
+ * **Changing a role and removing one are different questions.** An earlier version answered both
+ * with `source === 'derived'` and rendered derived rows as dead text — which, on real data where
+ * 187 of 190 rows are derived, made the page ~98% inert with no hint that the assign bar above was
+ * the way through. A derived holder has no row to REMOVE, true; but they can absolutely have their
+ * role CHANGED — by assigning an explicit one, which overrides the ladder. So:
  *
- *  - **A derived row has no controls.** `source === 'derived'` means the ladder grants the role and
- *    there is no `unit_app_membership` row — nothing to change, nothing to remove. Its
- *    `assignment_id` is `null`, which is also why rows are keyed on `(platform_user_id, unit_id)`.
- *  - **An assigned row always has them, whatever the org role.** An Owner carrying an explicit
- *    `Staff` row is a real demotion on a real row. Suppressing its controls because "Owners are
- *    Managers" would leave a live assignment uneditable forever.
+ *  - derived + may change → a `Select` that ASSIGNS (creating the override), not `set` (which needs
+ *    an `assignment_id` that does not exist). It keeps the `· auto` marker until a row exists.
+ *  - assigned → `Select` that sets, and `Remove` — **including for an Owner/Admin**, whose explicit
+ *    row is real and beats the ladder. Removing it reverts them to `auto`.
  *
- * `role` is Passport's derived answer, already resolved server-side. This component never infers a
- * role from `org_role` — doing so would re-implement the ladder in a second language and let the
- * table disagree with the permission check.
+ * Who may do what is Passport's authority matrix, mirrored via `isOrgAdmin` and the brand's own
+ * `my_role`. Presentation only — Passport re-checks every write and is the real gate.
+ *
+ * `role` is Passport's derived answer, resolved server-side. This component never infers a role
+ * from `org_role`: that would re-implement the ladder in a second language and let the table
+ * disagree with the permission check.
  */
 
 const ROLE_OPTIONS: { value: BrandRole; label: string }[] = [
@@ -44,6 +49,9 @@ interface BrandAccessTableProps {
   brands: PassportBrand[];
   roster: PassportBrandRole[];
   pending: boolean;
+  /** Owner/Admin of the ACTING org: may change any role and remove anyone. */
+  isOrgAdmin: boolean;
+  onAssign: (platformUserId: string, unitId: string, role: BrandRole) => void;
   onSetRole: (assignmentId: string, role: BrandRole) => void;
   onRemove: (assignmentId: string) => void;
 }
@@ -52,6 +60,8 @@ export function BrandAccessTable({
   brands,
   roster,
   pending,
+  isOrgAdmin,
+  onAssign,
   onSetRole,
   onRemove,
 }: BrandAccessTableProps) {
@@ -145,51 +155,92 @@ export function BrandAccessTable({
               )}
 
               {isOpen &&
-                people.map((person) => (
-                  <TableRow key={`${person.platform_user_id}:${person.unit_id}`} id={panelId}>
-                    <TableCell className="pl-10 text-foreground">
-                      {person.display_name || person.email}
-                      {person.display_name && (
-                        <span className="ml-2 text-xs text-muted-foreground">{person.email}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{person.org_role}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {person.source === 'derived' || person.assignment_id === null ? (
-                        <span className="text-muted-foreground">
-                          {person.role}
-                          <span className="ml-1 text-xs">· auto</span>
-                        </span>
-                      ) : (
-                        <Select
-                          aria-label={`Brand role for ${person.display_name || person.email} at ${brand.name}`}
-                          value={person.role}
-                          disabled={pending}
-                          onChange={(e) =>
-                            onSetRole(person.assignment_id as string, e.target.value as BrandRole)
-                          }
-                          className="h-8 w-auto py-1"
-                          options={ROLE_OPTIONS}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {person.source === 'assigned' && person.assignment_id !== null && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onRemove(person.assignment_id as string)}
-                          disabled={pending}
-                          className="text-red-600 hover:text-red-700 dark:text-red-400"
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                people.map((person) => {
+                  const isDerived = person.source === 'derived' || person.assignment_id === null;
+                  const iManageThisBrand = brand.my_role === 'Manager';
+
+                  // Only an org Owner/Admin may CHANGE an existing role — a brand Manager gets a
+                  // 403 from Passport, so do not offer it.
+                  const mayChange = isOrgAdmin;
+                  // A Manager may remove `Staff` at a brand they manage, never a peer Manager.
+                  const mayRemove =
+                    !isDerived &&
+                    (isOrgAdmin || (iManageThisBrand && person.role === 'Staff'));
+                  // Overriding the ladder means CREATING a role — assignment, not a change. A
+                  // Manager may do that, but only as `Staff`, so for them a derived Manager is not
+                  // something they can touch.
+                  const mayOverride = isDerived && isOrgAdmin;
+
+                  return (
+                    <TableRow key={`${person.platform_user_id}:${person.unit_id}`} id={panelId}>
+                      <TableCell className="pl-10 text-foreground">
+                        {person.display_name || person.email}
+                        {person.display_name && (
+                          <span className="ml-2 text-xs text-muted-foreground">{person.email}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{person.org_role}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {isDerived ? (
+                          <div className="flex items-center gap-1">
+                            {mayOverride ? (
+                              <Select
+                                aria-label={`Brand role for ${person.display_name || person.email} at ${brand.name} — currently automatic`}
+                                value={person.role}
+                                disabled={pending}
+                                onChange={(e) =>
+                                  onAssign(
+                                    person.platform_user_id,
+                                    person.unit_id,
+                                    e.target.value as BrandRole
+                                  )
+                                }
+                                className="h-8 w-auto py-1"
+                                options={ROLE_OPTIONS}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">{person.role}</span>
+                            )}
+                            <span
+                              className="text-xs text-muted-foreground"
+                              title="Automatic: they are an organisation Owner or Admin, so they hold this role at every brand without being given one."
+                            >
+                              · auto
+                            </span>
+                          </div>
+                        ) : mayChange ? (
+                          <Select
+                            aria-label={`Brand role for ${person.display_name || person.email} at ${brand.name}`}
+                            value={person.role}
+                            disabled={pending}
+                            onChange={(e) =>
+                              onSetRole(person.assignment_id as string, e.target.value as BrandRole)
+                            }
+                            className="h-8 w-auto py-1"
+                            options={ROLE_OPTIONS}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">{person.role}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {mayRemove && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRemove(person.assignment_id as string)}
+                            disabled={pending}
+                            className="text-red-600 hover:text-red-700 dark:text-red-400"
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
             </Fragment>
           );
         })}

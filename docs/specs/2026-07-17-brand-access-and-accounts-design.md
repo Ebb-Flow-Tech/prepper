@@ -533,6 +533,67 @@ explicitly because `security.md` requires RLS on new tables and a reviewer will 
    admin-scoped — so this is not a widening. Flagged because it is worth an explicit decision rather
    than an inherited default.
 
+## The three rules the page must obey
+
+Stated by the product owner after the first implementation, which honoured none of them in the UI.
+
+1. **Only an org Owner/Admin may CHANGE an existing Manager/Staff role at a brand.**
+2. **A brand Manager may only assign `Staff`** — and, per the matrix, only remove `Staff`, never a
+   peer Manager.
+3. **A user only sees the brands they have access to.**
+
+**Rules 1 and 2 are presentation.** Passport already enforces them (`writeback.py:16-20`) and
+returns `403`. The defect was that the UI rendered a `Select` and a `Remove` on every row for
+everyone, so a Manager clicked a control that was always going to fail. Fixed by mirroring the
+matrix in `BrandAccessTab`/`BrandAccessTable` via `isOrgAdmin` (read from `my_org_role` for the
+**acting** org) and the brand's own `my_role`. **Do not re-implement the matrix in Prepper's
+backend**: `_require_local_authority` is a pre-filter, Passport is the gate, and a second copy would
+drift.
+
+**Rule 3 is enforcement, and only Prepper can do it.** The roster is served from Prepper's
+projection — Passport never sees the request. `brands_for_user` returned EVERY app-carrying brand in
+the org with `my_role: None` on unreachable ones; `roster` then returned every brand's people, names
+and emails included. The derived rows made an existing hole worth closing: unscoped it went from 3
+rows to ~190. Both are now filtered to `access.brand_roles(session, subject)`. An Owner/Admin still
+sees every brand — through the LADDER, not an exception, which is why scoping costs them nothing.
+
+Three existing directory tests broke on this and were **fixed, not weakened**: they asserted a
+plain `Member` with no role row could see `BRAND`, which was only ever true because the old code
+showed you brands you could not access. They test dark-brand filtering and org narrowing; they now
+grant their subject a real role so they test that and not the leak.
+
+### Changing a derived role — the dead-end this created
+
+The first cut rendered `source === 'derived'` as static text with no controls. On live data **187 of
+190 rows are derived**, so the page was ~98% inert, and the only way through — assign an explicit
+role, which overrides the ladder — lived in a separate widget the table never pointed at.
+
+The error was answering two questions with one flag. A derived holder has no row to **remove**;
+that does not mean their role cannot be **changed**. Derived rows now carry a `Select` that calls
+**assign** (creating the override) rather than **set** (which needs an `assignment_id` that does not
+exist) — for an org admin only, per rule 1. A Manager cannot override a derived Manager, since
+creating that role is an assignment and rule 2 caps them at `Staff`.
+
+## Open question — onboarding someone with no Passport account
+
+**Raised after implementation; not answered.** The invite grants org membership. It does **not**
+create a credential, and Prepper must never try to: login authenticates against PASSPORT's project
+(`auth.py:60` — *"one credential for every app, and no Prepper-side invite/SMTP"*), and
+`sso_login_enabled` is true wherever `passport_supabase_url` + anon key are set, which is staging.
+
+| invitee | what happens |
+|---|---|
+| **has a Passport account** | Signs in immediately with their existing Passport password. The membership was the only missing piece, and this is the first time Prepper could grant it. **Works.** |
+| **no Passport account** | `upsert_membership(email=…)` creates the platform-user record. Whether Passport then provisions a GoTrue credential and emails them is **Passport's server-side behaviour — undocumented in the SDK (no `invite`/`email`/`password` anywhere in its README) and unverified.** If it does not, they must be set up in Passport's own admin UI first. |
+
+**This is not a regression.** The `AddUserModal` it replaced registered against *Prepper's* Supabase
+(`supabase_auth_service.register` uses `service_role_key`) while login checks *Passport's* — so its
+accounts could never sign in, and were invisible in the roster besides. The path was already dead.
+
+**Do not "fix" this by adding SMTP to Prepper.** That forks identity, which is the thing Passport
+exists to prevent. Answer it by reading Passport's membership-creation behaviour, then either
+document "the invitee must exist in Passport" in the modal, or have Passport own the invite email.
+
 ## Decisions
 
 1. **Phone is editable on your own row only. Settled 2026-07-17; not revisited without new

@@ -13,6 +13,18 @@ import type { InviteMemberRequest } from '@/types';
  * moment it was created: the roster is Passport's membership, and a locally-made account has none,
  * so "Add User" added someone nobody could see. Passport owns identity; Prepper projects it.
  *
+ * **This grants ACCESS, not a CREDENTIAL — and that is the whole design.** Login authenticates
+ * against PASSPORT's project, not Prepper's (`auth.py:60`: "one credential for every app, and no
+ * Prepper-side invite/SMTP"). So someone who already has a Passport account signs in immediately
+ * once this membership exists — the credential was never missing, the membership was. Someone with
+ * NO Passport account may need provisioning in Passport first; whether Passport emails them on
+ * membership creation is Passport's business and is NOT verified here. Do not add SMTP to Prepper
+ * to paper over that — it would fork identity, which is what Passport exists to prevent.
+ *
+ * The modal this replaced created a local Supabase account with a password. That account could
+ * never log in: its password lived in Prepper's project while login checks Passport's. It was a
+ * dead path, not a working one that got taken away.
+ *
  * Three things worth knowing before changing this:
  *
  *  - **The role here is the ORG vocabulary** — `Owner` | `Admin` | `Member`. NOT `Manager`/`Staff`,
@@ -116,9 +128,13 @@ export function InviteMemberModal({ isOpen, onClose }: InviteMemberModalProps) {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Invitations are sent by Passport, which has the final say on whether you may grant this
-          role. New members appear in this list once Passport syncs them back — usually a moment
-          later, not instantly.
+          This grants access to Prepper. It does not create a password — people sign in with their
+          existing Mission Systems (Passport) account, so someone who has never used a Mission
+          Systems app may need setting up in Passport first.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Passport has the final say on whether you may grant this role. New members appear in this
+          list once Passport syncs them back — a moment later, not instantly.
         </p>
 
         <div className="flex justify-end gap-3 border-t border-border pt-4">

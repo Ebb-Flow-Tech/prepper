@@ -76,14 +76,21 @@ def organizations_for_user(
 def brands_for_user(
     session: Session, subject: str, organization_id: str
 ) -> list[dict[str, object]]:
-    """Active brands that CARRY Prepper, in the acting user's orgs, with that user's role at each.
+    """The brands this user CAN REACH in the acting org — never the org's full brand list.
 
     A brand with no ``unit_app_access`` row confers access to nobody — not even an org Owner, whose
     ladder still requires a brand that carries the app — so a brand without one is not shown: it is
     not somewhere anyone can be given a role.
 
-    ``my_role`` is ``Manager`` | ``Staff`` | ``None``, taken from the SAME derivation the request
-    path uses (``roles_at_brands``), so the UI can never disagree with the permission check.
+    **Scoped to the caller's own access.** This used to return every app-carrying brand in the org
+    with ``my_role: None`` on the ones the caller could not reach, so a Staff at one brand saw all
+    of them. Passport cannot catch that: these reads are served from Prepper's projection and never
+    reach it. An org Owner/Admin still sees every app-carrying brand — via the LADDER, not via an
+    exception here, which is why scoping costs them nothing.
+
+    ``my_role`` is ``Manager`` | ``Staff``, never ``None``, and comes from the SAME derivation the
+    request path uses (``roles_at_brands``) — so the UI cannot disagree with the permission check,
+    and "can see it" and "holds a role at it" cannot drift apart.
     """
     platform_user_id = access.platform_user_id_for(session, subject)
     if platform_user_id is None:
@@ -113,16 +120,17 @@ def brands_for_user(
             "id": unit.id,
             "name": unit.name,
             "organization_id": unit.organization_id,
-            "my_role": my_roles.get(unit.id),
+            "my_role": my_roles[unit.id],
         }
         for unit in sorted(rows, key=lambda u: u.name.casefold())
+        if unit.id in my_roles
     ]
 
 
 def roster(
     session: Session, subject: str, organization_id: str
 ) -> list[dict[str, object]]:
-    """Everyone who can reach each brand in the acting org — assigned AND derived.
+    """Everyone who can reach each brand THE CALLER can reach — assigned AND derived.
 
     Not "the brand-app role rows we store". An org Owner/Admin holds ``Manager`` at every
     app-carrying brand with NO ``unit_app_membership`` row (the ladder), so a stored-rows-only
@@ -138,6 +146,10 @@ def roster(
 
     ``role`` always comes from ``access.brand_roles_for_org_members`` — never from the stored row's
     own ``role`` — so precedence stays inside the SDK, the one place that decides it.
+
+    Brand-scoped to the CALLER, like :func:`brands_for_user`: a Staff at one brand has no business
+    learning who works at a brand they cannot reach. An org Owner/Admin sees everything here, but
+    through the ladder rather than a bypass.
 
     Delivery is own-app scoped, so every projected row is already Prepper's: do NOT filter by
     ``app_id`` locally. ``removed`` rows are KEPT as tombstones by the handler (trap 1) and confer
@@ -158,17 +170,31 @@ def roster(
 
     derived = access.brand_roles_for_org_members(session, organization_id)
 
+    # Scoped to the brands the CALLER can reach — not the org's. Without this a Staff at one brand
+    # is handed the name and email of everyone at every brand: 190 rows on staging, where the
+    # unscoped version only ever showed 3 because it listed stored rows alone. Derived rows made an
+    # existing hole worth closing. `my_reach` is the caller's own derivation; `derived` is everyone
+    # else's — two different questions that both go through `roles_at_brands`.
+    my_reach = set(access.brand_roles(session, subject))
+
     # Brands that CARRY Prepper — the same predicate `brands_for_user` uses. A brand with no
     # `unit_app_access` row is somewhere nobody can hold a role, ladder included.
-    brands = session.exec(
-        select(PassportUnit)
-        .join(PassportUnitAppAccess, col(PassportUnitAppAccess.unit_id) == PassportUnit.id)
-        .where(
-            col(PassportUnit.organization_id) == organization_id,
-            PassportUnit.type == _BRAND,
-            PassportUnit.status == _ACTIVE,
-        )
-    ).all()
+    brands = [
+        unit
+        for unit in session.exec(
+            select(PassportUnit)
+            .join(
+                PassportUnitAppAccess,
+                col(PassportUnitAppAccess.unit_id) == PassportUnit.id,
+            )
+            .where(
+                col(PassportUnit.organization_id) == organization_id,
+                PassportUnit.type == _BRAND,
+                PassportUnit.status == _ACTIVE,
+            )
+        ).all()
+        if unit.id in my_reach
+    ]
 
     members = {
         m.platform_user_id: m

@@ -9,6 +9,8 @@ import {
   useSetBrandRole,
   useRemoveBrandRole,
 } from '@/lib/hooks/usePassportRoles';
+import { useOrganizations } from '@/lib/hooks';
+import { useAppState } from '@/lib/store';
 import { Button, PageHeader, Select } from '@/components/ui';
 import { BrandAccessTable } from './BrandAccessTable';
 import { RoleLegend } from './RoleLegend';
@@ -36,10 +38,8 @@ import type { BrandRole } from '@/types';
  * explicit row beats it, which is why an Owner can be Staff at one brand and Manager at the rest.
  */
 
-const ROLE_OPTIONS: { value: BrandRole; label: string }[] = [
-  { value: 'Manager', label: 'Manager' },
-  { value: 'Staff', label: 'Staff' },
-];
+const MANAGER_OPTION = { value: 'Manager' as BrandRole, label: 'Manager' };
+const STAFF_OPTION = { value: 'Staff' as BrandRole, label: 'Staff' };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong';
@@ -49,6 +49,39 @@ export function BrandAccessTab() {
   const { data: brands, isLoading: brandsLoading } = usePassportBrands();
   const { data: roster, isLoading: rosterLoading } = usePassportBrandRoles();
   const { data: members } = usePassportMembers();
+  const { data: organizations } = useOrganizations();
+  const { activeOrgId } = useAppState();
+
+  // Passport's authority matrix, mirrored so the UI stops offering what it will refuse:
+  //
+  //   actor             | assign      | change a role | remove
+  //   org Owner/Admin   | either role | yes           | yes
+  //   brand Manager     | Staff only  | NO            | Staff only
+  //   brand Staff/none  | no          | no            | no
+  //
+  // This is presentation, NOT enforcement. Passport re-checks every write against the verified end
+  // user and is the real gate; hiding a control only stops us asking for a refusal we can predict.
+  // Read the role for the ACTING org — `my_org_role` is per-org, and an Owner of org B is not an
+  // admin of org A.
+  const isOrgAdmin = useMemo(() => {
+    if (!organizations?.length) return false;
+    const acting = activeOrgId
+      ? organizations.find((o) => o.id === activeOrgId)
+      : organizations.length === 1
+        ? organizations[0]
+        : undefined;
+    return acting?.my_org_role === 'Owner' || acting?.my_org_role === 'Admin';
+  }, [organizations, activeOrgId]);
+
+  // A Manager may assign `Staff` and nothing else.
+  const roleOptions = isOrgAdmin ? [MANAGER_OPTION, STAFF_OPTION] : [STAFF_OPTION];
+
+  // Brands you may assign AT: anywhere for an org admin, your own brands if you manage them. A
+  // Staff can reach a brand (so it is in `brands`) without being able to give anyone a role there.
+  const assignableBrands = useMemo(
+    () => (brands ?? []).filter((b) => isOrgAdmin || b.my_role === 'Manager'),
+    [brands, isOrgAdmin]
+  );
 
   const assign = useAssignBrandRole();
   const setRole = useSetBrandRole();
@@ -56,6 +89,7 @@ export function BrandAccessTab() {
 
   const [platformUserId, setPlatformUserId] = useState('');
   const [unitId, setUnitId] = useState('');
+  // Defaults to `Staff` — the only role a Manager may grant, and the safer of the two for an admin.
   const [role, setRole_] = useState<BrandRole>('Staff');
 
   const pending = assign.isPending || setRole.isPending || remove.isPending;
@@ -119,7 +153,10 @@ export function BrandAccessTab() {
         </div>
       )}
 
-      {/* --- assign ------------------------------------------------------------------ */}
+      {/* --- assign ---------------------------------------------------------------------
+          Hidden entirely for someone who manages no brand: Passport would refuse every write, so
+          offering the form would only manufacture a 403. */}
+      {assignableBrands.length > 0 && (
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Brand</span>
@@ -128,7 +165,7 @@ export function BrandAccessTab() {
             onChange={(e) => setUnitId(e.target.value)}
             options={[
               { value: '', label: 'Select a brand…' },
-              ...brands.map((b) => ({ value: b.id, label: b.name })),
+              ...assignableBrands.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />
         </label>
@@ -153,14 +190,22 @@ export function BrandAccessTab() {
           <Select
             value={role}
             onChange={(e) => setRole_(e.target.value as BrandRole)}
-            options={ROLE_OPTIONS}
+            options={roleOptions}
           />
         </label>
 
         <Button onClick={handleAssign} disabled={pending || !platformUserId || !unitId}>
           {assign.isPending ? 'Assigning…' : 'Assign'}
         </Button>
+
+        {!isOrgAdmin && (
+          <p className="w-full text-xs text-muted-foreground">
+            As a brand Manager you can give someone <span className="font-medium">Staff</span> at a
+            brand you manage. Changing an existing role is an organisation Owner or Admin.
+          </p>
+        )}
       </div>
+      )}
 
       <RoleLegend />
 
@@ -168,6 +213,14 @@ export function BrandAccessTab() {
         brands={brands}
         roster={roster ?? []}
         pending={pending}
+        isOrgAdmin={isOrgAdmin}
+        onAssign={(platformUserIdToAssign, brandId, nextRole) =>
+          assign.mutate({
+            platform_user_id: platformUserIdToAssign,
+            unit_id: brandId,
+            role: nextRole,
+          })
+        }
         onSetRole={(assignmentId, nextRole) => setRole.mutate({ assignmentId, role: nextRole })}
         onRemove={(assignmentId) => remove.mutate(assignmentId)}
       />

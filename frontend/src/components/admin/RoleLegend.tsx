@@ -61,11 +61,33 @@ export function RoleLegend() {
         </div>
 
         <div>
+          <p className="font-medium text-foreground">Who can change what</p>
+          <ul className="mt-1 space-y-1">
+            <li>
+              An organisation <span className="font-medium text-foreground">Owner</span> or{' '}
+              <span className="font-medium text-foreground">Admin</span> can give either role,
+              change an existing one, and remove anyone.
+            </li>
+            <li>
+              A brand <span className="font-medium text-foreground">Manager</span> can give someone{' '}
+              <span className="font-medium text-foreground">Staff</span> at a brand they manage, and
+              remove Staff there. They cannot change an existing role, and cannot remove another
+              Manager.
+            </li>
+          </ul>
+          <p className="mt-1">
+            You only see the brands you have access to, so this page may show fewer brands than your
+            organisation has.
+          </p>
+        </div>
+
+        <div>
           <p className="font-medium text-foreground">Passport has the final say</p>
           <p className="mt-1">
-            Roles live in Passport; Prepper only asks. Being refused here is normal — a Manager may
-            give someone Staff, but may not change an existing role. Changes also appear once
-            Passport syncs them back, not the instant you make them.
+            Roles live in Passport; Prepper only asks. Controls you cannot use are hidden rather than
+            shown and refused — but Passport still checks every change, so a refusal is normal rather
+            than a fault. Changes also appear once Passport syncs them back, not the instant you make
+            them.
           </p>
         </div>
       </div>

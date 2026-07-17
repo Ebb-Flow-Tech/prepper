@@ -152,6 +152,9 @@ def test_brand_without_app_access_is_hidden(session: Session):
     """A brand carrying no `unit_app_access` row confers access to NOBODY — not even an Owner.
     Showing it would offer somewhere a role cannot actually be given."""
     _seed(session)
+    # The subject needs a real role at BRAND: the directory is scoped to what the caller can
+    # REACH, so a Member with no role row sees nothing and this would assert `[] == []`.
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
     store.apply_unit(session, _unit(DARK_BRAND, name="Dark"))  # no unit_app_access row
 
     assert [b["id"] for b in directory.brands_for_user(session, SUBJECT, ORG)] == [BRAND]
@@ -201,6 +204,9 @@ def test_a_member_of_two_orgs_sees_only_the_org_they_are_acting_in(session: Sess
     changed nothing about what came back.
     """
     _seed(session)
+    # The subject needs a real role at BRAND: the directory is scoped to what the caller can
+    # REACH, so a Member with no role row sees nothing and this would assert `[] == []`.
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
     store.apply_entitlement(session, _entitlement(OTHER_ORG))
     store.apply_membership(session, _membership(OTHER_ORG))  # a real member of the second org
     store.apply_unit(session, _unit(OTHER_BRAND, OTHER_ORG, name="Other"))
@@ -233,6 +239,9 @@ def test_another_orgs_brands_and_roles_are_never_visible(session: Session):
     """RULE 9 — Prepper holds units and switches for EVERY org it is entitled to. An unscoped read
     would show a user another tenant's brands. Nothing errors when it does."""
     _seed(session)
+    # The subject needs a real role at BRAND: the directory is scoped to what the caller can
+    # REACH, so a Member with no role row sees nothing and this would assert `[] == []`.
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
     # A second entitled org, with its own brand carrying Prepper and its own role row.
     store.apply_entitlement(session, _entitlement(OTHER_ORG))
     store.apply_unit(session, _unit(OTHER_BRAND, OTHER_ORG, name="Other"))
@@ -355,3 +364,83 @@ def test_roster_never_leaks_another_orgs_members(session: Session):
     assert _by_brand(rows, OTHER_BRAND) == []
     assert {r["unit_id"] for r in rows} == {BRAND}
     assert {r["platform_user_id"] for r in rows} == {PU}
+
+
+# --- brand scoping: you see the brands you can reach, and no others ---------------------------
+# `brands_for_user` returned EVERY app-carrying brand in the org, with `my_role: None` on the ones
+# the caller cannot reach — so a Staff at one brand saw all of them. Harmless-looking until the
+# roster grew derived rows: it then handed every member the name and email of every person at every
+# brand (190 rows on staging, against the 3 it used to show).
+#
+# Passport cannot enforce this: the roster is served from Prepper's projection and Passport never
+# sees the request. It is ours to get right.
+
+
+def _staff_at_one_brand(session: Session) -> None:
+    """A plain Member holding Staff at BRAND only — no ladder, no access to OTHER_BRAND."""
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership())  # role="Member"
+    store.apply_unit(session, _unit(BRAND))
+    store.apply_unit(session, _unit(OTHER_BRAND, name="Beta"))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND))
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))  # Staff at BRAND
+
+
+def test_brands_are_scoped_to_the_ones_the_caller_can_reach(session: Session):
+    _staff_at_one_brand(session)
+
+    brands = directory.brands_for_user(session, SUBJECT, ORG)
+
+    assert [b["id"] for b in brands] == [BRAND]
+    assert all(b["my_role"] is not None for b in brands)
+
+
+def test_an_owner_still_sees_every_app_carrying_brand_via_the_ladder(session: Session):
+    """Scoping must not cost the ladder its reach — an Owner reaches every brand carrying the app."""
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership(role="Owner"))
+    store.apply_unit(session, _unit(BRAND))
+    store.apply_unit(session, _unit(OTHER_BRAND, name="Beta"))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND))
+
+    brands = directory.brands_for_user(session, SUBJECT, ORG)
+
+    assert {b["id"] for b in brands} == {BRAND, OTHER_BRAND}
+
+
+def test_roster_is_scoped_to_the_brands_the_caller_can_reach(session: Session):
+    """A Staff at one brand must not learn who works at a brand they cannot reach."""
+    _staff_at_one_brand(session)
+    # Somebody else — an Owner — therefore derived Manager at BOTH brands.
+    store.apply_membership(
+        session,
+        {
+            **_membership(role="Owner"),
+            "id": "m-owner",
+            "platform_user_id": "pu-owner",
+            "email": "owner@acme.test",
+        },
+    )
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    assert {r["unit_id"] for r in rows} == {BRAND}, "OTHER_BRAND's roster is not theirs to see"
+    assert "owner@acme.test" not in {
+        r["email"] for r in rows if r["unit_id"] != BRAND
+    }
+
+
+def test_a_user_with_no_brand_access_sees_no_roster(session: Session):
+    """A plain Member with no role row reaches nothing — fail closed, not 'everything'."""
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership())  # Member, no role row, no ladder
+    store.apply_unit(session, _unit(BRAND))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+
+    assert directory.brands_for_user(session, SUBJECT, ORG) == []
+    assert directory.roster(session, SUBJECT, ORG) == []
