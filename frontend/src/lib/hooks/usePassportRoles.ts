@@ -3,7 +3,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppState } from '@/lib/store';
 import * as api from '@/lib/api';
-import type { AssignBrandRoleRequest, BrandRole, InviteMemberRequest } from '@/types';
+import type {
+  AssignBrandRoleRequest,
+  BrandRole,
+  InviteMemberRequest,
+  PassportBrandRole,
+} from '@/types';
 import { MEMBER_ACCOUNTS_KEY } from './useUsers';
 
 /**
@@ -50,18 +55,34 @@ export function usePassportMembers() {
 }
 
 /**
- * Invalidate every projection-backed query after a write-back.
+ * Apply Passport's OWN answer to the roster cache after a write.
  *
- * The write lands in Passport and echoes back through sync, so the local projection is only correct
- * once that event arrives. Re-reading is the honest thing to do — Prepper must never apply the
- * change locally to make the UI feel instant, because that would make Prepper, not Passport, the
- * source of truth for a row it does not own.
+ * This used to invalidate immediately, and the comment here said re-reading was "the honest thing
+ * to do". It was honest and it was useless: the write lands in Passport and the projection only
+ * changes when the `unit_app_membership.*` echo is delivered a moment LATER, so invalidating on
+ * success refetched the *unchanged* projection and painted the old value straight back. With
+ * `refetchOnWindowFocus: false` and a 5-minute `staleTime` (providers.tsx) nothing refetched again
+ * either, so a successful change looked like a no-op — permanently. Staging bore this out: a role
+ * row sat at `version: 4`, i.e. three successful writes the user never saw land.
+ *
+ * So we do NOT invalidate on success, and we do NOT invent the new state either. Passport's
+ * response IS the new aggregate — the same value the echo will carry — so writing that into the
+ * cache is not Prepper deciding anything. It is Prepper not throwing away the answer it just
+ * received. Passport remains the source of truth; the projection is still only written by sync.
+ *
+ * The next natural refetch (the Settings tab unmounts inactive panels, so revisiting remounts and
+ * refetches) reads the projection with the echo applied and agrees. Nothing snaps back — which is
+ * exactly what a plain optimistic update WOULD do, since `onSettled` would refetch the pre-echo
+ * projection and revert the row.
  */
-function useInvalidateRoles() {
+function usePatchRoster() {
   const queryClient = useQueryClient();
-  return () => {
-    queryClient.invalidateQueries({ queryKey: [ROLES_KEY] });
-    queryClient.invalidateQueries({ queryKey: [BRANDS_KEY] });
+  const { userId } = useAppState();
+  return (fn: (rows: PassportBrandRole[]) => PassportBrandRole[]) => {
+    queryClient.setQueryData<PassportBrandRole[]>(
+      [ROLES_KEY, userId],
+      (rows) => (rows ? fn(rows) : rows)
+    );
   };
 }
 
@@ -88,27 +109,73 @@ export function useInviteMember() {
   });
 }
 
+/**
+ * Give someone a role at a brand — including OVERRIDING the ladder for an Owner/Admin, whose
+ * derived `Manager` has no row until this creates one.
+ */
 export function useAssignBrandRole() {
-  const invalidate = useInvalidateRoles();
+  const patch = usePatchRoster();
   return useMutation({
     mutationFn: (data: AssignBrandRoleRequest) => api.assignPassportBrandRole(data),
-    onSuccess: invalidate,
+    onSuccess: (aggregate) =>
+      patch((rows) =>
+        rows.map((r) =>
+          r.platform_user_id === aggregate.platform_user_id && r.unit_id === aggregate.unit_id
+            ? {
+                ...r,
+                role: aggregate.role,
+                source: 'assigned',
+                assignment_id: aggregate.id,
+              }
+            : r
+        )
+      ),
   });
 }
 
+/** Change an existing assignment's role. Owner/Admin only, per Passport's matrix. */
 export function useSetBrandRole() {
-  const invalidate = useInvalidateRoles();
+  const patch = usePatchRoster();
   return useMutation({
     mutationFn: ({ assignmentId, role }: { assignmentId: string; role: BrandRole }) =>
       api.setPassportBrandRole(assignmentId, role),
-    onSuccess: invalidate,
+    onSuccess: (aggregate) =>
+      patch((rows) =>
+        rows.map((r) =>
+          r.assignment_id === aggregate.id ? { ...r, role: aggregate.role } : r
+        )
+      ),
   });
 }
 
+/**
+ * Remove an assignment. Passport returns the FINAL aggregate (`status: 'removed'`) — a tombstone,
+ * not a delete.
+ *
+ * The ONE place here that predicts rather than echoes. Passport tells us the row is gone; it does
+ * not tell us what the person is left with, and that depends on the ladder: an org Owner/Admin
+ * falls back to a DERIVED `Manager` at every app-carrying brand, while anyone else is left with
+ * nothing and drops off the brand entirely.
+ *
+ * Predicting it from `org_role` re-states the ladder on the client, which is normally exactly what
+ * this codebase refuses to do. It is tolerable ONLY because it is transient and self-correcting:
+ * the next refetch reads the real derivation from the projection and overrules it. If the ladder
+ * ever stops meaning "Owner/Admin ⇒ Manager", this is wrong for one refetch cycle — and it is the
+ * first thing to delete. Do not build anything on it.
+ */
 export function useRemoveBrandRole() {
-  const invalidate = useInvalidateRoles();
+  const patch = usePatchRoster();
   return useMutation({
     mutationFn: (assignmentId: string) => api.removePassportBrandRole(assignmentId),
-    onSuccess: invalidate,
+    onSuccess: (aggregate) =>
+      patch((rows) =>
+        rows.flatMap((r) => {
+          if (r.assignment_id !== aggregate.id) return [r];
+          const laddered = r.org_role === 'Owner' || r.org_role === 'Admin';
+          return laddered
+            ? [{ ...r, role: 'Manager' as BrandRole, source: 'derived' as const, assignment_id: null }]
+            : [];
+        })
+      ),
   });
 }

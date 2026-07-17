@@ -231,13 +231,23 @@ class UserService:
         Passport's membership, which EMBEDS email, display name and role for everyone, signed in or
         not.
 
-        So membership is the spine and `users` is a LEFT join:
+        So membership is the spine, and the local account is resolved through the link:
 
             membership.platform_user_id = identity_link.platform_user_id
             identity_link.subject       = users.id
 
         Note the pair: `identity_link.subject` holds the LOCAL `users.id` while `platform_user_id`
         holds Passport's. Joining the wrong two matches nothing and silently returns an empty list.
+
+        **Resolved in Python, NOT as a LEFT JOIN — a bug fix, not a preference.** `identity_link` is
+        not one-per-person: a platform user can carry several rows for the same app (staging has one
+        with two, of which one is orphaned). Joined, they FAN OUT — a row per LINK instead of per
+        person — so a member rendered twice, once "Not signed in" and once not, and `count()`
+        reported 21 members where 20 exist. `DISTINCT` would not have saved it: the rows genuinely
+        differ. The link table is small and per-app, so three flat reads cost less than the join did.
+
+        A RESOLVING link beats an orphan, or a real account reads "Not signed in" purely because a
+        stale link happened to sort first.
 
         `user_id is None` means "never signed in" — no link, so no local row, so no username and no
         phone. They still belong in the list; that is the entire point. Email comes from the
@@ -258,35 +268,53 @@ class UserService:
         ):
             return [], 0
 
-        statement = (
-            select(PassportMembership, User)
-            .outerjoin(
-                PassportIdentityLink,
-                col(PassportIdentityLink.platform_user_id)
-                == col(PassportMembership.platform_user_id),
-            )
-            .outerjoin(User, col(User.id) == col(PassportIdentityLink.subject))
-            .where(
-                col(PassportMembership.organization_id) == organization_id,
-                PassportMembership.status == "active",
-            )
-            .order_by(col(PassportMembership.email))
+        members = list(
+            self.session.exec(
+                select(PassportMembership)
+                .where(
+                    col(PassportMembership.organization_id) == organization_id,
+                    PassportMembership.status == "active",
+                )
+                .order_by(col(PassportMembership.email))
+            ).all()
         )
+        total = len(members)
+        page = members[offset : offset + limit]
+        if not page:
+            return [], total
 
-        total = self.session.exec(
-            select(func.count()).select_from(statement.subquery())
-        ).one()
-        rows = self.session.exec(statement.offset(offset).limit(limit)).all()
+        # platform_user_id -> the local account, for THIS page only. A person may carry several
+        # links; only one can be their account, and it is the one that resolves to a `users` row.
+        wanted = {m.platform_user_id for m in page}
+        links = self.session.exec(
+            select(PassportIdentityLink).where(
+                col(PassportIdentityLink.platform_user_id).in_(wanted)
+            )
+        ).all()
+        users_by_id = {
+            u.id: u
+            for u in self.session.exec(
+                select(User).where(col(User.id).in_({link.subject for link in links}))
+            ).all()
+        }
+        account: dict[str, User] = {}
+        for link in links:
+            user = users_by_id.get(link.subject)
+            if user is not None:
+                account.setdefault(link.platform_user_id, user)
 
-        return [
-            {
-                "platform_user_id": m.platform_user_id,
-                "email": m.email,
-                "display_name": m.display_name,
-                "org_role": m.role,
-                "user_id": u.id if u else None,
-                "username": u.username if u else None,
-                "phone_number": u.phone_number if u else None,
-            }
-            for m, u in rows
-        ], int(total)
+        rows: list[dict[str, object]] = []
+        for m in page:
+            u = account.get(m.platform_user_id)
+            rows.append(
+                {
+                    "platform_user_id": m.platform_user_id,
+                    "email": m.email,
+                    "display_name": m.display_name,
+                    "org_role": m.role,
+                    "user_id": u.id if u else None,
+                    "username": u.username if u else None,
+                    "phone_number": u.phone_number if u else None,
+                }
+            )
+        return rows, total

@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.70](#0070---2026-07-17)** — Brand Access & Accounts: the Roster Showed 3 Rows Against ~190 Real Grants and Accounts Showed **One Person** — Derived Ladder Holders as Rows, Brand-Scoped Reads, Passport-Backed Accounts with Member Invites; plus a `LEFT JOIN` Fan-Out and a Refetch That Discarded Every Successful Write
 - **[0.0.68](#0068---2026-07-17)** — Org Isolation (3/3): RLS Had **Zero** Org-Aware Policies and 14 `USING (true)` Reads — `my_org_ids()`/`is_admin_in()`, All 123 Policies Rewritten, `organization_id` NOT NULL; plus Four Forks and an AI Agent That Never Stamped an Org, AI Rate Limits & the `getUsers()` 100-Row Cap
 - **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs, the `tasting-note-images` Family, and the SSO Login 503
 - **[0.0.64](#0064---2026-07-16)** — Fix: Four Cross-Tenant Leaks (All Three Supplier-Ingredient Writes, `GET /menu-items`), Email Self-Service Granting Another User's Passport Identity, Unscoped `GET /users` PII & Unauthenticated `/docs`; plus the Settings Refactor — Tabs/Table Primitives, the BrandRoles Scroll Fix, Profile Org Info & the Org Switcher
@@ -70,6 +71,113 @@ All notable changes to Prepper are documented here.
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
 ---
+
+## [0.0.70] - 2026-07-17
+
+The Brand Roles tab told the truth about 3 rows and stayed silent about 187 others; the Accounts tab
+showed exactly one person. Both were reading the wrong thing rather than reading it wrongly.
+
+Numbers below are from staging, read-only, and are the reason the shape of the fix changed twice.
+
+### Fixed
+
+#### The roster showed 3 rows against ~190 real grants
+
+An org `Owner`/`Admin` holds `Manager` at **every** brand carrying the app with no
+`unit_app_membership` row at all — Passport's ladder. The roster listed stored rows only, so it
+showed **3** where **190** grants existed. It was not slightly misleading; it was wrong by two
+orders of magnitude, and the page carried a paragraph on screen apologising for it.
+
+Staging is 19 of 20 members `Owner`/`Admin` across 10 app-carrying brands. `directory.roster` now
+emits derived holders as rows (`source: 'derived'`, `assignment_id: null`), the apology is deleted,
+and the table is brand-first and collapsed by default — a flat list of 190 rows is unusable.
+
+**The ladder is a FLOOR FOR GAPS, not an override.** `roles_at_brands` applies explicit rows and
+then `setdefault`s `Manager` into what is left, so an Owner carrying an explicit `Staff` row **is**
+`Staff` there. The first design asserted the opposite. Staging holds exactly that row, and all three
+of the org's assignments belong to Owners/Admins — so keying `source` on org role would have marked
+**every existing assignment in the org** derived, shown one of them the wrong role, and left all
+three uneditable through the UI. `source` keys on the presence of a row, never on the org role.
+
+#### Accounts showed one person — 19 of 20 members were invisible
+
+`GET /users` scopes local `users` rows through `passport.identity_link`, and a link exists only once
+someone has signed in via Passport SSO. On staging that is **1 of 20 active members**. The scoping
+is correct and is untouched — it is simply the wrong question for a roster. `GET /users/accounts`
+answers the right one: Passport's membership, which embeds email, display name and role for
+everyone, left-joined to the local account where one exists. Never signed in ⇒ "Not signed in", no
+phone to edit.
+
+`GET /users` keeps its shape and scoping: `ParticipantPicker` needs a local `users.id`, and a
+tasting participant genuinely does need an account.
+
+#### A user saw every brand's people, not their own brands'
+
+`brands_for_user` returned every app-carrying brand in the org with `my_role: null` on unreachable
+ones, and the roster then returned every brand's names and emails to any member. Derived rows took
+that from 3 rows to ~190 and made it worth closing. Both now filter to the caller's own derivation.
+Passport cannot catch this — these reads are served from Prepper's projection and never reach it. An
+Owner/Admin still sees everything, via the ladder rather than an exception.
+
+#### Accounts showed the same person several times — a `LEFT JOIN` fan-out
+
+`identity_link` is **not one-per-person**: a platform user can carry several rows for the same app
+(staging has one with two, one of them orphaned). Joined through to `users` they fan out to a row
+per LINK, so a member rendered twice — once "Not signed in", once not — and `count()` reported **21
+members where 20 exist**. `DISTINCT` would not have helped; the rows genuinely differ. Resolved in
+Python now, with a resolving link beating an orphan.
+
+#### Every successful role change looked like a no-op
+
+Reported as "update and remove don't work". They always worked: `unit_app_membership` on staging
+holds a row at `version: 4` — three successful writes, each echoed back, none of which the user ever
+saw. Prepper never writes the projection, so a change only lands when Passport's echo arrives; the
+mutation invalidated **on success**, refetching the projection *before* the echo and painting the
+old value straight back. With `refetchOnWindowFocus: false` and a 5-minute `staleTime` nothing
+refetched again. **We refetched at the one instant guaranteed to be wrong, and then never again.**
+
+The writes now apply Passport's own returned aggregate to the cache. That is not an optimistic
+update — the value is Passport's answer, not Prepper's guess, and sync still owns the projection. A
+plain optimistic update would have been worse: `onSettled` refetches the pre-echo projection and the
+row snaps back.
+
+### Added
+
+- **Brand Access** (renamed from Brand Roles) — brand-first expandable roster, derived holders shown
+  as `Manager · auto`, and a collapsible legend separating the two vocabularies (`Manager`/`Staff` at
+  a brand vs `Owner`/`Admin`/`Member` in the org — `models/passport.py`: "Do not conflate them").
+- **Member invites** — `POST /passport/brand-roles/members` wires the SDK's `upsert_membership`,
+  installed since v1.1.0 and never called. "Add User" created a local account with a password in
+  *Prepper's* Supabase while login authenticates against *Passport's* — it could never sign in and
+  was invisible in the roster. It now invites into Passport. **It grants access, not a credential**:
+  someone with no Passport account may still need setting up there first (open question).
+- `access.brand_roles_for_org_members` — the batched derivation. The single form costs 6 queries per
+  member including two unfiltered full scans; 20 members was ~120 queries per roster load. Now 4,
+  whatever the member count, with the SDK still the sole derivation.
+- `pydantic[email]` — **not optional**: `EmailStr` raises at class-definition time without it, and
+  `main.py` imports the router that declares it, so a missing extra fails every import of the app.
+
+### Changed
+
+- Passport's authority matrix is mirrored in the UI: only an org Owner/Admin may change an existing
+  role or remove anyone; a brand Manager may assign `Staff` at brands they manage and remove `Staff`
+  there. Presentation only — Passport re-checks every write and remains the gate. Deliberately **not**
+  re-implemented in Prepper's backend, where a second copy would drift.
+- `usePassportRoles.ts` no longer forbids applying a write result locally. That rule ("re-reading is
+  the honest thing to do") was honest and useless — it is what made every change look like a no-op.
+- The three brand-role write routes are typed `PassportBrandRoleAggregate`, not `PassportBrandRole`.
+  They return Passport's aggregate, which has no `email`/`unit_name`/`org_role`; the old type
+  compiled only because nothing read the body.
+
+### Known gaps
+
+- **Onboarding someone with no Passport account is unresolved.** An invite creates the membership;
+  whether Passport provisions a credential and emails them is Passport's behaviour, undocumented in
+  the SDK and unverified. Prepper must not grow its own SMTP — `auth.py`: "one credential for every
+  app, and no Prepper-side invite/SMTP" — as that forks identity.
+- `useInviteMember` still invalidates and waits for the echo. It is only not a bug because the modal
+  says so; delete that message and the no-op trap returns.
+- Two of three identity links on staging point at no `users` row. Pre-existing, unexplained.
 
 ## [0.0.68] - 2026-07-17
 

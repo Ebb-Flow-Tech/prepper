@@ -256,3 +256,42 @@ def test_accounts_fail_closed_for_an_unlinked_caller(session: Session):
 
     assert rows == []
     assert total == 0
+
+
+def test_a_member_with_two_identity_links_appears_exactly_once(session: Session):
+    """A LEFT JOIN through identity_link FANS OUT: one row per LINK, not per person.
+
+    Real data has a platform user carrying two links for the same app — one resolving to a `users`
+    row, one orphaned — so the roster rendered them twice, once "Not signed in" and once not. The
+    join returned 21 rows for 20 members. A person is one row here, whatever their link history.
+    """
+    caller = _caller(session)
+    chef = create_user(session, "chef", "chef", email="chef@acme.test")
+    grant_org_role(session, "pu-chef", "Member")
+    link_identity(session, chef.id, "pu-chef")           # resolves to a users row
+    link_identity(session, "ghost-subject", "pu-chef")   # an orphan link for the SAME person
+
+    rows, total = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    chef_rows = [r for r in rows if r["platform_user_id"] == "pu-chef"]
+    assert len(chef_rows) == 1, f"fanned out to {len(chef_rows)} rows"
+    # The link that RESOLVES must win — otherwise a real account reads "Not signed in".
+    assert chef_rows[0]["user_id"] == chef.id
+    assert total == 2
+
+
+def test_total_count_is_members_not_links(session: Session):
+    """`total` drives pagination. Counting the fanned-out join over-reports and can page oddly."""
+    caller = _caller(session)
+    grant_org_role(session, "pu-chef", "Member")
+    link_identity(session, "orphan-a", "pu-chef")
+    link_identity(session, "orphan-b", "pu-chef")
+
+    rows, total = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    assert total == 2
+    assert len(rows) == 2

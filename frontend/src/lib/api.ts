@@ -7,6 +7,7 @@ import type {
   PassportBrand,
   PassportOrganization,
   PassportBrandRole,
+  PassportBrandRoleAggregate,
   PassportMember,
 } from '@/types';
 import type {
@@ -1843,10 +1844,13 @@ export async function invitePassportMember(data: InviteMemberRequest): Promise<v
   });
 }
 
+// These three return Passport's `unit_app_membership` AGGREGATE, not a roster row — see
+// `PassportBrandRoleAggregate`. They were typed as `PassportBrandRole`, which compiled only because
+// nothing read the body. The callers now do, so the type has to be true.
 export async function assignPassportBrandRole(
   data: AssignBrandRoleRequest
-): Promise<PassportBrandRole> {
-  return fetchApi<PassportBrandRole>('/passport/brand-roles', {
+): Promise<PassportBrandRoleAggregate> {
+  return fetchApi<PassportBrandRoleAggregate>('/passport/brand-roles', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -1855,15 +1859,15 @@ export async function assignPassportBrandRole(
 export async function setPassportBrandRole(
   assignmentId: string,
   role: BrandRole
-): Promise<PassportBrandRole> {
-  return fetchApi<PassportBrandRole>(`/passport/brand-roles/${assignmentId}`, {
+): Promise<PassportBrandRoleAggregate> {
+  return fetchApi<PassportBrandRoleAggregate>(`/passport/brand-roles/${assignmentId}`, {
     method: 'PATCH',
     body: JSON.stringify({ role }),
   });
 }
 
-export async function removePassportBrandRole(assignmentId: string): Promise<PassportBrandRole> {
-  return fetchApi<PassportBrandRole>(`/passport/brand-roles/${assignmentId}`, {
+export async function removePassportBrandRole(assignmentId: string): Promise<PassportBrandRoleAggregate> {
+  return fetchApi<PassportBrandRoleAggregate>(`/passport/brand-roles/${assignmentId}`, {
     method: 'DELETE',
   });
 }

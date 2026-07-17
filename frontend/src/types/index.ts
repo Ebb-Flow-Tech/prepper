@@ -1071,6 +1071,26 @@ export interface PassportMember {
   organization_id: string;
 }
 
+/**
+ * What Passport returns from a brand-role write — its `unit_app_membership` AGGREGATE.
+ *
+ * NOT a `PassportBrandRole`: that is a roster row and carries `email`, `unit_name` and `org_role`,
+ * which this does not. The write routes were typed as returning the roster shape, which compiled
+ * only because nothing read the body — there is no runtime validation to catch it.
+ *
+ * `status: 'removed'` is a TOMBSTONE, not a delete: the row survives and confers nothing.
+ */
+export interface PassportBrandRoleAggregate {
+  id: string;
+  organization_id: string;
+  platform_user_id: string;
+  unit_id: string;
+  app_id: string;
+  role: BrandRole;
+  status: 'active' | 'removed';
+  version: number;
+}
+
 export interface AssignBrandRoleRequest {
   platform_user_id: string;
   unit_id: string;

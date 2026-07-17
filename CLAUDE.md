@@ -26,7 +26,7 @@ Features: Supabase auth with **brand-scoped roles derived from Passport** (no lo
 - `frontend/src/lib/hooks/` — TanStack Query hooks, one file per resource with cache invalidation
 - `frontend/src/lib/providers.tsx` — `QueryClientProvider` + `AppProvider` + `AuthGuard`
 - `frontend/src/lib/store.tsx` — React Context (selected recipe, canvas tab, auth)
-- `frontend/src/components/` — layout, recipe, ingredients, suppliers, units (brand pickers), categories, tasting, admin (incl. `BrandRolesTab` — Passport brand roles), ui primitives
+- `frontend/src/components/` — layout, recipe, ingredients, suppliers, units (brand pickers), categories, tasting, admin (incl. `BrandAccessTab` — Passport brand access, brand-first with derived ladder holders), ui primitives
 
 ## Commands
 ```

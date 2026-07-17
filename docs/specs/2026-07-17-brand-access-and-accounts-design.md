@@ -574,6 +574,65 @@ that does not mean their role cannot be **changed**. Derived rows now carry a `S
 exist) — for an org admin only, per rule 1. A Manager cannot override a derived Manager, since
 creating that role is an assignment and rule 2 caps them at `Staff`.
 
+## Two bugs found by using the thing (2026-07-17, post-implementation)
+
+### 1. Accounts showed the same person several times — a LEFT JOIN fan-out
+
+`list_org_member_accounts` joined `membership → identity_link → users`. **`identity_link` is not
+one-per-person**: a platform user can carry several rows for the same app — staging has one with
+two, of which one is orphaned (its `subject` resolves to no `users` row). Joined, they fan out to
+one row per LINK, so that member rendered twice — once "Not signed in", once not — and `count()`
+reported **21 members where 20 exist**. `DISTINCT` would not have helped: the rows genuinely differ.
+
+Fixed by resolving the link in Python (three flat reads, no join), with a **resolving link beating
+an orphan** — otherwise a real account reads "Not signed in" because a stale link sorted first.
+Verified against staging: 20 rows, 20 total, no duplicates. Regression tests:
+`test_a_member_with_two_identity_links_appears_exactly_once`, `test_total_count_is_members_not_links`.
+
+The orphan links are a separate, pre-existing data oddity worth a look: a link should only exist for
+someone who has signed in, yet 2 of 3 point at no `users` row.
+
+### 2. "Update / remove doesn't work" — it always worked; the UI discarded the answer
+
+Reported as: change a role or click Remove, **nothing happens, no error**. Everything was working.
+Proof, from `passport.unit_app_membership` on staging:
+
+```
+Staff  active  version 4   <- THREE successful writes, echoed back
+Staff  active  version 2   <- one
+```
+
+A `version > 1` is only reachable if Prepper wrote to Passport AND the echo returned. So the API
+key, the `issuer_url` registration, the authority matrix and the sync echo were all fine.
+
+The defect was `useInvalidateRoles`: on success it invalidated, refetching the projection **before
+the echo landed**, painting the old value straight back. With `refetchOnWindowFocus: false` and a
+5-minute `staleTime` (`providers.tsx`) nothing refetched again — so a successful change looked like
+a permanent no-op. **We refetched at the one instant guaranteed to be wrong, then never again.**
+
+Fixed by applying **Passport's own returned aggregate** to the cache instead of invalidating. This
+is not the optimistic update the old comment forbade: the value is Passport's answer, not Prepper's
+guess, and the projection is still only ever written by sync. A plain optimistic update would have
+been *worse* — `onSettled` refetches the pre-echo projection and the row snaps back.
+
+The old comment ("re-reading is the honest thing to do — Prepper must never apply the change locally
+to make the UI feel instant") is **overturned deliberately**, and the reasoning is recorded in its
+place. It was honest and useless.
+
+The three write routes also returned Passport's **aggregate** while being typed `PassportBrandRole`
+(a roster row, with `email`/`unit_name`/`org_role` the aggregate lacks). That compiled only because
+nothing read the body; now something does, so `PassportBrandRoleAggregate` is the real shape.
+
+**One prediction survives**, in `useRemoveBrandRole`: Passport says the row is gone but not what the
+person is left with, and that depends on the ladder (Owner/Admin ⇒ derived `Manager`; anyone else ⇒
+off the brand). It re-states the ladder on the client — normally forbidden — and is tolerable only
+because it is transient and the next refetch overrules it. First thing to delete if the ladder ever
+changes.
+
+**`useInviteMember` still has the original shape** (invalidate, then wait for the echo). It is not a
+bug there only because the modal SAYS so — "Invited — they'll appear here once Passport syncs." If
+that message ever goes, this trap comes back.
+
 ## Open question — onboarding someone with no Passport account
 
 **Raised after implementation; not answered.** The invite grants org membership. It does **not**
