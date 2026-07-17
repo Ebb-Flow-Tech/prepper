@@ -355,29 +355,19 @@ def admin_org_ids(session: Session, subject: str) -> set[str]:
     }
 
 
-def admins_row(
-    session: Session, subject: str, row_organization_id: str | None
-) -> bool:
+def admins_row(session: Session, subject: str, row_organization_id: str) -> bool:
     """Whether ``subject`` administers the org that owns this row.
 
-    **The transitional rule, in ONE place.** Domain rows only got `organization_id` in
-    `q1orgcol9p0q` and it is only populated where `q2orgfill1r2s` has run — so it is NULL in the
-    test database and in any environment behind on migrations.
+    Always the org-scoped question: an Owner of org B is not an admin of org A's row.
 
-    - row HAS an org  -> the correct, org-scoped question. An Owner of org B is not an admin here.
-    - row org is NULL -> fall back to the org-less question ("admin of any of your orgs").
-
-    The NULL branch is the known cross-org defect and is deliberately kept: a NULL org carries no
-    information to scope by, and answering ``False`` would silently revoke every documented admin
-    bypass the moment this shipped — admins would lose the unassigned drafts these bypasses exist
-    for. The fallback disappears on its own as the backfill lands, without another code change.
-
-    Centralised so there is one comment to delete rather than nine, and one place to change when
-    `organization_id` becomes NOT NULL.
+    This used to fall back to the org-less `is_org_admin(session, subject)` — "admin of ANY of your
+    orgs" — when the row's org was NULL. That branch was a known cross-org defect, kept deliberately
+    because a NULL org carries nothing to scope by and answering False would have revoked every
+    admin bypass while the backfill was outstanding. `q3orgnn3t4u` made the column NOT NULL, so a
+    NULL row no longer exists and the fallback is gone. `row_organization_id` is now required, which
+    is what stops it coming back by accident.
     """
-    if row_organization_id is not None:
-        return is_org_admin(session, subject, row_organization_id)
-    return is_org_admin(session, subject)
+    return is_org_admin(session, subject, row_organization_id)
 
 
 def _brand_of(session: Session, unit_id: str) -> str | None:

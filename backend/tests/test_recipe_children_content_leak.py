@@ -54,7 +54,7 @@ def populated_fixture(session: Session, client: TestClient):
         )
     )
 
-    ingredient = Ingredient(name="Confidential Wagyu A5", base_unit="kg")
+    ingredient = Ingredient(organization_id=ORG_ID, name="Confidential Wagyu A5", base_unit="kg")
     session.add(ingredient)
     session.commit()
     session.refresh(ingredient)
@@ -122,7 +122,7 @@ def test_recipe_images_content_leak(populated, client: TestClient):
 
 def test_sub_recipe_write_leak(populated, session: Session, client: TestClient):
     """WRITE: can a Brand B user graft a sub-recipe onto Brand A's recipe?"""
-    evil = Recipe(name="Attacker Payload", is_public=False, status=RecipeStatus.ACTIVE)
+    evil = Recipe(organization_id=ORG_ID, name="Attacker Payload", is_public=False, status=RecipeStatus.ACTIVE)
     session.add(evil)
     session.commit()
     session.refresh(evil)

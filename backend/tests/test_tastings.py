@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models import User
+from tests.conftest import ORG_ID
 
 
 def test_create_tasting_session(client: TestClient):
@@ -781,7 +782,7 @@ def test_nonadmin_cannot_access_session_they_are_not_invited_to(
 
     from app.models import TastingSession
 
-    unrelated_session = TastingSession(
+    unrelated_session = TastingSession(organization_id=ORG_ID, 
         name="Not Mine",
         date=datetime(2024, 12, 15, 10, 0, 0),
         location="Somewhere",
@@ -856,7 +857,7 @@ def test_admin_noncreator_cannot_update_session(
     from app.models import TastingSession
 
     # Create session owned by someone else (not the admin test user)
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Normal User Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -880,7 +881,7 @@ def test_admin_noncreator_cannot_delete_session(
     """Admin who is not the creator cannot delete session."""
     from app.models import TastingSession
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Normal User Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -899,7 +900,7 @@ def test_participant_cannot_update_session(
     """Participant who is not creator cannot update session."""
     from app.models import TastingSession, TastingUser
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Another Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -926,7 +927,7 @@ def test_noncreator_cannot_add_recipe_to_session(
     """Non-creator cannot add a recipe to session."""
     from app.models import TastingSession
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -963,7 +964,7 @@ def test_noncreator_cannot_remove_recipe_from_session(
     )
     recipe_id = recipe_resp.json()["id"]
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -989,7 +990,7 @@ def test_noncreator_cannot_add_ingredient_to_session(
     """Non-creator cannot add an ingredient to session."""
     from app.models import TastingSession
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -1024,7 +1025,7 @@ def test_noncreator_cannot_remove_ingredient_from_session(
     )
     ingredient_id = ing_resp.json()["id"]
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Session",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -1135,12 +1136,12 @@ def test_nonparticipant_cannot_add_recipe_note(
     """Non-participant cannot add a tasting note."""
     from app.models import Recipe, TastingSession
 
-    recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
+    recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", yield_quantity=1, yield_unit="portion")
     session.add(recipe)
     session.commit()
     session.refresh(recipe)
 
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Tasting",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -1164,13 +1165,13 @@ def test_admin_nonparticipant_cannot_add_recipe_note(
     """Admin who is not a participant cannot add a tasting note."""
     from app.models import Recipe, TastingSession
 
-    recipe = Recipe(name="Test Recipe", yield_quantity=1, yield_unit="portion")
+    recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", yield_quantity=1, yield_unit="portion")
     session.add(recipe)
     session.commit()
     session.refresh(recipe)
 
     # Session with no participants — admin is NOT added
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Tasting",
         date=datetime(2024, 12, 15, 10, 0, 0),
         creator_id="someone-else",
@@ -1194,9 +1195,9 @@ def test_nonadmin_list_only_sees_own_and_invited_sessions(
     """Non-admin GET /tasting-sessions only returns sessions they created or are a participant of."""
     from app.models import TastingSession, TastingUser
 
-    own = TastingSession(name="Mine", date=datetime(2025, 1, 1), creator_id="test-normal-user")
-    as_participant = TastingSession(name="Invited", date=datetime(2025, 1, 2), creator_id="other-user")
-    unrelated = TastingSession(name="Not Mine", date=datetime(2025, 1, 3), creator_id="other-user")
+    own = TastingSession(organization_id=ORG_ID, name="Mine", date=datetime(2025, 1, 1), creator_id="test-normal-user")
+    as_participant = TastingSession(organization_id=ORG_ID, name="Invited", date=datetime(2025, 1, 2), creator_id="other-user")
+    unrelated = TastingSession(organization_id=ORG_ID, name="Not Mine", date=datetime(2025, 1, 3), creator_id="other-user")
 
     session.add_all([own, as_participant, unrelated])
     session.commit()

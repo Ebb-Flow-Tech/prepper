@@ -316,6 +316,12 @@ class RecipeService:
             created_by=new_owner_id,
             version=original.version + 1,
             root_id=original.id,
+            # The fork inherits the original's org. Without this it landed NULL — an orphan its own
+            # creator could not see once reads filtered on the org, and one that `org_scope`'s
+            # transitional NULL arm showed to EVERY org in the meantime. The same defect existed in
+            # `fork_sketch` and `fork_menu`; all three were found by `q3orgnn3t4u` making the
+            # column NOT NULL, not by any test.
+            organization_id=original.organization_id,
         )
         self.session.add(forked)
         self.session.commit()

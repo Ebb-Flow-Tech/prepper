@@ -11,7 +11,7 @@ from app.models.recipe import Recipe
 from app.models.tasting import TastingNote, TastingSession
 
 # Import mock classes from conftest
-from tests.conftest import MockClaudeResponse, MockToolUseBlock
+from tests.conftest import ORG_ID, MockClaudeResponse, MockToolUseBlock
 
 
 class TestFeedbackSummaryAgentInit:
@@ -35,13 +35,13 @@ class TestRetrieveFeedback:
     def test_retrieve_feedback_success(self, session: Session, mock_settings, mock_anthropic):
         """Test successfully retrieving feedback for a recipe."""
         # Create recipe
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
         # Create tasting session
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -73,13 +73,13 @@ class TestRetrieveFeedback:
     def test_retrieve_feedback_no_feedback(self, session: Session, mock_settings, mock_anthropic):
         """Test retrieving feedback when no notes have feedback text."""
         # Create recipe
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
         # Create tasting session
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -102,7 +102,7 @@ class TestRetrieveFeedback:
     def test_retrieve_feedback_empty_recipe(self, session: Session, mock_settings, mock_anthropic):
         """Test retrieving feedback for recipe with no tasting notes."""
         # Create recipe with no notes
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
@@ -115,13 +115,13 @@ class TestRetrieveFeedback:
     def test_retrieve_feedback_mixed_notes(self, session: Session, mock_settings, mock_anthropic):
         """Test retrieving feedback with mix of notes with and without feedback."""
         # Create recipe
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
         # Create tasting session
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -156,12 +156,12 @@ class TestProcessToolCall:
     def test_process_retrieve_feedback_tool(self, session: Session, mock_settings, mock_anthropic):
         """Test processing retrieve_feedback tool call."""
         # Create test data
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -211,12 +211,12 @@ class TestSummarizeFeedback:
     ):
         """Test successful feedback summarization."""
         # Create test data
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -268,7 +268,7 @@ class TestSummarizeFeedback:
     ):
         """Test summarization fails gracefully when no feedback exists."""
         # Create recipe with no feedback
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
@@ -296,12 +296,12 @@ class TestSummarizeFeedback:
     ):
         """Test summarization with multiple feedback entries."""
         # Create recipe and multiple feedback notes
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -371,12 +371,12 @@ class TestSummarizeFeedbackAPI:
     def test_summarize_feedback_endpoint_success(self, client, session: Session):
         """Test the /agents/summarize-feedback/{recipe_id} endpoint with success."""
         # Create test data
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
-        tasting_session = TastingSession(name="Test Session", date=datetime(2024, 1, 1))
+        tasting_session = TastingSession(organization_id=ORG_ID, name="Test Session", date=datetime(2024, 1, 1))
         session.add(tasting_session)
         session.commit()
         session.refresh(tasting_session)
@@ -430,7 +430,7 @@ class TestSummarizeFeedbackAPI:
     def test_summarize_feedback_endpoint_no_feedback(self, client, session: Session):
         """Test endpoint returns error when recipe has no feedback."""
         # Create recipe with no feedback
-        recipe = Recipe(name="Test Recipe", is_public=True)
+        recipe = Recipe(organization_id=ORG_ID, name="Test Recipe", is_public=True)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)

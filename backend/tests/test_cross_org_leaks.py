@@ -239,31 +239,26 @@ class TestOrgScopedAdminBypass:
             "an Owner of org B must not administer org A's rows"
         )
 
-    def test_admins_row_falls_back_when_the_row_has_no_org(self, session: Session):
-        """A NULL org carries nothing to scope by — the pre-backfill state.
+    def test_admins_row_always_asks_the_org_scoped_question(self, session: Session):
+        """The NULL fallback is gone, and `row_organization_id` is required so it cannot return.
 
-        Deliberately falls back to the org-less question rather than answering False, which would
-        silently revoke every documented admin bypass the moment this shipped. The fallback
-        disappears as `q2orgfill1r2s` lands, with no further code change.
+        `admins_row` used to fall back to the org-less `is_org_admin(session, subject)` — "admin of
+        ANY of your orgs" — when a row's org was NULL. That was a real cross-org defect, kept
+        deliberately while the column was nullable, because answering False would have revoked every
+        admin bypass before the backfill landed. `q3orgnn3t4u` made the column NOT NULL, so the
+        branch became unreachable and was deleted.
         """
         from tests.conftest import grant_org_role, link_identity
 
-        create_user(session, "some-admin", "someadmin")
-        link_identity(session, "some-admin", "pu-some-admin")
-        grant_org_role(session, "pu-some-admin", "Admin", org_id=ORG_ID)
+        create_user(session, "owner-of-b", "ownerb2")
+        link_identity(session, "owner-of-b", "pu-owner-of-b")
+        grant_org_role(session, "pu-owner-of-b", "Owner", org_id=ORG_B)
+        grant_org_role(session, "pu-owner-of-b", "Member", org_id=ORG_ID)
 
-        assert access.admins_row(session, "some-admin", None) is True
-
-    def test_a_non_admin_is_not_admitted_by_the_null_fallback(self, session: Session):
-        """The fallback must widen the bypass to admins only — not to everyone."""
-        from tests.conftest import grant_org_role, link_identity
-
-        create_user(session, "plain-member", "plainmember")
-        link_identity(session, "plain-member", "pu-plain-member")
-        grant_org_role(session, "pu-plain-member", "Member", org_id=ORG_ID)
-
-        assert access.admins_row(session, "plain-member", None) is False
-        assert access.admin_org_ids(session, "plain-member") == set()
+        assert access.admins_row(session, "owner-of-b", ORG_B) is True
+        assert access.admins_row(session, "owner-of-b", ORG_ID) is False, (
+            "an Owner of org B must not administer an org A row"
+        )
 
 
 class TestGlobalCataloguesAreOrgScoped:
@@ -341,23 +336,26 @@ class TestGlobalCataloguesAreOrgScoped:
         assert other.id is not None
         assert other.organization_id == ORG_B
 
-    def test_pre_backfill_rows_stay_visible(self, session: Session, client: TestClient):
-        """A NULL org is "not yet assigned", not "belongs to nobody".
+    def test_an_unstamped_row_cannot_be_written_at_all(self, session: Session):
+        """`org_scope` no longer admits NULL, because NULL no longer exists.
 
-        `organization_id` is nullable until migration 3, so rows written before `q2orgfill1r2s`
-        carry NULL. A bare `organization_id == active_org` would erase them from the UI — the
-        entire existing catalogue vanishing on deploy. See `domain/org_scope.py`.
+        The arm was transitional: while the column was nullable it kept un-backfilled rows visible
+        (a bare equality would have erased 6,890 ingredients from the UI on deploy), but it also
+        meant any write path that forgot to stamp produced a row EVERY org could see. Four forks and
+        the category agent did exactly that.
+
+        `q3orgnn3t4u` closed both ends. The database now refuses the row outright, which is the
+        behaviour this pins: an unstamped insert must fail loudly rather than become everyone's.
         """
+        import pytest
+        from sqlalchemy.exc import IntegrityError
+
         from app.models import Ingredient
 
-        session.add(Ingredient(name="Legacy Ingredient", base_unit="kg", organization_id=None))
-        session.commit()
-
-        resp = client.get("/api/v1/ingredients")
-        assert resp.status_code == 200
-        assert "Legacy Ingredient" in resp.text, (
-            "a pre-backfill row disappeared — the IS NULL arm of org_scope() is missing"
-        )
+        session.add(Ingredient(name="Unstamped", base_unit="kg"))
+        with pytest.raises(IntegrityError):
+            session.commit()
+        session.rollback()
 
 
 class TestPublicRecipesAreOrgScoped:
@@ -516,6 +514,152 @@ class TestMenusAreOrgScoped:
         )
 
 
+class TestUserDirectoryIsOrgScoped:
+    """`GET /users` returned the union of the caller's orgs, not the org being acted in.
+
+    The last of the union-scoped reads. Safe against a stranger — a non-member never appeared — but
+    a person who genuinely belongs to two orgs saw both rosters at once, with email and phone. That
+    is PII crossing a tenant boundary between two orgs that may be unrelated customers.
+    """
+
+    def test_a_member_of_two_orgs_sees_only_the_acting_orgs_people(
+        self, session: Session, client: TestClient
+    ):
+        from tests.conftest import grant_org_role, link_identity
+
+        # The caller belongs to BOTH orgs.
+        me = create_user(session, "dual-member", "dualmember")
+        link_identity(session, "dual-member", "pu-dual-member")
+        grant_org_role(session, "pu-dual-member", "Admin", org_id=ORG_ID)
+        grant_org_role(session, "pu-dual-member", "Admin", org_id=ORG_B)
+
+        # A colleague in ORG_B only — must not appear while acting in ORG_A.
+        create_user(session, "org-b-person", "orgbperson", email="secret@org-b.test")
+        link_identity(session, "org-b-person", "pu-org-b-person")
+        grant_org_role(session, "pu-org-b-person", "Member", org_id=ORG_B)
+
+        use_user(client, me)  # conftest pins the acting org to ORG_ID
+
+        resp = client.get("/api/v1/users")
+
+        assert resp.status_code == 200, resp.text
+        assert "secret@org-b.test" not in resp.text, (
+            "CROSS-ORG PII LEAK: GET /users returns the union of the caller's orgs — it must "
+            "return only the org being acted in"
+        )
+
+
+class TestMenuSketchChildrenAreOrgScoped:
+    """The sketch itself is org-scoped; its children were not.
+
+    `/menu-sketches/*` resolves through `MenuSketchService`, which carries the org. Its children —
+    sections, section-items, comments — resolve their own ids directly and never reach that
+    service, so a guessed integer walked straight past the parent's scoping. 11 routes, none of
+    which authorise anything today.
+
+    The chain is comment -> item -> section -> sketch -> org. Every link has to be followed: a
+    guard on the sketch alone leaves the comment routes open, since a comment id never mentions a
+    sketch.
+    """
+
+    def _org_b_sketch_tree(self, session: Session):
+        """A sketch in ORG_B with a section, an item and a comment hanging off it."""
+        from app.models.menu_sketch import MenuSketch
+        from app.models.menu_sketch_section import MenuSketchSection
+        from app.models.menu_sketch_section_item import MenuSketchSectionItem
+        from app.models.menu_sketch_section_item_comment import (
+            MenuSketchSectionItemComment,
+        )
+
+        sketch = MenuSketch(name="ORG_B Secret Sketch", organization_id=ORG_B)
+        session.add(sketch)
+        session.commit()
+        session.refresh(sketch)
+
+        section = MenuSketchSection(menu_sketch_id=sketch.id, name="ORG_B Secret Section")
+        session.add(section)
+        session.commit()
+        session.refresh(section)
+
+        item = MenuSketchSectionItem(
+            menu_sketch_section_id=section.id, name="ORG_B Secret Dish"
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+
+        comment = MenuSketchSectionItemComment(
+            menu_sketch_section_item_id=item.id, text="ORG_B Secret Comment"
+        )
+        session.add(comment)
+        session.commit()
+        session.refresh(comment)
+        return sketch, section, item, comment
+
+    def test_cannot_list_another_orgs_sections(self, session: Session, client: TestClient):
+        sketch, _s, _i, _c = self._org_b_sketch_tree(session)
+
+        resp = client.get(f"/api/v1/menu-sketch-sections?menu_sketch_id={sketch.id}")
+
+        assert resp.status_code == 404, "another org's sketch is not yours to enumerate"
+        assert "ORG_B Secret Section" not in resp.text
+
+    def test_cannot_list_another_orgs_section_items(self, session: Session, client: TestClient):
+        _sk, section, _i, _c = self._org_b_sketch_tree(session)
+
+        resp = client.get(f"/api/v1/menu-sketch-section-items?section_id={section.id}")
+
+        assert resp.status_code == 404
+        assert "ORG_B Secret Dish" not in resp.text
+
+    def test_cannot_read_another_orgs_comments(self, session: Session, client: TestClient):
+        sketch, _s, _i, _c = self._org_b_sketch_tree(session)
+
+        resp = client.get(f"/api/v1/menu-sketch-section-item-comments/menu-sketch/{sketch.id}")
+
+        assert resp.status_code == 404
+        assert "ORG_B Secret Comment" not in resp.text
+
+    def test_cannot_delete_another_orgs_section(self, session: Session, client: TestClient):
+        from app.models.menu_sketch_section import MenuSketchSection
+
+        _sk, section, _i, _c = self._org_b_sketch_tree(session)
+
+        resp = client.delete(f"/api/v1/menu-sketch-sections/{section.id}")
+
+        assert resp.status_code == 404
+        session.expire_all()
+        assert session.get(MenuSketchSection, section.id) is not None, "the section must survive"
+
+    def test_cannot_delete_another_orgs_comment(self, session: Session, client: TestClient):
+        from app.models.menu_sketch_section_item_comment import (
+            MenuSketchSectionItemComment,
+        )
+
+        _sk, _s, _i, comment = self._org_b_sketch_tree(session)
+
+        resp = client.delete(f"/api/v1/menu-sketch-section-item-comments/{comment.id}")
+
+        assert resp.status_code == 404
+        session.expire_all()
+        assert session.get(MenuSketchSectionItemComment, comment.id) is not None
+
+    def test_cannot_create_a_section_on_another_orgs_sketch(
+        self, session: Session, client: TestClient
+    ):
+        """The parent id comes from the BODY here — the shape that hid an IDOR in `sync/*`."""
+        sketch, _s, _i, _c = self._org_b_sketch_tree(session)
+
+        resp = client.post(
+            "/api/v1/menu-sketch-sections",
+            json={"menu_sketch_id": sketch.id, "name": "Injected", "order_no": 99},
+        )
+
+        assert resp.status_code == 404, (
+            "a body-supplied menu_sketch_id must be checked against the acting org"
+        )
+
+
 class TestTastingNoteImageIDOR:
     """`tasting-note-images` resolved NO user on any route.
 
@@ -530,12 +674,12 @@ class TestTastingNoteImageIDOR:
         from app.models import TastingNoteImage
 
         victim = make_brand_user(session, "img-victim", brand, STAFF, "imgvictim")
-        recipe = Recipe(name="Victim Dish", owner_id=victim.id, status=RecipeStatus.ACTIVE)
+        recipe = Recipe(organization_id=ORG_ID, name="Victim Dish", owner_id=victim.id, status=RecipeStatus.ACTIVE)
         session.add(recipe)
         session.commit()
         session.refresh(recipe)
 
-        ts = TastingSession(
+        ts = TastingSession(organization_id=ORG_ID, 
             name="Victim Session", date=datetime.datetime(2026, 1, 1), creator_id=victim.id
         )
         session.add(ts)

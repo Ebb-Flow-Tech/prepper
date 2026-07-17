@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import get_current_user, get_session
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain.user_service import UserService
 from app.models.user import User, UserRead, UserUpdate
 
@@ -18,21 +18,23 @@ def list_users(
     page_size: int = Query(default=30, ge=1, le=100),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
-    """People who share an organisation with the caller, paginated.
+    """People in the organisation the caller is acting in, paginated.
 
     This returned every user in the instance — email, username and phone number — to any
     authenticated caller, unpaginated, and `?email=` made it a targeted lookup oracle on top.
 
-    Scoped to the caller's orgs via the Passport projection. It is NOT narrowed to a single acting
-    org yet: no route carries an org context, and the union already closes the cross-tenant leak.
+    Scoped to the ACTING org via the Passport projection. It used to return the union of the
+    caller's orgs, which never exposed a stranger but did put two unrelated customers' rosters —
+    email and phone — in one response for anyone who belonged to both.
     """
     from app.models.pagination import PaginatedResponse
 
     service = UserService(session)
     offset = (page_number - 1) * page_size
     items, total = service.list_users_paginated(
-        current_user.id, offset=offset, limit=page_size, email=email
+        current_user.id, org.organization_id, offset=offset, limit=page_size, email=email
     )
     return PaginatedResponse.create(
         items=[UserRead.model_validate(u) for u in items],

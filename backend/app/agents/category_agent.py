@@ -20,6 +20,7 @@ from app.agents.agent_utils import (
     time_it,
 )
 from app.agents.base_agent import BaseAgent
+from app.domain.org_scope import org_scope
 from app.models.category import Category, CategoryCreate
 
 
@@ -122,13 +123,22 @@ Guidelines for categorization:
 
 Always provide a brief explanation of why the category fits the ingredient."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
         """Initialize the category agent.
 
         Args:
             session: SQLModel database session for category operations
+            organization_id: the acting org. Required, and deliberately without a default.
+
+        The agent both READS categories (to find a semantic match) and WRITES them (when no match
+        exists). Neither was org-aware: it searched every tenant's categories to decide how to
+        categorise an ingredient, and created new ones with no org at all — rows that
+        `org_scope`'s transitional NULL arm then showed to everybody. Surfaced by making the
+        column NOT NULL (`q3orgnn3t4u`); it had been failing silently, as data rather than as an
+        error.
         """
         super().__init__(session)
+        self.organization_id = organization_id
         self._last_category_id: int | None = None
         self._last_category_name: str | None = None
         self._last_explanation: str | None = None
@@ -152,7 +162,10 @@ Always provide a brief explanation of why the category fits the ingredient."""
             Category dict if found with sufficient similarity, None otherwise
         """
         # Get all active categories
-        statement = select(Category).where(Category.is_active == True)
+        statement = select(Category).where(
+            Category.is_active == True,
+            org_scope(Category, self.organization_id),
+        )
         categories = list(self.session.exec(statement).all())
 
         if not categories:
@@ -196,7 +209,8 @@ Always provide a brief explanation of why the category fits the ingredient."""
         existing = self.session.exec(
             select(Category).where(
                 func.lower(Category.name) == title_case_name.lower(),
-                Category.is_active == True
+                Category.is_active == True,
+                org_scope(Category, self.organization_id),
             )
         ).first()
 
@@ -211,6 +225,7 @@ Always provide a brief explanation of why the category fits the ingredient."""
         # Create new category
         category_data = CategoryCreate(name=title_case_name, description=description)
         category = Category.model_validate(category_data)
+        category.organization_id = self.organization_id
         self.session.add(category)
         self.session.commit()
         self.session.refresh(category)

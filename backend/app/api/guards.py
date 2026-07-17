@@ -28,8 +28,13 @@ from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
 from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
+from app.domain.org_scope import org_scope
 from app.models import Recipe, RecipeOutlet, TastingNoteImage, User
 from app.models.ingredient_tasting import IngredientTastingNote
+from app.models.menu_sketch import MenuSketch
+from app.models.menu_sketch_section import MenuSketchSection
+from app.models.menu_sketch_section_item import MenuSketchSectionItem
+from app.models.menu_sketch_section_item_comment import MenuSketchSectionItemComment
 from app.models.recipe_tasting import RecipeTasting
 from app.models.tasting import TastingNote, TastingSession, TastingUser
 from app.passport import access
@@ -38,16 +43,16 @@ from app.passport import access
 def _in_org(recipe: Recipe, organization_id: str) -> bool:
     """Whether the recipe belongs to the org being acted in.
 
-    The in-Python twin of `domain.org_scope.org_scope`, including the transitional NULL arm — a
-    guard resolves one row it already holds, so it tests the value rather than adding a predicate.
-    The two must stay in step.
+    The in-Python twin of `domain.org_scope.org_scope` — a guard resolves one row it already holds,
+    so it tests the value rather than adding a predicate. The two must stay in step; both dropped
+    their transitional NULL arm at `q3orgnn3t4u`.
 
     Kept separate from :func:`_may_see_recipe` because the two answer different questions and
     deserve different answers: failing THIS one means the row is in another tenant, which is a
     404 — its existence is not yours to learn. Failing that one means the row is in your org but
     not on your brands, which is a 403 you are allowed to see.
     """
-    return recipe.organization_id is None or recipe.organization_id == organization_id
+    return recipe.organization_id == organization_id
 
 
 def _may_see_recipe(session: Session, user: User, recipe: Recipe) -> bool:
@@ -332,3 +337,120 @@ def require_session_access(
         )
 
     return tasting_session
+
+
+# --- Menu-sketch family ---------------------------------------------------------------
+#
+# The sketch itself is org-scoped by `MenuSketchService`, which carries the acting org. Its
+# children resolve their OWN ids and never reach that service, so a guessed integer walked past
+# the parent's scoping entirely: 11 routes that authorised nothing.
+#
+# The chain is comment -> item -> section -> sketch -> org, and every link has to be followed. A
+# guard on the sketch alone leaves the comment routes open, because a comment id never mentions a
+# sketch. Each guard below resolves exactly one link and delegates the rest upward, so the org test
+# lives in ONE place (`_sketch_in_org`) rather than four.
+
+
+def _sketch_in_org(session: Session, sketch_id: int, organization_id: str) -> MenuSketch | None:
+    """The sketch, if it belongs to the acting org. Mirrors `MenuSketchService.get_sketch`."""
+    return session.exec(
+        select(MenuSketch).where(
+            MenuSketch.id == sketch_id,
+            org_scope(MenuSketch, organization_id),
+        )
+    ).first()
+
+
+def _sketch_not_found() -> HTTPException:
+    """404 for every failure in this family — missing, or another org's.
+
+    Same status and same detail either way: a sketch in another tenant must be indistinguishable
+    from one that does not exist.
+    """
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Menu sketch not found",
+    )
+
+
+def require_sketch_access(
+    menu_sketch_id: int,
+    session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
+) -> MenuSketch:
+    """The sketch named by a `menu_sketch_id` path/query parameter, if it is in the acting org."""
+    sketch = _sketch_in_org(session, menu_sketch_id, org.organization_id)
+    if sketch is None:
+        raise _sketch_not_found()
+    return sketch
+
+
+def require_section_access(
+    section_id: int,
+    session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
+) -> MenuSketchSection:
+    """The section, if its sketch is in the acting org."""
+    section = session.get(MenuSketchSection, section_id)
+    if section is None or _sketch_in_org(session, section.menu_sketch_id, org.organization_id) is None:
+        raise _sketch_not_found()
+    return section
+
+
+def require_sketch_item_access(
+    item_id: int,
+    session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
+) -> MenuSketchSectionItem:
+    """The item, if its section's sketch is in the acting org."""
+    item = session.get(MenuSketchSectionItem, item_id)
+    if item is None:
+        raise _sketch_not_found()
+    section = session.get(MenuSketchSection, item.menu_sketch_section_id)
+    if section is None or _sketch_in_org(session, section.menu_sketch_id, org.organization_id) is None:
+        raise _sketch_not_found()
+    return item
+
+
+def require_sketch_comment_access(
+    comment_id: int,
+    session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
+) -> MenuSketchSectionItemComment:
+    """The comment, if its item's section's sketch is in the acting org — the full chain."""
+    comment = session.get(MenuSketchSectionItemComment, comment_id)
+    if comment is None:
+        raise _sketch_not_found()
+    item = session.get(MenuSketchSectionItem, comment.menu_sketch_section_item_id)
+    if item is None:
+        raise _sketch_not_found()
+    section = session.get(MenuSketchSection, item.menu_sketch_section_id)
+    if section is None or _sketch_in_org(session, section.menu_sketch_id, org.organization_id) is None:
+        raise _sketch_not_found()
+    return comment
+
+
+def sketch_reachable(session: Session, sketch_id: int, organization_id: str) -> bool:
+    """Predicate form, for routes that take the parent id in the REQUEST BODY.
+
+    A body-supplied parent id is not a path parameter, so no dependency can resolve it — the route
+    has to ask. This is the shape that hid an IDOR inside `tasting-note-images/sync/*`: ids arriving
+    in the body and being trusted because the route "had a guard".
+    """
+    return _sketch_in_org(session, sketch_id, organization_id) is not None
+
+
+def section_reachable(session: Session, section_id: int, organization_id: str) -> bool:
+    """Predicate form for a body-supplied `menu_sketch_section_id` — see `sketch_reachable`."""
+    section = session.get(MenuSketchSection, section_id)
+    if section is None:
+        return False
+    return _sketch_in_org(session, section.menu_sketch_id, organization_id) is not None
+
+
+def sketch_item_reachable(session: Session, item_id: int, organization_id: str) -> bool:
+    """Predicate form for a body-supplied `menu_sketch_section_item_id` — see `sketch_reachable`."""
+    item = session.get(MenuSketchSectionItem, item_id)
+    if item is None:
+        return False
+    return section_reachable(session, item.menu_sketch_section_id, organization_id)

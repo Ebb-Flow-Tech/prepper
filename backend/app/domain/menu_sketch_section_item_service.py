@@ -19,8 +19,16 @@ from app.models.tasting import TastingNote, TastingSession
 class MenuSketchSectionItemService:
     """Service for menu sketch section item (dish) management."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, organization_id: str):
+        """``organization_id`` is required and has no default — see `CategoryService.__init__`.
+
+        Naming a dish on a sketch AUTO-CREATES a draft recipe (`_auto_create_recipe`), so this
+        service is a create path even though nothing about it says "create recipe". It stamped no
+        org, so every dish named this way produced an orphan — invisible to its own author once
+        reads filtered on the org. Found by `q3orgnn3t4u`, not by a test.
+        """
         self.session = session
+        self.organization_id = organization_id
 
     # ------------------------------------------------------------------
     # Helpers
@@ -87,7 +95,12 @@ class MenuSketchSectionItemService:
         )
 
     def _auto_create_recipe(self, name: str, owner_id: str | None = None) -> Recipe:
-        recipe = Recipe(name=name, status=RecipeStatus.DRAFT, owner_id=owner_id)
+        recipe = Recipe(
+            name=name,
+            status=RecipeStatus.DRAFT,
+            owner_id=owner_id,
+            organization_id=self.organization_id,
+        )
         self.session.add(recipe)
         self.session.commit()
         self.session.refresh(recipe)
@@ -190,6 +203,11 @@ class MenuSketchSectionItemService:
                             is_prep_recipe=recipe.is_prep_recipe,
                             status=recipe.status,
                             owner_id=recipe.owner_id,
+                            # The fourth hand-rolled fork in this codebase, and the fourth to
+                            # forget the org (see `fork_recipe`, `fork_sketch`, `fork_menu`).
+                            # Copying a row field-by-field means every new column has to be
+                            # remembered in four places; `organization_id` was remembered in none.
+                            organization_id=recipe.organization_id,
                         )
                         self.session.add(forked)
                         self.session.commit()

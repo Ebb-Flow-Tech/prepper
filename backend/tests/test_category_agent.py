@@ -9,7 +9,12 @@ from app.agents.category_agent import CategoryAgent
 from app.models.category import Category
 
 # Import mock classes from conftest
-from tests.conftest import MockClaudeResponse, MockContentBlock, MockToolUseBlock
+from tests.conftest import (
+    ORG_ID,
+    MockClaudeResponse,
+    MockContentBlock,
+    MockToolUseBlock,
+)
 
 
 class TestCategoryAgentInit:
@@ -17,7 +22,7 @@ class TestCategoryAgentInit:
 
     def test_init_success(self, session: Session, mock_settings, mock_anthropic):
         """Test successful agent initialization."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         assert agent.session == session
         assert agent._last_category_id is None
         assert agent._last_category_name is None
@@ -26,7 +31,7 @@ class TestCategoryAgentInit:
     def test_init_no_api_key(self, session: Session, agent_no_api_key):
         """Test initialization fails without API key."""
         with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not configured"):
-            CategoryAgent(session)
+            CategoryAgent(session, ORG_ID)
 
 
 class TestSimilarityCalculation:
@@ -34,25 +39,25 @@ class TestSimilarityCalculation:
 
     def test_exact_match(self, session: Session, mock_settings, mock_anthropic):
         """Test exact match returns 1.0."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         assert agent._calculate_similarity("Dairy", "Dairy") == 1.0
 
     def test_case_insensitive(self, session: Session, mock_settings, mock_anthropic):
         """Test similarity is case-insensitive."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         assert agent._calculate_similarity("DAIRY", "dairy") == 1.0
         assert agent._calculate_similarity("Dairy", "DAIRY") == 1.0
 
     def test_similar_strings(self, session: Session, mock_settings, mock_anthropic):
         """Test similar strings have high similarity."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         # "Vegetables" vs "Vegetable" should be > 0.8
         similarity = agent._calculate_similarity("Vegetables", "Vegetable")
         assert similarity > 0.8
 
     def test_different_strings(self, session: Session, mock_settings, mock_anthropic):
         """Test different strings have low similarity."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         similarity = agent._calculate_similarity("Dairy", "Seafood")
         assert similarity < 0.5
 
@@ -63,12 +68,12 @@ class TestQueryCategoryByName:
     def test_exact_match_found(self, session: Session, mock_settings, mock_anthropic):
         """Test finding an exact category match."""
         # Create a category in the database
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
         session.refresh(category)
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._query_category_by_name("Dairy")
 
         assert result is not None
@@ -78,12 +83,12 @@ class TestQueryCategoryByName:
 
     def test_similar_match_found(self, session: Session, mock_settings, mock_anthropic):
         """Test finding a similar category match above threshold."""
-        category = Category(name="Vegetables", description="Fresh vegetables")
+        category = Category(organization_id=ORG_ID, name="Vegetables", description="Fresh vegetables")
         session.add(category)
         session.commit()
         session.refresh(category)
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._query_category_by_name("Vegetable")
 
         assert result is not None
@@ -93,41 +98,41 @@ class TestQueryCategoryByName:
 
     def test_no_match_below_threshold(self, session: Session, mock_settings, mock_anthropic):
         """Test that low similarity doesn't return a match."""
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._query_category_by_name("Seafood")
 
         assert result is None
 
     def test_no_categories_exist(self, session: Session, mock_settings, mock_anthropic):
         """Test querying when no categories exist."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._query_category_by_name("Dairy")
 
         assert result is None
 
     def test_inactive_categories_excluded(self, session: Session, mock_settings, mock_anthropic):
         """Test that inactive categories are not matched."""
-        category = Category(name="Dairy", description="Milk products", is_active=False)
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products", is_active=False)
         session.add(category)
         session.commit()
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._query_category_by_name("Dairy")
 
         assert result is None
 
     def test_case_insensitive_match(self, session: Session, mock_settings, mock_anthropic):
         """Test that querying is case-insensitive."""
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
         session.refresh(category)
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
 
         # Test various case variations
         result_lower = agent._query_category_by_name("dairy")
@@ -154,7 +159,7 @@ class TestAddCategory:
 
     def test_add_new_category(self, session: Session, mock_settings, mock_anthropic):
         """Test adding a new category."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._add_category("dairy", "Milk products")
 
         assert result["name"] == "Dairy"  # Title case
@@ -164,7 +169,7 @@ class TestAddCategory:
 
     def test_add_category_title_case(self, session: Session, mock_settings, mock_anthropic):
         """Test that category names are converted to title case."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
 
         result = agent._add_category("SEAFOOD")
         assert result["name"] == "Seafood"
@@ -175,11 +180,11 @@ class TestAddCategory:
     def test_add_category_already_exists(self, session: Session, mock_settings, mock_anthropic):
         """Test adding a category that already exists."""
         # Create existing category
-        category = Category(name="Dairy", description="Original")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Original")
         session.add(category)
         session.commit()
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._add_category("dairy", "New description")
 
         assert result["name"] == "Dairy"
@@ -187,7 +192,7 @@ class TestAddCategory:
 
     def test_add_category_no_description(self, session: Session, mock_settings, mock_anthropic):
         """Test adding a category without description."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._add_category("herbs")
 
         assert result["name"] == "Herbs"
@@ -200,12 +205,12 @@ class TestProcessToolCall:
 
     def test_process_query_category_found(self, session: Session, mock_settings, mock_anthropic):
         """Test processing query_category_by_name when found."""
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
         session.refresh(category)
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._process_tool_call("query_category_by_name", {"name": "Dairy"})
 
         assert '"name": "Dairy"' in result
@@ -214,7 +219,7 @@ class TestProcessToolCall:
 
     def test_process_query_category_not_found(self, session: Session, mock_settings, mock_anthropic):
         """Test processing query_category_by_name when not found."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._process_tool_call("query_category_by_name", {"name": "Dairy"})
 
         assert result == "null"
@@ -223,7 +228,7 @@ class TestProcessToolCall:
 
     def test_process_add_category(self, session: Session, mock_settings, mock_anthropic):
         """Test processing add_category tool call."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._process_tool_call(
             "add_category",
             {"name": "Dairy", "description": "Milk products"}
@@ -236,7 +241,7 @@ class TestProcessToolCall:
 
     def test_process_unknown_tool(self, session: Session, mock_settings, mock_anthropic):
         """Test processing an unknown tool."""
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = agent._process_tool_call("unknown_tool", {})
 
         assert "error" in result
@@ -252,7 +257,7 @@ class TestCategorizeIngredient:
     ):
         """Test categorizing when a matching category exists."""
         # Create existing category
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
         session.refresh(category)
@@ -287,7 +292,7 @@ class TestCategorizeIngredient:
         mock_client.messages.create.side_effect = [tool_use_response, finalize_response]
         mock_anthropic.return_value = mock_client
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = await agent.categorize_ingredient("Milk")
 
         assert result["category_id"] == category.id
@@ -337,7 +342,7 @@ class TestCategorizeIngredient:
         mock_client.messages.create.side_effect = [query_response, add_response, finalize_response]
         mock_anthropic.return_value = mock_client
 
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, ORG_ID)
         result = await agent.categorize_ingredient("Salmon")
 
         assert result["category_id"] is not None
@@ -357,7 +362,7 @@ class TestCategorizeIngredientAPI:
     def test_categorize_ingredient_endpoint(self, client, session: Session):
         """Test the /agents/categorize-ingredient endpoint."""
         # Create a category first
-        category = Category(name="Dairy", description="Milk products")
+        category = Category(organization_id=ORG_ID, name="Dairy", description="Milk products")
         session.add(category)
         session.commit()
         session.refresh(category)

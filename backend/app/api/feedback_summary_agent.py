@@ -6,6 +6,7 @@ from sqlmodel import Session
 
 from app.agents.feedback_summary_agent import FeedbackSummaryAgent
 from app.api.guards import require_recipe_access
+from app.api.rate_limit import rate_limit_ai
 from app.database import get_session
 from app.models import Recipe
 
@@ -21,6 +22,7 @@ class SummarizeFeedbackResponse(BaseModel):
 
 @router.post(
     "/summarize-feedback/{recipe_id}",
+    dependencies=[Depends(rate_limit_ai)],
     response_model=SummarizeFeedbackResponse,
     status_code=status.HTTP_200_OK,
     summary="Summarize recipe feedback",

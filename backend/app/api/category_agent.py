@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.agents.category_agent import CategoryAgent
+from app.api.deps import OrgContext, get_org_context
+from app.api.rate_limit import rate_limit_ai
 from app.database import get_session
 
 router = APIRouter()
@@ -27,6 +29,7 @@ class CategorizeIngredientResponse(BaseModel):
 
 @router.post(
     "/categorize-ingredient",
+    dependencies=[Depends(rate_limit_ai)],
     response_model=CategorizeIngredientResponse,
     status_code=status.HTTP_200_OK,
     summary="Categorize an ingredient",
@@ -35,6 +38,7 @@ class CategorizeIngredientResponse(BaseModel):
 async def categorize_ingredient(
     request: CategorizeIngredientRequest,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ) -> CategorizeIngredientResponse:
     """Categorize an ingredient using the AI agent.
 
@@ -45,7 +49,7 @@ async def categorize_ingredient(
     4. If not found, create a new category in title case
     """
     try:
-        agent = CategoryAgent(session)
+        agent = CategoryAgent(session, org.organization_id)
         result = await agent.categorize_ingredient(request.ingredient_name)
         return CategorizeIngredientResponse(**result)
     except ValueError as e:

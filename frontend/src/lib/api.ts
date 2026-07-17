@@ -1399,25 +1399,56 @@ export async function getUser(userId: string): Promise<User> {
   return fetchApi<User>(`/users/${userId}`);
 }
 
-/** The largest page the backend allows. See the truncation note on `getUsers`. */
+/** The largest page the backend allows (`users.py` caps `page_size` at 100). */
 const USERS_PAGE_SIZE = 100;
 
 /**
- * People who share an organisation with the caller.
+ * Refuse to fetch beyond this many pages.
  *
- * `GET /users` is now org-scoped and paginated — it used to return every user in the instance,
+ * Not a truncation in practice — an org would need 10,000 members to reach it — but an unbounded
+ * loop driven by a number the server returns should have a stop, and a runaway is better as a
+ * console error than as 500 silent requests.
+ */
+const USERS_MAX_PAGES = 100;
+
+/**
+ * Every person in the organisation the caller is acting in.
+ *
+ * `GET /users` is org-scoped and paginated — it used to return every user in the *instance*,
  * unpaginated, to any authenticated caller.
  *
- * KNOWN LIMITATION: this unwraps the first page and drops the rest, so an org with more than
- * `USERS_PAGE_SIZE` members shows only the first 100. Callers render a flat list and none paginate
- * yet. Surfacing it here rather than hiding it: a silent cap reads as "these are all the users",
- * and none of them are wrong today only because no org is that large.
+ * Follows every page. It used to unwrap the first and drop the rest, which capped both consumers
+ * at 100 people: `UserManagementTab` would simply not list member 101, and `ParticipantPicker`
+ * would make them un-invitable to a tasting — with no error, because a short list looks exactly
+ * like a complete one. Both render flat lists and neither paginates, so "all of them" is what they
+ * actually need.
+ *
+ * Pages after the first are fetched together rather than in sequence: they are independent, and
+ * `performance.md`'s "don't call the same API repeatedly" is about redundant calls, not about
+ * pagination that has to happen.
  */
 export async function getUsers(): Promise<User[]> {
-  const page = await fetchApi<PaginatedResponse<User>>(
+  const first = await fetchApi<PaginatedResponse<User>>(
     `/users?page_size=${USERS_PAGE_SIZE}`
   );
-  return page.items;
+  if (first.total_pages <= 1) return first.items;
+
+  const pagesToFetch = Math.min(first.total_pages, USERS_MAX_PAGES);
+  if (first.total_pages > USERS_MAX_PAGES) {
+    console.error(
+      `getUsers: ${first.total_count} users span ${first.total_pages} pages; ` +
+        `stopping at ${USERS_MAX_PAGES}. This list is now incomplete — paginate the callers.`
+    );
+  }
+
+  const rest = await Promise.all(
+    Array.from({ length: pagesToFetch - 1 }, (_, i) =>
+      fetchApi<PaginatedResponse<User>>(
+        `/users?page_size=${USERS_PAGE_SIZE}&page_number=${i + 2}`
+      )
+    )
+  );
+  return [...first.items, ...rest.flatMap((p) => p.items)];
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {

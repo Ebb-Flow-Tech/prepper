@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.models import TastingSession, User
+from tests.conftest import ORG_ID
 
 
 def _seed_session_without(session, *, exclude_user_id: str) -> int:
@@ -21,7 +22,7 @@ def _seed_session_without(session, *, exclude_user_id: str) -> int:
             User(id=organiser_id, email="organiser@test.com", username="Organiser")
         )
         session.flush()
-    ts = TastingSession(
+    ts = TastingSession(organization_id=ORG_ID, 
         name="Test Session",
         date=datetime.datetime(2024, 12, 15, 10, 0, 0),
         creator_id=organiser_id,

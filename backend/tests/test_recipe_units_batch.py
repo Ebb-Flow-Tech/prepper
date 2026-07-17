@@ -9,11 +9,11 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models import Recipe, RecipeOutlet
-from tests.conftest import make_brand_user, seed_brand, use_user
+from tests.conftest import ORG_ID, make_brand_user, seed_brand, use_user
 
 
 def _recipe(session: Session, name: str = "Soup") -> Recipe:
-    r = Recipe(name=name, created_by="admin-user-id", owner_id="admin-user-id")
+    r = Recipe(organization_id=ORG_ID, name=name, created_by="admin-user-id", owner_id="admin-user-id")
     session.add(r)
     session.commit()
     session.refresh(r)

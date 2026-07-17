@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.68](#0068---2026-07-17)** — Org Isolation (3/3): RLS Had **Zero** Org-Aware Policies and 14 `USING (true)` Reads — `my_org_ids()`/`is_admin_in()`, All 123 Policies Rewritten, `organization_id` NOT NULL; plus Four Forks and an AI Agent That Never Stamped an Org, AI Rate Limits & the `getUsers()` 100-Row Cap
 - **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs, the `tasting-note-images` Family, and the SSO Login 503
 - **[0.0.64](#0064---2026-07-16)** — Fix: Four Cross-Tenant Leaks (All Three Supplier-Ingredient Writes, `GET /menu-items`), Email Self-Service Granting Another User's Passport Identity, Unscoped `GET /users` PII & Unauthenticated `/docs`; plus the Settings Refactor — Tabs/Table Primitives, the BrandRoles Scroll Fix, Profile Org Info & the Org Switcher
 - **[0.0.63](#0063---2026-07-16)** — Org Isolation (1/3): Nullable `organization_id` on the Seven Per-Org Tables, `get_org_context` with Email Fallback & a Read-Only Backfill Report — No Query Enforces Yet; `ingredients`/`categories`/`menus_sketch` Are 100% Underivable
@@ -70,6 +71,91 @@ All notable changes to Prepper are documented here.
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
 ---
 
+## [0.0.68] - 2026-07-17
+
+Org isolation 3 of 3, and the end of the transitional state. The application layer has enforced org
+scoping since `0.0.65`; this is the database catching up, and it turned out to be further behind
+than the plan assumed.
+
+### Fixed
+
+#### RLS had no org-aware policy at all — and 14 wide-open reads
+
+**Not one of the 123 policies mentioned `organization_id`**, and 14 of the 32 SELECT policies were
+`USING (true)`: `ingredients`, `suppliers`, `categories`, `menus_sketch`, `supplier_ingredients` and
+the entire menu-sketch family were readable by any authenticated role. For those tables RLS was not
+a weakened second line of defence — it was no line of defence. The plan going in was "swap the admin
+helper"; the reality was a rewrite.
+
+`recipes_select` was `owner_id = auth.uid() OR is_public = true OR is_admin()` — that `is_public`
+had no org predicate under it, the identical bug fixed in `guards._may_see_recipe` in `0.0.65`. The
+app and the database disagreed, and the database was wrong.
+
+`q4rlsorg5v6w` (reads) and `q5rlswrite7x8y` (writes) rebuild all of it on `my_org_ids()`,
+`is_admin_in(org)` and `is_manager_or_admin_in(org)`. The org-less `is_admin()` now survives only on
+the three global reference vocabularies, where "an admin may edit the shared list" is the intended
+rule.
+
+Two write policies had **no parent check whatsoever**: `menu_sketch_section` and
+`supplier_ingredients` were a bare `is_manager_or_admin()`, so a Manager at any brand of any org
+could rename or delete sections on any sketch, and rewrite supplier pricing on any ingredient.
+
+#### Four forks and an AI agent never stamped an org
+
+`q3orgnn3t4u` (NOT NULL) surfaced six write paths that produced org-less rows — every one of them
+invisible to the tests and visible, via `org_scope`'s transitional `IS NULL` arm, to **every org**:
+
+- `fork_recipe`, `fork_sketch`, `fork_menu`, and a fourth hand-rolled fork inside the sketch-item
+  rename. Each copies a row field-by-field; each forgot the column.
+- `CategoryAgent` — which both **read** every tenant's categories to decide a categorisation and
+  **wrote** new ones with no org.
+- `_auto_create_recipe` — naming a dish on a sketch silently creates a draft recipe.
+
+None was found by a test. All were found by making the column NOT NULL.
+
+### Changed
+
+- **`organization_id` is NOT NULL** on the seven per-org tables (`q3orgnn3t4u`), with a defensive
+  backfill for stragglers. This is the migration that broke staging when it was attempted early in
+  `q2`; it is safe now only because creates stamp the column. **Do not deploy it below v0.0.65.**
+- **`org_scope`'s `IS NULL` arm is gone**, along with `guards._in_org`'s and `access.admins_row`'s
+  NULL fallbacks. The arm was load-bearing while the column was nullable — a bare equality would
+  have erased 6,890 ingredients from the UI on deploy — but it also meant any unstamped row was
+  everyone's. NOT NULL retired both problems at once.
+- **AI agent routes are rate-limited** (10/minute/user). They were authenticated, so never a leak,
+  but any signed-in user could hold the button down and bill the org. In-process and therefore
+  per-machine, not per-deployment — documented in `api/rate_limit.py` rather than papered over.
+- **`getUsers()` follows every page.** It unwrapped the first and dropped the rest, capping both
+  callers at 100: member 101 was missing from the Accounts table and un-invitable to a tasting, with
+  no error, because a short list looks exactly like a complete one.
+- `GET /users` and `directory.*` narrowed from the union of your orgs to the acting org.
+
+### Verification
+
+RLS is invisible to everything that normally reports: `conftest.py` is SQLite (no RLS), and the
+backend connects as `service_role` (BYPASSRLS), so no policy is ever exercised on the app's own
+connection. Two things were added because of that:
+
+- `scripts/verify_rls.py` — connects as a **non-bypassing** role, impersonates a real user via
+  `auth.uid()`, plants a row in a foreign org and proves it cannot be seen. Before the migration it
+  reported that row as **visible**; after, invisible.
+- `tests/test_rls_integration.py` gained a `TestCrossOrgRLS` class. The existing 21 tests put every
+  actor in one org, so all of them passed just as happily when no policy mentioned an org — they
+  could not have caught this. The new six were confirmed non-vacuous by reverting the migrations and
+  watching them fail.
+
+Those same integration tests caught three regressions in the first cut of `q4`: a Manager gained the
+ability to delete ingredients, non-participants could read every session in their org, and creators
+lost the right to update their own session — all from flattening each table's rules into one generic
+shape.
+
+### Still outstanding
+
+Staging has exactly **one org**, so none of this has run against a real second tenant; every
+cross-org test seeds its own. The mechanisms are verified, the deployment is not.
+
+---
+
 ## [0.0.65] - 2026-07-17
 
 Org isolation 2 of 3. `0.0.63` added the column and `get_org_context`; nothing read either. This wires both to the write path and the read path, so `organization_id` starts meaning something.
@@ -109,6 +195,16 @@ Participation scoping held. `admin_org_ids` did not — it is the union of every
 #### `.env.example` documented `SUPABASE_KEY` as the anon key; it must be service_role
 
 Two consumers need an admin credential the anon key cannot supply: `auth.admin.create_user` (an admin API) and `storage_service` (bucket writes). Following the example gave a key that authenticates fine everywhere else and then fails at registration and image upload. The entry now names `service_role`, says where to find it, lists both consumers, and notes that it bypasses RLS.
+
+#### The menu-sketch children authorised nothing — 11 routes
+
+The sketch is org-scoped by `MenuSketchService`. Its children — sections, section-items, comments — resolve their own ids and never reach that service, so a guessed integer walked straight past the parent's scoping: read any org's menu sketches, rename their dishes, delete their sections and comments.
+
+The chain is comment -> item -> section -> sketch -> org, and every link had to be followed. A guard on the sketch alone would have left the comment routes open, because a comment id never mentions a sketch. Three of the routes take the parent id in the **request body**, where no dependency can resolve it — the same shape that hid an IDOR inside `tasting-note-images/sync/*` — so those get a predicate (`sketch_reachable`, `section_reachable`, `sketch_item_reachable`) the route must ask explicitly.
+
+#### `GET /users` returned the union of the caller's orgs
+
+The last union-scoped read. Safe against a stranger — a non-member never appeared — but someone who genuinely belongs to two orgs got both rosters at once, email and phone included: two unrelated customers' PII in one response. Now scoped to the acting org, with the caller's own membership still checked first so a forged org id returns nobody rather than that org's roster.
 
 #### `tasting-note-images` resolved no user on any route
 

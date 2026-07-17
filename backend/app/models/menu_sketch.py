@@ -19,7 +19,13 @@ class MenuSketch(SQLModel, table=True):
     # Passport org UUID (rule 9) — a scope pointer, not a Passport fact. Nullable until the
     # backfill lands: existing rows have no org and any default would be a guess. See
     # alembic q1orgcol9p0q.
-    organization_id: str | None = Field(default=None, index=True)
+    organization_id: str | None = Field(default=None, nullable=False, index=True)
+    # NOT NULL in the database (`q3orgnn3t4u`) but Optional in Python: the create path is
+    # `model_validate(data)` — where `data` is a Create schema that deliberately has no org
+    # field — followed by stamping it from the acting org. A required field would break that
+    # at validation. `nullable=False` is what keeps the model honest about the column, so
+    # autogenerate does not offer to make it nullable again and SQLite tests fail on an
+    # unstamped insert the same way Postgres would.
 
     id: int | None = Field(default=None, primary_key=True)
     version: int = Field(default=1)

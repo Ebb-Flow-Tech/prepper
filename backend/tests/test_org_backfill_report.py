@@ -11,9 +11,30 @@ fixture re-points it rather than executing it verbatim.
 **Known limitation:** that rewrite means these tests exercise the report's LOGIC, not the exact SQL
 string production runs. The `passport.`-qualified form is verified only by running the report
 against a real Postgres. Run it once against staging before trusting its numbers.
+
+**SKIPPED as of `q3orgnn3t4u`.** The report answers "which rows can be assigned to an org?", which
+only has meaning while `organization_id IS NULL` is representable. `q3` made the column NOT NULL and
+the models now declare `nullable=False`, so `_clear_org` — which returns rows to the pre-backfill
+state these tests need — can no longer run: SQLite rejects the UPDATE exactly as Postgres would.
+
+The tool itself is NOT dead. It is a *pre-migration* aid, and any environment that has not yet run
+`q2orgfill1r2s` (production, at the time of writing) still has a nullable column and can still run
+it. It was run against staging before `q3` (7,315 rows, all decidable, one org), which is what the
+backfill rule was chosen from. What is gone is the ability to reproduce that pre-migration world in
+a test.
+
+These are kept rather than deleted so the report's logic stays reviewable, and so this note has
+somewhere to live. Delete both once production is on `q3` — at that point the report can never
+return a row again.
 """
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Reports on organization_id IS NULL, which q3orgnn3t4u made unrepresentable. "
+    "See the module docstring: the tool still serves un-migrated environments, but the "
+    "pre-backfill state it needs can no longer be built in a test."
+)
 from sqlalchemy import text as sa_text
 from sqlmodel import Session
 

@@ -120,23 +120,28 @@ class UserService:
         self.session.refresh(user)
         return user
 
-    def _org_scoped_user_query(self, subject: str):
-        """Users who share an org with ``subject``, newest first.
+    def _org_scoped_user_query(self, subject: str, organization_id: str):
+        """Users who are members of ``organization_id``, newest first.
 
         `users` has no `organization_id` and must not get one: membership is Passport-owned and
         already projected, and a multi-org user has no single org to store. So the scope is a JOIN:
 
             users.id = identity_link.subject
             identity_link.platform_user_id = membership.platform_user_id
-            membership.organization_id IN (the caller's active orgs)
+            membership.organization_id = the ACTING org
 
         Note the join is on `identity_link.subject` — it holds the local `users.id`, while
         `platform_user_id` holds Passport's. Joining the wrong pair matches nothing and silently
         returns an empty list.
 
-        This scopes to the caller's org UNION rather than one active org, because no route carries
-        an org context yet. The union closes the cross-tenant leak; narrowing to the acting org
-        comes with the rest of org scoping.
+        Scoped to the ACTING org, not the caller's org union. The union was safe against a stranger
+        — a non-member never appeared — but someone who genuinely belongs to two orgs saw both
+        rosters at once, email and phone included. Two unrelated customers' PII in one response.
+
+        The caller's own membership is still checked first: the acting org must be one of theirs,
+        so a forged org id returns nobody rather than that org's roster. `get_org_context` already
+        verifies this against the projection; the check is repeated here because this function
+        takes the org as an argument, and arguments come from wherever the next caller gets them.
 
         A user with no identity link appears to nobody — correct, since nothing places them in an
         org, and guessing would be the leak this closes.
@@ -147,8 +152,7 @@ class UserService:
         if platform_user_id is None:
             return None
 
-        org_ids = access.orgs_for_platform_user(self.session, platform_user_id)
-        if not org_ids:
+        if organization_id not in access.orgs_for_platform_user(self.session, platform_user_id):
             return None
 
         members_in_my_orgs = (
@@ -159,7 +163,7 @@ class UserService:
                 == col(PassportIdentityLink.platform_user_id),
             )
             .where(
-                col(PassportMembership.organization_id).in_(org_ids),
+                col(PassportMembership.organization_id) == organization_id,
                 PassportMembership.status == "active",
             )
         )
@@ -170,17 +174,24 @@ class UserService:
         )
 
     def list_users_paginated(
-        self, subject: str, *, offset: int, limit: int, email: str | None = None
+        self,
+        subject: str,
+        organization_id: str,
+        *,
+        offset: int,
+        limit: int,
+        email: str | None = None,
     ) -> tuple[list[User], int]:
-        """Users in the caller's orgs, paginated.
+        """Users in the acting org, paginated.
 
-        `subject` is REQUIRED. This returned EVERY user in the instance — email, username and phone
-        number — to any authenticated caller, unpaginated. `?email=` made it a targeted oracle as
-        well as a bulk dump.
+        `subject` and `organization_id` are both REQUIRED. This returned EVERY user in the instance
+        — email, username and phone number — to any authenticated caller, unpaginated. `?email=`
+        made it a targeted oracle as well as a bulk dump.
 
-        Fails CLOSED: an unresolvable caller sees nobody rather than everybody.
+        Fails CLOSED: an unresolvable caller, or an org that is not theirs, sees nobody rather than
+        everybody.
         """
-        statement = self._org_scoped_user_query(subject)
+        statement = self._org_scoped_user_query(subject, organization_id)
         if statement is None:
             return [], 0
 
