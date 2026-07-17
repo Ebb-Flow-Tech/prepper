@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 from passport_client import PassportAPIError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import User
 from app.passport import store, writeback
@@ -55,6 +55,12 @@ class _FakeClient:
             raise self._raises
         _FakeClient.calls.append(("remove", org_id, assignment_id, kwargs))
         return {"id": assignment_id, "status": "removed"}
+
+    async def upsert_membership(self, org_id, **kwargs):
+        if self._raises:
+            raise self._raises
+        _FakeClient.calls.append(("upsert_membership", org_id, kwargs))
+        return {"id": "m-new", "organization_id": org_id, "status": "active", **kwargs}
 
 
 def _configured():
@@ -223,3 +229,131 @@ def test_invalid_role_is_rejected_before_the_call(session: Session):
 
     assert exc.value.status_code == 422
     assert _FakeClient.calls == []
+
+
+# --- invite_member: org membership, written UP -----------------------------------------------
+# The ORG vocabulary (Owner|Admin|Member), NOT the brand one (Manager|Staff). The two tuples look
+# identical at a glance and mean unrelated things — models/passport.py:164-186 says so outright.
+#
+# Ordering matters beyond this module: assign_unit_app_role 409s if the target holds no active org
+# membership, so a brand role cannot bootstrap a member. Invite first, assign second.
+
+INVITEE = "newchef@acme.test"
+
+
+def test_invite_member_forwards_the_end_user_token(session: Session):
+    _FakeClient.calls = []
+
+    with _configured(), patch.object(writeback, "_client", lambda *_: _FakeClient()):
+        asyncio.run(
+            writeback.invite_member(
+                session,
+                actor=_actor(session),
+                organization_id=ORG,
+                email=INVITEE,
+                display_name="New Chef",
+                role="Member",
+                end_user_token=TOKEN,
+            )
+        )
+
+    kind, org_id, kwargs = _FakeClient.calls[0]
+    assert kind == "upsert_membership" and org_id == ORG
+    assert kwargs["end_user_token"] == TOKEN, "the end user's own JWT must be forwarded"
+    assert kwargs["email"] == INVITEE
+    assert kwargs["role"] == "Member"
+    # EXACTLY ONE identifier: the SDK raises ValueError if email and platform_user_id are both set.
+    assert "platform_user_id" not in kwargs
+
+
+def test_invite_member_refuses_a_non_admin_before_calling_passport(session: Session):
+    """Prepper's own check runs FIRST. Passport is the final gate, not the only one."""
+    _FakeClient.calls = []
+
+    with _configured(), patch.object(writeback, "_client", lambda *_: _FakeClient()):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                writeback.invite_member(
+                    session,
+                    actor=_actor(session, admin=False),
+                    organization_id=ORG,
+                    email=INVITEE,
+                    display_name=None,
+                    role="Member",
+                    end_user_token=TOKEN,
+                )
+            )
+
+    assert exc.value.status_code == 403
+    assert _FakeClient.calls == [], "must not reach the SDK at all"
+
+
+@pytest.mark.parametrize("bad_role", ["Manager", "Staff", "owner", "", "Superuser"])
+def test_invite_member_rejects_the_brand_vocabulary(session: Session, bad_role: str):
+    """Manager/Staff are BRAND roles. An org membership takes Owner|Admin|Member."""
+    _FakeClient.calls = []
+
+    with _configured(), patch.object(writeback, "_client", lambda *_: _FakeClient()):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                writeback.invite_member(
+                    session,
+                    actor=_actor(session),
+                    organization_id=ORG,
+                    email=INVITEE,
+                    display_name=None,
+                    role=bad_role,
+                    end_user_token=TOKEN,
+                )
+            )
+
+    assert exc.value.status_code == 422
+    assert _FakeClient.calls == []
+
+
+def test_invite_member_writes_nothing_locally(session: Session):
+    """Prepper NEVER writes the projection — the sync echo does. Suppressing that echo would make
+    delivery scope smaller than snapshot scope and reconcile would report permanent phantom drift.
+    """
+    from app.models import PassportMembership
+
+    actor = _actor(session)
+    before = len(session.exec(select(PassportMembership)).all())
+
+    with _configured(), patch.object(writeback, "_client", lambda *_: _FakeClient()):
+        asyncio.run(
+            writeback.invite_member(
+                session,
+                actor=actor,
+                organization_id=ORG,
+                email=INVITEE,
+                display_name=None,
+                role="Member",
+                end_user_token=TOKEN,
+            )
+        )
+
+    assert len(session.exec(select(PassportMembership)).all()) == before
+
+
+def test_invite_member_surfaces_passports_verdict_verbatim(session: Session):
+    """A 403 is a NORMAL outcome — Passport's authority matrix, applied to the verified end user."""
+    err = PassportAPIError(status_code=403, detail="actor may not grant Owner")
+
+    with _configured(), patch.object(writeback, "_client", lambda *_: _FakeClient(raises=err)):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                writeback.invite_member(
+                    session,
+                    actor=_actor(session),
+                    organization_id=ORG,
+                    email=INVITEE,
+                    display_name=None,
+                    role="Owner",
+                    end_user_token=TOKEN,
+                )
+            )
+
+    assert exc.value.status_code == 403
+    assert "may not grant Owner" in str(exc.value.detail)
+    assert TOKEN not in str(exc.value.detail), "never echo the end user's token"

@@ -180,6 +180,69 @@ def brand_roles_for_platform_user(
     return roles
 
 
+def brand_roles_for_org_members(
+    session: Session, org_id: str
+) -> dict[str, dict[str, str]]:
+    """``{platform_user_id: {brand_id: "Manager" | "Staff"}}`` for every ACTIVE member of ONE org.
+
+    The batched form of :func:`brand_roles_for_platform_user`, for the roster. Identical derivation
+    — the SDK's ``roles_at_brands``, once per member — but the inputs are read ONCE and sliced in
+    memory instead of re-read per member.
+
+    The single form costs SIX queries per member: ``entitlement_status``, then
+    ``_derivation_inputs`` runs ``unit`` and ``unit_app_access`` (both UNFILTERED full scans), the
+    member's role rows, ``entitlement_status`` AGAIN, and ``_org_role``. Staging's 20 members are
+    ~120 queries and 40 full scans for one roster load. This is four, whatever the member count.
+
+    Still the SDK's answer, never a local one. Re-deriving the ladder here — or in TypeScript —
+    would let the roster disagree with the request-path check, which is the failure the
+    single-derivation rule exists to prevent. Note the ladder is a FLOOR FOR GAPS: an explicit row
+    beats it, so an Owner carrying a ``Staff`` row is ``Staff`` at that brand.
+
+    Empty when the entitlement has not synced — "derive nothing", NOT "deny", matching the single
+    form. Fail open until Passport is genuinely authoritative.
+    """
+    status = entitlement_status(session, org_id)
+    if status is None:
+        return {}  # entitlements not synced yet — fail open, derive nothing
+
+    units_by_id = {
+        u.id: UnitPayload(**u.model_dump()) for u in session.exec(select(PassportUnit)).all()
+    }
+    app_accesses = [
+        UnitAppAccessPayload(**a.model_dump())
+        for a in session.exec(select(PassportUnitAppAccess)).all()
+    ]
+
+    # Unscoped by org, deliberately: `_derivation_inputs` passes a user's rows unscoped because the
+    # SDK helper applies the org filter itself, and a receiver legitimately holds rows for every org
+    # it is entitled to. Scoping here would silently diverge from the single form.
+    rows_by_user: dict[str, list[UnitAppMembershipPayload]] = {}
+    for row in session.exec(select(PassportUnitAppMembership)).all():
+        rows_by_user.setdefault(row.platform_user_id, []).append(
+            UnitAppMembershipPayload(**row.model_dump())
+        )
+
+    members = session.exec(
+        select(PassportMembership).where(
+            col(PassportMembership.organization_id) == org_id,
+            PassportMembership.status == _ACTIVE,
+        )
+    ).all()
+
+    return {
+        m.platform_user_id: roles_at_brands(
+            org_id=org_id,
+            entitlement_status=status,
+            org_role=m.role,
+            memberships=rows_by_user.get(m.platform_user_id, []),
+            units_by_id=units_by_id,
+            app_accesses=app_accesses,
+        )
+        for m in members
+    }
+
+
 def brand_roles(session: Session, subject: str) -> dict[str, str]:
     """``{brand_id: role}`` for the local user behind ``subject``, ACROSS every org they belong to.
 

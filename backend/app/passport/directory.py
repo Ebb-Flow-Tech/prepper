@@ -122,14 +122,27 @@ def brands_for_user(
 def roster(
     session: Session, subject: str, organization_id: str
 ) -> list[dict[str, object]]:
-    """Every brand-app role row in the acting user's orgs — the assignment roster.
+    """Everyone who can reach each brand in the acting org — assigned AND derived.
+
+    Not "the brand-app role rows we store". An org Owner/Admin holds ``Manager`` at every
+    app-carrying brand with NO ``unit_app_membership`` row (the ladder), so a stored-rows-only
+    roster could show an empty brand while every Owner had full access. That is not a hypothetical:
+    on staging it listed 3 rows against ~190 real grants, and the page carried a paragraph
+    apologising for it. Derived holders are rows now, and the apology is gone.
+
+    ``source`` is ``'assigned'`` iff an ACTIVE row exists for ``(platform_user_id, unit_id)``, else
+    ``'derived'``. It keys on the ROW, never on the org role: the ladder is a floor for GAPS, so an
+    Owner carrying an explicit ``Staff`` row is ``Staff`` there — a real demotion, on a real row,
+    which must keep its ``assignment_id`` and stay removable. Key it on org role instead and you
+    strip the controls off a live assignment.
+
+    ``role`` always comes from ``access.brand_roles_for_org_members`` — never from the stored row's
+    own ``role`` — so precedence stays inside the SDK, the one place that decides it.
 
     Delivery is own-app scoped, so every projected row is already Prepper's: do NOT filter by
-    ``app_id`` locally. ``removed`` rows are KEPT as tombstones by the handler (trap 1) and are
-    excluded here — a tombstone confers nothing, and showing it would read as an active grant.
-
-    Email / display name come from ``passport_membership``, which EMBEDS them; there is no separate
-    user aggregate to join (the snapshot has no users collection).
+    ``app_id`` locally. ``removed`` rows are KEPT as tombstones by the handler (trap 1) and confer
+    nothing. Email / display name come from ``passport_membership``, which EMBEDS them; there is no
+    separate user aggregate to join (the snapshot has no users collection).
     """
     platform_user_id = access.platform_user_id_for(session, subject)
     if platform_user_id is None:
@@ -143,36 +156,62 @@ def roster(
         # being the leak, and the check costs a set membership.
         return []
 
-    rows = session.exec(
-        select(PassportUnitAppMembership, PassportUnit, PassportMembership)
-        .join(PassportUnit, col(PassportUnit.id) == PassportUnitAppMembership.unit_id)
-        .join(
-            PassportMembership,
-            col(PassportMembership.platform_user_id)
-            == PassportUnitAppMembership.platform_user_id,
-        )
+    derived = access.brand_roles_for_org_members(session, organization_id)
+
+    # Brands that CARRY Prepper — the same predicate `brands_for_user` uses. A brand with no
+    # `unit_app_access` row is somewhere nobody can hold a role, ladder included.
+    brands = session.exec(
+        select(PassportUnit)
+        .join(PassportUnitAppAccess, col(PassportUnitAppAccess.unit_id) == PassportUnit.id)
         .where(
-            col(PassportUnitAppMembership.organization_id) == organization_id,
-            PassportUnitAppMembership.status == _ACTIVE,
-            col(PassportMembership.organization_id)
-            == PassportUnitAppMembership.organization_id,
+            col(PassportUnit.organization_id) == organization_id,
+            PassportUnit.type == _BRAND,
+            PassportUnit.status == _ACTIVE,
         )
     ).all()
 
-    return [
-        {
-            "assignment_id": assignment.id,
-            "platform_user_id": assignment.platform_user_id,
-            "email": membership.email,
-            "display_name": membership.display_name,
-            "unit_id": assignment.unit_id,
-            "unit_name": unit.name,
-            "role": assignment.role,
-            "org_role": membership.role,
-            "organization_id": assignment.organization_id,
-        }
-        for assignment, unit, membership in rows
-    ]
+    members = {
+        m.platform_user_id: m
+        for m in session.exec(
+            select(PassportMembership).where(
+                col(PassportMembership.organization_id) == organization_id,
+                PassportMembership.status == _ACTIVE,
+            )
+        ).all()
+    }
+
+    assignments = {
+        (a.platform_user_id, a.unit_id): a
+        for a in session.exec(
+            select(PassportUnitAppMembership).where(
+                col(PassportUnitAppMembership.organization_id) == organization_id,
+                PassportUnitAppMembership.status == _ACTIVE,
+            )
+        ).all()
+    }
+
+    rows: list[dict[str, object]] = []
+    for unit in sorted(brands, key=lambda u: u.name.casefold()):
+        for pu, membership in members.items():
+            role = derived.get(pu, {}).get(unit.id)
+            if role is None:
+                continue
+            assignment = assignments.get((pu, unit.id))
+            rows.append(
+                {
+                    "assignment_id": assignment.id if assignment else None,
+                    "source": "assigned" if assignment else "derived",
+                    "platform_user_id": pu,
+                    "email": membership.email,
+                    "display_name": membership.display_name,
+                    "unit_id": unit.id,
+                    "unit_name": unit.name,
+                    "role": role,
+                    "org_role": membership.role,
+                    "organization_id": organization_id,
+                }
+            )
+    return rows
 
 
 def assignable_members(

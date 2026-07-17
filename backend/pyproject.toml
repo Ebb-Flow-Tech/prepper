@@ -19,6 +19,11 @@ dependencies = [
     "uvicorn[standard]>=0.27.0",
     "sqlmodel>=0.0.14",
     "pydantic-settings>=2.1.0",
+    # `pydantic[email]` for EmailStr on the member-invite payload. NOT optional: EmailStr raises
+    # ImportError at CLASS-DEFINITION time when email-validator is absent, and `main.py` imports the
+    # router that declares it — so a missing extra does not fail that one route, it fails every
+    # import of the app, including the whole test suite.
+    "pydantic[email]>=2.0",
     "alembic>=1.13.0",
     "psycopg2-binary>=2.9.9",
     "supabase>=2.0.0",

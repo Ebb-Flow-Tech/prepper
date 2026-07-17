@@ -2,6 +2,8 @@ import type { FMHImportResult } from '@/types';
 import type {
   AssignBrandRoleRequest,
   BrandRole,
+  InviteMemberRequest,
+  MemberAccount,
   PassportBrand,
   PassportOrganization,
   PassportBrandRole,
@@ -1451,6 +1453,40 @@ export async function getUsers(): Promise<User[]> {
   return [...first.items, ...rest.flatMap((p) => p.items)];
 }
 
+/**
+ * The acting org's people, from Passport's membership, with their local account if linked.
+ *
+ * NOT `getUsers`. That one lists local `users` rows scoped through the identity link, so it only
+ * ever returns people who have signed in via Passport SSO — on staging, 1 of 20 members. Correct
+ * for `ParticipantPicker` (a tasting participant needs a real account), wrong for a roster, which
+ * is why both exist.
+ *
+ * Follows every page, same as `getUsers` and for the same reason: the caller renders a flat list.
+ */
+export async function getMemberAccounts(): Promise<MemberAccount[]> {
+  const first = await fetchApi<PaginatedResponse<MemberAccount>>(
+    `/users/accounts?page_size=${USERS_PAGE_SIZE}`
+  );
+  if (first.total_pages <= 1) return first.items;
+
+  const pagesToFetch = Math.min(first.total_pages, USERS_MAX_PAGES);
+  if (first.total_pages > USERS_MAX_PAGES) {
+    console.error(
+      `getMemberAccounts: ${first.total_count} members span ${first.total_pages} pages; ` +
+        `stopping at ${USERS_MAX_PAGES}. This list is now incomplete — paginate the callers.`
+    );
+  }
+
+  const rest = await Promise.all(
+    Array.from({ length: pagesToFetch - 1 }, (_, i) =>
+      fetchApi<PaginatedResponse<MemberAccount>>(
+        `/users/accounts?page_size=${USERS_PAGE_SIZE}&page_number=${i + 2}`
+      )
+    )
+  );
+  return [...first.items, ...rest.flatMap((p) => p.items)];
+}
+
 export async function getUserByEmail(email: string): Promise<User | null> {
   const page = await fetchApi<PaginatedResponse<User>>(
     `/users?email=${encodeURIComponent(email)}&page_size=1`
@@ -1790,6 +1826,21 @@ export async function getPassportBrandRoles(): Promise<PassportBrandRole[]> {
 
 export async function getPassportMembers(): Promise<PassportMember[]> {
   return fetchApi<PassportMember[]>('/passport/brand-roles/members');
+}
+
+/**
+ * Invite someone into the acting org, or update their org role if Passport already knows them.
+ *
+ * Returns `void` deliberately. The route returns Passport's `MembershipRead` AGGREGATE — a
+ * different shape from `PassportMember` — and nothing consumes it: the member reaches the
+ * projection via the sync echo, not via this response. Typing it as `PassportMember` would compile
+ * and be a lie, since there is no runtime validation to catch it.
+ */
+export async function invitePassportMember(data: InviteMemberRequest): Promise<void> {
+  await fetchApi<unknown>('/passport/brand-roles/members', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function assignPassportBrandRole(

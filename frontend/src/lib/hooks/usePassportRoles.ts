@@ -3,7 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppState } from '@/lib/store';
 import * as api from '@/lib/api';
-import type { AssignBrandRoleRequest, BrandRole } from '@/types';
+import type { AssignBrandRoleRequest, BrandRole, InviteMemberRequest } from '@/types';
+import { MEMBER_ACCOUNTS_KEY } from './useUsers';
 
 /**
  * Brand-app roles (`Manager` | `Staff`), read from Prepper's projection of Passport.
@@ -62,6 +63,29 @@ function useInvalidateRoles() {
     queryClient.invalidateQueries({ queryKey: [ROLES_KEY] });
     queryClient.invalidateQueries({ queryKey: [BRANDS_KEY] });
   };
+}
+
+/**
+ * Invite someone into the acting org — the ORG vocabulary (`Owner`|`Admin`|`Member`).
+ *
+ * Invalidating does NOT make the member appear: Prepper never writes the membership row, so they
+ * arrive only when Passport's `membership.*` echo is delivered. This just stops a stale cache from
+ * hiding them once it lands.
+ *
+ * `MEMBERS_KEY` matters as much as the roster: it backs the Person dropdown in Brand Access and has
+ * a 5-minute `staleTime`, so omitting it leaves a freshly invited person un-assignable for five
+ * minutes with no way to force a refresh. Ordering is load-bearing too — Passport 409s a brand-role
+ * assignment for someone who holds no active org membership, so an invite must land first.
+ */
+export function useInviteMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: InviteMemberRequest) => api.invitePassportMember(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [MEMBER_ACCOUNTS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [MEMBERS_KEY] });
+    },
+  });
 }
 
 export function useAssignBrandRole() {

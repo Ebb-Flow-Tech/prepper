@@ -1,2 +1,2 @@
 export { UserManagementTab } from './UserManagementTab';
-export { BrandRolesTab } from './BrandRolesTab';
+export { BrandAccessTab } from './BrandAccessTab';

@@ -244,3 +244,114 @@ def test_another_orgs_brands_and_roles_are_never_visible(session: Session):
 
     assert brand_ids == [BRAND], "must not leak another org's brands"
     assert OTHER_BRAND not in roster_units, "must not leak another org's role rows"
+
+
+# --- derived rows: the ladder, shown ---------------------------------------------------------
+# An Owner/Admin holds Manager at every app-carrying brand with NO role row. The roster used to
+# list stored rows only, so it could read "nobody has access" while every Owner had everything —
+# which is why the page carried a paragraph apologising for itself. On staging that gap is 3 rows
+# displayed against ~190 real grants. These pin the fix, and pin that the ladder is a FLOOR FOR
+# GAPS: an explicit row beats it, so an Owner given Staff at one brand is Staff THERE.
+
+
+def _by_brand(rows: list[dict], unit_id: str) -> list[dict]:
+    return [r for r in rows if r["unit_id"] == unit_id]
+
+
+def test_owner_appears_as_a_derived_row_at_every_app_carrying_brand(session: Session):
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership(role="Owner"))
+    store.apply_unit(session, _unit(BRAND))
+    store.apply_unit(session, _unit(OTHER_BRAND, name="Beta"))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND))
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    assert {r["unit_id"] for r in rows} == {BRAND, OTHER_BRAND}
+    for r in rows:
+        assert r["role"] == "Manager"
+        assert r["source"] == "derived"
+        assert r["assignment_id"] is None
+        assert r["org_role"] == "Owner"
+
+
+def test_a_brand_without_app_access_yields_no_rows_even_for_an_owner(session: Session):
+    """No ``unit_app_access`` row => the brand confers access to nobody, ladder included."""
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership(role="Owner"))
+    store.apply_unit(session, _unit(BRAND))
+    store.apply_unit(session, _unit(DARK_BRAND, name="Dark"))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    assert _by_brand(rows, DARK_BRAND) == []
+    assert len(_by_brand(rows, BRAND)) == 1
+
+
+def test_explicit_row_beats_the_ladder_and_stays_removable(session: Session):
+    """An Owner with an explicit Staff row is STAFF there — a real demotion, on a real row.
+
+    So it keeps its assignment_id and reads 'assigned'. Keying `source` on the ORG ROLE instead
+    would label this 'derived', strip its Select and Remove, and leave a live assignment
+    uneditable through the UI forever.
+    """
+    _link(session)
+    store.apply_entitlement(session, _entitlement())
+    store.apply_membership(session, _membership(role="Owner"))
+    store.apply_unit(session, _unit(BRAND))
+    store.apply_unit(session, _unit(OTHER_BRAND, name="Beta"))
+    store.create_unit_app_access(session, _access("a-1", BRAND))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND))
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))  # role="Staff"
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    demoted = _by_brand(rows, BRAND)[0]
+    assert demoted["role"] == "Staff"
+    assert demoted["source"] == "assigned"
+    assert demoted["assignment_id"] == "uam-1"
+
+    elsewhere = _by_brand(rows, OTHER_BRAND)[0]
+    assert elsewhere["role"] == "Manager"
+    assert elsewhere["source"] == "derived"
+    assert elsewhere["assignment_id"] is None
+
+
+def test_plain_member_with_a_role_row_is_assigned_not_derived(session: Session):
+    _seed(session)  # membership role defaults to "Member"
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    assert len(rows) == 1
+    assert rows[0]["source"] == "assigned"
+    assert rows[0]["assignment_id"] == "uam-1"
+    assert rows[0]["role"] == "Staff"
+
+
+def test_removed_role_row_is_a_tombstone_and_confers_nothing(session: Session):
+    _seed(session)
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND, status="removed"))
+
+    assert directory.roster(session, SUBJECT, ORG) == []
+
+
+def test_roster_never_leaks_another_orgs_members(session: Session):
+    _seed(session)
+    store.apply_unit_app_membership(session, _role_row("uam-1", BRAND))
+    store.apply_entitlement(session, _entitlement(OTHER_ORG))
+    store.apply_membership(session, _membership(OTHER_ORG, role="Owner"))
+    store.apply_unit(session, _unit(OTHER_BRAND, OTHER_ORG, name="Rival"))
+    store.create_unit_app_access(session, _access("a-2", OTHER_BRAND, OTHER_ORG))
+
+    rows = directory.roster(session, SUBJECT, ORG)
+
+    # NB: asserting on `organization_id` alone would be tautological — the implementation stamps
+    # the argument onto every row. Assert on data that came out of the DB.
+    assert _by_brand(rows, OTHER_BRAND) == []
+    assert {r["unit_id"] for r in rows} == {BRAND}
+    assert {r["platform_user_id"] for r in rows} == {PU}

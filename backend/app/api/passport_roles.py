@@ -14,7 +14,7 @@ outcomes, not failures to paper over.
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
 
 from app.api.deps import (
@@ -40,6 +40,19 @@ class AssignRoleRequest(BaseModel):
 
 class SetRoleRequest(BaseModel):
     role: str  # Manager | Staff
+
+
+class InviteMemberRequest(BaseModel):
+    """The ORG vocabulary — ``Owner`` | ``Admin`` | ``Member``. NOT the brand one.
+
+    ``EmailStr``, not ``str``: this value maps onto a Passport IDENTITY — an unvalidated address
+    creates a membership nobody can ever claim, and the invite is not idempotent enough to make
+    that harmless.
+    """
+
+    email: EmailStr
+    display_name: str | None = None
+    role: str = "Member"
 
 
 @router.get("")
@@ -84,6 +97,35 @@ def list_members(
     """Org members who can be given a brand role — from Passport's membership roster, NOT from
     Prepper's local ``users`` table (which may hold accounts Passport has never heard of)."""
     return list(directory.assignable_members(session, current_user.id, org.organization_id))
+
+
+@router.post("/members", status_code=201)
+async def invite_member(
+    data: InviteMemberRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
+    token: str = Depends(get_bearer_token),
+) -> Any:
+    """Invite someone into the ACTING org, or update their org role if already a member.
+
+    Returns Passport's aggregate. The member does NOT appear in the projection until the
+    ``membership.*`` echo lands — the client must say so rather than insert optimistically, because
+    Prepper never writes these rows itself.
+
+    Ordering matters across the UI: ``assign_unit_app_role`` 409s if the target holds no active org
+    membership, so a brand role cannot bootstrap a member. Invite here first, assign a brand role
+    second. That is why Accounts and Brand Access are two tabs and not one.
+    """
+    return await writeback.invite_member(
+        session,
+        actor=current_user,
+        organization_id=org.organization_id,
+        email=data.email,
+        display_name=data.display_name,
+        role=data.role,
+        end_user_token=token,
+    )
 
 
 @router.post("", status_code=201)

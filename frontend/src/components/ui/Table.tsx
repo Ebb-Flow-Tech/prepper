@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils';
 /**
  * A bordered, horizontally-scrollable data table.
  *
- * `BrandRolesTab` and `UserManagementTab` both hand-rolled this with duplicated `px-6 py-3`
- * classes. The `overflow-x-auto` wrapper is not decoration: wide content must scroll inside its
- * own container so the page body never scrolls horizontally.
+ * `BrandAccessTab` and `UserManagementTab` both hand-rolled this with duplicated `px-6 py-3`
+ * classes; both use it now. The `overflow-x-auto` wrapper is not decoration: wide content must
+ * scroll inside its own container so the page body never scrolls horizontally.
  */
 
 export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(

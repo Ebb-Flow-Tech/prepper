@@ -218,3 +218,75 @@ class UserService:
         ).one()
         rows = list(self.session.exec(statement.offset(offset).limit(limit)).all())
         return rows, int(total)
+
+    def list_org_member_accounts(
+        self, subject: str, organization_id: str, *, offset: int, limit: int
+    ) -> tuple[list[dict[str, object]], int]:
+        """The acting org's Passport members, each with their local account if they have one.
+
+        `list_users_paginated` answers "which local `users` rows may I see", and scopes them THROUGH
+        the identity link — so it returns only people who have signed in via Passport SSO. On
+        staging that is 1 of 20 active members. That scoping is right and is not being loosened; it
+        is simply the wrong QUESTION for a roster. The authoritative list of people in an org is
+        Passport's membership, which EMBEDS email, display name and role for everyone, signed in or
+        not.
+
+        So membership is the spine and `users` is a LEFT join:
+
+            membership.platform_user_id = identity_link.platform_user_id
+            identity_link.subject       = users.id
+
+        Note the pair: `identity_link.subject` holds the LOCAL `users.id` while `platform_user_id`
+        holds Passport's. Joining the wrong two matches nothing and silently returns an empty list.
+
+        `user_id is None` means "never signed in" — no link, so no local row, so no username and no
+        phone. They still belong in the list; that is the entire point. Email comes from the
+        membership, never the local row: Passport is identity truth, and `users.email` is only ever
+        a copy.
+
+        Fails CLOSED, like every read here: an unresolvable caller, or an org that is not theirs,
+        sees nobody rather than everybody.
+        """
+        from app.models import PassportIdentityLink, PassportMembership
+
+        platform_user_id = access.platform_user_id_for(self.session, subject)
+        if platform_user_id is None:
+            return [], 0
+
+        if organization_id not in access.orgs_for_platform_user(
+            self.session, platform_user_id
+        ):
+            return [], 0
+
+        statement = (
+            select(PassportMembership, User)
+            .outerjoin(
+                PassportIdentityLink,
+                col(PassportIdentityLink.platform_user_id)
+                == col(PassportMembership.platform_user_id),
+            )
+            .outerjoin(User, col(User.id) == col(PassportIdentityLink.subject))
+            .where(
+                col(PassportMembership.organization_id) == organization_id,
+                PassportMembership.status == "active",
+            )
+            .order_by(col(PassportMembership.email))
+        )
+
+        total = self.session.exec(
+            select(func.count()).select_from(statement.subquery())
+        ).one()
+        rows = self.session.exec(statement.offset(offset).limit(limit)).all()
+
+        return [
+            {
+                "platform_user_id": m.platform_user_id,
+                "email": m.email,
+                "display_name": m.display_name,
+                "org_role": m.role,
+                "user_id": u.id if u else None,
+                "username": u.username if u else None,
+                "phone_number": u.phone_number if u else None,
+            }
+            for m, u in rows
+        ], int(total)

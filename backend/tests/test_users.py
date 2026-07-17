@@ -9,7 +9,15 @@ a user may edit only themselves.
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from tests.conftest import ORG_ID, create_user, use_user
+from app.domain.user_service import UserService
+from app.models import User
+from tests.conftest import (
+    ORG_ID,
+    create_user,
+    grant_org_role,
+    link_identity,
+    use_user,
+)
 
 
 def test_user_can_update_their_own_row(client: TestClient, session: Session):
@@ -148,3 +156,103 @@ def test_email_lookup_does_not_confirm_another_orgs_user(
     body = client.get("/api/v1/users?email=outsider@other.com").json()
 
     assert body["items"] == []
+
+
+# --- /users/accounts: the org roster, from Passport, joined to local accounts ------------------
+# `GET /users` scopes local `users` rows THROUGH the identity link, so it shows only people who
+# have signed in via Passport SSO. On staging that is 1 of 20 active members — the other 19 are
+# invisible to everybody. That scoping is correct and stays; it is simply the wrong QUESTION for a
+# roster. The authoritative list of people in an org is Passport's membership, which embeds email,
+# display name and role for everyone, signed in or not.
+#
+# `users` has no organization_id and must not get one, so the scope is a JOIN, and the local row is
+# a LEFT join: someone who has never signed in has no link, no local row, and still belongs here.
+
+
+def _caller(session: Session) -> User:
+    user = create_user(session, "caller", "caller", email="caller@acme.test")
+    link_identity(session, user.id, "pu-caller")
+    grant_org_role(session, "pu-caller", "Admin")
+    return user
+
+
+def test_member_who_never_signed_in_appears_with_no_local_account(session: Session):
+    caller = _caller(session)
+    grant_org_role(session, "pu-ghost", "Member")  # no identity link, no users row
+
+    rows, total = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    ghost = next(r for r in rows if r["platform_user_id"] == "pu-ghost")
+    assert ghost["user_id"] is None
+    assert ghost["phone_number"] is None
+    assert ghost["email"] == "pu-ghost@test.com"  # from the membership, which EMBEDS it
+    assert ghost["org_role"] == "Member"
+    assert total == 2
+
+
+def test_local_user_with_no_membership_does_not_appear(session: Session):
+    """Nothing places them in an org, so nothing may show them in one."""
+    caller = _caller(session)
+    create_user(session, "stranger", "stranger", email="stranger@acme.test")
+
+    rows, _ = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    assert "stranger@acme.test" not in {r["email"] for r in rows}
+    assert "stranger" not in {r["user_id"] for r in rows}
+
+
+def test_linked_member_carries_their_local_account(session: Session):
+    caller = _caller(session)
+    chef = create_user(
+        session, "chef", "chef", email="chef@acme.test", phone_number="+61400000000"
+    )
+    link_identity(session, chef.id, "pu-chef")
+    grant_org_role(session, "pu-chef", "Member")
+
+    rows, _ = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    row = next(r for r in rows if r["platform_user_id"] == "pu-chef")
+    assert row["user_id"] == chef.id
+    assert row["phone_number"] == "+61400000000"
+    assert row["username"] == "chef"
+
+
+def test_accounts_never_leak_another_org(session: Session):
+    caller = _caller(session)
+    grant_org_role(session, "pu-rival", "Owner", org_id="org-b")
+
+    rows, _ = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    assert "pu-rival" not in {r["platform_user_id"] for r in rows}
+
+
+def test_accounts_fail_closed_for_an_org_that_is_not_the_callers(session: Session):
+    """A forged org id returns NOBODY, not everybody."""
+    caller = _caller(session)
+
+    rows, total = UserService(session).list_org_member_accounts(
+        caller.id, "org-not-mine", offset=0, limit=30
+    )
+
+    assert rows == []
+    assert total == 0
+
+
+def test_accounts_fail_closed_for_an_unlinked_caller(session: Session):
+    caller = create_user(session, "loner", "loner", email="loner@acme.test")  # no link
+    grant_org_role(session, "pu-other", "Member")
+
+    rows, total = UserService(session).list_org_member_accounts(
+        caller.id, ORG_ID, offset=0, limit=30
+    )
+
+    assert rows == []
+    assert total == 0

@@ -6,6 +6,7 @@ from sqlmodel import Session
 
 from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain.user_service import UserService
+from app.models.pagination import PaginatedResponse
 from app.models.user import User, UserRead, UserUpdate
 
 router = APIRouter()
@@ -29,8 +30,6 @@ def list_users(
     caller's orgs, which never exposed a stranger but did put two unrelated customers' rosters —
     email and phone — in one response for anyone who belonged to both.
     """
-    from app.models.pagination import PaginatedResponse
-
     service = UserService(session)
     offset = (page_number - 1) * page_size
     items, total = service.list_users_paginated(
@@ -38,6 +37,38 @@ def list_users(
     )
     return PaginatedResponse.create(
         items=[UserRead.model_validate(u) for u in items],
+        total_count=total,
+        page_number=page_number,
+        page_size=page_size,
+    )
+
+
+@router.get("/accounts")
+def list_member_accounts(
+    page_number: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
+) -> PaginatedResponse[dict[str, object]]:
+    """The acting org's people — from Passport's membership, with their local account if linked.
+
+    DECLARED BEFORE `/{user_id}` deliberately. FastAPI matches in declaration order, and below it
+    this path binds `user_id="accounts"` and 404s "User not found" — which reads like a missing
+    route rather than a routing bug. `tests/test_route_order.py` pins the ordering.
+
+    Distinct from `GET /users` above, and does NOT replace it. That one lists local `users` rows
+    scoped through the identity link, which is correct for tasting participants (a participant needs
+    a real account) and wrong for a roster: it hides everyone who has not signed in, which on
+    staging is 19 of 20 members. Both exist because they answer different questions.
+    """
+    service = UserService(session)
+    offset = (page_number - 1) * page_size
+    items, total = service.list_org_member_accounts(
+        current_user.id, org.organization_id, offset=offset, limit=page_size
+    )
+    return PaginatedResponse.create(
+        items=items,
         total_count=total,
         page_number=page_number,
         page_size=page_size,

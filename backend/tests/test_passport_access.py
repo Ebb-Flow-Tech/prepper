@@ -334,3 +334,137 @@ def test_owner_of_one_org_gets_nothing_at_another_orgs_brands(session: Session):
 
     assert roles == {BRAND: "Manager"}, "ladder must not reach across the org boundary"
     assert other_brand not in roles
+
+
+# --- brand_roles_for_org_members: the batched form -----------------------------------------
+# The roster needs every member's roles at once. Looping the single form costs SIX queries per
+# member (entitlement_status, then _derivation_inputs re-runs units + accesses — both UNFILTERED
+# full scans — the member's rows, entitlement_status AGAIN, and _org_role). Staging has 20 active
+# members, so that is ~120 queries and 40 full scans for one page.
+#
+# The batched form must never DISAGREE with the single form: the roster the UI renders would then
+# contradict the check the request path makes, which is the one failure the "SDK is the sole
+# derivation" rule exists to prevent.
+
+PU_OWNER = "pu-owner"
+PU_MEMBER = "pu-member"
+BRAND_2 = "brand-2"
+
+
+def _seed_two_brand_org(session: Session) -> None:
+    """One entitled org, two brands both carrying Prepper."""
+    store.apply_entitlement(session, _entitlement_values(version=1))
+    store.apply_unit(session, _unit_values(version=1))
+    store.apply_unit(session, _unit_values(version=1, unit_id=BRAND_2))
+    store.create_unit_app_access(session, _app_access_values())
+    store.create_unit_app_access(
+        session, _app_access_values(unit_id=BRAND_2, access_id="uaa-2")
+    )
+
+
+def _member(session: Session, platform_user_id: str, role: str) -> None:
+    store.apply_membership(
+        session,
+        {
+            **_membership_values(version=1, role=role),
+            "id": f"m-{platform_user_id}",
+            "platform_user_id": platform_user_id,
+        },
+    )
+
+
+def _role_row(session: Session, platform_user_id: str, unit_id: str, role: str) -> None:
+    store.apply_unit_app_membership(
+        session,
+        {
+            **_role_values(version=1, role=role, unit_id=unit_id),
+            "id": f"uam-{platform_user_id}-{unit_id}",
+            "platform_user_id": platform_user_id,
+        },
+    )
+
+
+def test_batched_derivation_covers_every_active_member(session: Session):
+    _seed_two_brand_org(session)
+    _member(session, PU_OWNER, "Owner")
+    _member(session, PU_MEMBER, "Member")
+
+    roles = access.brand_roles_for_org_members(session, ORG)
+
+    # The ladder: an Owner holds Manager at BOTH brands with no role rows at all.
+    assert roles[PU_OWNER] == {BRAND: "Manager", BRAND_2: "Manager"}
+    # A plain Member with no role row derives nothing.
+    assert roles[PU_MEMBER] == {}
+
+
+def test_batched_derivation_ladder_is_a_floor_not_an_override(session: Session):
+    """An Owner with an explicit Staff row is STAFF there — the demotion is real.
+
+    ``roles_at_brands`` applies explicit rows first, then ``setdefault``s the ladder into the GAPS.
+    Asserting Manager here would encode the inverted-precedence bug this design was corrected for.
+    """
+    _seed_two_brand_org(session)
+    _member(session, PU_OWNER, "Owner")
+    _role_row(session, PU_OWNER, BRAND, "Staff")
+
+    roles = access.brand_roles_for_org_members(session, ORG)
+
+    assert roles[PU_OWNER][BRAND] == "Staff"      # the explicit row wins
+    assert roles[PU_OWNER][BRAND_2] == "Manager"  # the ladder fills the gap
+
+
+def test_batched_agrees_with_the_single_form_for_every_member(session: Session):
+    """The anti-drift guard — the most important test of the batched form."""
+    _seed_two_brand_org(session)
+    _member(session, PU_OWNER, "Owner")
+    _member(session, PU_MEMBER, "Member")
+    _role_row(session, PU_OWNER, BRAND, "Staff")
+    _role_row(session, PU_MEMBER, BRAND_2, "Manager")
+
+    batched = access.brand_roles_for_org_members(session, ORG)
+
+    for pu in (PU_OWNER, PU_MEMBER):
+        assert batched[pu] == access.brand_roles_for_platform_user(session, pu, ORG), pu
+
+
+def test_batched_derivation_is_empty_before_entitlements_sync(session: Session):
+    """Derive nothing, NOT deny — matching the single form. Fail open until Passport is
+    authoritative, or turning the projection on locks everyone out."""
+    store.apply_unit(session, _unit_values(version=1))
+    store.create_unit_app_access(session, _app_access_values())
+    _member(session, PU_OWNER, "Owner")
+
+    assert access.brand_roles_for_org_members(session, ORG) == {}
+
+
+def test_batched_derivation_excludes_removed_memberships(session: Session):
+    """A membership tombstone confers nothing — the ladder does not refill a lapsed role."""
+    _seed_two_brand_org(session)
+    store.apply_membership(
+        session,
+        {
+            **_membership_values(version=1, role="Owner", status="removed"),
+            "id": "m-gone",
+            "platform_user_id": PU_OWNER,
+        },
+    )
+
+    assert PU_OWNER not in access.brand_roles_for_org_members(session, ORG)
+
+
+def test_batched_derivation_does_not_reach_across_the_org_boundary(session: Session):
+    """An Owner of ANOTHER org derives nothing here — rule 9, the org is an argument."""
+    _seed_two_brand_org(session)
+    store.apply_membership(
+        session,
+        {
+            **_membership_values(version=1, role="Owner"),
+            "id": "m-rival",
+            "organization_id": "org-other",
+            "platform_user_id": "pu-rival",
+        },
+    )
+
+    roles = access.brand_roles_for_org_members(session, ORG)
+
+    assert "pu-rival" not in roles

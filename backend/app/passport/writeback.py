@@ -48,7 +48,12 @@ from app.passport import access
 
 MANAGER = "Manager"
 STAFF = "Staff"
-_ROLES = (MANAGER, STAFF)
+_ROLES = (MANAGER, STAFF)  # the BRAND-app vocabulary
+
+OWNER = "Owner"
+ADMIN = "Admin"
+MEMBER = "Member"
+_ORG_ROLES = (OWNER, ADMIN, MEMBER)  # the ORG vocabulary — a DIFFERENT ladder. Never mix them.
 
 
 def _require_configured() -> tuple[str, str]:
@@ -161,6 +166,16 @@ def _require_role(role: str) -> None:
         )
 
 
+def _require_org_role(role: str) -> None:
+    """The ORG vocabulary. :func:`_require_role` is the BRAND one — two functions, not one
+    parametrised guard, because passing a role to the wrong one yields a 422 that reads correct."""
+    if role not in _ORG_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"role must be one of {', '.join(_ORG_ROLES)}",
+        )
+
+
 def _client(base_url: str, api_key: str) -> PassportClient:
     return PassportClient(base_url=base_url, api_key=api_key)
 
@@ -240,6 +255,59 @@ async def remove_brand_role(
         async with _client(base_url, api_key) as pc:
             return await pc.remove_unit_app_role(
                 org_id, assignment_id, end_user_token=end_user_token
+            )
+    except PassportAPIError as exc:
+        raise _reraise(exc) from exc
+
+
+async def invite_member(
+    session: Session,
+    *,
+    actor: User,
+    organization_id: str,
+    email: str,
+    display_name: str | None,
+    role: str,
+    end_user_token: str,
+) -> Any:
+    """Invite someone into the org — or update their org role if Passport already knows them.
+
+    ``role`` is the ORG vocabulary: ``Owner`` | ``Admin`` | ``Member``. NOT ``Manager``/``Staff``.
+
+    Passing ``email`` for someone Passport has never seen is what CREATES the platform user; the
+    SDK has no separate ``create_user``. Exactly one of email / platform_user_id may be sent — it
+    raises ``ValueError`` otherwise — and this only ever sends email.
+
+    **Writes NOTHING locally.** The call returns the aggregate AND Passport echoes a
+    ``membership.*`` event that the version-guarded handler applies. Writing the returned aggregate
+    into the projection here is the suppressed-echo mistake this module's header forbids. The
+    practical consequence for callers: the new member does not appear until sync delivers them, so
+    the UI must say so rather than insert optimistically.
+
+    Unlike :func:`_require_local_authority`, this asks the ORG-SCOPED admin question. That helper's
+    org-less ``is_org_admin`` call is a sanctioned exception only because Passport re-checks against
+    the verified end user; there is no reason to inherit it when the caller has an acting org in
+    hand, and the org-less form would let an Owner of org B invite into org A.
+
+    Passport applies its own authority matrix after this one, so a ``403`` is a NORMAL outcome —
+    an Admin may not necessarily grant ``Owner``.
+    """
+    base_url, api_key = _require_configured()
+    if not access.is_org_admin(session, actor.id, organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not permitted to manage members of this organisation",
+        )
+    _require_org_role(role)
+
+    try:
+        async with _client(base_url, api_key) as pc:
+            return await pc.upsert_membership(
+                organization_id,
+                email=email,
+                display_name=display_name,
+                role=role,
+                end_user_token=end_user_token,
             )
     except PassportAPIError as exc:
         raise _reraise(exc) from exc

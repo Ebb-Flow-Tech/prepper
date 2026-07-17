@@ -1,43 +1,66 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { SearchInput, Skeleton, PageHeader, Button } from '@/components/ui';
-import { useUsers, useUpdateUser } from '@/lib/hooks';
-import { AddUserModal } from './AddUserModal';
+import {
+  Badge,
+  Button,
+  PageHeader,
+  SearchInput,
+  Skeleton,
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui';
+import { useMemberAccounts, useUpdateUser } from '@/lib/hooks';
+import { useAppState } from '@/lib/store';
+import { InviteMemberModal } from './InviteMemberModal';
 import { toast } from 'sonner';
 
+/**
+ * The organisation's people — from PASSPORT's membership, not Prepper's `users` table.
+ *
+ * This listed local `users` rows, scoped through the identity link, and an identity link only
+ * exists once someone has signed in via Passport SSO. On staging that was 1 of 20 active members:
+ * the tab showed the person looking at it and nobody else. The scoping was never wrong — it is the
+ * wrong QUESTION. The roster of people in an org is Passport's membership, which embeds email, name
+ * and org role for everyone, signed in or not.
+ *
+ * So a row here may have NO local account (`user_id === null`) — that is the normal state for
+ * someone invited but not yet signed in, not an error.
+ *
+ * Roles are not set here. Org roles come from Passport; brand access lives in the Brand Access tab.
+ */
 export function UserManagementTab() {
   const [search, setSearch] = useState('');
-  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editingPhoneValue, setEditingPhoneValue] = useState('');
+
+  const { userId } = useAppState();
   const updateUser = useUpdateUser();
-  const { data: users, isLoading, error } = useUsers();
+  const { data: members, isLoading, error } = useMemberAccounts();
 
-  const filteredUsers = useMemo(() => {
-    if (!users) return [];
-    return users.filter((user) => {
-      if (search) {
-        const searchLower = search.toLowerCase();
-        return (
-          user.username.toLowerCase().includes(searchLower) ||
-          user.email.toLowerCase().includes(searchLower)
-        );
-      }
-      return true;
-    });
-  }, [users, search]);
+  const filteredMembers = useMemo(() => {
+    if (!members) return [];
+    if (!search) return members;
+    const needle = search.toLowerCase();
+    // Search the Passport-owned identity, not `username`: a member who has never signed in has no
+    // local row and therefore no username at all.
+    return members.filter((m) =>
+      `${m.display_name ?? ''} ${m.email}`.toLowerCase().includes(needle)
+    );
+  }, [members, search]);
 
-  const handlePhoneChange = (userId: string, phoneNumber: string) => {
+  const handlePhoneChange = (targetUserId: string, phoneNumber: string) => {
     updateUser.mutate(
-      { userId, data: { phone_number: phoneNumber || null } },
+      { userId: targetUserId, data: { phone_number: phoneNumber || null } },
       {
-        onSuccess: () => {
-          toast.success('User phone number updated');
-        },
-        onError: () => {
-          toast.error('Failed to update user');
-        },
+        onSuccess: () => toast.success('Phone number updated'),
+        onError: () => toast.error('Failed to update phone number'),
       }
     );
   };
@@ -45,8 +68,8 @@ export function UserManagementTab() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg bg-red-50 dark:bg-red-950 p-4 text-red-600 dark:text-red-400">
-          Failed to load users. Please try again.
+        <div className="rounded-lg bg-red-50 p-4 text-red-600 dark:bg-red-950 dark:text-red-400">
+          Failed to load members. Please try again.
         </div>
       </div>
     );
@@ -54,121 +77,128 @@ export function UserManagementTab() {
 
   return (
     <div>
-      <div>
-        <PageHeader
-          title="Accounts"
-          description="Login accounts and contact details. Roles are assigned per brand in the Brand Roles tab — Passport owns them, Prepper cannot set them here."
-        />
+      <PageHeader
+        title="Accounts"
+        description="Everyone in your organisation, from Passport. Brand access is assigned per brand in the Brand Access tab — Passport owns roles, Prepper cannot set them here."
+      />
 
-        {/* Toolbar */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="max-w-md flex-1">
-            <SearchInput
-              placeholder="Search by username or email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onClear={() => setSearch('')}
-            />
-          </div>
-          <Button onClick={() => setIsAddUserModalOpen(true)}>
-            Add User
-          </Button>
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="max-w-md flex-1">
+          <SearchInput
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch('')}
+          />
         </div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 rounded-lg" />
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">
-              {search ? 'No users match your search' : 'No users found'}
-            </p>
-          </div>
-        )}
-
-        {/* Users Table */}
-        {!isLoading && filteredUsers.length > 0 && (
-          <div className="overflow-x-auto border border-border rounded-lg">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Username
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                    Phone
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-border hover:bg-secondary"
-                  >
-                    <td className="px-6 py-3 text-sm text-foreground">
-                      {user.username}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted-foreground">
-                      {user.email}
-                    </td>
-                    <td className="px-6 py-3 text-sm">
-                      {editingPhoneId === user.id ? (
-                        <input
-                          type="tel"
-                          value={editingPhoneValue}
-                          onChange={(e) => setEditingPhoneValue(e.target.value)}
-                          onBlur={() => {
-                            handlePhoneChange(user.id, editingPhoneValue);
-                            setEditingPhoneId(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handlePhoneChange(user.id, editingPhoneValue);
-                              setEditingPhoneId(null);
-                            } else if (e.key === 'Escape') {
-                              setEditingPhoneId(null);
-                            }
-                          }}
-                          autoFocus
-                          disabled={updateUser.isPending}
-                          placeholder="Add phone..."
-                          className="px-2 py-1 text-sm w-full border border-blue-500 rounded bg-card text-foreground placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      ) : (
-                        <div
-                          onClick={() => {
-                            setEditingPhoneId(user.id);
-                            setEditingPhoneValue(user.phone_number || '');
-                          }}
-                          className="cursor-pointer text-muted-foreground hover:text-foreground hover:bg-secondary px-2 py-1 rounded"
-                        >
-                          {user.phone_number || '—'}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Button onClick={() => setIsInviteModalOpen(true)}>Invite member</Button>
       </div>
 
-      {/* Add User Modal */}
-      <AddUserModal
-        isOpen={isAddUserModalOpen}
-        onClose={() => setIsAddUserModalOpen(false)}
+      {isLoading && (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 rounded-lg" />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Person</TableHead>
+              <TableHead>Org role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Phone</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {!filteredMembers.length && (
+              <TableRow>
+                <TableEmpty colSpan={4}>
+                  {search ? 'No members match your search' : 'No members found'}
+                </TableEmpty>
+              </TableRow>
+            )}
+
+            {filteredMembers.map((member) => {
+              // PATCH /users/{user_id} refuses to edit anyone but the caller, and that is not being
+              // widened: 18 of this org's 20 members hold `Admin`, so "admins may edit" would mean
+              // everyone may rewrite everyone's contact details while reading like a restriction.
+              // A member with no local row has nothing to write to at all.
+              const isSelf = member.user_id !== null && member.user_id === userId;
+              const isEditing = editingPhoneId === member.platform_user_id;
+
+              return (
+                <TableRow key={member.platform_user_id}>
+                  <TableCell className="text-foreground">
+                    {member.display_name || member.email}
+                    {member.display_name && (
+                      <span className="ml-2 text-xs text-muted-foreground">{member.email}</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    <Badge variant="secondary">{member.org_role}</Badge>
+                  </TableCell>
+
+                  <TableCell>
+                    {member.user_id === null ? (
+                      <Badge variant="secondary">Not signed in</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="text-sm">
+                    {isEditing && member.user_id ? (
+                      <input
+                        type="tel"
+                        value={editingPhoneValue}
+                        onChange={(e) => setEditingPhoneValue(e.target.value)}
+                        onBlur={() => {
+                          handlePhoneChange(member.user_id as string, editingPhoneValue);
+                          setEditingPhoneId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handlePhoneChange(member.user_id as string, editingPhoneValue);
+                            setEditingPhoneId(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingPhoneId(null);
+                          }
+                        }}
+                        autoFocus
+                        disabled={updateUser.isPending}
+                        placeholder="Add phone..."
+                        className="w-full rounded border border-blue-500 bg-card px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    ) : isSelf ? (
+                      <div
+                        onClick={() => {
+                          setEditingPhoneId(member.platform_user_id);
+                          setEditingPhoneValue(member.phone_number || '');
+                        }}
+                        className="cursor-pointer rounded px-2 py-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      >
+                        {member.phone_number || '—'}
+                      </div>
+                    ) : (
+                      <span className="px-2 py-1 text-muted-foreground">
+                        {member.phone_number || '—'}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+
+      <InviteMemberModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
       />
     </div>
   );

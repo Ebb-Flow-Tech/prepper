@@ -52,3 +52,36 @@ def test_with_feedback_is_not_swallowed_by_recipe_id(client: TestClient, session
         "registered BEFORE recipes.router in main.py"
     )
     assert response.status_code == 200
+
+
+# `GET /users/accounts` vs `GET /users/{user_id}` — the same collision, WITHIN one router.
+#
+# The tests above catch a static path swallowed by a SIBLING router's catch-all. This is the same
+# hazard one file down: `users.py` declares both, and `/{user_id}` matches any single segment. Get
+# the order wrong and `/users/accounts` binds `user_id="accounts"`, finds no such user, and 404s
+# "User not found" — a failure that reads like a route someone forgot to add, not like a routing
+# bug, which is exactly why it earns a test rather than a comment.
+SAME_ROUTER_SHADOWING = [
+    ("GET", "/api/v1/users/accounts", "/api/v1/users/{user_id}"),
+]
+
+
+@pytest.mark.parametrize("method,specific,catch_all", SAME_ROUTER_SHADOWING)
+def test_specific_path_is_declared_before_its_sibling_catch_all(
+    method: str, specific: str, catch_all: str
+):
+    from app.main import app
+    from scripts.route_auth_census import _collect_with_paths
+
+    order = [
+        full
+        for route, full in _collect_with_paths(app)
+        if method in (route.methods or set())
+    ]
+
+    assert specific in order, f"{method} {specific} is not mounted at all"
+    assert catch_all in order, f"{method} {catch_all} is not mounted at all"
+    assert order.index(specific) < order.index(catch_all), (
+        f"{specific} is declared AFTER {catch_all} and is therefore unreachable — "
+        f"move it above the parameterised route in the router"
+    )

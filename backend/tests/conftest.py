@@ -198,8 +198,14 @@ def create_user(
     user_id: str,
     username: str = "user",
     email: str | None = None,
+    phone_number: str | None = None,
 ) -> User:
-    """A local Prepper account, carrying NO role — roles live in Passport."""
+    """A local Prepper account, carrying NO role — roles live in Passport.
+
+    ``user_id`` is the local ``users.id`` (the Supabase ``sub``), NOT an email — passing an address
+    here leaves the row's real email as the ``{username}@test.com`` default, which quietly makes any
+    assertion about that address vacuous.
+    """
     existing = session.exec(select(User).where(User.id == user_id)).first()
     if existing:
         return existing
@@ -208,6 +214,7 @@ def create_user(
         id=user_id,
         email=email or f"{username}@test.com",
         username=username,
+        phone_number=phone_number,
     )
     session.add(user)
     session.commit()

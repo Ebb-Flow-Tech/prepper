@@ -1,18 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { UserManagementTab, BrandRolesTab } from '@/components/admin';
+import { UserManagementTab, BrandAccessTab } from '@/components/admin';
 import { UserProfileTab } from '@/components/settings/UserProfileTab';
 import DesignSystemPage from '@/app/design-system/page';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui';
 
-type SettingsTab = 'profile' | 'brand-roles' | 'accounts' | 'design';
+type SettingsTab = 'profile' | 'brand-access' | 'accounts' | 'design';
 
 // No tab is gated by a role flag: Prepper has none. Authority is per-brand and lives in Passport,
 // which applies the real matrix on every write.
 const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: 'profile', label: 'Profile' },
-  { id: 'brand-roles', label: 'Brand Roles' },
+  { id: 'brand-access', label: 'Brand Access' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'design', label: 'Design' },
 ];
@@ -51,8 +51,8 @@ export default function SettingsPage() {
         <TabsContent value="profile" className={CONTENT_WIDTH}>
           <UserProfileTab />
         </TabsContent>
-        <TabsContent value="brand-roles" className={CONTENT_WIDTH}>
-          <BrandRolesTab />
+        <TabsContent value="brand-access" className={CONTENT_WIDTH}>
+          <BrandAccessTab />
         </TabsContent>
         <TabsContent value="accounts" className={CONTENT_WIDTH}>
           <UserManagementTab />

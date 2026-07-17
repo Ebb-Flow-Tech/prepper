@@ -9,46 +9,43 @@ import {
   useSetBrandRole,
   useRemoveBrandRole,
 } from '@/lib/hooks/usePassportRoles';
-import {
-  Badge,
-  Button,
-  PageHeader,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui';
+import { Button, PageHeader, Select } from '@/components/ui';
+import { BrandAccessTable } from './BrandAccessTable';
+import { RoleLegend } from './RoleLegend';
 import type { BrandRole } from '@/types';
 
 /**
- * Brand-app roles, managed in Passport.
+ * Brand access, managed in Passport.
  *
- * Passport is the source of truth for who holds which role at which brand. Prepper reads the roster
- * from its projection and writes changes UP through Passport — it never edits these rows locally.
+ * Passport is the source of truth for who can reach which brand. Prepper reads the roster from its
+ * projection and writes changes UP through Passport — it never edits these rows locally.
  *
  * Two things that look like bugs but are not:
  *
  *  - A `403` is a NORMAL outcome. Passport applies its own authority matrix after Prepper's: a
  *    brand `Manager` may assign `Staff` but never a peer, and may not change an existing role at
  *    all. Only an org `Owner`/`Admin` can do everything. The message is surfaced verbatim.
- *  - Org `Owner`s and `Admin`s hold `Manager` at every brand with NO row in this table — that is
- *    the ladder. An empty roster does not mean nobody has access. This is stated on screen too,
- *    not just here: it is the single most misleading thing about this page, and a reader of the
- *    source is not the person who needs to know.
+ *  - A change does not appear instantly. The write lands in Passport and comes back through sync;
+ *    re-reading the projection is the honest thing to do, because applying it locally would make
+ *    Prepper the source of truth for a row it does not own.
+ *
+ * The ladder used to be the third item on that list — Owners and Admins hold `Manager` everywhere
+ * with no row, so this table could read empty while everyone had access, and a paragraph on screen
+ * had to apologise for it. Derived holders are rows now (`source: 'derived'`), so the page shows
+ * what is true instead of explaining why it doesn't. Note the ladder is a FLOOR FOR GAPS: an
+ * explicit row beats it, which is why an Owner can be Staff at one brand and Manager at the rest.
  */
 
-const ROLES: BrandRole[] = ['Manager', 'Staff'];
-const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
+const ROLE_OPTIONS: { value: BrandRole; label: string }[] = [
+  { value: 'Manager', label: 'Manager' },
+  { value: 'Staff', label: 'Staff' },
+];
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong';
 }
 
-export function BrandRolesTab() {
+export function BrandAccessTab() {
   const { data: brands, isLoading: brandsLoading } = usePassportBrands();
   const { data: roster, isLoading: rosterLoading } = usePassportBrandRoles();
   const { data: members } = usePassportMembers();
@@ -64,13 +61,20 @@ export function BrandRolesTab() {
   const pending = assign.isPending || setRole.isPending || remove.isPending;
   const error = assign.error ?? setRole.error ?? remove.error ?? null;
 
-  // People already holding a role at the selected brand cannot be assigned there again — Passport
-  // would reject it, and offering it invites a pointless 409/duplicate.
+  // People who already hold an EXPLICIT role at the selected brand cannot be assigned there again —
+  // Passport would reject it, and offering it invites a pointless 409.
+  //
+  // `source === 'assigned'` only. Derived holders must stay selectable: an Owner appears in the
+  // roster at every app-carrying brand, so filtering on the whole roster would drop every Owner and
+  // Admin from this list at every brand, permanently. And giving one of them `Staff` is a real,
+  // observable act — the explicit row beats the ladder and demotes them at that brand.
   const assignable = useMemo(() => {
     if (!members) return [];
     if (!unitId) return members;
     const taken = new Set(
-      (roster ?? []).filter((r) => r.unit_id === unitId).map((r) => r.platform_user_id)
+      (roster ?? [])
+        .filter((r) => r.unit_id === unitId && r.source === 'assigned')
+        .map((r) => r.platform_user_id)
     );
     return members.filter((m) => !taken.has(m.platform_user_id));
   }, [members, roster, unitId]);
@@ -84,7 +88,7 @@ export function BrandRolesTab() {
   }
 
   if (brandsLoading || rosterLoading) {
-    return <p className="text-sm text-muted-foreground">Loading brand roles…</p>;
+    return <p className="text-sm text-muted-foreground">Loading brand access…</p>;
   }
 
   // Not an error state: Passport returning nothing here is a normal outcome for someone who is not
@@ -105,8 +109,8 @@ export function BrandRolesTab() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Brand roles"
-        description="Managed in Passport. A person may hold a different role at each brand — there is no single role."
+        title="Brand access"
+        description="Who can reach each brand. Managed in Passport — a person may hold a different role at each brand."
       />
 
       {error && (
@@ -158,78 +162,15 @@ export function BrandRolesTab() {
         </Button>
       </div>
 
-      {/* The ladder, said out loud. Owners and Admins hold Manager at every brand with no row
-          below, so this table can look empty while everyone still has access. */}
-      <p className="text-sm text-muted-foreground">
-        Organisation <span className="font-medium text-foreground">Owners</span> and{' '}
-        <span className="font-medium text-foreground">Admins</span> hold{' '}
-        <span className="font-medium text-foreground">Manager</span> at every brand automatically
-        and do not appear below. An empty list does not mean nobody has access.
-      </p>
+      <RoleLegend />
 
-      {/* --- roster ------------------------------------------------------------------ */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Person</TableHead>
-            <TableHead>Brand</TableHead>
-            <TableHead>Org role</TableHead>
-            <TableHead>Brand role</TableHead>
-            <TableHead>
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {!roster?.length && (
-            <TableRow>
-              <TableEmpty colSpan={5}>
-                No brand roles assigned. Owners and Admins still hold Manager everywhere.
-              </TableEmpty>
-            </TableRow>
-          )}
-          {roster?.map((r) => (
-            <TableRow key={r.assignment_id}>
-              <TableCell className="text-foreground">
-                {r.display_name || r.email}
-                {r.display_name && (
-                  <span className="ml-2 text-xs text-muted-foreground">{r.email}</span>
-                )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{r.unit_name}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">{r.org_role}</Badge>
-              </TableCell>
-              <TableCell>
-                <Select
-                  aria-label={`Brand role for ${r.display_name || r.email} at ${r.unit_name}`}
-                  value={r.role}
-                  disabled={pending}
-                  onChange={(e) =>
-                    setRole.mutate({
-                      assignmentId: r.assignment_id,
-                      role: e.target.value as BrandRole,
-                    })
-                  }
-                  className="h-8 w-auto py-1"
-                  options={ROLE_OPTIONS}
-                />
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => remove.mutate(r.assignment_id)}
-                  disabled={pending}
-                  className="text-red-600 hover:text-red-700 dark:text-red-400"
-                >
-                  Remove
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <BrandAccessTable
+        brands={brands}
+        roster={roster ?? []}
+        pending={pending}
+        onSetRole={(assignmentId, nextRole) => setRole.mutate({ assignmentId, role: nextRole })}
+        onRemove={(assignmentId) => remove.mutate(assignmentId)}
+      />
     </div>
   );
 }

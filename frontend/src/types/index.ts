@@ -990,6 +990,21 @@ export interface CreateSupplierIngredientTagRequest {
 export type BrandRole = 'Manager' | 'Staff';
 
 /**
+ * Where a brand role came from.
+ *
+ * `assigned` — an active `unit_app_membership` row exists: editable, removable.
+ * `derived`  — no row. The holder is an org Owner/Admin and Passport's ladder gives them `Manager`
+ *              at every brand carrying the app, so there is nothing to edit or remove.
+ *
+ * Keys on the ROW, never on the org role. The ladder is a floor for GAPS, not an override: an Owner
+ * carrying an explicit `Staff` row **is** `Staff` there, and that row is real and must stay
+ * editable. Deriving this from `org_role` on the client would strip the controls off a live
+ * assignment — and would re-implement Passport's ladder in a second language, so the roster could
+ * disagree with the permission check.
+ */
+export type BrandRoleSource = 'assigned' | 'derived';
+
+/**
  * An organisation the user belongs to, from Prepper's projection of Passport.
  *
  * The only place org NAMES reach the client. `organization_id` has been carried on several
@@ -1013,16 +1028,39 @@ export interface PassportBrand {
 }
 
 export interface PassportBrandRole {
-  assignment_id: string;
+  /** `null` for a derived holder — the ladder grants the role, so there is no row to point at. */
+  assignment_id: string | null;
+  source: BrandRoleSource;
   platform_user_id: string;
   email: string;
   display_name: string | null;
   unit_id: string;
   unit_name: string;
+  /** Always Passport's derived answer, never the stored row's value — the two differ on a demotion. */
   role: BrandRole;
   /** The person's ORG role (`Owner`|`Admin`|`Member`) — a different vocabulary; shown for context. */
   org_role: string;
   organization_id: string;
+}
+
+/** A person in the org, from Passport's membership, with their local account if they have one. */
+export interface MemberAccount {
+  platform_user_id: string;
+  email: string;
+  display_name: string | null;
+  /** `Owner` | `Admin` | `Member` — the ORG vocabulary. */
+  org_role: string;
+  /** `null` => never signed in via Passport, so there is no local row, no username and no phone. */
+  user_id: string | null;
+  username: string | null;
+  phone_number: string | null;
+}
+
+export interface InviteMemberRequest {
+  email: string;
+  display_name?: string | null;
+  /** The ORG vocabulary — NOT `Manager`/`Staff`. */
+  role: 'Owner' | 'Admin' | 'Member';
 }
 
 export interface PassportMember {
