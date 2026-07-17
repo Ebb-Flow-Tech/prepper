@@ -29,7 +29,14 @@ from sqlmodel import Session, col, select
 
 from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
 from app.domain.org_scope import org_scope
-from app.models import Recipe, RecipeOutlet, TastingNoteImage, User
+from app.models import (
+    Ingredient,
+    Recipe,
+    RecipeImage,
+    RecipeOutlet,
+    TastingNoteImage,
+    User,
+)
 from app.models.ingredient_tasting import IngredientTastingNote
 from app.models.menu_sketch import MenuSketch
 from app.models.menu_sketch_section import MenuSketchSection
@@ -454,3 +461,71 @@ def sketch_item_reachable(session: Session, item_id: int, organization_id: str) 
     if item is None:
         return False
     return section_reachable(session, item.menu_sketch_section_id, organization_id)
+
+
+def require_recipe_image_access(
+    image_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
+) -> RecipeImage:
+    """The image, if the caller may reach the recipe it hangs off.
+
+    `DELETE /recipe-images/{image_id}` took a bare integer and removed any recipe's image — the
+    same shape as `tasting-note-images` before v0.0.65. The recipe's own image LIST was guarded;
+    the image's id was not, so the by-id route was looser than the list it belonged to.
+
+    404 for a recipe in another org, 403 for one in your org but outside your brands — the same
+    split as `require_recipe_access`, since this is that question asked one hop away.
+    """
+    image = session.get(RecipeImage, image_id)
+    if image is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    recipe = session.get(Recipe, image.recipe_id)
+    if recipe is None or not _in_org(recipe, org.organization_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    if not _may_see_recipe(session, current_user, recipe):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this recipe",
+        )
+    return image
+
+
+def visible_recipe_ids(
+    session: Session, user: User, organization_id: str, recipe_ids: list[int]
+) -> set[int]:
+    """Of ``recipe_ids``, the ones the caller may actually see.
+
+    For BATCH routes, whose ids arrive in the request body where no dependency can reach them. The
+    route must filter, and this is the filter — the same rule `require_recipe_access` applies, asked
+    about many ids at once.
+
+    Answering for an id you cannot see is a leak even when the answer is a bare `False`: it confirms
+    the recipe exists. `POST /recipes/sub-recipes/batch` returned exactly that, and
+    `POST /recipes/allergens/batch` returned the allergen list itself.
+
+    Ids that do not survive are simply absent from the result, which is the batch equivalent of a
+    404: the caller cannot tell "not yours" from "not there".
+    """
+    if not recipe_ids:
+        return set()
+
+    rows = session.exec(
+        select(Recipe).where(
+            col(Recipe.id).in_(recipe_ids),
+            Recipe.organization_id == organization_id,
+        )
+    ).all()
+    return {r.id for r in rows if _may_see_recipe(session, user, r)}
+
+
+def ingredient_reachable(session: Session, ingredient_id: int, organization_id: str) -> bool:
+    """Whether the ingredient belongs to the acting org.
+
+    Predicate form, for routes that hang off an ingredient id but do not want the row itself.
+    """
+    ingredient = session.get(Ingredient, ingredient_id)
+    return ingredient is not None and ingredient.organization_id == organization_id

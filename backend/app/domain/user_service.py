@@ -173,6 +173,21 @@ class UserService:
             .order_by(col(User.created_at).desc())
         )
 
+    def get_user_in_org(self, user_id: str, subject: str, organization_id: str) -> User | None:
+        """A user by id, but only if they are a member of the acting org.
+
+        `GET /users` was org-scoped in v0.0.67 and `GET /users/{id}` was not, so the roster stopped
+        leaking while the individual lookup carried on handing over email, username and phone to
+        anyone who could name an id. A by-id read must never be looser than the list it belongs to.
+
+        Reuses `_org_scoped_user_query` rather than restating the join: the two must agree, and the
+        way to guarantee that is to have one of them.
+        """
+        statement = self._org_scoped_user_query(subject, organization_id)
+        if statement is None:
+            return None
+        return self.session.exec(statement.where(User.id == user_id)).first()
+
     def list_users_paginated(
         self,
         subject: str,

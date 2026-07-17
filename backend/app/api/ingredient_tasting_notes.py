@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from sqlmodel import select as sql_select
 
-from app.api.deps import get_current_user, get_session
-from app.api.guards import require_session_access
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
+from app.api.guards import ingredient_reachable, require_session_access
 from app.domain import IngredientTastingNoteService, TastingSessionService
 from app.models import (
     IngredientTastingNoteCreate,
@@ -134,7 +134,15 @@ def delete_ingredient_tasting_note(
 def get_ingredient_tasting_history(
     ingredient_id: int,
     session: Session = Depends(get_session),
+    org: OrgContext = Depends(get_org_context),
 ):
-    """Get tasting history for a specific ingredient."""
+    """Get tasting history for a specific ingredient, within the acting org.
+
+    Returned every note's CONTENT for any ingredient id — another org's verdicts on their own
+    produce, to anyone who could count. The ingredient carries the org, so that is what scopes it;
+    404 rather than an empty list, so the id cannot be probed for existence.
+    """
+    if not ingredient_reachable(session, ingredient_id, org.organization_id):
+        raise HTTPException(status_code=404, detail="Ingredient not found")
     service = IngredientTastingNoteService(session)
     return service.get_for_ingredient(ingredient_id)

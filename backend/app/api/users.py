@@ -48,10 +48,16 @@ def list_users(
 def get_user(
     user_id: str,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
-    """Get a user by ID."""
+    """Get a user by ID, within the acting org.
+
+    404 rather than 403 for someone outside it: that a person exists in another tenant is not
+    yours to learn, and the response would otherwise confirm an email address by id.
+    """
     service = UserService(session)
-    user = service.get_user(user_id)
+    user = service.get_user_in_org(user_id, current_user.id, org.organization_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

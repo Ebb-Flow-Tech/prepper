@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.costing import evict_costing_cache
-from app.api.deps import get_session
-from app.api.guards import require_recipe_access
+from app.api.deps import OrgContext, get_current_user, get_org_context, get_session
+from app.api.guards import require_recipe_access, visible_recipe_ids
 from app.domain import CycleDetectedError, SubRecipeService
 from app.models import (
     Recipe,
@@ -14,6 +14,7 @@ from app.models import (
     RecipeRecipeCreate,
     RecipeRecipeReorder,
     RecipeRecipeUpdate,
+    User,
 )
 
 router = APIRouter()
@@ -28,10 +29,18 @@ class SubRecipesBatchRequest(BaseModel):
 def get_sub_recipes_batch(
     request: SubRecipesBatchRequest,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    org: OrgContext = Depends(get_org_context),
 ):
-    """Return which recipes in the list have sub-recipes."""
+    """Return which recipes in the list have sub-recipes.
+
+    The ids come from the BODY, so no dependency can guard them — the route filters instead. An
+    id the caller cannot see is simply absent from the map: answering `False` would still confirm
+    the recipe exists, which is a cross-org existence oracle a client can enumerate.
+    """
+    allowed = visible_recipe_ids(session, current_user, org.organization_id, request.recipe_ids)
     service = SubRecipeService(session)
-    return service.get_has_sub_recipes_batch(request.recipe_ids)
+    return service.get_has_sub_recipes_batch(sorted(allowed))
 
 
 @router.get("/{recipe_id}/sub-recipes", response_model=list[RecipeRecipe])

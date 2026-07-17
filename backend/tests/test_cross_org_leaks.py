@@ -727,3 +727,133 @@ class TestTastingNoteImageIDOR:
 
         assert resp.status_code == 404
         assert "secret.png" not in resp.text, "the storage URL must not leak"
+
+
+class TestByIdReadsAreNotLooserThanListReads:
+    """A by-id route must not hand over what the list route hides.
+
+    `GET /users` was scoped to the acting org in v0.0.67 and `GET /users/{id}` was not — so the
+    roster stopped leaking and the individual lookup carried on. Same for recipe images: the list
+    of a recipe's images is guarded, the image's own id was not.
+
+    This is the shape CLAUDE.md warns about ("write scope must never be looser than read scope"),
+    one step sideways: a per-id read looser than the list it belongs to.
+    """
+
+    def test_cannot_read_another_orgs_user_by_id(self, session: Session, client: TestClient):
+        from tests.conftest import grant_org_role, link_identity
+
+        victim = create_user(session, "org-b-victim", "orgbvictim", email="pii@org-b.test")
+        link_identity(session, "org-b-victim", "pu-org-b-victim")
+        grant_org_role(session, "pu-org-b-victim", "Member", org_id=ORG_B)
+
+        resp = client.get(f"/api/v1/users/{victim.id}")
+
+        assert resp.status_code == 404, "another org's user is not yours to look up"
+        assert "pii@org-b.test" not in resp.text, "PII must not leak by id"
+
+    def test_cannot_delete_another_orgs_recipe_image(self, session: Session, client: TestClient):
+        from app.models import RecipeImage
+
+        recipe = Recipe(
+            name="ORG_B Dish", owner_id="org-b-chef", status=RecipeStatus.ACTIVE,
+            organization_id=ORG_B,
+        )
+        session.add(recipe)
+        session.commit()
+        session.refresh(recipe)
+
+        image = RecipeImage(recipe_id=recipe.id, image_url="https://x/org-b-secret.png")
+        session.add(image)
+        session.commit()
+        session.refresh(image)
+
+        resp = client.delete(f"/api/v1/recipe-images/{image.id}")
+
+        assert resp.status_code == 404, "an image on another org's recipe is not yours to delete"
+        session.expire_all()
+        assert session.get(RecipeImage, image.id) is not None, "the image must survive"
+
+
+class TestBodySuppliedIdBatchRoutesAreScoped:
+    """Batch routes take their ids from the BODY, so no dependency can guard them.
+
+    The route has to filter. These three did not: two returned an answer for every id handed to
+    them, and one returned tasting-note CONTENT for any ingredient by id. Ids come from the client,
+    and a client can count.
+    """
+
+    def _org_b_recipe(self, session: Session) -> Recipe:
+        recipe = Recipe(
+            name="ORG_B Batch Dish", owner_id="org-b-chef",
+            status=RecipeStatus.ACTIVE, organization_id=ORG_B,
+        )
+        session.add(recipe)
+        session.commit()
+        session.refresh(recipe)
+        return recipe
+
+    def test_sub_recipes_batch_does_not_answer_for_another_orgs_recipe(
+        self, session: Session, client: TestClient
+    ):
+        """A boolean per id is still an existence oracle: it confirms the recipe is there."""
+        recipe = self._org_b_recipe(session)
+
+        resp = client.post("/api/v1/recipes/sub-recipes/batch", json={"recipe_ids": [recipe.id]})
+
+        assert resp.status_code == 200, resp.text
+        assert str(recipe.id) not in resp.json(), (
+            "a recipe in another org must not appear in the batch result at all"
+        )
+
+    def test_allergens_batch_does_not_answer_for_another_orgs_recipe(
+        self, session: Session, client: TestClient
+    ):
+        recipe = self._org_b_recipe(session)
+
+        resp = client.post("/api/v1/recipes/allergens/batch", json={"recipe_ids": [recipe.id]})
+
+        assert resp.status_code == 200, resp.text
+        assert str(recipe.id) not in resp.json(), (
+            "allergens for another org's recipe must not be returned"
+        )
+
+    def test_ingredient_tasting_history_does_not_cross_orgs(
+        self, session: Session, client: TestClient
+    ):
+        """This one returns note CONTENT, not a boolean — the whole tasting history of an
+        ingredient, to anyone who can name its id."""
+        from app.models import Ingredient
+        from app.models.ingredient_tasting import IngredientTastingNote
+
+        ingredient = Ingredient(name="ORG_B Truffle", base_unit="kg", organization_id=ORG_B)
+        session.add(ingredient)
+        session.commit()
+        session.refresh(ingredient)
+
+        ts = TastingSession(
+            name="ORG_B Session",
+            date=datetime.datetime(2026, 4, 1),
+            creator_id="org-b-chef",
+            organization_id=ORG_B,
+        )
+        session.add(ts)
+        session.commit()
+        session.refresh(ts)
+
+        session.add(
+            IngredientTastingNote(
+                ingredient_id=ingredient.id,
+                session_id=ts.id,
+                user_id="org-b-chef",
+                feedback="ORG_B secret verdict",
+            )
+        )
+        session.commit()
+
+        resp = client.get(f"/api/v1/tasting-sessions/ingredients/{ingredient.id}/tasting-history")
+
+        assert resp.status_code in (200, 404), resp.text
+        assert "ORG_B secret verdict" not in resp.text, (
+            "another org's tasting notes must not be readable by ingredient id"
+        )

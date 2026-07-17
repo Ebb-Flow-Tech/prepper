@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_session
-from app.api.guards import require_recipe_access
+from app.api.guards import require_recipe_access, require_recipe_image_access
 from app.config import get_settings
 from app.domain import RecipeImageService, RecipeService
 from app.domain.storage_service import (
@@ -104,22 +104,16 @@ class SetMainImageRequest(BaseModel):
 
 @router.patch("/main/{image_id}", response_model=RecipeImage)
 def set_main_image(
-    image_id: int,
+    image: RecipeImage = Depends(require_recipe_image_access),
     session: Session = Depends(get_session),
 ):
-    """Set an image as the main (preferred) image for its recipe."""
+    """Set an image as the main (preferred) image for its recipe.
+
+    The guard resolves the image AND proves the caller may reach its recipe, so the id checked and
+    the id used are the same value.
+    """
     service = RecipeImageService(session)
-
-    # Get the image to find the recipe_id
-    image = service.get_image(image_id)
-    if not image:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Image not found",
-        )
-
-    # Set as main
-    updated_image = service.set_main_image(image.recipe_id, image_id)
+    updated_image = service.set_main_image(image.recipe_id, image.id)
     if not updated_image:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -131,12 +125,15 @@ def set_main_image(
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_recipe_image(
-    image_id: int,
+    image: RecipeImage = Depends(require_recipe_image_access),
     session: Session = Depends(get_session),
 ):
-    """Delete a recipe image."""
+    """Delete a recipe image.
+
+    Took a bare integer and deleted any recipe's image, in any org, for any signed-in user.
+    """
     service = RecipeImageService(session)
-    success = service.delete_image(image_id)
+    success = service.delete_image(image.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
