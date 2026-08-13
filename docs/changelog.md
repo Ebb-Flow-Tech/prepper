@@ -187,7 +187,13 @@ by the Passport callback has no credential on Prepper's own project, so with SSO
 Google sign-in mints its session client-side, before `/auth/oauth-complete` is consulted, so a member
 can use it and skip Passport's MFA. Revocation still lands via the projection, so this is a policy
 weakening rather than an access-control hole — accepted, and to be revisited if Passport's MFA
-becomes mandatory. `POST /auth/password-reset` ships with no caller: Prepper has no recovery page,
+becomes mandatory.
+
+**One operational consequence, worth knowing before the support ticket arrives:** a member who signs
+in with Google holds a token issued by *Prepper's* project, so role write-back refuses it with a
+`401` — Passport verifies forwarded tokens against Prepper's registered `issuer_url`, which names
+Passport's project. The symptom is "role assignment is broken for one person"; the cause is which
+button they used to sign in. The same person signing in through Passport works normally. `POST /auth/password-reset` ships with no caller: Prepper has no recovery page,
 and a reset link landing where no password can be set would be worse than none.
 
 ---

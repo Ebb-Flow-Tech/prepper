@@ -485,6 +485,29 @@ entirely at that point. The two fixes considered and declined: hide Google while
 but does not cover a legacy member with a local password), or reject an own-issuer token for an
 active member on the verify path (complete, but touches every request).
 
+#### Second consequence, found after the decision: role write-back fails for these users
+
+Not visible when the trade was accepted, and it will arrive as a bug report rather than as a
+security question — so it is recorded here to make it findable.
+
+Write-back forwards the **end user's own JWT** (`X-End-User-Token`), and Passport verifies it against
+the `issuer_url` registered for Prepper — Passport's own project. A member who signed in through
+Passport holds a Passport-issued token, so this works. A member who signed in **with Google** holds a
+token issued by **Prepper's** project.
+
+That member passes Prepper's local authority check — they genuinely are an Owner, or a Manager at
+that brand — and is then refused by Passport with a **401**, because the forwarded token is signed by
+a project it does not expect. `writeback._reraise` surfaces Passport's status verbatim, so the user
+sees an authentication error while plainly logged in and plainly an admin.
+
+**The symptom is "role assignment is broken for one person", and the cause is which button they used
+to sign in.** It fails closed, so it is not a security problem — but nothing on screen connects the
+two, which is precisely why it is written down here rather than left to be rediscovered.
+
+Note this is unchanged by the login migration itself: under the retired login-proxy every session was
+Passport-issued, so write-back worked for everyone who could log in at all. The Google path is the
+only way to hold an own-issuer token *and* be a member — the same gap, seen from a different side.
+
 **Residual risk, stated rather than papered over.** Prepper's own Supabase anon key ships in the browser
 bundle (`lib/supabase/client.ts`), so a legacy member holding a local password can call Prepper's GoTrue
 `signInWithPassword` / `resetPasswordForEmail` **directly**, bypassing the D9 endpoints entirely; the
