@@ -2,8 +2,7 @@
 
 from collections.abc import Generator
 
-from sqlalchemy import text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, create_engine
 
 from app.config import get_settings
 
@@ -66,18 +65,6 @@ engine = create_engine(
     execution_options=schema_execution_options(settings.database_url),
     **engine_kwargs,
 )
-
-
-def create_db_and_tables() -> None:
-    """Create all database tables from SQLModel metadata.
-
-    On Postgres the `passport` schema must exist before the projection tables can be created; the
-    schema is owned by the connecting role. On SQLite the schema collapses to the default (via the
-    engine's schema_translate_map), so no schema DDL is needed."""
-    if not is_sqlite:
-        with engine.begin() as conn:
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {PASSPORT_SCHEMA}"))
-    SQLModel.metadata.create_all(engine)
 
 
 def get_session() -> Generator[Session, None, None]:

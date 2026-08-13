@@ -44,16 +44,29 @@ from app.api import (
 )
 from app.api.deps import require_auth
 from app.config import get_settings
-from app.database import create_db_and_tables
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle application startup and shutdown events."""
-    # Startup
-    create_db_and_tables()
+    """Handle application startup and shutdown events.
+
+    **Startup deliberately does NOT create tables.** It used to call `create_db_and_tables()`, and
+    that call cost a deploy on 2026-08-13: registering the `PassportLoginAttempt` model meant the
+    next app start created `passport_login_attempt` from SQLModel metadata — bare, with **no RLS, no
+    policies, and no Alembic stamp**. The migration that owns that table then failed with
+    `DuplicateTable`, and the table sat in staging as the only one in the database without RLS.
+
+    Alembic is the source of truth: `fly.toml`'s `release_command = "alembic upgrade head"` runs
+    before any machine serves, and `security.md` requires every new table to ship RLS **in its
+    migration**. `create_all` knows nothing about policies, so it cannot honour that rule — it
+    silently produces exactly the unprotected table the rule exists to prevent.
+
+    The function itself is deleted rather than left unused: the test fixtures build their own
+    SQLite engine and call `create_all` directly, and migration `p4rtschema7n8o` owns the
+    `passport` schema, so nothing else needed it.
+    """
     yield
     # Shutdown
     from app.domain.storage_service import close_http_client

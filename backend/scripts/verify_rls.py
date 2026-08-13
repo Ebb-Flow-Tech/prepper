@@ -294,24 +294,67 @@ def check_login_attempt_is_client_invisible(engine: Engine, role: str) -> bool:
     A verifier that is *structurally unable* to see a table is worse than one that fails on it,
     because the green result reads as coverage. Hence this check exists separately rather than
     being folded into the loop above.
+
+    **The first version of this check was itself vacuous, and that is why it is written this way.**
+    It asserted only "0 rows visible to `authenticated`" — which is true of an EMPTY table whether
+    or not RLS exists. It reported PASS against staging on 2026-08-13 while the table had RLS
+    disabled and no policies at all, because `create_all` had built it outside the migration. The
+    structural assertions below run FIRST and cannot pass on an empty table; the behavioural one
+    seeds a row so that "0 visible" means something was actually hidden.
     """
     print("\npassport_login_attempt - the PKCE verifier store")
     table = "passport_login_attempt"
-    try:
-        with engine.connect() as c:
-            c.execute(text(f"SET LOCAL ROLE {role}"))
-            visible = c.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
-    except Exception as exc:  # noqa: BLE001 — a refused read is the PASS case, see below
-        # A hard permission error is the strongest possible result: the REVOKE denied the role
-        # before RLS was even consulted. Treat it as a pass and say which layer answered.
-        _ok(f"{table}: unreadable by {role!r} (refused at GRANT level: {type(exc).__name__})")
-        return True
 
-    if visible:
-        _fail(f"{table}: {visible} row(s) visible to {role!r} — PKCE verifiers are exposed")
+    # Structural, and deliberately first: an empty table cannot fake either of these.
+    with engine.connect() as c:
+        enabled = c.execute(
+            text("SELECT relrowsecurity FROM pg_class WHERE relname = :t"), {"t": table}
+        ).scalar_one_or_none()
+        policies = [
+            r[0]
+            for r in c.execute(
+                text("SELECT policyname FROM pg_policies WHERE tablename = :t"), {"t": table}
+            )
+        ]
+    if enabled is None:
+        _fail(f"{table}: table does not exist — the migration has not run")
         return False
-    _ok(f"{table}: 0 rows visible to {role!r}")
-    return True
+    if not enabled:
+        _fail(f"{table}: RLS is DISABLED — created outside the migration (see this docstring)")
+        return False
+    if not policies:
+        _fail(f"{table}: RLS enabled but NO policy — the deny-all was never created")
+        return False
+    _ok(f"{table}: RLS enabled, policies present ({', '.join(policies)})")
+
+    # Behavioural, with a seeded row so "0 visible" is evidence rather than an artefact of
+    # emptiness. Written and removed under the privileged connection; the read is the restricted
+    # one. Values are inert (this table only ever holds 5-minute login attempts).
+    probe = "__rls_probe_state__"
+    with engine.begin() as c:
+        c.execute(
+            text(f"INSERT INTO {table} (state, code_verifier) VALUES (:s, :v)"),
+            {"s": probe, "v": "probe-not-a-real-verifier"},
+        )
+    try:
+        try:
+            with engine.connect() as c:
+                c.execute(text(f"SET LOCAL ROLE {role}"))
+                visible = c.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
+        except Exception as exc:  # noqa: BLE001 — a refused read is the PASS case, see below
+            # A hard permission error is the strongest possible result: the REVOKE denied the role
+            # before RLS was even consulted. Treat it as a pass and say which layer answered.
+            _ok(f"{table}: unreadable by {role!r} (refused at GRANT level: {type(exc).__name__})")
+            return True
+
+        if visible:
+            _fail(f"{table}: {visible} row(s) visible to {role!r} — PKCE verifiers are exposed")
+            return False
+        _ok(f"{table}: a seeded row is invisible to {role!r}")
+        return True
+    finally:
+        with engine.begin() as c:
+            c.execute(text(f"DELETE FROM {table} WHERE state = :s"), {"s": probe})
 
 
 def main() -> int:
