@@ -283,6 +283,37 @@ def check_second_org_is_invisible(engine: Engine, role: str) -> bool:
     return ok
 
 
+def check_login_attempt_is_client_invisible(engine: Engine, role: str) -> bool:
+    """`passport_login_attempt` must be readable by NO client role — it holds PKCE verifiers.
+
+    Not covered by :func:`check_live_isolation`, which walks the org-scoped tables and asks "can
+    this role see another org's rows?". This table has no ``organization_id`` and no legitimate
+    client reader at all, so the org question does not apply and it was silently outside the
+    verifier's scope — the suite reported "All RLS checks passed" while never looking at it.
+
+    A verifier that is *structurally unable* to see a table is worse than one that fails on it,
+    because the green result reads as coverage. Hence this check exists separately rather than
+    being folded into the loop above.
+    """
+    print("\npassport_login_attempt - the PKCE verifier store")
+    table = "passport_login_attempt"
+    try:
+        with engine.connect() as c:
+            c.execute(text(f"SET LOCAL ROLE {role}"))
+            visible = c.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
+    except Exception as exc:  # noqa: BLE001 — a refused read is the PASS case, see below
+        # A hard permission error is the strongest possible result: the REVOKE denied the role
+        # before RLS was even consulted. Treat it as a pass and say which layer answered.
+        _ok(f"{table}: unreadable by {role!r} (refused at GRANT level: {type(exc).__name__})")
+        return True
+
+    if visible:
+        _fail(f"{table}: {visible} row(s) visible to {role!r} — PKCE verifiers are exposed")
+        return False
+    _ok(f"{table}: 0 rows visible to {role!r}")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
@@ -306,6 +337,7 @@ def main() -> int:
     else:
         results.append(check_live_isolation(engine, role))
         results.append(check_second_org_is_invisible(engine, role))
+        results.append(check_login_attempt_is_client_invisible(engine, role))
 
     print()
     if all(results):

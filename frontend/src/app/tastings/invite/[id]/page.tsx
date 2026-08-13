@@ -2,9 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-
-const TASTING_REDIRECT_KEY = 'tasting_redirect_url';
-const AUTH_STORAGE_KEY = 'prepper_auth';
+import { getActiveSupabaseClient } from '@/lib/supabase/activeClient';
+import { TASTING_REDIRECT_KEY } from '@/lib/auth/postLoginDestination';
 
 export default function TastingInvitePage() {
   const router = useRouter();
@@ -17,27 +16,21 @@ export default function TastingInvitePage() {
     // Always save the redirect URL (so re-accessing the invite link re-saves it)
     localStorage.setItem(TASTING_REDIRECT_KEY, sessionUrl);
 
-    // Check if user is authenticated by reading localStorage directly
-    // (avoids hydration race condition with AppProvider)
-    let isAuthenticated = false;
-    try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        isAuthenticated = !!parsed?.userId;
+    // Ask the active Supabase client directly rather than waiting on AppProvider's identity
+    // round trip — this route is a passthrough and decides for itself.
+    (async () => {
+      let hasSession = false;
+      try {
+        const { data } = await getActiveSupabaseClient().auth.getSession();
+        hasSession = !!data.session;
+      } catch {
+        hasSession = false;
       }
-    } catch {
-      // Ignore parsing errors
-      isAuthenticated = false;
-    }
 
-    if (isAuthenticated) {
-      // User is logged in - go directly to the session
-      router.replace(sessionUrl);
-    } else {
-      // User is not logged in - redirect to login with redirect parameter
-      router.replace(`/login?redirect=${encodeURIComponent(sessionUrl)}`);
-    }
+      router.replace(
+        hasSession ? sessionUrl : `/login?redirect=${encodeURIComponent(sessionUrl)}`
+      );
+    })();
   }, [id, router]);
 
   // Render nothing while redirecting

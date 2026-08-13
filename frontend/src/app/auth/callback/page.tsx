@@ -6,13 +6,13 @@ import type { Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { useAppState } from '@/lib/store';
 import { completeOAuth } from '@/lib/api';
+import {
+  consumeTastingRedirect,
+  rememberPostLoginDestination,
+  resolvePostLoginDestination,
+} from '@/lib/auth/postLoginDestination';
 
-const DEFAULT_DESTINATION = '/recipes';
 const BRIDGE_TIMEOUT_MS = 15_000;
-
-function isValidRedirectPath(path: string | null): path is string {
-  return !!path && path.startsWith('/') && !path.startsWith('//');
-}
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function AuthCallbackPage() {
 
       try {
         const user = await completeOAuth(session.access_token);
-        login(
+        await login(
           user.id,
           session.access_token,
           session.refresh_token,
@@ -55,13 +55,9 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const storedRedirect = localStorage.getItem('tasting_redirect_url');
-      const storedLastRoute = localStorage.getItem('prepper_last_route');
-      const raw = storedRedirect || storedLastRoute || DEFAULT_DESTINATION;
-      const destination = isValidRedirectPath(raw) ? raw : DEFAULT_DESTINATION;
-
-      localStorage.setItem('prepper_last_route', destination);
-      if (storedRedirect) localStorage.removeItem('tasting_redirect_url');
+      const destination = resolvePostLoginDestination();
+      rememberPostLoginDestination(destination);
+      consumeTastingRedirect();
 
       router.replace(destination);
     };

@@ -109,7 +109,6 @@ def test_get_current_user_resolves_a_passport_token_to_the_local_row(session: Se
     )
     with (
         patch("app.api.deps.get_auth_service", return_value=fake),
-        patch("app.api.deps.is_org_blocked", return_value=False),
     ):
         user = deps._resolve_current_user(session, "Bearer sometoken")
     assert user.id == "S_prepper_local", "resolved to the local row, keyed by its own id"
@@ -126,7 +125,6 @@ def test_prepper_token_still_works_when_passport_path_misses(session: Session):
     )
     with (
         patch("app.api.deps.get_auth_service", return_value=fake),
-        patch("app.api.deps.is_org_blocked", return_value=False),
     ):
         user = deps._resolve_current_user(session, "Bearer sometoken")
     assert user.id == "S_prepper_local"
@@ -157,7 +155,6 @@ def test_sso_login_provisions_a_local_row_for_a_new_member(session: Session):
     )
     with (
         patch("app.api.deps.get_auth_service", return_value=fake),
-        patch("app.api.deps.is_org_blocked", return_value=False),
     ):
         user = deps._resolve_current_user(session, "Bearer t")
 
@@ -176,34 +173,80 @@ def test_sso_login_does_not_provision_a_non_member(session: Session):
     )
     with (
         patch("app.api.deps.get_auth_service", return_value=fake),
-        patch("app.api.deps.is_org_blocked", return_value=False),
         pytest.raises(Exception),  # 401: no local user, not a member, no fallback
     ):
         deps._resolve_current_user(session, "Bearer t")
 
 
-# --- 5.2 LOGIN-PROXY: Prepper's login page authenticates against Passport -----------------------
+# --- The login-proxy is GONE (Model 3 replaces it) ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "gone",
+    [
+        "login_via_passport",
+        "refresh_via_passport",
+        "sso_login_enabled",
+        "register",
+        # Not part of the proxy, but the same rule: the browser's Supabase client owns refresh, and
+        # a backend that also redeems refresh tokens is a second session authority.
+        "refresh_token",
+    ],
+)
+def test_the_password_proxy_no_longer_exists(gone: str):
+    """Regression. `login_via_passport` replayed the user's PASSPORT password through Prepper's
+    backend, so a Prepper compromise harvested credentials valid for every app on the platform —
+    and `sign_in_with_password` is non-interactive, so it structurally could not present MFA.
+    Deleting it is the entire point of the Model 3 work.
+
+    Asserted on the CLASS rather than by patching a call site: a test that only proved the login
+    route stopped calling it would go green again the moment someone reintroduced the method and
+    wired it up somewhere new.
+    """
+    assert not hasattr(SupabaseAuthService, gone)
+
+
+def test_no_client_points_at_passports_gotrue_any_more():
+    """The proxy's other half. Under Model 3 the exchange authenticates with `X-API-Key` and the
+    hosted login happens in the BROWSER, so this backend has no reason to hold a client for
+    Passport's project — and holding one is how a password path grows back."""
+    from app.domain import supabase_auth_service as mod
+
+    assert not hasattr(mod, "_get_passport_supabase_client")
+
+
+def test_no_backend_setting_survives_for_passports_anon_key():
+    """`Settings.passport_supabase_anon_key` is deleted, not merely unread.
+
+    The backend never calls Passport's GoTrue under Model 3, so the key has no reader — and a
+    stale setting for a credential nothing uses is exactly what gets wired back into an auth path
+    by someone tidying up an unused variable. The frontend owns it now, as
+    `NEXT_PUBLIC_PASSPORT_SUPABASE_ANON_KEY`.
+    """
+    from app.config import Settings
+
+    assert "passport_supabase_anon_key" not in Settings.model_fields
+    assert "passport_org_id" not in Settings.model_fields
 
 
 def _login_settings(**over):
     base = dict(
         sso_enabled=True,
         passport_supabase_url="https://passport.supabase.co",
-        passport_supabase_anon_key="anon-key",
         supabase_url="https://prepper.supabase.co",
     )
     base.update(over)
     return SimpleNamespace(**base)
 
 
-def test_sso_login_works_without_preppers_own_supabase_key():
-    """The SSO login-proxy must not depend on a client it never uses.
+def test_the_service_builds_without_preppers_own_supabase_key():
+    """Prepper's own client must stay lazy.
 
-    `login_via_passport` talks to PASSPORT's project via `_get_passport_supabase_client`. Prepper's
-    own client is only needed for storage and `auth.admin.create_user`. But `__init__` built it
-    eagerly, so `SupabaseAuthService()` raised `ValueError("Supabase credentials not configured")`
-    whenever `supabase_key` was unset — and `api/auth.py:49` turns that into a 503. The SSO path was
-    fully configured and could not run, blocked by a client it would never have touched.
+    `__init__` used to build it eagerly, so `SupabaseAuthService()` raised
+    `ValueError("Supabase credentials not configured")` whenever `supabase_key` was unset — and
+    `api/auth.py` turns that into a 503. That took down paths which never touch Prepper's project
+    at all; under Model 3 that is the whole callback, which only ever calls
+    `verify_passport_identity`.
 
     Found by running the app: login 503'd with both PASSPORT_SUPABASE_* set and SSO on.
     """
@@ -213,15 +256,15 @@ def test_sso_login_works_without_preppers_own_supabase_key():
     settings = _login_settings(supabase_key=None, supabase_jwt_secret=None)
     with patch("app.domain.supabase_auth_service.get_settings", return_value=settings):
         svc = SupabaseAuthService()  # must not raise
-        assert svc.sso_login_enabled is True
+        assert svc.verify_passport_identity.__self__ is svc
 
 
 def test_preppers_own_client_still_raises_when_actually_used():
     """Laziness must defer the error, not swallow it.
 
-    A path that genuinely needs Prepper's project (storage, admin user creation) must still fail
-    loudly when the key is absent — otherwise this fix trades a startup 503 for a confusing
-    AttributeError deep inside the supabase SDK.
+    A path that genuinely needs Prepper's project (storage, app-native sign-in, password recovery)
+    must still fail loudly when the key is absent — otherwise this fix trades a startup 503 for a
+    confusing AttributeError deep inside the supabase SDK.
     """
     from app.domain import supabase_auth_service as mod
 
@@ -231,58 +274,6 @@ def test_preppers_own_client_still_raises_when_actually_used():
         svc = SupabaseAuthService()
         with pytest.raises(ValueError, match="Supabase credentials not configured"):
             _ = svc.client
-
-
-def test_sso_login_enabled_requires_flag_url_and_anon_key():
-    """The proxy is active only when all three are set — any missing is a hard off (fallback)."""
-    svc = _svc()
-    with patch("app.domain.supabase_auth_service.get_settings", return_value=_login_settings()):
-        assert svc.sso_login_enabled is True
-    for missing, off in [
-        ("sso_enabled", False),
-        ("passport_supabase_url", None),
-        ("passport_supabase_anon_key", None),
-    ]:
-        with patch(
-            "app.domain.supabase_auth_service.get_settings",
-            return_value=_login_settings(**{missing: off}),
-        ):
-            assert svc.sso_login_enabled is False, missing
-
-
-def test_login_via_passport_authenticates_against_passport_and_returns_its_session():
-    """Login hits PASSPORT's project and returns its sub + token — never Prepper's project."""
-    svc = _svc()
-    sess = SimpleNamespace(access_token="AT", refresh_token="RT", expires_in=3600)
-    passport_user = SimpleNamespace(id="S_passport", email="chef@temper.sg")
-    fake_client = SimpleNamespace(
-        auth=SimpleNamespace(
-            sign_in_with_password=lambda creds: SimpleNamespace(user=passport_user, session=sess)
-        )
-    )
-    with patch(
-        "app.domain.supabase_auth_service._get_passport_supabase_client", return_value=fake_client
-    ) as gc:
-        out = svc.login_via_passport("chef@temper.sg", "pw")
-    gc.assert_called_once()  # the PASSPORT client, not Prepper's
-    assert out["user_id"] == "S_passport"  # Passport sub — caller resolves locally by email
-    assert out["email"] == "chef@temper.sg"
-    assert (out["access_token"], out["refresh_token"]) == ("AT", "RT")
-
-
-def test_login_via_passport_bad_credentials_maps_to_valueerror():
-    """A GoTrue 'invalid login' becomes the same ValueError the endpoint turns into a 400."""
-    svc = _svc()
-
-    def _boom(_creds):
-        raise Exception("Invalid login credentials")
-
-    fake_client = SimpleNamespace(auth=SimpleNamespace(sign_in_with_password=_boom))
-    with patch(
-        "app.domain.supabase_auth_service._get_passport_supabase_client", return_value=fake_client
-    ):
-        with pytest.raises(ValueError):
-            svc.login_via_passport("chef@temper.sg", "wrong")
 
 
 def test_resolve_matches_local_user_by_email_ignoring_sub(session: Session):
@@ -340,7 +331,7 @@ def _member(session: Session, *, email: str, platform_user_id: str, role: str = 
 
 
 def test_platform_user_id_for_email_resolves_active_member(session: Session):
-    from app.passport.access import platform_user_id_for_email
+    from app.passport.gate import platform_user_id_for_email
 
     _member(session, email="chef@temper.sg", platform_user_id="pu-1")
     assert platform_user_id_for_email(session, "CHEF@Temper.SG") == "pu-1"  # case-insensitive
@@ -351,7 +342,7 @@ def test_removed_member_does_not_resolve_so_the_login_gate_denies(session: Sessi
     """A removed member returns None (active-only) — the login gate treats None as 'not a member' and
     denies, so a removed member cannot keep a session via a legacy local `users` row."""
     from app.models import PassportMembership
-    from app.passport.access import platform_user_id_for_email
+    from app.passport.gate import platform_user_id_for_email
 
     session.add(
         PassportMembership(
@@ -366,7 +357,7 @@ def test_removed_member_does_not_resolve_so_the_login_gate_denies(session: Sessi
 def test_login_gate_fails_open_before_entitlements_sync(session: Session):
     """A member whose org has NO entitlement row yet is NOT blocked — Passport is not authoritative
     for that org until the data lands (matches the request-path derivation)."""
-    from app.passport.access import has_prepper_access_for_platform_user
+    from app.passport.gate import has_prepper_access_for_platform_user
 
     _member(session, email="chef@temper.sg", platform_user_id="pu-1")  # no entitlement projected
     assert has_prepper_access_for_platform_user(session, "pu-1") is True
@@ -376,7 +367,7 @@ def test_login_gate_blocks_member_with_no_access_once_entitled(session: Session)
     """Entitlement active but the member holds no brand role and is a plain Member (no ladder) and
     no brand carries the app → derived access is empty → the gate blocks (403 at login)."""
     from app.models import PassportEntitlement
-    from app.passport.access import has_prepper_access_for_platform_user
+    from app.passport.gate import has_prepper_access_for_platform_user
 
     _member(session, email="staff@temper.sg", platform_user_id="pu-2", role="Member")
     session.add(
@@ -388,3 +379,26 @@ def test_login_gate_blocks_member_with_no_access_once_entitled(session: Session)
     session.commit()
     # no PassportUnit / unit_app_access / unit_app_membership → roles_at_brands is empty
     assert has_prepper_access_for_platform_user(session, "pu-2") is False
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [("POST", "/api/v1/auth/register"), ("POST", "/api/v1/auth/refresh-token")],
+)
+def test_the_deleted_routes_no_longer_answer(method: str, path: str):
+    """The `hasattr` guards above pin the SERVICE methods; nothing pinned the ROUTES.
+
+    Asserted through the app rather than by grepping the source, because the routers are mounted
+    as wrapper objects — a route can be perfectly absent from a text search and still be served.
+    404 is the only acceptable answer: a 401 would mean the route still exists behind the gate,
+    and a 405 would mean the path is live under another method.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        assert client.request(method, path, json={}).status_code == 404
+        # Control: a route that IS mounted must not also answer 404 through this same call, or
+        # the assertion above would pass for a broken client rather than for a deleted route.
+        assert client.post("/api/v1/auth/login", json={}).status_code != 404

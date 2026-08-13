@@ -704,11 +704,13 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  username: string;
-}
+/**
+ * The email-first router's answer: which kind of account holds this address.
+ *
+ * Exactly two values, and no client-side toggle may add a third — the point of the router is that
+ * a user never has to know whether they hold a Passport identity or a Prepper password.
+ */
+export type LoginRoute = 'passport' | 'app-native';
 
 /**
  * A Prepper account. It carries NO role: `user_type`, `is_manager` and `outlet_id` are gone.

@@ -15,6 +15,7 @@ Seed nothing and the user derives nothing — access FAILS CLOSED. That is the p
 """
 
 from itertools import count
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -29,7 +30,7 @@ from app.api.deps import (
     get_session,
     require_auth,
 )
-from app.database import SQLITE_SCHEMA_TRANSLATE_MAP
+from app.database import HIDE_SQL_PARAMETERS, SQLITE_SCHEMA_TRANSLATE_MAP
 from app.database import get_session as db_get_session
 from app.main import app
 from app.models import User
@@ -286,6 +287,10 @@ def session_fixture():
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
+        # Mirrors the runtime engine, from the same constant. A test engine that leaked bound
+        # parameters would let `test_passport_sso_start`'s no-secrets-in-logs assertions pass
+        # against an engine the app does not use — certifying a fix they never exercised.
+        hide_parameters=HIDE_SQL_PARAMETERS,
         # Collapse the `passport` schema to the default on SQLite (design 2026-07-15); the projection
         # models declare {"schema": "passport"}, which has no meaning on schemaless SQLite.
         execution_options={"schema_translate_map": SQLITE_SCHEMA_TRANSLATE_MAP},
@@ -351,6 +356,54 @@ def client_fixture(session: Session, admin_user: User):
 # ============================================================================
 # Storage Mocks
 # ============================================================================
+
+
+# ============================================================================
+# The unauthenticated login surface — shared by the three /auth front-door suites
+# ============================================================================
+
+PASSPORT_DASHBOARD_URL = "https://passport.example.com"
+FRONTEND_URL = "https://app.example.com"
+SSO_CALLBACK_URL = "https://api.example.com/api/v1/auth/passport/callback"
+
+
+def sso_settings(**over) -> SimpleNamespace:
+    """A fully configured Model 3 deployment, for patching ``get_settings``.
+
+    Shared because three suites need it and had each grown their own copy — which had already
+    drifted (one carried a trailing slash on ``passport_api_url``, with nothing saying whether that
+    was deliberate). Pass overrides explicitly instead; a difference that matters should be visible
+    at the call site.
+    """
+    base = dict(
+        sso_enabled=True,
+        passport_supabase_url="https://passport.supabase.co",
+        passport_dashboard_url=PASSPORT_DASHBOARD_URL,
+        sso_callback_url=SSO_CALLBACK_URL,
+        frontend_url=FRONTEND_URL,
+        passport_api_url=PASSPORT_DASHBOARD_URL,
+        passport_api_key="app-key",
+        # Mirrors the real `Settings.debug` default. It decides `Secure` on the login-CSRF state
+        # cookie, so the default here must be the PRODUCTION one — a stub defaulting to debug=True
+        # would assert the cookie's attributes for an environment nobody deploys.
+        debug=False,
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+@pytest.fixture(name="anon_client")
+def anon_client_fixture(session: Session):
+    """A client with NO auth override and NOTHING seeded — the state the login routes run in.
+
+    The `client` fixture cannot stand in: it acts as an org admin, and provisioning one seeds an
+    entitlement, which silently supplies the app id that `/passport/start` needs. A test for the
+    unsynced-projection case would pass against it for the wrong reason.
+    """
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[db_get_session] = lambda: session
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

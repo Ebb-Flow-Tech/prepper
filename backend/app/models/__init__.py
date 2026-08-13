@@ -6,11 +6,9 @@ from app.models.allergen import (
     AllergenUpdate,
 )
 from app.models.auth import (
+    EMAIL_MAX_LENGTH,
     LoginRequest,
     LoginResponse,
-    RefreshTokenResponse,
-    RegisterRequest,
-    TokenRequest,
 )
 from app.models.category import (
     Category,
@@ -86,6 +84,7 @@ from app.models.passport import (
     PassportUnitAppMembership,
     PassportUnitRelation,
 )
+from app.models.passport_login_attempt import PassportLoginAttempt
 from app.models.recipe import (
     InstructionsRaw,
     InstructionsStructured,
@@ -305,11 +304,9 @@ __all__ = [
     "UserUpdate",
     "UserRead",
     # Auth
+    "EMAIL_MAX_LENGTH",
     "LoginRequest",
-    "RegisterRequest",
     "LoginResponse",
-    "TokenRequest",
-    "RefreshTokenResponse",
     # Menu
     "Menu",
     "MenuCreate",
@@ -345,4 +342,6 @@ __all__ = [
     "PassportUnitRelation",
     "PassportUnitAppAccess",
     "PassportUnitAppMembership",
+    # PKCE attempt store — Prepper-owned, default schema (not a projected aggregate)
+    "PassportLoginAttempt",
 ]

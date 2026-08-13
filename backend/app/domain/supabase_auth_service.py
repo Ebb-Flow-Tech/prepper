@@ -1,7 +1,16 @@
 """Supabase authentication service.
 
-Handles all Supabase auth operations (login, register, logout, token refresh).
-Does NOT touch the database.
+Handles all Supabase auth operations against PREPPER's own project (sign-in, sign-out, password
+recovery), plus verification of tokens signed by PASSPORT's project. Does NOT touch the database.
+
+There is no ``refresh_token`` here either. The browser hands both tokens to its Supabase client and
+that client owns refresh from then on; a backend that also redeems refresh tokens is a second
+session authority, and under Model 3 the issuer is the only one that gets to be that.
+
+There is no client pointed at Passport's GoTrue any more, and there must not be one again: under
+Model 3 the browser signs in at Passport's hosted page and the code exchange authenticates with
+``X-API-Key``, so this backend never handles a Passport password. The retired ``login_via_passport``
+did, which meant a Prepper compromise harvested credentials valid for every app on the platform.
 
 Uses a singleton Supabase client to avoid re-creating HTTP connections per request.
 Supports local JWT verification to eliminate network round-trips on every auth check.
@@ -27,35 +36,22 @@ from jwt.exceptions import InvalidTokenError as _JwtInvalidTokenError
 from supabase import create_client
 
 from app.config import get_settings
+from app.passport import gate
 
 
 @lru_cache
 def _get_supabase_client():
     """Create and cache a singleton Supabase client (Prepper's own project).
 
-    ``settings.supabase_key`` is the **service_role** key despite the plain name — `create_user`
-    below calls `auth.admin.*`, which the anon key cannot reach. It bypasses RLS, so it stays
-    server-side; `_get_passport_supabase_client` deliberately uses an anon key instead, because
-    that one only ever does what a browser does.
+    ``settings.supabase_key`` is the **service_role** key despite the plain name — the storage
+    paths and `auth.admin.*` cannot be reached with the anon key. It bypasses RLS, so it never
+    leaves the server. This is the ONLY Supabase client this service holds: see the module
+    docstring for why there is no second one pointed at Passport's project.
     """
     settings = get_settings()
     if not settings.supabase_url or not settings.supabase_key:
         raise ValueError("Supabase credentials not configured")
     return create_client(settings.supabase_url, settings.supabase_key)
-
-
-@lru_cache
-def _get_passport_supabase_client():
-    """Create and cache a client pointed at PASSPORT's project (the shared issuer).
-
-    Used by the SSO login-proxy (P3 §5.2): Prepper's own login page authenticates email/password
-    here, so the browser receives a Passport-issued token. Uses the anon (public) key — the same
-    key a browser would use — never Prepper's service-role key.
-    """
-    settings = get_settings()
-    if not settings.passport_supabase_url or not settings.passport_supabase_anon_key:
-        raise ValueError("Passport Supabase credentials not configured")
-    return create_client(settings.passport_supabase_url, settings.passport_supabase_anon_key)
 
 
 class SupabaseAuthService:
@@ -65,10 +61,10 @@ class SupabaseAuthService:
         """Read settings only. Prepper's own client is built on first use, not here.
 
         Constructing it eagerly coupled EVERY auth path to Prepper's own project, including the
-        ones that never touch it. With the SSO login-proxy active, `login_via_passport` talks to
-        PASSPORT's project — but `SupabaseAuthService()` still raised when `supabase_key` was
-        unset, and `api/auth.py` turns that into a 503. SSO login was unusable on any deployment
-        that had not also configured a project it would never call.
+        ones that never touch it — today that is the whole Model 3 callback, which only calls
+        `verify_passport_identity`. `SupabaseAuthService()` raised when `supabase_key` was unset
+        and `api/auth.py` turns that into a 503, so SSO was unusable on any deployment that had
+        not also configured a project it would never call.
         """
         settings = get_settings()
         self.service_role_key = settings.supabase_key
@@ -111,118 +107,14 @@ class SupabaseAuthService:
                 raise ValueError("Invalid email or password")
             raise RuntimeError(f"Supabase error: {str(e)}")
 
-    @property
-    def sso_login_enabled(self) -> bool:
-        """Whether the SSO login-proxy is active — email/password authenticate against Passport.
+    def send_password_recovery(self, email: str) -> None:
+        """Ask PREPPER's own project to mail a recovery link. Never Passport's.
 
-        Requires all three: the feature flag, Passport's project URL, and its anon key. Any missing
-        → the login path falls back to Prepper's own project (fully reversible)."""
-        s = get_settings()
-        return bool(s.sso_enabled and s.passport_supabase_url and s.passport_supabase_anon_key)
-
-    def login_via_passport(self, email: str, password: str) -> dict:
-        """Authenticate email/password against PASSPORT's project; return a Passport-issued session.
-
-        The returned ``user_id`` is the Passport ``sub`` (not a Prepper sub) and ``email`` is the
-        authenticated address — the caller resolves the LOCAL ``users`` row by that email, never by
-        this sub (P3 §5.2). Same error contract as :meth:`login`.
+        Raises whatever GoTrue raises. ``api/auth.py``'s route swallows it deliberately, because a
+        differing response is the enumeration oracle that route exists to refuse — the decision
+        belongs there, where the property is stated, not buried in a service that cannot see it.
         """
-        client = _get_passport_supabase_client()
-        try:
-            response = client.auth.sign_in_with_password(
-                {"email": email, "password": password}
-            )
-            if not response.user or not response.user.email:
-                # A successful sign-in without an email is unreachable in practice, but the caller
-                # keys the local lookup on this email — guard so a null maps to a clean 400, not a
-                # 500 (parity with verify_passport_identity's `if not identity.email`).
-                raise ValueError("Invalid email or password")
-            return {
-                "user_id": response.user.id,  # Passport sub — resolve locally by email, not this
-                "email": response.user.email,
-                "access_token": response.session.access_token,
-                "refresh_token": response.session.refresh_token,
-                "expires_in": response.session.expires_in,
-            }
-        except ValueError:
-            raise  # the deliberate null-email guard above → 400, not the 503 fallback below
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "invalid login" in error_msg or "invalid credentials" in error_msg:
-                raise ValueError("Invalid email or password")
-            raise RuntimeError(f"Passport auth error: {str(e)}")
-
-    def refresh_via_passport(self, refresh_token: str) -> dict:
-        """Refresh a Passport-issued session against PASSPORT's project (SSO login-proxy).
-
-        A session minted by :meth:`login_via_passport` carries a Passport refresh token, which only
-        Passport's GoTrue can redeem — so refresh must route here, not to Prepper's project."""
-        client = _get_passport_supabase_client()
-        try:
-            response = client.auth.refresh_session(refresh_token)
-            return {
-                "access_token": response.session.access_token,
-                "refresh_token": response.session.refresh_token,
-                "expires_in": response.session.expires_in,
-            }
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "invalid" in error_msg or "expired" in error_msg:
-                raise ValueError("Invalid or expired refresh token")
-            raise RuntimeError(f"Passport auth error: {str(e)}")
-
-    def register(self, email: str, password: str) -> str:
-        """
-        Create user in Supabase auth using admin API.
-
-        Returns:
-            Supabase user ID
-
-        Raises:
-            ValueError: If email already exists
-            RuntimeError: If Supabase service is unavailable
-        """
-        if not self.service_role_key:
-            raise RuntimeError("Supabase service role key not configured")
-
-        try:
-            response = self.client.auth.admin.create_user(
-                {
-                    "email": email,
-                    "password": password,
-                    "email_confirm": True,  # Skip email verification
-                }
-            )
-            return response.user.id
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "already registered" in error_msg or "already exists" in error_msg:
-                raise ValueError("User with this email already exists")
-            raise RuntimeError(f"Supabase error: {str(e)}")
-
-    def refresh_token(self, refresh_token: str) -> dict:
-        """
-        Refresh an expired access token.
-
-        Returns:
-            Dictionary with keys: access_token, refresh_token, expires_in
-
-        Raises:
-            ValueError: If refresh token is invalid or expired
-            RuntimeError: If Supabase service is unavailable
-        """
-        try:
-            response = self.client.auth.refresh_session(refresh_token)
-            return {
-                "access_token": response.session.access_token,
-                "refresh_token": response.session.refresh_token,
-                "expires_in": response.session.expires_in,
-            }
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "invalid" in error_msg or "expired" in error_msg:
-                raise ValueError("Invalid or expired refresh token")
-            raise RuntimeError(f"Supabase error: {str(e)}")
+        self.client.auth.reset_password_email(email)
 
     def logout(self, access_token: str) -> None:
         """
@@ -340,7 +232,11 @@ class SupabaseAuthService:
         it is safe to deploy dark and flip on. See the P3 design doc in the passport repo.
         """
         settings = get_settings()
-        if not settings.sso_enabled or not settings.passport_supabase_url:
+        # The SAME `sso_active` the router and all three D9 refusals use. It was an inline
+        # flag-AND-url test here, a second copy in the retired `sso_login_enabled`, and a third in
+        # the router — three definitions of "SSO is on" that could disagree, which is how a kill
+        # switch ends up switching off only part of the thing it names.
+        if not gate.sso_active(settings):
             return None
 
         try:

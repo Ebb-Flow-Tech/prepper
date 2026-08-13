@@ -46,25 +46,23 @@ class Settings(BaseSettings):
     # supabase_service_role_key: str | None = None
     supabase_jwt_secret: str | None = None
 
-    # SSO issuer cutover (P3, dark-launched). When enabled, a token signed by PASSPORT's
-    # Supabase project is accepted and the local user is resolved by the token's VERIFIED
-    # email (platform_user.supabase_id is never synced, so sub-matching is impossible in a
-    # consumer). Prepper's own project stays a valid issuer too until 5.3 — this only ADDS an
-    # accepted issuer, so it is safe to ship off and flip on. See
-    # passport docs/specs/2026-07-15-sso-issuer-cutover-prepper-pilot-design.md.
+    # PASSPORT's Supabase project — the shared issuer. A token it signed is accepted, and the local
+    # user is resolved by the token's VERIFIED email (platform_user.supabase_id is never synced, so
+    # sub-matching is impossible in a consumer). Prepper's own project stays a valid issuer too, so
+    # this only ever ADDS an accepted issuer.
+    #
+    # There is deliberately NO `passport_supabase_anon_key` beside it. The retired login-proxy needed
+    # one to call `sign_in_with_password` server-side; under Model 3 the hosted login happens in the
+    # BROWSER and the code exchange authenticates with `X-API-Key`, so this backend never touches
+    # Passport's GoTrue. The anon key is a frontend concern (`NEXT_PUBLIC_PASSPORT_SUPABASE_ANON_KEY`)
+    # and keeping a backend setting for a credential with no reader is how one gets wired back into
+    # an auth path by someone "fixing" an unused variable.
     passport_supabase_url: str | None = None
-    # Passport project's anon (public) key. Needed for the SSO login-proxy: Prepper keeps its own
-    # login page but authenticates email/password against PASSPORT's GoTrue (P3 §5.2 decision 2),
-    # so the browser gets a Passport-issued token. Verification of that token uses JWKS/the issuer
-    # (no key), but `sign_in_with_password` needs the project's anon key. Login-proxy is active only
-    # when sso_enabled AND both passport_supabase_url and this key are set.
-    passport_supabase_anon_key: str | None = None
     # ON by default so an environment that HAS the Passport config below is on the shared issuer
-    # without a separate flag. This is a hard gate, not a switch on its own: the login-proxy and the
-    # accept-Passport-tokens path only activate when `passport_supabase_url` (and, for login, the
-    # anon key) are ALSO set — so an env without them (local/CI) silently stays on the Prepper-native
-    # path. It only ever ADDS an accepted issuer, never rejects a Prepper token. Set to False to hard
-    # disable (the reversible kill switch).
+    # without a separate flag. This is a hard gate, not a switch on its own: `gate.sso_active` is
+    # this flag AND `passport_supabase_url`, so an env without the URL (local/CI) silently stays on
+    # the Prepper-native path. Set to False to hard disable (the reversible kill switch) — it turns
+    # off the router, all three D9 refusals and the Passport-issuer verify path together.
     sso_enabled: bool = True
 
     # Anthropic API
@@ -74,11 +72,24 @@ class Settings(BaseSettings):
     # When these are unset the sync endpoint is not mounted and identity
     # reporting is a no-op — the app degrades gracefully without Passport.
     passport_api_url: str | None = None
-    passport_org_id: str | None = None
     passport_api_key: str | None = None
     passport_webhook_secret: str | None = None
     # Set only during a 24h webhook-secret rotation overlap; clear afterwards.
     passport_webhook_secret_prev: str | None = None
+
+    # Passport hosted login (Model 3, OAuth 2.1 + PKCE).
+    #
+    # A DIFFERENT host from `passport_api_url`: this is the dashboard the BROWSER is redirected to
+    # for `/authorize`; the API url is the server-to-server host the code exchange calls. Pointing
+    # one at the other is the classic misconfiguration and yields a flat 404.
+    passport_dashboard_url: str | None = None
+    # Must equal the URI registered on Passport's PER-APP sign-in-callback allow-list byte for byte
+    # (not the Supabase project-level redirect list). Re-sent in the exchange body per RFC 6749
+    # §4.1.3, so a drift here fails the exchange rather than the redirect.
+    sso_callback_url: str | None = None
+    # Where the handoff lands: the session fragment on success, and all three failure codes
+    # otherwise. Unset degrades to a relative path — misconfigured, but it still lands somewhere.
+    frontend_url: str | None = None
 
 
 @lru_cache

@@ -14,7 +14,7 @@ from app.models import (
     PassportUnitAppAccess,
     PassportUnitAppMembership,
 )
-from app.passport import access, store
+from app.passport import access, gate, store
 
 ORG = "org-1"
 PU = "pu-1"          # Passport platform_user_id
@@ -178,7 +178,7 @@ def test_owner_with_no_role_rows_has_access(session: Session):
     _seed_entitled_brand(session)
     store.apply_membership(session, _membership_values(version=1, role="Owner"))
 
-    assert access.has_prepper_access(session, SUBJECT) is True
+    assert gate.has_prepper_access(session, SUBJECT) is True
     assert access.brand_roles(session, SUBJECT) == {BRAND: "Manager"}
 
 
@@ -187,7 +187,7 @@ def test_member_without_a_role_row_is_denied(session: Session):
     _seed_entitled_brand(session)
     store.apply_membership(session, _membership_values(version=1, role="Member"))
 
-    assert access.has_prepper_access(session, SUBJECT) is False
+    assert gate.has_prepper_access(session, SUBJECT) is False
     assert access.brand_roles(session, SUBJECT) == {}
 
 
@@ -196,7 +196,7 @@ def test_member_with_a_role_row_has_access_at_that_brand(session: Session):
     store.apply_membership(session, _membership_values(version=1, role="Member"))
     store.apply_unit_app_membership(session, _role_values(version=1, role="Staff"))
 
-    assert access.has_prepper_access(session, SUBJECT) is True
+    assert gate.has_prepper_access(session, SUBJECT) is True
     assert access.brand_roles(session, SUBJECT) == {BRAND: "Staff"}
 
 
@@ -208,7 +208,7 @@ def test_brand_carrying_no_app_access_confers_nothing_even_to_an_owner(session: 
     store.apply_membership(session, _membership_values(version=1, role="Owner"))
 
     assert access.brand_roles(session, SUBJECT) == {}
-    assert access.has_prepper_access(session, SUBJECT) is False
+    assert gate.has_prepper_access(session, SUBJECT) is False
 
 
 def test_archived_brand_confers_nothing(session: Session):
@@ -216,7 +216,7 @@ def test_archived_brand_confers_nothing(session: Session):
     store.apply_membership(session, _membership_values(version=1, role="Owner"))
     store.apply_unit(session, _unit_values(version=2, status="archived"))
 
-    assert access.has_prepper_access(session, SUBJECT) is False
+    assert gate.has_prepper_access(session, SUBJECT) is False
 
 
 def test_entitlement_revocation_denies_access_but_deletes_nothing(session: Session):
@@ -229,12 +229,12 @@ def test_entitlement_revocation_denies_access_but_deletes_nothing(session: Sessi
     store.apply_membership(session, _membership_values(version=1, role="Member"))
     store.apply_unit_app_membership(session, _role_values(version=1))
 
-    assert access.has_prepper_access(session, SUBJECT) is True
+    assert gate.has_prepper_access(session, SUBJECT) is True
 
     # Revocation arrives as an entitlement.upserted with status != active.
     store.apply_entitlement(session, _entitlement_values(version=2, status="suspended"))
     session.expire_all()
-    assert access.has_prepper_access(session, SUBJECT) is False
+    assert gate.has_prepper_access(session, SUBJECT) is False
 
     # The roster survives, dormant — nothing was deleted.
     assert session.get(PassportUnitAppMembership, "uam-1") is not None
@@ -248,7 +248,7 @@ def test_entitlement_revocation_denies_access_but_deletes_nothing(session: Sessi
 def test_access_fails_open_before_entitlements_sync(session: Session):
     # Turning the projection on must not lock everyone out before the data has landed.
     store.create_identity_link(session, _link_values())
-    assert access.has_prepper_access(session, SUBJECT) is True
+    assert gate.has_prepper_access(session, SUBJECT) is True
 
 
 # --- an outlet INHERITS its brand ----------------------------------------------------------
@@ -468,3 +468,18 @@ def test_batched_derivation_does_not_reach_across_the_org_boundary(session: Sess
     roles = access.brand_roles_for_org_members(session, ORG)
 
     assert "pu-rival" not in roles
+
+
+def test_both_email_lookups_normalise_identically(session: Session):
+    """`is_active_member` and `platform_user_id_for_email` must agree on normalisation.
+
+    They sit on the same callback path, so a disagreement splits it in half: the trimmed lookup
+    admits the caller, `ensure_user` provisions a `users` row holding the UNTRIMMED address, and
+    the untrimmed lookup then refuses it as `passport_no_access`. Fails closed, but leaves a junk
+    row behind and a login failure an operator cannot explain.
+    """
+    store.apply_membership(session, _membership_values(version=1))
+
+    for variant in (" chef@acme.test", "chef@acme.test ", " CHEF@Acme.TEST "):
+        assert gate.is_active_member(session, variant) is True, variant
+        assert gate.platform_user_id_for_email(session, variant) == PU, variant

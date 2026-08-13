@@ -39,12 +39,11 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.models import (
-    PassportEntitlement,
     PassportUnit,
     PassportUnitAppMembership,
     User,
 )
-from app.passport import access
+from app.passport import access, gate
 
 MANAGER = "Manager"
 STAFF = "Staff"
@@ -100,12 +99,12 @@ def _app_id(session: Session, org_id: str) -> str:
 
     Delivery is own-app scoped, so every entitlement Prepper receives names Prepper — there
     is nothing to configure and nothing to get wrong.
+
+    A thin wrapper over :func:`gate.resolve_app_id`, which returns ``None`` instead of
+    raising because the SSO start route cannot answer with a status code. The 503 belongs
+    here, on the authenticated write path, not in the shared resolver.
     """
-    app_id = session.exec(
-        select(PassportEntitlement.app_id).where(
-            PassportEntitlement.organization_id == org_id
-        )
-    ).first()
+    app_id = gate.resolve_app_id(session, org_id=org_id)
     if app_id is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

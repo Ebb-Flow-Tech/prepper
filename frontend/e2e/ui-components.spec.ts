@@ -5,6 +5,7 @@
  *         Badges, Auth/Access Control, Autosave, Error Handling, Responsiveness
  */
 import { test, expect } from '@playwright/test';
+import { corruptStoredSession } from './helpers/auth';
 import { DEBOUNCE_WAIT } from './helpers/data';
 import { getPagination, hasPagination } from './helpers/pagination';
 import { readSeedUserData } from './helpers/seed';
@@ -618,20 +619,13 @@ test.describe('Authorization & Access Control', () => {
 
   test.describe('Edge Cases', () => {
     test('expired/invalid token is rejected', async ({ page }) => {
-      // Use /login as the initial page (stable — no redirect) before setting localStorage
+      // Use /login as the initial page (stable — no redirect) before touching cookies.
       await page.goto('/login');
       await page.waitForLoadState('load');
-      // Set an obviously invalid/expired JWT. The token carries no role — authority is derived
-      // per-brand from Passport server-side, never trusted from a client claim.
-      await page.evaluate(() => {
-        localStorage.setItem('prepper_auth', JSON.stringify({
-          userId: 'some-user',
-          jwt: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxfQ.INVALID',
-          refreshToken: 'expired-refresh',
-          username: 'hacker',
-          email: 'hacker@example.com',
-        }));
-      });
+      // The session lives in the Supabase client's own cookies, so there is no auth blob to forge
+      // — corrupt what is stored instead. The token carries no role either way: authority is
+      // derived per-brand from Passport server-side, never trusted from a client claim.
+      await corruptStoredSession(page);
 
       // Try to access a protected page
       await page.goto('/recipes');

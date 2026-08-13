@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.api.deps import get_org_context
-from app.passport import access
+from app.passport import access, gate
 from tests.conftest import (
     ORG_ID,
     create_user,
@@ -267,7 +267,7 @@ def test_ambiguous_email_fails_closed(session: Session):
             },
         )
 
-    assert access.platform_user_id_for_email(session, "shared@temper.sg") is None
+    assert gate.platform_user_id_for_email(session, "shared@temper.sg") is None
 
 
 def test_ambiguity_is_case_insensitive(session: Session):
@@ -287,7 +287,7 @@ def test_ambiguity_is_case_insensitive(session: Session):
             },
         )
 
-    assert access.platform_user_id_for_email(session, "CHEF@temper.sg") is None
+    assert gate.platform_user_id_for_email(session, "CHEF@temper.sg") is None
 
 
 def test_one_member_across_two_orgs_still_resolves(session: Session):
@@ -310,4 +310,4 @@ def test_one_member_across_two_orgs_still_resolves(session: Session):
             },
         )
 
-    assert access.platform_user_id_for_email(session, "multi@temper.sg") == "pu-same-person"
+    assert gate.platform_user_id_for_email(session, "multi@temper.sg") == "pu-same-person"

@@ -63,6 +63,7 @@ import { DishFeedbackPanel } from '@/components/tasting/DishFeedbackPanel';
 import type { Recipe, RecipeTasting, User, UpdateTastingSessionRequest, ReorderSessionDishItem } from '@/types';
 import { useAppState } from '@/lib/store';
 import { ApiError } from '@/lib/api';
+import { consumeTastingRedirect } from '@/lib/auth/postLoginDestination';
 import { toast } from 'sonner';
 
 // Ensure bare datetime strings (no timezone suffix) are treated as UTC
@@ -668,9 +669,9 @@ export default function TastingSessionDetailPage() {
     }
   }, [session?.date]);
 
-  // Clear the tasting redirect URL when this page is accessed
+  // The invite deep link has been honoured — clear it so the next sign-in does not reopen it.
   useEffect(() => {
-    localStorage.removeItem('tasting_redirect_url');
+    consumeTastingRedirect();
   }, []);
 
   const get24HourTime = (): string => {

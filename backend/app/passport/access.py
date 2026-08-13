@@ -1,4 +1,9 @@
-"""Request-path access derivation, driven by the Passport projection.
+"""Request-path role derivation, driven by the Passport projection: **what may they see, where?**
+
+The admission half — "may this person be in Prepper at all?" — lives in :mod:`app.passport.gate`
+(the SSO switch, membership-by-email lookups, the app id, ``SubjectScope``, the entitlement kill
+switch and the derived-access gate). It imports this module for the SDK inputs below; nothing here
+imports it back, and that direction is deliberate — see that module's docstring.
 
 **App access is DERIVED, never granted.** There is no per-user, per-app grant row. A person
 may use Prepper in an org iff ALL of:
@@ -23,16 +28,14 @@ entitlements are really flowing.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from passport_client.access import has_app_access, roles_at_brands
+from passport_client.access import roles_at_brands
 from passport_client.models import (
     UnitAppAccessPayload,
     UnitAppMembershipPayload,
     UnitPayload,
 )
-from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.models import (
@@ -81,30 +84,6 @@ def entitlement_status(session: Session, org_id: str) -> str | None:
     return _ACTIVE if _ACTIVE in statuses else statuses[0]
 
 
-def is_org_blocked(session: Session, subject: str) -> bool:
-    """Org-level kill switch for the user behind ``subject``: ``True`` when EVERY org they belong
-    to has a synced, non-active entitlement.
-
-    Rule 9: evaluated against the user's OWN orgs, not a configured one — a user entitled through
-    any org may still use Prepper. Fail-open (``False``) when the user is not linked yet, belongs to
-    no org, or no entitlement has synced: turning the projection on must not lock anyone out before
-    the data has landed.
-    """
-    platform_user_id = platform_user_id_for(session, subject)
-    if platform_user_id is None:
-        return False  # not linked — Passport is not authoritative for this user
-
-    orgs = orgs_for_platform_user(session, platform_user_id)
-    if not orgs:
-        return False
-
-    known = [s for s in (entitlement_status(session, o) for o in orgs) if s is not None]
-    if not known:
-        return False  # nothing synced yet — do not block
-
-    return all(status != _ACTIVE for status in known)
-
-
 def platform_user_id_for(session: Session, subject: str) -> str | None:
     """Resolve a local ``users.id`` (the app's Supabase ``sub``) to a Passport platform user
     via the identity link. ``None`` until the link exists."""
@@ -131,17 +110,41 @@ def _org_role(session: Session, platform_user_id: str, org_id: str) -> str | Non
 
 
 def _derivation_inputs(
-    session: Session, platform_user_id: str, org_id: str
+    session: Session,
+    platform_user_id: str,
+    org_id: str,
+    *,
+    known_status: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the four facts the SDK helper needs, as SDK payload objects.
 
     ``memberships`` are the USER's role rows — the helper takes no ``platform_user_id`` and
-    so cannot scope them itself. ``units`` / ``app_accesses`` are passed unscoped by org on
-    purpose: the helper applies the org filter internally (a receiver legitimately holds
-    rows for every org it is entitled to).
+    so cannot scope them itself.
+
+    ``units`` / ``app_accesses`` are read **filtered to ``org_id``**, which is a pure narrowing:
+    ``roles_at_brands`` still applies its own org filter internally and discards every row whose
+    ``organization_id`` differs, so the rows dropped here are exactly the rows it would drop. The
+    SDK's filter is NOT being replaced — do not remove it, and do not read this as permission to
+    trust a caller's scoping; that is the mistake its own docstring warns about.
+
+    They were previously read unscoped, which on the request-path gate meant ``SELECT`` over every
+    unit and every ``unit_app_access`` row in every org, once per entitled org, each row then
+    materialised as an ORM object and ``model_dump()``ed into a payload. ``performance.md`` forbids
+    loading a whole table when a subset suffices; ``organization_id`` is indexed on both.
+
+    ``known_status`` is the org's entitlement status when the caller has already read it — see
+    :class:`SubjectScope`. Named for the caller's knowledge rather than the field so it does not
+    shadow :func:`entitlement_status` in this scope.
     """
-    units = session.exec(select(PassportUnit)).all()
-    accesses = session.exec(select(PassportUnitAppAccess)).all()
+    status = known_status if known_status is not None else entitlement_status(session, org_id)
+    units = session.exec(
+        select(PassportUnit).where(PassportUnit.organization_id == org_id)
+    ).all()
+    accesses = session.exec(
+        select(PassportUnitAppAccess).where(
+            PassportUnitAppAccess.organization_id == org_id
+        )
+    ).all()
     memberships = session.exec(
         select(PassportUnitAppMembership).where(
             PassportUnitAppMembership.platform_user_id == platform_user_id
@@ -150,7 +153,7 @@ def _derivation_inputs(
 
     return {
         "org_id": org_id,
-        "entitlement_status": entitlement_status(session, org_id) or "",
+        "entitlement_status": status or "",
         "org_role": _org_role(session, platform_user_id, org_id),
         "memberships": [UnitAppMembershipPayload(**m.model_dump()) for m in memberships],
         "units_by_id": {u.id: UnitPayload(**u.model_dump()) for u in units},
@@ -257,74 +260,6 @@ def brand_roles(session: Session, subject: str) -> dict[str, str]:
     for org_id in orgs_for_platform_user(session, platform_user_id):
         roles.update(brand_roles_for_platform_user(session, platform_user_id, org_id))
     return roles
-
-
-def has_prepper_access_for_platform_user(
-    session: Session, platform_user_id: str
-) -> bool:
-    """Whether a platform user may use Prepper in ANY of their orgs — the derived-access emptiness
-    test, keyed by ``platform_user_id`` directly.
-
-    Used by the SSO login gate, which knows the member by **email → membership** (the identity link
-    that :func:`platform_user_id_for` needs may not exist yet for an SSO user). Fail-open (``True``)
-    until entitlements have synced, so turning the projection on never locks anyone out before the
-    data lands.
-    """
-    orgs = orgs_for_platform_user(session, platform_user_id)
-    if not orgs:
-        return True
-    scoped = [org_id for org_id in orgs if entitlement_status(session, org_id) is not None]
-    if not scoped:
-        return True  # entitlements not synced yet
-    return any(
-        has_app_access(**_derivation_inputs(session, platform_user_id, org_id))
-        for org_id in scoped
-    )
-
-
-def platform_user_id_for_email(session: Session, email: str) -> str | None:
-    """An ACTIVE member's ``platform_user_id`` resolved straight from their email.
-
-    The SSO login path: the member is known by the verified email (the identity link may not exist
-    yet), and the membership projection carries the ``platform_user_id``. ``None`` if not a member.
-
-    **``email`` must be a VERIFIED email**, not a value a user can write. This maps an email onto a
-    Passport identity, so whoever controls the input controls whose identity is returned. Callers
-    pass either a token claim (``api/auth.py:90``) or ``users.email``, which is safe only because
-    the profile route refuses to set it (``UserUpdate``).
-
-    Fails closed on an ambiguous match rather than returning an arbitrary one — the same rule
-    ``deps.resolve_or_provision_passport_user`` applies, and for the same reason: on a path that
-    confers identity, "one of these two people" is not an answer.
-    """
-    matches = list(
-        session.exec(
-            select(PassportMembership.platform_user_id).where(
-                func.lower(PassportMembership.email) == email.lower(),
-                PassportMembership.status == _ACTIVE,
-            )
-        ).all()
-    )
-    distinct = set(matches)
-    if len(distinct) > 1:
-        logging.getLogger(__name__).warning(
-            "platform_user_id_for_email: ambiguous match (count=%d) — failing closed",
-            len(distinct),
-        )
-        return None
-    return next(iter(distinct), None)
-
-
-def has_prepper_access(session: Session, subject: str) -> bool:
-    """Whether the user behind ``subject`` (a local ``users.id``) may use Prepper in ANY org.
-
-    Fail-open (``True``) until Passport is genuinely the source of truth — not linked, no org, or no
-    entitlement synced — so that turning the projection on does not lock everyone out.
-    """
-    platform_user_id = platform_user_id_for(session, subject)
-    if platform_user_id is None:
-        return True  # not linked yet — Passport is not authoritative for this user
-    return has_prepper_access_for_platform_user(session, platform_user_id)
 
 
 def org_role(session: Session, subject: str, organization_id: str | None = None) -> str | None:

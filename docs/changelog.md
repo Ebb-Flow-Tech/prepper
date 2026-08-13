@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.71](#0071---2026-08-13)** — Email-First Login & Passport Hosted Login: Prepper's Backend Was **Replaying Members' Passport Passwords**; the Proxy Is Deleted — One Email Field Routes to Passport's Hosted Login (PKCE + Browser-Bound State) or a Password Field In Place, Sessions Move to Dual Supabase Clients, Authorization Moves to the Request Path; plus a Whitespace Bypass of the Membership Check, an Open Redirect With Four Working Bypasses, and PKCE Verifiers Reaching the Log File
 - **[0.0.70](#0070---2026-07-17)** — Brand Access & Accounts: the Roster Showed 3 Rows Against ~190 Real Grants and Accounts Showed **One Person** — Derived Ladder Holders as Rows, Brand-Scoped Reads, Passport-Backed Accounts with Member Invites; plus a `LEFT JOIN` Fan-Out and a Refetch That Discarded Every Successful Write
 - **[0.0.68](#0068---2026-07-17)** — Org Isolation (3/3): RLS Had **Zero** Org-Aware Policies and 14 `USING (true)` Reads — `my_org_ids()`/`is_admin_in()`, All 123 Policies Rewritten, `organization_id` NOT NULL; plus Four Forks and an AI Agent That Never Stamped an Org, AI Rate Limits & the `getUsers()` 100-Row Cap
 - **[0.0.65](#0065---2026-07-17)** — Org Isolation (2/3): Creates Stamp `organization_id` & Reads Finally Filter On It — the Ingredient/Supplier/Category/Sketch Catalogues Were Global, `is_public` Meant Public to the *Instance*, and a Dual-Org Admin Saw the Other Org's Tastings; plus Five `session.get()` IDORs, the `tasting-note-images` Family, and the SSO Login 503
@@ -70,6 +71,125 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.71] - 2026-08-13
+
+`POST /auth/login` took a member's email **and password** and replayed the password against
+Passport's auth server. That is the whole reason for this release: Prepper's backend was handling
+credentials valid for every app on the platform, on every login, and a non-interactive API call
+cannot present MFA — so anything Passport added to its own login was skipped.
+
+Ported from `geddit-one`, the reference consumer, with three deliberate deviations recorded in the
+design doc. Six chunks, each through spec-compliance then code-quality review.
+
+### Changed
+
+#### One email field, then the app decides
+
+Step 1 collects an email and nothing else. `POST /auth/resolve-login` answers `passport` or
+`app-native` — **two values, ever**. A member is redirected into Passport's hosted login and never
+sees a password field here; everyone else gets one on the same screen, in place. No SSO button, no
+toggle: the user should not have to know which kind of account they hold.
+
+The routing decision is one function with one boolean input, deliberately, so there is nowhere for a
+third branch to hide. A non-member and an address that does not exist must be indistinguishable —
+`app-native` means "type a password", never "this account exists". The endpoint does not validate
+email format before routing, because rejecting a malformed address is a different answer for a
+different class of input, which is still an oracle.
+
+#### Model 3 hosted login, with state bound to the browser
+
+`/auth/passport/start` mints a PKCE pair, stores the verifier server-side, and redirects to
+Passport's `/authorize`. The callback exchanges the code back-channel with `X-API-Key` and returns
+the session in a URL fragment.
+
+**The `state` is also bound to the initiating browser** via an `HttpOnly; SameSite=Lax` cookie —
+a deviation from the reference, which does not do this. Without it, an attacker completes `/start`
+themselves, captures their own `code`+`state`, and forces a victim's browser through the callback:
+the victim is silently signed in **as the attacker**, and everything they then enter lands in the
+attacker's tenant. The cookie is checked *before* the verifier is redeemed, so a forged callback
+cannot burn a victim's in-flight attempt either.
+
+`SameSite=Lax`, not `Strict` — the callback arrives via a cross-site top-level redirect, and
+`Strict` would withhold the cookie on exactly that navigation, breaking every login *after* the user
+had already authenticated.
+
+#### Sessions move to two Supabase clients
+
+The frontend stops holding tokens in `localStorage`. Two browser clients — Prepper's project and
+Passport's — are selected per call by a `prepper_auth_provider` cookie. **Every user is logged out
+once, at the frontend deploy** (not at the flag flip). The old `prepper_auth` blob, which contained
+a refresh token, is now deleted from every browser on first load: getting tokens out of
+`localStorage` is the point of the change, and leaving the old ones behind would have defeated it.
+
+#### Authorization moved onto the request path
+
+Derived access is now checked on every request rather than only at login — which is what makes it
+safe for the callback to mint a session and for a revoked member to lose access on their next
+request, whichever door they came through.
+
+### Fixed
+
+#### A leading space defeated the membership check entirely
+
+`/auth/login` passed the submitted email unnormalised. `is_active_member` lowercases both sides, so
+case was never the gap — **GoTrue trims before authenticating**, so a member posting
+`" chef@brand.test"` missed the membership lookup and then signed in perfectly normally. The control
+was live and bypassable with one keystroke. Normalisation now lives inside the shared helper, so no
+call site can forget it.
+
+#### An open redirect with four working bypasses, persisted to `localStorage`
+
+The post-login destination check was `startsWith('/') && !startsWith('//')`. The URL parser strips
+tab/CR/LF **before** parsing and treats `\` as `/`, so `/<TAB>/evil.example/x` passed the guard and
+resolved to `https://evil.example/x`. Worse, the *unsanitised* value was written to
+`prepper_last_route` before leaving for Passport — so a poisoned `?redirect` survived the round trip
+and was read back on every later visit to `/login`. `AuthGuard` held a byte-identical copy of the
+same weak predicate. The existing tests missed it because they tried `javascript:`, `//` and
+`https://` — the three forms the naive check *did* catch.
+
+#### PKCE verifiers were being written to the log file
+
+SQLAlchemy appends bound parameters to exception strings, and the `/passport/start` catch-all logs
+with `exc_info=True` — so a failed INSERT wrote the verifier at WARNING. `hide_parameters=True` now
+closes that class app-wide, not just here.
+
+#### Tokens stayed in the URL, and in a reachable history entry
+
+The callback never cleared the fragment. On the error path there was no navigation at all, leaving a
+valid access + refresh pair in the address bar under "Sign-in didn't complete". The backend arrives
+by 302, which creates no history entry, so Back landed on the callback **with the tokens still in
+it** — while a comment in the file claimed the opposite.
+
+### Removed
+
+`login_via_passport` (the proxy), `POST /auth/register` and its page, `POST /auth/refresh-token`,
+`refresh_via_passport`, `sso_login_enabled`, `PASSPORT_ORG_ID`, and the backend's
+`PASSPORT_SUPABASE_ANON_KEY` — under Model 3 the backend never signs into Passport's GoTrue, so the
+anon key is a frontend concern.
+
+### Notes for the deploy
+
+`SSO_ENABLED` defaults to **`true`**, and `PASSPORT_SUPABASE_URL` is already set in staging — so the
+"deploy dark" step only happens if the flag is explicitly set to `false` first. It is now in
+`.env.example` with that trap written down.
+
+Deploy **backend then frontend**: frontend-first is a hard login outage, since the new page's first
+call 404s on the old backend.
+
+**The kill switch does not cover everyone, and covers fewer people over time.** A member provisioned
+by the Passport callback has no credential on Prepper's own project, so with SSO off they route
+`app-native`, reach the password step, and have no password.
+
+### Known and accepted
+
+Google sign-in mints its session client-side, before `/auth/oauth-complete` is consulted, so a member
+can use it and skip Passport's MFA. Revocation still lands via the projection, so this is a policy
+weakening rather than an access-control hole — accepted, and to be revisited if Passport's MFA
+becomes mandatory. `POST /auth/password-reset` ships with no caller: Prepper has no recovery page,
+and a reset link landing where no password can be set would be worse than none.
+
 ---
 
 ## [0.0.70] - 2026-07-17

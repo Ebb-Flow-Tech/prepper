@@ -103,36 +103,6 @@ def mock_supabase_client(monkeypatch):
             else:
                 raise Exception("Invalid login credentials")
 
-        @property
-        def admin(self):
-            """Mock admin methods."""
-            return self.AdminMethods()
-
-        class AdminMethods:
-            """Mock admin methods."""
-
-            def create_user(self, data):
-                """Mock create user."""
-                if data["email"] == "newuser@prepper.com":
-                    return MockSupabaseAuthResponse(
-                        user_id="user-new-003",
-                        email="newuser@prepper.com",
-                        access_token="valid_token_new",
-                        refresh_token="refresh_token_new",
-                    )
-                else:
-                    raise Exception("User already registered")
-
-        def refresh_session(self, refresh_token):
-            """Mock refresh session."""
-            if refresh_token == "valid_refresh_token":
-                return MockSupabaseAuthResponse(
-                    access_token="new_access_token",
-                    refresh_token="new_refresh_token",
-                )
-            else:
-                raise Exception("Invalid or expired refresh token")
-
         def get_user(self, token):
             """Mock get user from token."""
             if token == "valid_token_admin":
@@ -144,12 +114,6 @@ def mock_supabase_client(monkeypatch):
             elif token == "valid_token_chef":
                 response = MagicMock()
                 user = MockSupabaseUser("user-chef-002", "chef@prepper.com")
-                user.user_metadata = {}
-                response.user = user
-                return response
-            elif token == "new_access_token":
-                response = MagicMock()
-                user = MockSupabaseUser("user-admin-001", "admin@prepper.com")
                 user.user_metadata = {}
                 response.user = user
                 return response
@@ -208,7 +172,6 @@ def mock_supabase_client(monkeypatch):
         "valid_token_admin": "user-admin-001",
         "valid_token_chef": "user-chef-002",
         "valid_token_new": "user-new-003",
-        "new_access_token": "user-admin-001",
         # Google OAuth tokens are real Supabase-minted JWTs — ebb verifies them like any other.
         # Register their subjects so oauth-complete gets past verify_token to the provisioning path.
         "google_token_new": "user-google-010",
@@ -316,78 +279,6 @@ def test_login_creates_user_on_first_login(
     data = response.json()
     assert data["user"]["id"] == "user-admin-001"
     assert data["user"]["email"] == "admin@prepper.com"
-
-
-# ============================================================================
-# Register Tests
-# ============================================================================
-
-
-def test_register_success(client: TestClient, mock_supabase_client):
-    """Test successful user registration."""
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "newuser@prepper.com",
-            "password": "password123",
-            "username": "newuser",
-        },
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["user"]["id"] == "user-new-003"
-    assert data["user"]["email"] == "newuser@prepper.com"
-    assert data["user"]["username"] == "newuser"
-    assert data["access_token"] == "valid_token_new"
-    assert data["refresh_token"] == "refresh_token_new"
-
-
-def test_register_duplicate_email(client: TestClient, mock_supabase_client):
-    """Test registration with duplicate email."""
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "existing@prepper.com",
-            "password": "password123",
-            "username": "existing",
-        },
-    )
-
-    assert response.status_code == 400
-    data = response.json()
-    assert "already exists" in data["detail"]
-
-
-# ============================================================================
-# Refresh Token Tests
-# ============================================================================
-
-
-def test_refresh_token_success(client: TestClient, mock_supabase_client):
-    """Test successful token refresh."""
-    response = client.post(
-        "/api/v1/auth/refresh-token",
-        json={"refresh_token": "valid_refresh_token"},
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["access_token"] == "new_access_token"
-    assert data["refresh_token"] == "new_refresh_token"
-    assert data["expires_in"] == 3600
-
-
-def test_refresh_token_invalid(client: TestClient, mock_supabase_client):
-    """Test refresh with invalid refresh token."""
-    response = client.post(
-        "/api/v1/auth/refresh-token",
-        json={"refresh_token": "invalid_refresh_token"},
-    )
-
-    assert response.status_code == 401
-    data = response.json()
-    assert "detail" in data
 
 
 # ============================================================================

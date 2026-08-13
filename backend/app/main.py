@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     allergens,
     auth,
+    auth_passport,
     categories,
     category_agent,
     costing,
@@ -94,6 +95,13 @@ def create_app() -> FastAPI:
     # Mount API routers
     app.include_router(
         auth.router,
+        prefix=f"{settings.api_v1_prefix}/auth",
+        tags=["auth"],
+    )
+    # Same prefix as `auth.router` on purpose — one `/auth` surface, split by concern rather than
+    # by URL. Order is not load-bearing here: no path in either router shadows one in the other.
+    app.include_router(
+        auth_passport.router,
         prefix=f"{settings.api_v1_prefix}/auth",
         tags=["auth"],
     )

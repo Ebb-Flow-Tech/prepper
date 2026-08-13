@@ -8,7 +8,7 @@ import { FlaskConical, DollarSign, Package, BookOpen, UtensilsCrossed, Settings,
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { OrgSwitcher } from './OrgSwitcher';
-import { logoutUser } from '@/lib/api';
+import { performSignOut } from '@/lib/auth/signOut';
 import { ConfirmModal } from '@/components/ui';
 
 interface NavItem {
@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId, username, logout, canvasHasUnsavedChanges } = useAppState();
+  const { userId, username, canvasHasUnsavedChanges } = useAppState();
 
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
@@ -51,6 +51,28 @@ export function TopNav() {
     }
   };
 
+  /**
+   * One sign-out sequence, shared with the forced path in `api.ts`: `performSignOut()` tears down
+   * the Supabase session and the provider cookie too, which a bare local-state clear would leave
+   * live for the next page load to re-hydrate from.
+   *
+   * The exit is a real navigation, NOT `router.push`. `AppProvider` subscribes to whichever client
+   * the provider cookie named at hydration and never re-subscribes; a client-side push keeps that
+   * mount alive, so signing out of a Passport session and then signing in app-native would leave
+   * the store listening to the wrong project — no SIGNED_IN arrives and the user bounces back to
+   * /login on a live session. A full load rebuilds the subscription against the cleared cookie.
+   */
+  const signOutAndReload = async () => {
+    try {
+      await performSignOut();
+    } finally {
+      // Navigate even if teardown rejected. `performSignOut` swallows the backend logout and the
+      // Supabase sign-out, but its own cookie clear and state reset are not caught — and a
+      // rejection there would otherwise strand the user on a half-torn-down page with no way out.
+      window.location.assign('/login');
+    }
+  };
+
   const handleLogout = async () => {
     // Check for unsaved changes before logout if on canvas page
     if (pathname === '/' && canvasHasUnsavedChanges) {
@@ -60,31 +82,16 @@ export function TopNav() {
       return;
     }
 
-    // Call backend logout endpoint
-    try {
-      await logoutUser();
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Continue with local logout even if backend call fails
-    }
-
-    logout();
-    router.push('/login');
+    await signOutAndReload();
   };
 
   const handleConfirmLeave = async () => {
     setShowUnsavedModal(false);
     if (isLogoutPending) {
-      // Call backend logout endpoint
-      try {
-        await logoutUser();
-      } catch (error) {
-        console.error('Logout error:', error);
-        // Continue with local logout even if backend call fails
-      }
-      logout();
-      router.push('/login');
-    } else if (pendingNavHref) {
+      await signOutAndReload();
+      return;
+    }
+    if (pendingNavHref) {
       router.push(pendingNavHref);
     }
     setPendingNavHref(null);

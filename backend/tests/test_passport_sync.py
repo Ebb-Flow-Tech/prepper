@@ -22,7 +22,7 @@ from app.models import (
     PassportMembership,
     PassportOrganization,
 )
-from app.passport import access, store
+from app.passport import access, gate, store
 
 ORG = "org-1"
 PU = "pu-1"          # Passport platform_user_id
@@ -209,29 +209,29 @@ def test_org_not_blocked_when_user_is_not_linked(session: Session):
     # Even with a revoked entitlement present, an unlinked user fails open: Passport is not yet
     # authoritative for them, so turning the projection on must not lock them out.
     store.apply_entitlement(session, _entitlement_values(version=1, status="inactive"))
-    assert access.is_org_blocked(session, SUBJECT) is False
+    assert gate.is_org_blocked(session, SUBJECT) is False
 
 
 def test_org_not_blocked_when_no_entitlement_synced(session: Session):
     # Linked member, but no entitlement rows yet -> fail open (do not block).
     _link_member(session)
-    assert access.is_org_blocked(session, SUBJECT) is False
+    assert gate.is_org_blocked(session, SUBJECT) is False
 
 
 def test_org_blocked_when_entitlement_inactive(session: Session):
     _link_member(session)
     store.apply_entitlement(session, _entitlement_values(version=1, status="active"))
-    assert access.is_org_blocked(session, SUBJECT) is False
+    assert gate.is_org_blocked(session, SUBJECT) is False
 
     # Kill switch thrown: entitlement flips non-active -> the user's whole org is blocked.
     store.apply_entitlement(session, _entitlement_values(version=2, status="suspended"))
     session.expire_all()
-    assert access.is_org_blocked(session, SUBJECT) is True
+    assert gate.is_org_blocked(session, SUBJECT) is True
 
     # Restored -> unblocked. TRAP 2: revocation deletes nothing, so restoring is lossless.
     store.apply_entitlement(session, _entitlement_values(version=3, status="active"))
     session.expire_all()
-    assert access.is_org_blocked(session, SUBJECT) is False
+    assert gate.is_org_blocked(session, SUBJECT) is False
 
 
 # --- resync_org fan-out (the manual re-sync bundle, SDK 0.2.0+) ---------------------------

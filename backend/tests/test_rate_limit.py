@@ -2,13 +2,29 @@
 
 Both agent routes call Anthropic on every request. They are authenticated, so this was never a
 leak — but any signed-in user could hold the button down and bill the org for it.
+
+The login buckets below bound something else entirely: enumeration throughput on the
+UNAUTHENTICATED front door. Same sliding window, different thing at risk.
 """
+
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.api.rate_limit import AI_CALLS_PER_WINDOW, _reset_for_tests
+from app.api.rate_limit import (
+    AI_CALLS_PER_WINDOW,
+    LOGIN_ROUTE_EMAIL_PER_MINUTE,
+    LOGIN_ROUTE_IP_PER_MINUTE,
+    LOGIN_WINDOW_SECONDS,
+    PASSPORT_START_IP_PER_MINUTE,
+    _hits,
+    _reset_for_tests,
+    client_ip,
+    login_route_limited,
+    passport_start_limited,
+)
 from tests.conftest import ADMIN_USER_ID, create_user, use_user
 
 
@@ -88,3 +104,142 @@ def test_the_limit_is_per_user_not_global(client: TestClient, session: Session, 
     assert (
         client.post("/api/v1/agents/categorize-ingredient", json=body).status_code == 200
     ), "a second user must have their own allowance"
+
+
+# =============================================================================
+# The login front door — two buckets on /auth/resolve-login, one on /passport/start
+# =============================================================================
+
+
+class TestLoginRouteBuckets:
+    def test_the_ip_bucket_refuses_the_call_past_the_allowance(self):
+        """A distinct email per call, so this can only be the IP bucket biting."""
+        allowed = [
+            login_route_limited(ip="1.2.3.4", email=f"user{n}@brand.test")
+            for n in range(LOGIN_ROUTE_IP_PER_MINUTE)
+        ]
+        assert not any(allowed), f"the allowance must be usable: {allowed}"
+        assert login_route_limited(ip="1.2.3.4", email="one-more@brand.test")
+
+    def test_the_email_bucket_refuses_the_call_past_the_allowance(self):
+        """A distinct IP per call, so this can only be the email bucket biting.
+
+        The email bucket is the one that matters: an enumerator spraying one address from a
+        botnet defeats the IP bucket entirely, and this is what still bounds them.
+        """
+        allowed = [
+            login_route_limited(ip=f"10.0.0.{n}", email="chef@brand.test")
+            for n in range(LOGIN_ROUTE_EMAIL_PER_MINUTE)
+        ]
+        assert not any(allowed), f"the allowance must be usable: {allowed}"
+        assert login_route_limited(ip="10.0.0.99", email="chef@brand.test")
+
+    def test_one_email_exhausting_its_bucket_does_not_lock_out_another(self):
+        for _ in range(LOGIN_ROUTE_EMAIL_PER_MINUTE + 1):
+            login_route_limited(ip="1.2.3.4", email="chef@brand.test")
+        assert not login_route_limited(ip="1.2.3.4", email="other@brand.test")
+
+    def test_an_ip_over_its_limit_does_not_spend_the_email_allowance(self):
+        """The IP check short-circuits. Otherwise a single flooding IP would burn every
+        address's allowance and lock those people out from their own machines."""
+        for n in range(LOGIN_ROUTE_IP_PER_MINUTE + 5):
+            login_route_limited(ip="1.2.3.4", email=f"user{n}@brand.test")
+        assert not login_route_limited(ip="5.6.7.8", email="user0@brand.test")
+
+
+class TestPassportStartBucket:
+    def test_refuses_the_call_past_the_allowance(self):
+        allowed = [passport_start_limited("9.9.9.9") for _ in range(PASSPORT_START_IP_PER_MINUTE)]
+        assert not any(allowed), f"the allowance must be usable: {allowed}"
+        assert passport_start_limited("9.9.9.9")
+
+    def test_does_not_share_a_bucket_with_the_login_router(self):
+        """Both are 10/minute from one IP, which is exactly why a shared key would go
+        unnoticed: the numbers match, so only a cross-route test can see the collision."""
+        for _ in range(PASSPORT_START_IP_PER_MINUTE):
+            passport_start_limited("9.9.9.9")
+        assert not login_route_limited(ip="9.9.9.9", email="chef@brand.test")
+
+
+class TestClientIp:
+    """Every limit in this module keys on this, and it is the one function whose behaviour
+    differs between the test process and production."""
+
+    @staticmethod
+    def _request(headers: list[tuple[bytes, bytes]] | None = None, client=("1.2.3.4", 1234)):
+        from fastapi import Request
+
+        return Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/",
+                "headers": headers or [],
+                "query_string": b"",
+                "client": client,
+            }
+        )
+
+    def test_prefers_the_fly_header(self):
+        """In production `request.client.host` is fly-proxy's own mesh address for EVERY request,
+        so trusting it would put the entire internet in one bucket."""
+        request = self._request([(b"fly-client-ip", b"203.0.113.9")])
+        assert client_ip(request) == "203.0.113.9"
+
+    def test_falls_back_to_the_peer_when_the_header_is_absent(self):
+        """Local and non-Fly environments, including this test suite."""
+        assert client_ip(self._request()) == "1.2.3.4"
+
+    def test_a_missing_peer_does_not_crash(self):
+        """Some ASGI transports report no peer. One shared bucket over-limits rather than
+        under-limits, which is the right way round for a failure nobody will notice."""
+        assert client_ip(self._request(client=None)) == "unknown"
+
+
+class TestKeyEviction:
+    def test_stale_keys_are_evicted_rather_than_accumulating(self, monkeypatch):
+        """`_hits` never shrank: pruning only ever touched the key being checked, and that key was
+        immediately re-populated. Near-harmless while keys were authenticated user ids — a bounded
+        set of real people. The login buckets key on an unauthenticated, caller-supplied email of
+        up to 320 octets, which makes it memory an anonymous caller can grow at will.
+        """
+        for n in range(50):
+            login_route_limited(ip=f"10.0.0.{n}", email=f"user{n}@brand.test")
+        assert len(_hits) == 100, "one key per bucket per caller"
+
+        later = time.monotonic() + LOGIN_WINDOW_SECONDS + 1
+        monkeypatch.setattr(time, "monotonic", lambda: later)
+
+        # Any call triggers the amortised sweep; this one's own key is the only survivor.
+        passport_start_limited("9.9.9.9")
+
+        assert set(_hits) == {"passport-start-ip:9.9.9.9"}
+
+    def test_the_sweep_does_not_evict_a_live_bucket(self, monkeypatch):
+        """An eviction that dropped keys still inside their window would reset the allowance of
+        whoever it touched — a rate limiter that forgets on a schedule is not one."""
+        for _ in range(LOGIN_ROUTE_EMAIL_PER_MINUTE):
+            login_route_limited(ip="1.2.3.4", email="chef@brand.test")
+
+        later = time.monotonic() + (LOGIN_WINDOW_SECONDS / 2)
+        monkeypatch.setattr(time, "monotonic", lambda: later)
+
+        assert login_route_limited(ip="1.2.3.4", email="chef@brand.test"), (
+            "the bucket was still live and must still be refusing"
+        )
+
+
+def test_reset_clears_the_login_buckets_too():
+    """`_reset_for_tests` is the only thing stopping one test rate-limiting the next; it has
+    to cover every bucket, not just the AI one it was written for."""
+    for n in range(LOGIN_ROUTE_IP_PER_MINUTE + 1):
+        login_route_limited(ip="1.2.3.4", email=f"user{n}@brand.test")
+    for _ in range(PASSPORT_START_IP_PER_MINUTE + 1):
+        passport_start_limited("1.2.3.4")
+    assert login_route_limited(ip="1.2.3.4", email="fresh@brand.test")
+    assert passport_start_limited("1.2.3.4")
+
+    _reset_for_tests()
+
+    assert not login_route_limited(ip="1.2.3.4", email="fresh@brand.test")
+    assert not passport_start_limited("1.2.3.4")

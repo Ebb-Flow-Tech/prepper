@@ -77,7 +77,7 @@ import type {
   IngredientAllergenCreate,
   LoginRequest,
   LoginResponse,
-  RegisterRequest,
+  LoginRoute,
   User,
   UpdateUserRequest,
   Menu,
@@ -135,9 +135,17 @@ export interface SupplierListParams extends ListParams {
   active_only?: boolean;
 }
 
-import { refreshAccessToken, triggerLogout, type RefreshTokenResult } from '@/lib/auth-interceptor';
+import { readActiveOrgId } from '@/lib/activeOrg';
+import { performSignOut } from '@/lib/auth/signOut';
+import { getActiveSupabaseClient } from '@/lib/supabase/activeClient';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+/**
+ * The API root, `/api/v1` prefix INCLUDED — unlike other apps in this group, whose equivalent
+ * variable is the bare origin. Exported because `app/login/resolveLogin.ts` builds a URL the
+ * browser navigates to rather than fetches, and a second copy of this expression is how the
+ * version prefix ends up doubled (or missing) on exactly one path.
+ */
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -146,20 +154,22 @@ export class ApiError extends Error {
   }
 }
 
-function readAuthFromStorage() {
-  if (typeof window === 'undefined') {
-    return { jwt: null, refreshToken: null, activeOrgId: null };
-  }
+/**
+ * The bearer token, from whichever Supabase client the provider cookie names.
+ *
+ * The app no longer stores tokens itself — `getSession()` returns the live session and
+ * transparently refreshes it when it is close to expiry, so this is also the refresh
+ * path. Returns `null` off the browser and on any failure: an unauthenticated request
+ * is a recoverable 401, whereas throwing here would take down every caller.
+ */
+async function readAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem('prepper_auth');
-    if (stored) {
-      const auth = JSON.parse(stored);
-      return { jwt: auth.jwt, refreshToken: auth.refreshToken, activeOrgId: auth.activeOrgId ?? null };
-    }
+    const { data } = await getActiveSupabaseClient().auth.getSession();
+    return data.session?.access_token ?? null;
   } catch {
-    // Ignore parse errors
+    return null;
   }
-  return { jwt: null, refreshToken: null, activeOrgId: null };
 }
 
 /**
@@ -173,35 +183,104 @@ function orgHeader(activeOrgId: string | null): Record<string, string> {
   return activeOrgId ? { 'X-Organization-Id': activeOrgId } : {};
 }
 
-function updateTokensInStorage(newJwt: string, newRefreshToken: string) {
-  if (typeof window === 'undefined') return;
+/**
+ * What the active client says about the session when a request has just come back 401.
+ *
+ * `unavailable` is the row that matters: it means we could not find out, not that the
+ * session is gone. See `handleUnauthorized`.
+ */
+type SessionProbe =
+  | { kind: 'session'; accessToken: string }
+  | { kind: 'none' }
+  | { kind: 'unavailable' };
+
+async function probeSession(): Promise<SessionProbe> {
+  // Off the browser we genuinely cannot find out — there is no client and no storage to ask.
+  // NOT `none`: `none` is the verdict row, and acting on it calls `performSignOut()`, whose
+  // first act is to read `document.cookie`. Server-side that is a ReferenceError escaping
+  // `fetchApi` in place of the ApiError every caller is typed for. Route handlers do call into
+  // this module (`app/api/generate-image` uploads through it), and the backend is default-deny,
+  // so a tokenless server-side 401 is routine rather than exotic.
+  if (typeof window === 'undefined') return { kind: 'unavailable' };
   try {
-    const stored = localStorage.getItem('prepper_auth');
-    if (stored) {
-      const auth = JSON.parse(stored);
-      auth.jwt = newJwt;
-      auth.refreshToken = newRefreshToken;
-      localStorage.setItem('prepper_auth', JSON.stringify(auth));
-    }
+    const { data, error } = await getActiveSupabaseClient().auth.getSession();
+    // Deliberately broader than the spec, which names only a THROWN call as the outage
+    // case: a returned `error` means the lookup (and any refresh it attempted) failed, so
+    // it is equally a "we could not find out", not a verdict on the session. Only a clean
+    // answer of "no session" is a verdict.
+    //
+    // The trade is accepted with eyes open. If supabase-js ever reports a genuinely dead
+    // refresh token as `{ session: null, error }` rather than a clean null session, that
+    // user is never signed out automatically and sees repeated 401s until they use the
+    // sign-out button. That is the tolerable direction: the opposite mistake logs every
+    // user out during a Passport outage, into a login screen that cannot work.
+    if (error) return { kind: 'unavailable' };
+    return data.session
+      ? { kind: 'session', accessToken: data.session.access_token }
+      : { kind: 'none' };
   } catch {
-    // Ignore parse errors
+    return { kind: 'unavailable' };
   }
+}
+
+/**
+ * The 401 rule. Returns true when the caller should retry the request once.
+ *
+ * On a 401 we ask the active client for a session — `getSession()` auto-refreshes — and
+ * act on three distinct outcomes:
+ *
+ * - a session with a DIFFERENT access token: our token was simply stale. Retry.
+ * - no session at all: a genuine revocation or expiry. Sign out, then surface the 401.
+ * - the lookup failed, or returned the SAME token the server just rejected: do NOT sign
+ *   out. Surface the error and leave the session intact to ride out its TTL.
+ *
+ * That last row is the whole point. Once every session is minted by Passport, an outage
+ * on Passport's side (JWKS, DNS, a 5xx) makes the backend reject every token, so every
+ * request 401s at once. Collapsing that into a logout mass-logs-out every user into a
+ * login screen that cannot work — because the thing that is down IS the login.
+ */
+async function handleUnauthorized(currentToken: string | null): Promise<boolean> {
+  const probe = await probeSession();
+
+  if (probe.kind === 'session') {
+    return probe.accessToken !== currentToken;
+  }
+  if (probe.kind === 'none') {
+    await performSignOut();
+  }
+  return false;
+}
+
+/** Internal knobs on a single request. Never part of a public wrapper's signature. */
+interface FetchControl {
+  /** Set on the one retry the 401 rule allows, so the rule runs at most once per request. */
+  isRetry?: boolean;
+  /**
+   * Opt out of the 401 rule entirely.
+   *
+   * Only `POST /auth/logout` sets it, and that is load-bearing: it is called BY
+   * `performSignOut()`, so a 401 there would re-enter the sign-out sequence — and since
+   * `performSignOut()` now shares one in-flight promise between concurrent callers, a call
+   * re-entered from inside its own body would await itself and deadlock. An expired token is
+   * precisely the state that reaches sign-out, so that 401 is expected, not exceptional.
+   */
+  skipSessionRecovery?: boolean;
 }
 
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
-  retryCount = 0
+  control: FetchControl = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt, refreshToken, activeOrgId } = readAuthFromStorage();
+  const accessToken = await readAccessToken();
 
   const config: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(jwt ? { 'Authorization': `Bearer ${jwt}` } : {}),
-      ...orgHeader(activeOrgId),
+      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      ...orgHeader(readActiveOrgId()),
       ...options.headers,
     },
   };
@@ -209,21 +288,9 @@ async function fetchApi<T>(
   const response = await fetch(url, config);
 
   if (!response.ok) {
-    // Handle 401 Unauthorized - try to refresh token
-    if (response.status === 401 && retryCount === 0 && refreshToken) {
-      console.log('Received 401 response, attempting token refresh...');
-      const result = await refreshAccessToken(refreshToken);
-
-      if (result) {
-        // Token refresh successful, update storage and retry request
-        console.log('Token refresh successful, retrying request...');
-        updateTokensInStorage(result.accessToken, result.refreshToken);
-        return fetchApi<T>(endpoint, options, retryCount + 1);
-      } else {
-        // Token refresh failed, user needs to log in again
-        console.log('Token refresh failed, logging out user...');
-        triggerLogout();
-        throw new ApiError(401, 'Session expired. Please log in again.');
+    if (response.status === 401 && !control.isRetry && !control.skipSessionRecovery) {
+      if (await handleUnauthorized(accessToken)) {
+        return fetchApi<T>(endpoint, options, { ...control, isRetry: true });
       }
     }
 
@@ -263,13 +330,13 @@ async function fetchApiFormData<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt, activeOrgId } = readAuthFromStorage();
+  const accessToken = await readAccessToken();
 
   const config: RequestInit = {
     ...options,
     headers: {
-      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
-      ...orgHeader(activeOrgId),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...orgHeader(readActiveOrgId()),
       ...options.headers,
     },
   };
@@ -294,9 +361,12 @@ async function fetchApiFormData<T>(
 
 async function fetchApiBlob(endpoint: string): Promise<Blob> {
   const url = `${API_BASE}${endpoint}`;
-  const { jwt, activeOrgId } = readAuthFromStorage();
+  const accessToken = await readAccessToken();
   const response = await fetch(url, {
-    headers: { ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}), ...orgHeader(activeOrgId) },
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...orgHeader(readActiveOrgId()),
+    },
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -1355,10 +1425,18 @@ export async function loginUser(email: string, password: string): Promise<LoginR
   });
 }
 
-export async function registerUser(data: RegisterRequest): Promise<LoginResponse> {
-  return fetchApi<LoginResponse>('/auth/register', {
+/**
+ * Step 1 of the email-first router: which kind of account is this address?
+ *
+ * Unauthenticated and rate-limited server-side (IP + email buckets), and deliberately
+ * two-valued — a non-member and an address that does not exist answer identically, so this
+ * is not an account-enumeration oracle. A 429 arrives as an `ApiError` for the caller to
+ * message separately.
+ */
+export async function resolveLoginRoute(email: string): Promise<{ route: LoginRoute }> {
+  return fetchApi<{ route: LoginRoute }>('/auth/resolve-login', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ email }),
   });
 }
 
@@ -1388,12 +1466,25 @@ export async function completeOAuth(accessToken: string): Promise<User> {
   return res.json() as Promise<User>;
 }
 
+/**
+ * The acting user's identity, resolved from the bearer token by the backend.
+ *
+ * The only source of `userId` / `username` / `email` now that the session lives in the
+ * Supabase client: the client holds a token, not a profile, and a Passport-minted token
+ * carries Passport's user id rather than Prepper's.
+ */
+export async function getMe(): Promise<User> {
+  return fetchApi<User>('/auth/me');
+}
+
+/**
+ * Called only from `performSignOut()`, and only for an `app-native` session.
+ *
+ * `skipSessionRecovery` keeps a 401 here from re-entering the sign-out sequence — see
+ * `FetchControl`. Signing out with an already-dead token is the normal case, not an error.
+ */
 export async function logoutUser(): Promise<void> {
-  const res = fetchApi<void>('/auth/logout', {
-    method: 'POST',
-  });
-  console.log('Logout response:', JSON.stringify(res));
-  return res;
+  return fetchApi<void>('/auth/logout', { method: 'POST' }, { skipSessionRecovery: true });
 }
 
 // ============ Users ============

@@ -3,14 +3,18 @@
 import { useEffect, Suspense } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useAppState } from '@/lib/store';
+import { LAST_ROUTE_KEY } from '@/lib/auth-interceptor';
+import {
+  DEFAULT_POST_LOGIN_DESTINATION,
+  sanitizeRelativeDestination,
+} from '@/lib/auth/postLoginDestination';
 
-const PUBLIC_ROUTES = ['/', '/login', '/register'];
+const PUBLIC_ROUTES = ['/', '/login'];
 
 // Valid route patterns in the app
 const VALID_ROUTE_PATTERNS = [
   /^\/$/,                                    // Home (redirects)
   /^\/login$/,                               // Login
-  /^\/register$/,                            // Register
   /^\/canvas$/,                              // Canvas
   /^\/recipes$/,                             // Recipes list
   /^\/recipes\/[^/]+$/,                      // Recipe detail
@@ -36,29 +40,32 @@ const VALID_ROUTE_PATTERNS = [
   /^\/menu-sketch\/[^/]+$/,                  // Menu sketch editor
   /^\/settings$/,                            // Settings
   /^\/auth\/callback$/,                      // OAuth callback bridge
+  /^\/auth\/passport-callback$/,             // Passport hosted-login fragment handoff
 ];
 
 // Routes that bypass auth checks (accessible by both authenticated and unauthenticated users)
 const PASSTHROUGH_ROUTE_PATTERNS = [
   /^\/tastings\/invite\/[^/]+$/,
   /^\/auth\/callback$/, // self-manages session exchange + redirect
+  /^\/auth\/passport-callback$/, // installs the Passport session from the URL fragment itself
 ];
 
 function isValidRoute(pathname: string): boolean {
   return VALID_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
 }
-const LAST_ROUTE_KEY = 'prepper_last_route';
-const DEFAULT_ROUTE = '/recipes';
-
-/** Only allow relative paths that start with `/` (no `//`, `javascript:`, etc.) */
-function isValidRedirectPath(path: string): boolean {
-  return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//');
-}
-
+/**
+ * `LAST_ROUTE_KEY` is attacker-writable in practice: `/login?redirect=…` resolves into it, so a
+ * crafted link can plant a value here that outlives the visit that planted it. This read is
+ * therefore a security boundary, and it uses the SAME hardened check as the login and callback
+ * pages — a private copy of a `startsWith('/')` test is what let tab/newline/backslash bypasses
+ * through, and this file held the third copy of exactly that test.
+ */
 function getLastRoute(): string {
   if (typeof window === 'undefined') return '/';
-  const stored = localStorage.getItem(LAST_ROUTE_KEY);
-  return stored && isValidRedirectPath(stored) ? stored : DEFAULT_ROUTE;
+  return (
+    sanitizeRelativeDestination(localStorage.getItem(LAST_ROUTE_KEY)) ??
+    DEFAULT_POST_LOGIN_DESTINATION
+  );
 }
 
 function setLastRoute(route: string) {
@@ -83,7 +90,7 @@ function RouteTracker({ pathname, isPublicRoute, isPassthroughRoute }: { pathnam
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { userId } = useAppState();
+  const { userId, isAuthResolving } = useAppState();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -95,19 +102,27 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // Authentication only. Authorisation is per-brand and belongs to the API and to the components
   // that read `my_role` from `usePassportBrands()` — never to a route-level role flag.
   useEffect(() => {
+    // Identity now arrives over the network (session -> `GET /auth/me`), not from a synchronous
+    // localStorage read. Deciding before it lands would bounce every deep link through /login —
+    // and RouteTracker never renders on a route we redirect away from, so the destination is lost.
+    if (isAuthResolving) return;
+
     if (isAuthenticated && isPublicRoute) {
-      // Logged in user on login/register page -> redirect to last route
+      // Logged in user on the login page -> redirect to last route
       router.replace(getLastRoute());
     } else if (!isAuthenticated && !isPublicRoute && !isPassthroughRoute) {
       // Not logged in on protected page -> redirect to login
-      // This includes session expiration (token refresh failed)
+      // This includes session expiration (the session was revoked, not merely unreachable)
       // Passthrough routes handle their own auth logic
       router.replace('/login');
     }
-  }, [isAuthenticated, isPublicRoute, isPassthroughRoute, router]);
+  }, [isAuthResolving, isAuthenticated, isPublicRoute, isPassthroughRoute, router]);
 
   // Show nothing while redirecting
   if (isNotFound) {
+    return null;
+  }
+  if (isAuthResolving && !isPublicRoute && !isPassthroughRoute) {
     return null;
   }
   if (isAuthenticated && isPublicRoute) {

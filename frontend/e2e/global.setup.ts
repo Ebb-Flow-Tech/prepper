@@ -1,11 +1,26 @@
-import { test as setup, expect } from '@playwright/test';
+import { test as setup, expect, type Page } from '@playwright/test';
 import fs from 'fs';
+import { loginViaUi } from './helpers/auth';
 
 const USER_AUTH_FILE = 'e2e/.auth/user.json';
 const ADMIN_AUTH_FILE = 'e2e/.auth/admin.json';
 const MANAGER_AUTH_FILE = 'e2e/.auth/manager.json';
 
-// Inject auth state directly into localStorage to avoid depending on login UI.
+// Sign each test user in through the real two-step form, then save the browser's own storage state.
+//
+// **DEBUGGING A SUITE-WIDE AUTH FAILURE? LOOK AT THE LOGIN PAGE FIRST.** A session cannot be
+// injected any more — it lives in the Supabase client's own chunked, base64url-encoded
+// `sb-<project-ref>-auth-token` COOKIES, and reproducing that encoding here would bind the harness
+// to an SDK storage internal. Driving the real form is the accepted trade, and it couples every
+// project to the login UI: a regression in `app/login/page.tsx` or `pages/LoginPage.ts` presents as
+// EVERY spec running unauthenticated, not as one failing login test.
+//
+// **The suite runs with SSO OFF.** The backend under test must have no `PASSPORT_SUPABASE_URL`
+// (equivalently `SSO_ENABLED=false`), so `access.sso_active` is false. With it on, none of this
+// works: `/auth/resolve-login` routes these members to Passport's hosted login instead of the
+// password step, and `/auth/login` refuses an active member outright. The `passport` branch is
+// deliberately outside e2e coverage — driving it would mean automating Passport's own UI.
+//
 // Each test user must exist in the backend before running tests, AND — since Prepper's access
 // is now derived entirely from Passport (fail closed) — each user's Passport projection must be
 // seeded in the backend too: an identity_link, an active membership, an entitlement, a brand
@@ -23,11 +38,15 @@ const MANAGER_AUTH_FILE = 'e2e/.auth/manager.json';
 //   TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD
 //   TEST_API_URL (default: http://localhost:8000/api/v1)
 
-// The stored auth shape carries NO role — it mirrors the app's `StoredAuth` (src/lib/store.tsx).
+/**
+ * A bearer token for the seeding calls below — NOT the browser's session.
+ *
+ * The browser gets its session from `signInAndVerify`. This one only exists because the seed helpers
+ * talk to the API directly from Node.
+ */
 interface AuthResult {
   userId: string;
   jwt: string;
-  refreshToken: string;
   username: string;
   email: string;
 }
@@ -53,10 +72,36 @@ async function loginViaApi(
   return {
     userId: data.user.id,
     jwt: data.access_token,
-    refreshToken: data.refresh_token,
     username: data.user.username,
     email: data.user.email,
   };
+}
+
+/**
+ * Put a real session in the browser, then confirm it reaches a protected page.
+ *
+ * The sign-in sequence itself belongs to `LoginPage` (via `loginViaUi`) — this only adds the
+ * waiting and the verification the setup project needs.
+ */
+async function signInAndVerify(
+  page: Page,
+  email: string,
+  password: string,
+  verifyPath: string
+): Promise<void> {
+  await loginViaUi(page, email, password);
+
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 });
+
+  await page.goto(verifyPath);
+
+  // A NEGATIVE URL assertion is worthless here: immediately after `goto` the URL is `verifyPath`
+  // by definition, so `not.toHaveURL(/\/login/)` passes on its first poll and an `AuthGuard`
+  // bounce 200ms later is never seen — and then `storageState()` persists a session the whole
+  // suite fails on. Wait for something only an authenticated shell renders (which gives the
+  // bounce time to happen), THEN pin the URL positively.
+  await expect(page.locator('nav a[href="/recipes"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(new RegExp(`${verifyPath}$`));
 }
 
 /** Seed minimum data required so tests don't skip. Idempotent — safe to run multiple times. */
@@ -278,34 +323,18 @@ setup('authenticate as normal user', async ({ page }) => {
     console.log(`[seed] Wrote seed-user-data.json: recipeId=${seedData.recipeId} sessionId=${seedData.sessionId} ingredientId=${seedData.ingredientId}`);
   }
 
-  await page.goto('/');
-  await page.evaluate((authData) => {
-    localStorage.setItem('prepper_auth', JSON.stringify(authData));
-  }, auth);
-
-  // Verify auth works by navigating to a protected page
-  await page.goto('/recipes');
-  await expect(page).not.toHaveURL(/\/login/);
+  await signInAndVerify(page, email, password, '/recipes');
 
   await page.context().storageState({ path: USER_AUTH_FILE });
 });
 
 setup('authenticate as manager user', async ({ page }) => {
-  const apiUrl = process.env.TEST_API_URL || 'http://localhost:8000/api/v1';
   const email = process.env.TEST_MANAGER_EMAIL || 'manager@prepper.test';
   const password = process.env.TEST_MANAGER_PASSWORD || 'managerpassword123';
 
   // This user holds Manager at a brand in Passport (seeded in the backend). Prepper has no local
   // role flag to set, so there is nothing to promote here — just sign in.
-  const auth = await loginViaApi(email, password, apiUrl);
-
-  await page.goto('/');
-  await page.evaluate((authData) => {
-    localStorage.setItem('prepper_auth', JSON.stringify(authData));
-  }, auth);
-
-  await page.goto('/menu');
-  await expect(page).not.toHaveURL(/\/login/);
+  await signInAndVerify(page, email, password, '/menu');
 
   await page.context().storageState({ path: MANAGER_AUTH_FILE });
 });
@@ -325,13 +354,7 @@ setup('authenticate as admin user', async ({ page }) => {
     console.log(`[seed] Wrote seed-admin-data.json: unitId=${adminSeedData.unitId} menuId=${adminSeedData.menuId ?? 'n/a'}`);
   }
 
-  await page.goto('/');
-  await page.evaluate((authData) => {
-    localStorage.setItem('prepper_auth', JSON.stringify(authData));
-  }, auth);
-
-  await page.goto('/recipes');
-  await expect(page).not.toHaveURL(/\/login/);
+  await signInAndVerify(page, email, password, '/recipes');
 
   await page.context().storageState({ path: ADMIN_AUTH_FILE });
 });

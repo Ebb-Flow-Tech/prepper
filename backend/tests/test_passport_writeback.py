@@ -72,7 +72,6 @@ def _configured():
         return_value=SimpleNamespace(
             passport_api_url="https://passport.test",
             passport_api_key="key",
-            passport_org_id=ORG,
         ),
     )
 

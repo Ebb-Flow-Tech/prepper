@@ -12,9 +12,8 @@ from app.config import Settings, get_settings
 from app.database import engine
 from app.domain.supabase_auth_service import get_auth_service
 from app.domain.user_service import UserService
-from app.models import PassportMembership, User
-from app.passport import access
-from app.passport.access import is_org_blocked
+from app.models import User
+from app.passport import access, gate
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -37,24 +36,6 @@ def get_bearer_token(authorization: str | None = Header(None)) -> str:
     return authorization.replace("Bearer ", "")
 
 
-def _is_active_member(session: Session, email: str) -> bool:
-    """Whether a verified email belongs to an ACTIVE Passport member in the projection.
-
-    Gates SSO-login provisioning: Passport's shared issuer can sign tokens for people who are not
-    Prepper members, so a local account is only minted for someone Passport already knows as a
-    member here — never for an arbitrary verified email.
-    """
-    return (
-        session.exec(
-            select(PassportMembership).where(
-                func.lower(PassportMembership.email) == email.lower(),
-                PassportMembership.status == "active",
-            )
-        ).first()
-        is not None
-    )
-
-
 def resolve_or_provision_passport_user(
     session: Session, sub: str, email: str
 ) -> User | None:
@@ -66,9 +47,18 @@ def resolve_or_provision_passport_user(
     member, so a valid Passport token for a non-member never mints a local account. Returns ``None``
     when the email is not an active member.
 
-    Shared by BOTH the request-verify path (:func:`get_current_user`) and the SSO login-proxy
-    (``/login``) so the two can never drift — a divergence here is an auth bug.
+    Shared by BOTH the request-verify path (:func:`get_current_user`) and the Passport callback,
+    so the two can never drift — a divergence here is an auth bug.
+
+    **Normalisation must match ``gate.is_active_member`` exactly**, and that is why the ``.strip()``
+    below is not decorative. GoTrue trims before authenticating, so a verified claim can carry
+    ``" chef@x"``; ``gate`` strips, this did not, and the two therefore answered differently about
+    the same person. The visible failure was not a bypass but a junk row: the membership gate said
+    yes, this lookup missed, a second ``users`` row was provisioned holding the untrimmed address,
+    and the login then failed as ``passport_no_access`` with nothing to explain it. Same root cause
+    as the D9 whitespace bypass — one side of a pair normalising and the other not.
     """
+    email = email.strip()
     matches = session.exec(
         select(User).where(func.lower(User.email) == email.lower())
     ).all()
@@ -83,7 +73,7 @@ def resolve_or_provision_passport_user(
         return None
     if matches:
         return matches[0]
-    if _is_active_member(session, email):
+    if gate.is_active_member(session, email):
         return UserService(session).ensure_user(sub, email, email.split("@", 1)[0])
     return None
 
@@ -106,9 +96,15 @@ def public_routes(settings: Settings) -> frozenset[tuple[str, str]]:
     return frozenset(
         {
             ("POST", f"{prefix}/auth/login"),
-            ("POST", f"{prefix}/auth/register"),
+            # The email-first front door and the Passport hosted-login handoff. All three run
+            # BEFORE the caller has a session, so none of them can carry one.
+            ("POST", f"{prefix}/auth/resolve-login"),
+            ("GET", f"{prefix}/auth/passport/start"),
+            ("GET", f"{prefix}/auth/passport/callback"),
             ("POST", f"{prefix}/auth/oauth-complete"),
-            ("POST", f"{prefix}/auth/refresh-token"),
+            # Recovery is by definition reached by someone who cannot authenticate. It answers the
+            # same thing to everyone, so being public discloses nothing that `/auth/login` doesn't.
+            ("POST", f"{prefix}/auth/password-reset"),
             ("POST", f"{prefix}/auth/logout"),
             ("POST", f"{prefix}/passport/sync"),
             ("GET", "/health"),
@@ -187,7 +183,7 @@ def _platform_user_for(session: Session, user: User) -> str | None:
     then inherit their Passport identity and org role — with no identity link, which is exactly the
     state a non-member is permanently in, so the fallback fired for precisely the accounts that
     must never resolve. ``UserUpdate`` now refuses ``email``, and
-    ``access.platform_user_id_for_email`` fails closed on an ambiguous match.
+    ``gate.platform_user_id_for_email`` fails closed on an ambiguous match.
 
     If ``users.email`` ever becomes writable again, this fallback must resolve from the verified
     token claim instead — or be deleted.
@@ -195,7 +191,7 @@ def _platform_user_for(session: Session, user: User) -> str | None:
     platform_user_id = access.platform_user_id_for(session, user.id)
     if platform_user_id is not None:
         return platform_user_id
-    return access.platform_user_id_for_email(session, user.email)
+    return gate.platform_user_id_for_email(session, user.email)
 
 
 def get_org_context(
@@ -220,7 +216,7 @@ def get_org_context(
                                                   wrong tenant silently)
     - no Passport identity, or no orgs         -> 403
 
-    This deliberately supersedes the fail-open in ``access.has_prepper_access`` (:238-243), which
+    This deliberately supersedes the fail-open in ``gate.has_prepper_access``, which
     returns ``True`` for an unlinked user so that switching the projection on cannot lock everyone
     out. That is coherent for the boolean "may use Prepper at all"; it cannot survive contact with
     scoping, because there is no org to fail open *into* — a request names exactly one org or scopes
@@ -308,6 +304,13 @@ def _resolve_current_user(
     # `platform_user.supabase_id` is never synced, so email is the only key a consumer holds. This
     # ADDS an accepted issuer; a Prepper-issued token still resolves by the fallback below, so 5.1
     # is safe to ship off and flip on. See passport docs/specs/2026-07-15-sso-issuer-cutover-*.
+    #
+    # Checked while adding the gate below: the doctrine's `JwksUnavailableError` clause-ordering
+    # footgun does NOT apply here. It bites when a JWKS outage is caught by an earlier, broader
+    # `except AuthError` in the same chain and silently degrades to the fallback issuer. This is a
+    # separate call that ends in `except Exception: return None` (`supabase_auth_service.py`), not
+    # an except-chain fallthrough, and `verify_token`'s own chain lists `JwksUnavailableError`
+    # BEFORE `AuthError`, so its HS256 branch stays reachable.
     user_id: str | None = None
     passport_identity = auth_service.verify_passport_identity(token)
     if passport_identity is not None:
@@ -323,14 +326,41 @@ def _resolve_current_user(
             detail="Invalid or expired token",
         )
 
+    # Both gates below ask overlapping questions — which platform user is this, which orgs do they
+    # belong to, is each org's entitlement synced. Resolved ONCE here: asking them independently
+    # re-issued every one of those lookups on every request to every gated route.
+    scope = gate.subject_scope(session, user_id)
+
     # Passport org-level kill switch: if the entitlement of every org this user belongs to is
     # synced and not active, block them regardless of their role. Rule 9 — evaluated against the
     # user's OWN orgs, not a configured one. Fails open when the user is not linked yet or
-    # entitlements have not synced (see app.passport.access).
-    if is_org_blocked(session, user_id):
+    # entitlements have not synced (see app.passport.gate).
+    if gate.is_org_blocked_in_scope(scope):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Organization access is currently suspended",
+        )
+
+    # D6: derived access, re-asked on every request rather than only at the door. A session minted
+    # before a role was revoked otherwise keeps working for the whole life of its token — and under
+    # Model 3 the token is Passport's, so Prepper cannot shorten that window itself.
+    #
+    # Fails OPEN wherever Passport is not yet authoritative for this caller (not linked, no org, no
+    # entitlement synced), exactly like the kill switch above and the callback's D10 gate. Same
+    # helper on both paths, so the door and the request can never answer differently.
+    #
+    # COST, stated rather than left to be discovered: this is the expensive half. It cannot be an
+    # existence query, because the derivation rule is `passport_client.access`'s and CLAUDE.md
+    # forbids hand-rolling it — so it reads the user's role rows plus the org's units and
+    # brand-app switches, once per entitled org, and hands them to the SDK. Those reads are now
+    # org-scoped and index-backed rather than whole-table, and the shared `scope` removes the
+    # duplicate lookups, which together took `GET /auth/me` for a single-org member from 12
+    # queries to 8. It is still four queries per entitled org. If a user with many orgs, or a
+    # hot route, makes that bite, the next step is a per-request cache — not dropping the gate.
+    if not gate.has_prepper_access_in_scope(session, scope):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to Prepper",
         )
 
     # Get user from database
