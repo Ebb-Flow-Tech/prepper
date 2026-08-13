@@ -4,7 +4,8 @@
 beside the real model — they ARE the model (conformance rule 2). Calling Passport on the request
 path would undo the whole point of projecting: the page would die whenever Passport is down, it
 would add a network hop to every render, and it would ``403`` for any user who has no identity link
-yet. Mutations still go UP through ``writeback`` and come back DOWN via sync.
+yet. There are no mutations: Prepper is a read-only consumer, and roles and memberships are managed
+in Passport's own dashboard.
 
 Everything here is scoped to the orgs the ACTING USER belongs to (rule 9), resolved from the
 projection rather than from a configured constant — Prepper holds units and brand-app switches for

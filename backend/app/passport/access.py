@@ -313,11 +313,9 @@ def is_org_admin(
     specific row and asked the org-less question was a cross-org leak; use :func:`admins_row` (one
     row) or :func:`admin_org_ids` (a list query) instead.
 
-    The org-less form legitimately survives in three places, and only these:
+    The org-less form legitimately survives in two places, and only these. (It was three: the
+    write-back pre-filter used it too, until write-back was deleted on 2026-08-13.)
 
-    - ``writeback.py`` — a pre-filter. Passport re-checks against the VERIFIED end user and applies
-      its own authority matrix, so it is the real gate; this only avoids asking for something we
-      already know it will refuse.
     - the FMH/buy-catalogue imports in ``api/suppliers.py`` and ``api/ingredients.py`` — they
       rewrite GLOBAL master data. Suppliers and ingredients carry no enforced org scope yet, so
       "admin of any org" matches the scope the data actually has.

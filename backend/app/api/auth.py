@@ -32,7 +32,6 @@ from app.models import (
     UserRead,
 )
 from app.passport import gate
-from app.passport.identity import report_identity_link_safe
 
 router = APIRouter()
 
@@ -156,10 +155,6 @@ def login(
             detail="User not found in database",
         )
 
-    # Report the identity link to Passport (best-effort, no-op if unconfigured). Forwards the
-    # end user's own token — Passport takes sub + email from the verified claims.
-    report_identity_link_safe(auth_result["access_token"])
-
     return LoginResponse(
         user=UserRead.model_validate(user),
         access_token=auth_result["access_token"],
@@ -225,7 +220,6 @@ def oauth_complete(
         # same property `deps._platform_user_for` already depends on. If it ever becomes writable,
         # this must resolve from the verified profile instead.
         _refuse_active_member(session, existing.email)
-        report_identity_link_safe(token)
         return UserRead.model_validate(existing)
 
     # Fetch Supabase profile for email + Google-supplied metadata.
@@ -279,10 +273,6 @@ def oauth_complete(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists",
         )
-
-    # Report the identity link to Passport (best-effort, no-op if unconfigured). Forwards the
-    # end user's own token — Passport takes sub + email from the verified claims.
-    report_identity_link_safe(token)
 
     return UserRead.model_validate(user)
 

@@ -6,6 +6,7 @@ All notable changes to Prepper are documented here.
 
 ## Index
 
+- **[0.0.72](#0072---2026-08-13)** — Read-Only Consumer: Prepper Writes **Nothing** to Passport — Role Write-Back, Member Invites and Identity Reporting Deleted; Brand Access Becomes a Roster You Read, and the One Outbound Call That Had Never Once Worked Is Gone
 - **[0.0.71](#0071---2026-08-13)** — Email-First Login & Passport Hosted Login: Prepper's Backend Was **Replaying Members' Passport Passwords**; the Proxy Is Deleted — One Email Field Routes to Passport's Hosted Login (PKCE + Browser-Bound State) or a Password Field In Place, Sessions Move to Dual Supabase Clients, Authorization Moves to the Request Path; plus a Whitespace Bypass of the Membership Check, an Open Redirect With Four Working Bypasses, and PKCE Verifiers Reaching the Log File
 - **[0.0.70](#0070---2026-07-17)** — Brand Access & Accounts: the Roster Showed 3 Rows Against ~190 Real Grants and Accounts Showed **One Person** — Derived Ladder Holders as Rows, Brand-Scoped Reads, Passport-Backed Accounts with Member Invites; plus a `LEFT JOIN` Fan-Out and a Refetch That Discarded Every Successful Write
 - **[0.0.68](#0068---2026-07-17)** — Org Isolation (3/3): RLS Had **Zero** Org-Aware Policies and 14 `USING (true)` Reads — `my_org_ids()`/`is_admin_in()`, All 123 Policies Rewritten, `organization_id` NOT NULL; plus Four Forks and an AI Agent That Never Stamped an Org, AI Rate Limits & the `getUsers()` 100-Row Cap
@@ -71,6 +72,45 @@ All notable changes to Prepper are documented here.
 - **[0.0.3](#003---2024-11-27)** — Database Migration: Alembic Initial Tables to Supabase + PostgreSQL JSON Compatibility Fix
 - **[0.0.2](#002---2024-11-27)** — Frontend Implementation: Next.js 15 Recipe Canvas with Drag-and-Drop, Autosave & TanStack Query
 - **[0.0.1](#001---2024-11-27)** — Backend Foundation: FastAPI + SQLModel with 17 API Endpoints, Domain Services & Unit Conversion
+---
+
+## [0.0.72] - 2026-08-13
+
+Prepper is now a **read-only** Passport consumer. It projects the eight aggregates and reads them;
+it sends nothing back. Roles, memberships and invitations are managed in Passport's dashboard.
+
+The SDK treats write-back as optional, so this is a conforming shape rather than a reduced one.
+
+### Removed
+
+- **Role write-back** — `app/passport/writeback.py` and the four write routes on
+  `/passport/brand-roles` (assign, change, remove a brand role; invite a member). The three GET
+  routes stay: the roster, the brand list and the member list all read from the projection.
+- **The UI that drove it** — the assignment form, the per-row role dropdowns and Remove buttons,
+  the Invite member modal and its button. Brand Access is now a roster you read.
+- **Identity reporting** — `report_identity_link_safe` and its three call sites.
+- **`get_bearer_token`** — it existed only to forward the end user's JWT to Passport. A helper that
+  hands out a raw access token invites someone to send it somewhere, which this app no longer does.
+
+### On removing identity reporting
+
+Worth recording, because "it's a write, delete it" was not the whole reason: **it had never once
+worked here.** All five identity links in staging carry `linked_via='email_match'` — Passport's own
+eager matching, arriving through the webhook. None came from our call. Whether it was 403-ing on an
+issuer mismatch or being silently no-op'd, it had produced nothing, so what was lost was a repair
+path that had never run.
+
+Links still arrive two ways: Passport creates them eagerly on membership/entitlement events, and
+the Model 3 login callback writes one directly for the session it just minted. If neither has landed,
+`deps._platform_user_for` still falls back to resolving by verified email.
+
+### Side effect: one known gap closes itself
+
+0.0.71 recorded that a member who signed in with Google could not assign roles — their token is
+issued by Prepper's project, and Passport verifies forwarded tokens against the registered
+`issuer_url`, so write-back answered `401`. Nothing forwards a token any more, so that failure mode
+no longer exists. The underlying gap (a Google sign-in skips Passport's MFA) is unchanged.
+
 ---
 
 ## [0.0.71] - 2026-08-13

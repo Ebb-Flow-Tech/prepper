@@ -1,13 +1,9 @@
 import type { FMHImportResult } from '@/types';
 import type {
-  AssignBrandRoleRequest,
-  BrandRole,
-  InviteMemberRequest,
   MemberAccount,
   PassportBrand,
   PassportOrganization,
   PassportBrandRole,
-  PassportBrandRoleAggregate,
   PassportMember,
 } from '@/types';
 import type {
@@ -1920,48 +1916,10 @@ export async function getPassportMembers(): Promise<PassportMember[]> {
   return fetchApi<PassportMember[]>('/passport/brand-roles/members');
 }
 
-/**
- * Invite someone into the acting org, or update their org role if Passport already knows them.
- *
- * Returns `void` deliberately. The route returns Passport's `MembershipRead` AGGREGATE — a
- * different shape from `PassportMember` — and nothing consumes it: the member reaches the
- * projection via the sync echo, not via this response. Typing it as `PassportMember` would compile
- * and be a lie, since there is no runtime validation to catch it.
- */
-export async function invitePassportMember(data: InviteMemberRequest): Promise<void> {
-  await fetchApi<unknown>('/passport/brand-roles/members', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-// These three return Passport's `unit_app_membership` AGGREGATE, not a roster row — see
-// `PassportBrandRoleAggregate`. They were typed as `PassportBrandRole`, which compiled only because
-// nothing read the body. The callers now do, so the type has to be true.
-export async function assignPassportBrandRole(
-  data: AssignBrandRoleRequest
-): Promise<PassportBrandRoleAggregate> {
-  return fetchApi<PassportBrandRoleAggregate>('/passport/brand-roles', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function setPassportBrandRole(
-  assignmentId: string,
-  role: BrandRole
-): Promise<PassportBrandRoleAggregate> {
-  return fetchApi<PassportBrandRoleAggregate>(`/passport/brand-roles/${assignmentId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ role }),
-  });
-}
-
-export async function removePassportBrandRole(assignmentId: string): Promise<PassportBrandRoleAggregate> {
-  return fetchApi<PassportBrandRoleAggregate>(`/passport/brand-roles/${assignmentId}`, {
-    method: 'DELETE',
-  });
-}
+// Prepper writes NOTHING to Passport. `invitePassportMember`, `assignPassportBrandRole`,
+// `setPassportBrandRole` and `removePassportBrandRole` lived here until 2026-08-13; roles,
+// memberships and invitations are managed in Passport's dashboard and reach this app through
+// sync. The three readers above are the whole Passport surface now.
 
 // ---------------------------------------------------------------------------
 // Recipe -> unit chips, batched

@@ -94,7 +94,8 @@ def resolve_app_id(session: Session, *, org_id: str | None = None) -> str | None
     Returns ``None`` rather than raising, because ``GET /auth/passport/start`` is
     unauthenticated, has no org, and must ALWAYS redirect rather than surface a JSON error —
     it is reached by top-level browser navigation, so a raised exception renders as the whole
-    page. :func:`writeback._app_id` keeps the 503 by wrapping this.
+    page. (``writeback._app_id`` used to wrap this and keep a 503 for the authenticated write path;
+    write-back was deleted on 2026-08-13, so returning ``None`` is now the only contract.)
 
     The org-less form is **not** the unscoped cross-org read ``CLAUDE.md`` warns about.
     Entitlement delivery is own-app scoped, so every entitlement Prepper holds names Prepper

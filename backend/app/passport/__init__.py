@@ -16,12 +16,17 @@ Module layout:
 - ``access``      — request-path access derivation via ``passport_client.access``
                     (``has_app_access`` / ``roles_at_brands``); brand-scoped role reads.
 - ``directory``   — projection-first read-model queries (brands, role roster, members).
-- ``writeback``   — role write-back (assign / change / remove a brand-app role) via the SDK.
 - ``sync_router`` — mounts the ``build_sync_router`` receive endpoint.
-- ``identity``    — reports the (app, subject) identity link to Passport on login.
+- ``identity``    — writes the (app, subject) identity link LOCALLY for the Model 3 callback.
 - ``reconcile``   — nightly ``snapshot()`` reconciliation (server-side job, no polling).
 
-Only ``handlers`` / ``sync_router`` / ``identity`` / ``reconcile`` / ``writeback`` / ``access``
+**Prepper is a READ-ONLY consumer as of 2026-08-13.** It writes nothing to Passport: no role
+write-back, no identity reporting. Roles, memberships and invitations are managed in Passport's
+dashboard and arrive here through sync. The SDK treats write-back as optional, so this is a
+conforming shape — but do not "restore" ``writeback.py`` from git history without that being a
+deliberate product decision, because the UI that drove it is gone too.
+
+Only ``handlers`` / ``sync_router`` / ``reconcile`` / ``access``
 import ``passport_client``, and the request-path modules do so lazily / behind guards, so the
 pure ``store`` layer and its tests run whether or not the private SDK is installed.
 """

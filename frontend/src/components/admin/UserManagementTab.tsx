@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import {
   Badge,
-  Button,
   PageHeader,
   SearchInput,
   Skeleton,
@@ -17,7 +16,6 @@ import {
 } from '@/components/ui';
 import { useMemberAccounts, useUpdateUser } from '@/lib/hooks';
 import { useAppState } from '@/lib/store';
-import { InviteMemberModal } from './InviteMemberModal';
 import { toast } from 'sonner';
 
 /**
@@ -36,7 +34,6 @@ import { toast } from 'sonner';
  */
 export function UserManagementTab() {
   const [search, setSearch] = useState('');
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editingPhoneValue, setEditingPhoneValue] = useState('');
 
@@ -91,7 +88,6 @@ export function UserManagementTab() {
             onClear={() => setSearch('')}
           />
         </div>
-        <Button onClick={() => setIsInviteModalOpen(true)}>Invite member</Button>
       </div>
 
       {isLoading && (
@@ -196,10 +192,6 @@ export function UserManagementTab() {
         </Table>
       )}
 
-      <InviteMemberModal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-      />
     </div>
   );
 }

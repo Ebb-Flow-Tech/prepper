@@ -1,58 +1,30 @@
-"""Brand-app role management — write-back to Passport.
+"""Brand-app role roster — READ ONLY, served entirely from the projection.
 
-Prepper does not own these rows: the write goes UP to Passport via the SDK and the result
-comes back DOWN through sync, which is what actually updates
-``passport_unit_app_membership``. These routes therefore return Passport's aggregate directly
-and write nothing locally.
+**Prepper writes nothing to Passport.** Roles and memberships are created, changed and revoked in
+Passport's own dashboard; this app projects them and reads them. The write-back routes that used to
+live here (assign / change / remove a brand role, and invite a member) were deleted on 2026-08-13
+when the app became a read-only consumer — the SDK treats write-back as optional, so this is a
+conforming shape rather than a reduced one.
 
-Every route forwards the caller's own Supabase JWT so Passport can prove who is acting. A
-``403`` from Passport (its authority matrix, or Prepper's ``issuer_url`` not being registered)
-and a ``409`` (the target unit is not a brand) are passed through unchanged — they are normal
-outcomes, not failures to paper over.
+Nothing here calls Passport on the request path. The projection IS the model, so these reads survive
+a Passport outage, add no network hop, and do not ``403`` a user who has no identity link yet.
 """
 
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
 
 from app.api.deps import (
     OrgContext,
-    get_bearer_token,
     get_current_user,
     get_org_context,
     get_session,
 )
 from app.models import User
-from app.passport import directory, writeback
+from app.passport import directory
 
 router = APIRouter()
-
-
-class AssignRoleRequest(BaseModel):
-    """``unit_id`` MUST be a brand — outlets and entities never hold people."""
-
-    platform_user_id: str
-    unit_id: str
-    role: str  # Manager | Staff
-
-
-class SetRoleRequest(BaseModel):
-    role: str  # Manager | Staff
-
-
-class InviteMemberRequest(BaseModel):
-    """The ORG vocabulary — ``Owner`` | ``Admin`` | ``Member``. NOT the brand one.
-
-    ``EmailStr``, not ``str``: this value maps onto a Passport IDENTITY — an unvalidated address
-    creates a membership nobody can ever claim, and the invite is not idempotent enough to make
-    that harmless.
-    """
-
-    email: EmailStr
-    display_name: str | None = None
-    role: str = "Member"
 
 
 @router.get("")
@@ -61,11 +33,11 @@ def list_brand_roles(
     current_user: User = Depends(get_current_user),
     org: OrgContext = Depends(get_org_context),
 ) -> list[Any]:
-    """The brand-app role roster, READ FROM THE PROJECTION — not from Passport.
+    """The brand-app role roster, read from the projection.
 
-    Deliberately does not call Passport on the request path: the projection IS the model, so this
-    survives a Passport outage, adds no network hop, and does not ``403`` for a user who has no
-    identity link yet. Mutations below still go up via write-back.
+    Includes holders derived from the org ladder (an Owner/Admin holds ``Manager`` at every brand
+    carrying the app with no stored row at all), not just stored assignments — reading only stored
+    rows once showed 3 holders where 190 existed.
     """
     return list(directory.roster(session, current_user.id, org.organization_id))
 
@@ -81,9 +53,7 @@ def list_brands(
     Narrowed to the org being acted in, not the union of the caller's orgs — the switcher is
     what changes this list, so a union would make the switcher decorative.
 
-    Brands are where people are assigned — outlets and entities never hold roles. A brand with no
-    ``unit_app_access`` row is omitted: it confers access to nobody, so it is not somewhere a role
-    can be given.
+    A brand with no ``unit_app_access`` row is omitted: it confers access to nobody.
     """
     return list(directory.brands_for_user(session, current_user.id, org.organization_id))
 
@@ -94,88 +64,6 @@ def list_members(
     current_user: User = Depends(get_current_user),
     org: OrgContext = Depends(get_org_context),
 ) -> list[Any]:
-    """Org members who can be given a brand role — from Passport's membership roster, NOT from
-    Prepper's local ``users`` table (which may hold accounts Passport has never heard of)."""
+    """The org's members, from Passport's membership roster — NOT from Prepper's local ``users``
+    table, which may hold accounts Passport has never heard of."""
     return list(directory.assignable_members(session, current_user.id, org.organization_id))
-
-
-@router.post("/members", status_code=201)
-async def invite_member(
-    data: InviteMemberRequest,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    org: OrgContext = Depends(get_org_context),
-    token: str = Depends(get_bearer_token),
-) -> Any:
-    """Invite someone into the ACTING org, or update their org role if already a member.
-
-    Returns Passport's aggregate. The member does NOT appear in the projection until the
-    ``membership.*`` echo lands — the client must say so rather than insert optimistically, because
-    Prepper never writes these rows itself.
-
-    Ordering matters across the UI: ``assign_unit_app_role`` 409s if the target holds no active org
-    membership, so a brand role cannot bootstrap a member. Invite here first, assign a brand role
-    second. That is why Accounts and Brand Access are two tabs and not one.
-    """
-    return await writeback.invite_member(
-        session,
-        actor=current_user,
-        organization_id=org.organization_id,
-        email=data.email,
-        display_name=data.display_name,
-        role=data.role,
-        end_user_token=token,
-    )
-
-
-@router.post("", status_code=201)
-async def assign_brand_role(
-    data: AssignRoleRequest,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    token: str = Depends(get_bearer_token),
-) -> Any:
-    """Assign ``Manager``/``Staff`` to a platform user at a brand."""
-    return await writeback.assign_brand_role(
-        session,
-        actor=current_user,
-        platform_user_id=data.platform_user_id,
-        unit_id=data.unit_id,
-        role=data.role,
-        end_user_token=token,
-    )
-
-
-@router.patch("/{assignment_id}")
-async def change_brand_role(
-    assignment_id: str,
-    data: SetRoleRequest,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    token: str = Depends(get_bearer_token),
-) -> Any:
-    """Change an existing assignment's role (Owner/Admin only, per Passport's matrix)."""
-    return await writeback.change_brand_role(
-        session,
-        actor=current_user,
-        assignment_id=assignment_id,
-        role=data.role,
-        end_user_token=token,
-    )
-
-
-@router.delete("/{assignment_id}")
-async def remove_brand_role(
-    assignment_id: str,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    token: str = Depends(get_bearer_token),
-) -> Any:
-    """Remove an assignment. Passport returns the FINAL aggregate (``status="removed"``) — a
-    tombstone, not a delete."""
-    return await writeback.remove_brand_role(
-        session,
-        actor=current_user,
-        assignment_id=assignment_id,
-        end_user_token=token,
-    )

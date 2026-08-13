@@ -22,18 +22,11 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
-def get_bearer_token(authorization: str | None = Header(None)) -> str:
-    """The caller's raw Supabase access token.
-
-    Needed for Passport write-back, which forwards the END USER's own JWT (``X-End-User-Token``)
-    so the acting user is proved rather than asserted. Never log this value.
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-    return authorization.replace("Bearer ", "")
+# `get_bearer_token` lived here. It existed solely to hand the END USER's own JWT to Passport
+# write-back (`X-End-User-Token`), so the acting user was proved rather than asserted. Prepper is a
+# read-only consumer as of 2026-08-13 and forwards no token anywhere, so it is deleted rather than
+# left as a convenience — a helper that yields a raw access token invites a caller to send it
+# somewhere, which is exactly what this app no longer does.
 
 
 def resolve_or_provision_passport_user(
