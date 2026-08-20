@@ -30,7 +30,7 @@ dependencies = [
     "httpx>=0.26.0",
     "anthropic>=0.48.0",
     "PyJWT[crypto]>=2.10.0",
-    "ebb-flow-tech-auth @ git+https://github.com/missiongroupsystems/auth.git@v0.1.0#subdirectory=python",
+    "missiongroupsystems-auth @ git+https://github.com/missiongroupsystems/passport.git@v0.1.1#subdirectory=packages/auth/python",
     # Passport sync-consumer SDK — PRIVATE, not on PyPI. Installed like the auth dep above.
     # STAGING BRANCH = prerelease channel: Renovate tracks the newest tag INCLUDING rcN. The
     # current newest on that channel is the stable 1.1.0 (pep440: 1.1.0 supersedes 1.1.0rc), which

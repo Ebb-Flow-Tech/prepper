@@ -19,19 +19,19 @@ Supports local JWT verification to eliminate network round-trips on every auth c
 from functools import lru_cache
 
 import jwt as _pyjwt
-from ebb_flow_tech_auth import (
+from missiongroupsystems_auth import (
     AuthError as _EbbAuthError,
 )
-from ebb_flow_tech_auth import (
+from missiongroupsystems_auth import (
     JwksUnavailableError as _EbbJwksUnavailableError,
 )
-from ebb_flow_tech_auth import (
+from missiongroupsystems_auth import (
     TokenExpiredError as _EbbTokenExpiredError,
 )
-from ebb_flow_tech_auth import (
+from missiongroupsystems_auth import (
     TokenInvalidError as _EbbTokenInvalidError,
 )
-from ebb_flow_tech_auth import verify_token as _ebb_verify_token
+from missiongroupsystems_auth import verify_token as _ebb_verify_token
 from jwt.exceptions import InvalidTokenError as _JwtInvalidTokenError
 from supabase import create_client
 
@@ -183,7 +183,7 @@ class SupabaseAuthService:
         """
         Verify JWT token and return user ID if valid.
 
-        Delegates to the shared `ebb_flow_tech_auth` library which handles
+        Delegates to the shared `missiongroupsystems_auth` library which handles
         JWKS caching and ES256/RS256 signature verification locally — no
         network round-trip to Supabase per request (only periodic JWKS fetch).
 

@@ -7,7 +7,7 @@
 
 ## Auth
 - Supabase auth with user types `normal` / `admin`.
-- JWT verification delegates to the shared `ebb-flow-tech-auth` library in `supabase_auth_service.py` — don't reimplement.
+- JWT verification delegates to the shared `missiongroupsystems-auth` library in `supabase_auth_service.py` — don't reimplement.
 - `AuthGuard` component protects client routes — don't scatter checks across components.
 
 ## Access control

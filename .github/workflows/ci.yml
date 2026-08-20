@@ -2,7 +2,7 @@
 #
 # It MUST (a) install the PRIVATE passport-client dep and (b) actually exercise it (import +
 # tests), so a mis-versioned SDK break fails here before it can auto-merge. It fetches the private
-# git deps (passport-client, ebb-flow-tech-auth) with the SAME secret the Docker build already uses,
+# git deps (passport-client, missiongroupsystems-auth) with the SAME secret the Docker build already uses,
 # `EBB_PACKAGES_TOKEN`, via git's insteadOf rewrite.
 #
 # NOTE: install fails (correctly) until the pinned passport-client tag is pushed on

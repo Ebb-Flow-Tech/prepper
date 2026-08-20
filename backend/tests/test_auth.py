@@ -162,7 +162,7 @@ def mock_supabase_client(monkeypatch):
     )
 
     # Mock _ebb_verify_token so verify_token() works without a real JWT
-    from ebb_flow_tech_auth import TokenInvalidError as _EbbTokenInvalidError
+    from missiongroupsystems_auth import TokenInvalidError as _EbbTokenInvalidError
 
     class MockIdentity:
         def __init__(self, user_id: str):
