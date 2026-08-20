@@ -37,7 +37,7 @@ unaffected.
 | D4 | PKCE `state → code_verifier` in a Postgres table, popped by an **atomic `DELETE … RETURNING`**. |
 | D5 | Session crosses to the browser in the **URL fragment**, as in `geddit-one`. |
 | D6 | Derived-access authorization moves to the **request path** (`deps`), matching `geddit-one/backend/api/deps.py:255`. |
-| D7 | **Deviation.** Google sign-in moves to **step 2 only**. `geddit-one/frontend/app/(auth)/login/page.tsx:261-298` renders it on *both* steps (outside the step ternary, which closes at `:259`). Showing it at step 1 offers a front-door choice before routing has happened, which is the toggle the standard exists to delete. |
+| D7 | ~~**Deviation.** Google sign-in moves to **step 2 only**.~~ **Reversed 2026-08-21.** Google now renders on **both** steps, outside the step ternary — matching `geddit-one/frontend/app/(auth)/login/page.tsx:261-298`. Product decision: Google is a front-door choice again. This does not newly open the "Google sign-in by a member" gap below — a member could already reach the button by typing any non-member address into step 1 — it only removes that one extra keystroke. The accepted-risk consequences (MFA bypass, role write-back 401) stand unchanged; see that section. |
 | D8 | `/register` self-signup is **deleted**, frontend and backend. |
 | D9 | **Deviation.** App-native password sign-in, password reset, **and `oauth-complete`** re-check membership server-side and refuse an active member. Geddit does sign-in and reset client-side, so its backend cannot enforce anything — leaving an MFA/revocation bypass for legacy local accounts. |
 | D10 | **Deviation.** The callback carries the Seam B access gate. `geddit-one/backend/api/routes/auth.py:303-307` deliberately omits it, arguing its request-path gate makes a second check the "divergence is an auth bug" trap. That reasoning is sound *for Geddit*; this spec sides with `sso-login.md` because the callback is the only place Prepper mints a member session, and D6 lands in the same push — so the two gates are the same helper, not two slightly different checks. |
@@ -362,8 +362,8 @@ them.
   reasoning later is the expensive part. Closing this needs an `/auth/reset-password` page that handles
   the recovery fragment, plus `redirect_to` pointing at it. That is a real scope addition and is
   tracked as its own follow-up, not smuggled into this work.
-  Google below step 2 only (D7). A `?error=` param renders one shared message for all three codes. No SSO
-  button, no toggle.
+  Google on both steps (D7, reversed 2026-08-21). A `?error=` param renders one shared message for all
+  three codes. No SSO button, no toggle.
 
 **Changed:**
 
@@ -464,9 +464,11 @@ backend does the authenticating and can refuse before a session exists, whereas 
 `detectSessionInUrl` mint the session **client-side**, before `/auth/oauth-complete` is consulted.
 That endpoint's 403 therefore revokes nothing. One branch, one half enforced.
 
-D7 put Google on step 2 to keep members away from it, but step 2 is reachable by typing any
-non-member address, and the Google flow ignores the email field — so a member reaches it in one
-extra keystroke.
+D7 originally put Google on step 2 to keep members away from it, but step 2 was reachable by typing
+any non-member address, and the Google flow ignores the email field — so a member could already reach
+it in one extra keystroke. D7 was reversed 2026-08-21 (Google now renders on both steps), which removes
+that keystroke but does not change what is bypassed: the analysis below held before the reversal and
+holds after it.
 
 **What is actually bypassed, stated precisely — two earlier drafts of this section overstated it.**
 

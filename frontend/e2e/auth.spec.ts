@@ -35,13 +35,13 @@ test.describe('Login Page (/login)', () => {
     await expect(loginPage.emailInput).toHaveValue('test@example.com');
   });
 
-  test('step 1 offers no sign-in choice — no SSO button, no toggle, no Google', async ({ page }) => {
-    // The whole point of the email-first router: the address decides, so the user is never asked
-    // which kind of account they hold. Google lives on step 2 only (spec D7).
+  test('step 1 offers no SSO toggle, but does offer Google', async ({ page }) => {
+    // The email-first router still decides Passport-vs-app-native from the address alone — no SSO
+    // button, no toggle for that choice. Google is a front-door choice again (D7 reversed).
     const loginPage = new LoginPage(page);
     await loginPage.goto();
 
-    await expect(loginPage.googleButton).toHaveCount(0);
+    await expect(loginPage.googleButton).toBeVisible();
     await expect(page.locator('button', { hasText: /sso|single sign|company account|passport/i }))
       .toHaveCount(0);
   });

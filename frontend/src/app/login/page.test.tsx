@@ -44,14 +44,14 @@ describe('LoginPage — the two-step router', () => {
     localStorage.clear();
   });
 
-  it('asks for an email only, with no password field and no sign-in choice', () => {
+  it('asks for an email with no password field, and offers Google', () => {
     render(<LoginPage />);
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(passwordField()).toBeNull();
-    // No Google, no "SSO" button, no toggle: the address decides the route, so the user is never
-    // asked which kind of account they hold.
-    expect(screen.queryByRole('button', { name: /google/i })).toBeNull();
+    // Google is a front-door choice (D7 reversed 2026-08-21). No "SSO" button, no toggle: the
+    // address still decides the Passport-vs-app-native route on its own.
+    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sso|single sign|company account/i })).toBeNull();
   });
 
